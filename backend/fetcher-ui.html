@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Historical Price Fetcher</title>
+<style>
+  body { font-family: monospace; background: #0f0f0f; color: #e0e0e0; padding: 24px; max-width: 800px; margin: 0 auto; }
+  h2 { color: #7ee787; margin-bottom: 4px; }
+  .sub { color: #888; margin-bottom: 24px; font-size: 13px; }
+  button { background: #238636; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-right: 8px; }
+  button:disabled { background: #333; color: #666; cursor: not-allowed; }
+  button.stop { background: #b62324; }
+  .progress-bar-bg { background: #2a2a2a; border-radius: 4px; height: 20px; margin: 16px 0; }
+  .progress-bar { background: #238636; height: 20px; border-radius: 4px; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; min-width: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+  .stat { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 12px; text-align: center; }
+  .stat-val { font-size: 22px; color: #7ee787; font-weight: bold; }
+  .stat-lbl { font-size: 11px; color: #888; margin-top: 4px; }
+  .log { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 12px; height: 300px; overflow-y: auto; font-size: 12px; line-height: 1.6; }
+  .log-entry { padding: 1px 0; border-bottom: 1px solid #222; }
+  .ok   { color: #7ee787; }
+  .err  { color: #f85149; }
+  .info { color: #79c0ff; }
+  .warn { color: #e3b341; }
+  input { background: #1a1a1a; border: 1px solid #444; color: #e0e0e0; padding: 6px 10px; border-radius: 4px; width: 100%; box-sizing: border-box; margin-bottom: 12px; font-family: monospace; }
+  label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+  .done-banner { background: #1a3a1a; border: 1px solid #238636; border-radius: 6px; padding: 16px; text-align: center; color: #7ee787; font-size: 16px; margin-top: 16px; display: none; }
+</style>
+</head>
+<body>
+
+<h2>📈 Historical Price Fetcher</h2>
+<p class="sub">Drives fetch-historical-prices in sequential chunks from your browser. Keep this tab open while running.</p>
+
+<label>Supabase URL</label>
+<input id="url" value="https://munqjcjvzgqyxzlmuyjj.supabase.co" />
+
+<label>Service Role Key (needed to invoke the function)</label>
+<input id="key" type="password" value="" placeholder="Paste your service_role key here" />
+
+<label>From Date (10 years default)</label>
+<input id="fromDate" value="" placeholder="e.g. 2015-01-01 — leave blank for 10-year default" />
+
+<div>
+  <button id="startBtn" onclick="start()">▶ Start Full Fetch</button>
+  <button id="stopBtn"  onclick="stop()" class="stop" disabled>■ Stop</button>
+</div>
+
+<div class="progress-bar-bg">
+  <div class="progress-bar" id="bar" style="width:0%">0%</div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="sChunk">0/0</div><div class="stat-lbl">Chunk</div></div>
+  <div class="stat"><div class="stat-val" id="sTickers">0/0</div><div class="stat-lbl">Tickers Done</div></div>
+  <div class="stat"><div class="stat-val" id="sRows">0</div><div class="stat-lbl">Rows Inserted</div></div>
+  <div class="stat"><div class="stat-val" id="sFailed">0</div><div class="stat-lbl">Failed</div></div>
+</div>
+
+<div class="log" id="log"></div>
+
+<div class="done-banner" id="doneBanner">
+  ✅ All chunks complete! Historical price data fully loaded.
+</div>
+
+<script>
+let running   = false;
+let allTickers = null;   // received from first chunk, passed through all subsequent
+let chunkIdx  = 0;
+let totalChunks = 0;
+let cumStats  = { total: 0, inserted: 0, success: 0, failed: 0 };
+
+function log(msg, cls = "info") {
+  const el = document.getElementById("log");
+  const ts = new Date().toLocaleTimeString();
+  el.innerHTML += `<div class="log-entry ${cls}">[${ts}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateStats(data) {
+  const c = data.cumulative || cumStats;
+  totalChunks = data.chunks_total || totalChunks;
+  const pct = totalChunks ? Math.round((data.chunk / totalChunks) * 100) : 0;
+
+  document.getElementById("bar").style.width = pct + "%";
+  document.getElementById("bar").textContent  = pct + "%";
+  document.getElementById("sChunk").textContent   = `${data.chunk}/${totalChunks}`;
+  document.getElementById("sTickers").textContent = `${c.success}/${c.total}`;
+  document.getElementById("sRows").textContent    = c.inserted.toLocaleString();
+  document.getElementById("sFailed").textContent  = c.failed;
+  cumStats = c;
+}
+
+async function runChunk(chunkIndex, allTickersPayload, mode, fromDate) {
+  const url  = document.getElementById("url").value.trim();
+  const key  = document.getElementById("key").value.trim();
+
+  const body = {
+    mode,
+    _chunk: chunkIndex,
+    _all:   allTickersPayload,
+    _stats: cumStats,
+  };
+  if (fromDate) body.from_date = fromDate;
+
+  const res  = await fetch(`${url}/functions/v1/fetch-historical-prices`, {
+    method:  "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${key}`,
+      "apikey":        key,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  return await res.json();
+}
+
+async function start() {
+  const url  = document.getElementById("url").value.trim();
+  const key  = document.getElementById("key").value.trim();
+  const fromDate = document.getElementById("fromDate").value.trim();
+
+  if (!key) { alert("Please enter your Service Role Key"); return; }
+
+  running = true;
+  chunkIdx = 0;
+  allTickers = null;
+  cumStats = { total: 0, inserted: 0, success: 0, failed: 0 };
+
+  document.getElementById("startBtn").disabled = true;
+  document.getElementById("stopBtn").disabled  = false;
+  document.getElementById("doneBanner").style.display = "none";
+  document.getElementById("log").innerHTML = "";
+
+  log("Starting full historical price fetch...", "info");
+
+  // ── First call: no _all, no _chunk — loads tickers from bhav_copy ──────
+  try {
+    const firstBody = { mode: "full" };
+    if (fromDate) firstBody.from_date = fromDate;
+
+    log("Chunk 1: loading tickers from bhav_copy + fetching first batch...", "info");
+
+    const res = await fetch(`${url}/functions/v1/fetch-historical-prices`, {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${key}`,
+        "apikey":        key,
+      },
+      body: JSON.stringify(firstBody),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+
+    if (data.status === "error") throw new Error(data.message);
+
+    allTickers  = data._all_tickers;   // function returns full list on chunk 0
+    totalChunks = data.chunks_total;
+    chunkIdx    = 1;                   // next chunk to run
+    cumStats    = data.cumulative;
+
+    updateStats(data);
+    log(`Chunk 1/${totalChunks} done — ${data.chunk_success} ok, ${data.chunk_failed} failed, ${data.chunk_inserted} rows`, data.chunk_failed > 5 ? "warn" : "ok");
+
+    // ── Loop through remaining chunks ─────────────────────────────────────
+    while (running && chunkIdx < totalChunks) {
+      log(`Chunk ${chunkIdx + 1}/${totalChunks} starting...`, "info");
+
+      try {
+        const data = await runChunk(chunkIdx, allTickers, "full", fromDate || null);
+        if (data.status === "error") throw new Error(data.message);
+
+        chunkIdx++;
+        cumStats = data.cumulative;
+        updateStats(data);
+        log(`Chunk ${data.chunk}/${totalChunks} done — ${data.chunk_success} ok, ${data.chunk_failed} failed, ${data.chunk_inserted} rows (${data.duration_ms}ms)`,
+            data.chunk_failed > 5 ? "warn" : "ok");
+
+      } catch (e) {
+        log(`Chunk ${chunkIdx + 1} error: ${e.message} — retrying in 5s...`, "err");
+        await new Promise(r => setTimeout(r, 5000));
+        // retry same chunk
+      }
+
+      // Small pause between chunks to avoid hammering
+      if (running && chunkIdx < totalChunks) {
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+
+    if (running) {
+      log(`✅ All ${totalChunks} chunks complete! ${cumStats.inserted.toLocaleString()} rows for ${cumStats.success} tickers.`, "ok");
+      document.getElementById("doneBanner").style.display = "block";
+      document.getElementById("bar").style.width = "100%";
+      document.getElementById("bar").textContent = "100%";
+    } else {
+      log(`⏹ Stopped at chunk ${chunkIdx}/${totalChunks}. Resume by clicking Start again.`, "warn");
+    }
+
+  } catch (e) {
+    log(`Fatal error: ${e.message}`, "err");
+  }
+
+  running = false;
+  document.getElementById("startBtn").disabled = false;
+  document.getElementById("stopBtn").disabled  = true;
+}
+
+function stop() {
+  running = false;
+  log("Stop requested — will halt after current chunk completes.", "warn");
+  document.getElementById("stopBtn").disabled = true;
+}
+</script>
+</body>
+</html>
