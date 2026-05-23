@@ -17646,25 +17646,56 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
           .sdv-hero { grid-template-columns:1fr; }
         }
         @media (max-width:600px) {
-          .sdv-outer { overflow-y:auto; -webkit-overflow-scrolling:touch; }
-          .sdv-shell { padding:10px 10px 16px; gap:10px; overflow-y:auto; flex:none; min-height:100%; }
-          .sdv-topcard { border-radius:18px; flex-shrink:0; }
-          .sdv-hero { padding:14px; gap:12px; }
-          .sdv-summary-grid { grid-template-columns:repeat(3, minmax(0,1fr)); }
-          .sdv-summary-card b { font-size:15px; }
-          .sdv-subtitle { display:none !important; }
-          .sdv-pivot-bar { padding-left:8px !important; padding-right:8px !important; }
-          .sdv-techno-btn { display:none !important; }
-          .sdv-techno-mobile { display:inline-flex !important; }
-          .sdv-price-footer { font-size:9px !important; }
-          .sdv-toolbar { padding:0 12px; min-height:44px; flex-shrink:0; }
-          .sdv-filterbar { padding:10px 10px; border-radius:16px; flex-shrink:0; }
-          .sdv-table-shell { border-radius:18px; flex:none; min-height:60vh; }
+          /* On mobile: outer fills screen, no padding, no gap */
+          .sdv-outer { overflow:hidden; }
+          .sdv-shell { padding:0; gap:0; width:100%; }
+          /* Hide everything except the table and the mobile back bar */
+          .sdv-topcard { display:none !important; }
+          .sdv-filterbar { display:none !important; }
+          .sdv-toolbar { display:none !important; }
+          .sdv-table-topline { display:none !important; }
+          /* Table shell fills all remaining space below the back bar */
+          .sdv-table-shell {
+            flex:1; min-height:0; border-radius:0; border:none; border-top:1px solid ${T.border};
+            box-shadow:none;
+          }
         }
         .sdv-techno-mobile { display:none; }
+        /* Mobile back bar — hidden on desktop */
+        .sdv-mobile-back {
+          display:none;
+        }
+        @media (max-width:600px) {
+          .sdv-mobile-back {
+            display:flex; align-items:center; gap:10; flex-shrink:0;
+            padding:0 14px; height:46px;
+            background:${T.surface}; border-bottom:1px solid ${T.border};
+          }
+        }
       `}</style>
 
       <div className="sdv-shell">
+
+      {/* Mobile-only slim back bar — hidden on desktop via CSS */}
+      <div className="sdv-mobile-back">
+        <button onClick={onBack}
+          style={{ display:"flex", alignItems:"center", gap:6,
+            border:"none", background:"transparent",
+            color:T.subtext, cursor:"pointer", fontSize:13,
+            fontFamily:sans, padding:0, flexShrink:0 }}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 3L5 8l5 5"/>
+          </svg>
+          Screens
+        </button>
+        <div style={{ width:1, height:16, background:T.border, margin:"0 10px" }}/>
+        <span style={{ fontSize:13, fontWeight:700, color:T.text,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+          {title}
+        </span>
+      </div>
+
       <div className="sdv-topcard">
       <div className="sdv-hero">
         <div>
