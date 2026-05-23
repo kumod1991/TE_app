@@ -17604,7 +17604,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
   };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", width:"100%", height:"100%",
+    <div className="sdv-outer" style={{ display:"flex", flexDirection:"column", width:"100%", height:"100%",
       background:T.bg, color:T.text, fontFamily:sans, flex:1, minHeight:0, overflow:"hidden" }}>
       <style>{`
         .sdv-shell { width:min(100%, 1400px); margin:0 auto; display:flex; flex-direction:column; flex:1; min-height:0; padding:16px 18px 20px; gap:14px; }
@@ -17646,18 +17646,20 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
           .sdv-hero { grid-template-columns:1fr; }
         }
         @media (max-width:600px) {
-          .sdv-shell { padding:10px 10px 16px; gap:10px; }
-          .sdv-topcard { border-radius:18px; }
+          .sdv-outer { overflow-y:auto; -webkit-overflow-scrolling:touch; }
+          .sdv-shell { padding:10px 10px 16px; gap:10px; overflow-y:auto; flex:none; min-height:100%; }
+          .sdv-topcard { border-radius:18px; flex-shrink:0; }
           .sdv-hero { padding:14px; gap:12px; }
-          .sdv-summary-grid { grid-template-columns:1fr; }
+          .sdv-summary-grid { grid-template-columns:repeat(3, minmax(0,1fr)); }
+          .sdv-summary-card b { font-size:15px; }
           .sdv-subtitle { display:none !important; }
           .sdv-pivot-bar { padding-left:8px !important; padding-right:8px !important; }
           .sdv-techno-btn { display:none !important; }
           .sdv-techno-mobile { display:inline-flex !important; }
           .sdv-price-footer { font-size:9px !important; }
-          .sdv-toolbar { padding:0 12px; min-height:44px; }
-          .sdv-filterbar { padding:10px 10px; border-radius:16px; }
-          .sdv-table-shell { border-radius:18px; }
+          .sdv-toolbar { padding:0 12px; min-height:44px; flex-shrink:0; }
+          .sdv-filterbar { padding:10px 10px; border-radius:16px; flex-shrink:0; }
+          .sdv-table-shell { border-radius:18px; flex:none; min-height:60vh; }
         }
         .sdv-techno-mobile { display:none; }
       `}</style>
