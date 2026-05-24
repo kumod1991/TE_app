@@ -2,8 +2,6 @@
 TradeEdge is a full-stack research and portfolio analytics platform built specifically for Indian retail traders and investors. It unifies fundamental screening, technical analysis, institutional flow data, and personal trade journaling into a single, clean interface — designed to feel like a professional trading terminal without the institutional price tag.
 Whether you're scanning for breakout setups, tracking FII/DII flows, analyzing promoter ownership trends, or reviewing your own trading performance — TradeEdge brings it all into one workspace.
 
-Try it instantly — no sign-up required. Hit the Demo Mode button on the login screen to explore all features with sample data.
-
 
 # Feature Modules
 # 📊 Dashboard
