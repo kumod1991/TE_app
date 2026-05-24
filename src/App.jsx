@@ -25981,6 +25981,9 @@ const closeLegal = () => {
             if (parsed.kind === "app") {
                 setTopbarSearch("");
                 topbarResolvedSymRef.current = null;
+                // Reset to dashboard so the financial search page doesn't ghost-render
+                setProductTab("dashboard");
+                setFinancialSubPage("search");
             }
         };
         window.addEventListener("popstate", handlePopState);
