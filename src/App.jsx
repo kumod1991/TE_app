@@ -24873,133 +24873,97 @@ function LoginModal({ onClose, onLogin, theme }) {
 
 // ===== CONTACT FORM COMPONENT =====
 function ContactForm({ T }) {
-    const [subject, setSubject] = useState("");
-    const [message, setMessage] = useState("");
-    const [attachment, setAttachment] = useState(null);
-    const [status, setStatus] = useState(null); // null | "sending" | "sent" | "error"
-
-    const inputStyle = {
-        width: "100%",
-        boxSizing: "border-box",
-        border: `1px solid ${T.border}`,
-        borderRadius: 6,
-        padding: "10px 12px",
-        fontSize: 13.5,
-        color: T.text,
-        background: T.bg,
-        outline: "none",
-        fontFamily: "inherit",
-        transition: "border-color 0.15s",
-    };
-    const labelStyle = { display: "block", fontSize: 13.5, fontWeight: 600, color: T.text, marginBottom: 6 };
-    const subLabelStyle = { fontSize: 12.5, color: T.subtext, marginBottom: 8, display: "block" };
-
-    const handleSend = () => {
-        if (!subject.trim() || !message.trim()) return;
-        setStatus("sending");
-        // Build mailto link as fallback — replace with real API call if needed
-        const body = encodeURIComponent(message);
-        const sub = encodeURIComponent(subject);
-        window.location.href = `mailto:kumodiit@gmail.com?subject=${sub}&body=${body}`;
-        setTimeout(() => {
-            setStatus("sent");
-            setSubject("");
-            setMessage("");
-            setAttachment(null);
-        }, 800);
-    };
-
     return (
-        <div style={{ padding: "36px 28px 48px", maxWidth: 720 }}>
-            <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: T.text }}>Contact support</h2>
-            <p style={{ margin: "0 0 28px", fontSize: 13.5, color: T.subtext }}>
-                Send a message to the TradeEdge support team.
+        <div style={{
+            padding: "56px 48px 64px",
+            maxWidth: 640,
+            fontFamily: "'Georgia', 'Times New Roman', serif",
+        }}>
+            {/* Thin rule + eyebrow */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 40 }}>
+                <div style={{ height: 1, width: 32, background: T.green, flexShrink: 0 }} />
+                <span style={{
+                    fontSize: 10,
+                    letterSpacing: "0.22em",
+                    textTransform: "uppercase",
+                    fontWeight: 600,
+                    color: T.green,
+                    fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                }}>Get in touch</span>
+            </div>
+
+            {/* Headline */}
+            <h2 style={{
+                margin: "0 0 18px",
+                fontSize: 38,
+                fontWeight: 400,
+                lineHeight: 1.15,
+                color: T.text,
+                letterSpacing: "-0.02em",
+            }}>
+                We'd love to<br />
+                <em style={{ fontStyle: "italic", color: T.green }}>hear from you.</em>
+            </h2>
+
+            {/* Body */}
+            <p style={{
+                margin: "0 0 48px",
+                fontSize: 14,
+                lineHeight: 1.9,
+                color: T.subtext,
+                fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                maxWidth: 420,
+                fontWeight: 400,
+            }}>
+                For suggestions, improvements, or queries about TradeEdge — write to us directly. Every message is read personally.
             </p>
 
-            {status === "sent" ? (
-                <div style={{
-                    background: "rgba(0,180,100,0.08)",
-                    border: "1px solid rgba(0,180,100,0.25)",
-                    borderRadius: 8,
-                    padding: "20px 24px",
-                    color: T.green,
-                    fontSize: 14,
-                    fontWeight: 500,
-                }}>
-                    ✓ Message sent! We'll get back to you within 1–2 business days.
-                    <br />
-                    <button onClick={() => setStatus(null)} style={{
-                        marginTop: 12, fontSize: 13, color: T.green, background: "none",
-                        border: "none", cursor: "pointer", padding: 0, textDecoration: "underline", fontFamily: "inherit",
-                    }}>Send another message</button>
-                </div>
-            ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-                    {/* Subject */}
-                    <div>
-                        <label style={labelStyle}>Subject</label>
-                        <input
-                            type="text"
-                            value={subject}
-                            onChange={e => setSubject(e.target.value)}
-                            style={inputStyle}
-                            onFocus={e => e.target.style.borderColor = T.green}
-                            onBlur={e => e.target.style.borderColor = T.border}
-                            placeholder=""
-                        />
-                    </div>
+            {/* Divider */}
+            <div style={{ height: 1, background: `linear-gradient(to right, ${T.border || "rgba(15,23,42,0.10)"}, transparent)`, marginBottom: 40 }} />
 
-                    {/* Message */}
-                    <div>
-                        <label style={labelStyle}>Message</label>
-                        <span style={subLabelStyle}>We reply to all user queries.</span>
-                        <textarea
-                            value={message}
-                            onChange={e => setMessage(e.target.value)}
-                            rows={9}
-                            style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
-                            onFocus={e => e.target.style.borderColor = T.green}
-                            onBlur={e => e.target.style.borderColor = T.border}
-                        />
-                    </div>
+            {/* Email row */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <span style={{
+                    fontSize: 10,
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    color: T.subtext,
+                    fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                    fontWeight: 600,
+                }}>Direct line</span>
+                <a
+                    href="mailto:kmk03072018@gmail.com"
+                    style={{
+                        fontSize: 20,
+                        fontWeight: 400,
+                        color: T.text,
+                        textDecoration: "none",
+                        letterSpacing: "-0.01em",
+                        borderBottom: `1.5px solid ${T.green}`,
+                        paddingBottom: 3,
+                        display: "inline-block",
+                        transition: "opacity 0.2s",
+                        fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "0.65"}
+                    onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                >
+                    kmk03072018@gmail.com
+                </a>
+            </div>
 
-                    {/* Attachment */}
-                    <div>
-                        <label style={labelStyle}>
-                            Attachment <span style={{ fontWeight: 400, color: T.subtext }}>- Optional</span>
-                        </label>
-                        <input
-                            type="file"
-                            onChange={e => setAttachment(e.target.files[0] || null)}
-                            style={{ fontSize: 13, color: T.subtext, fontFamily: "inherit" }}
-                        />
-                    </div>
-
-                    {/* Send button */}
-                    <div>
-                        <button
-                            onClick={handleSend}
-                            disabled={!subject.trim() || !message.trim() || status === "sending"}
-                            style={{
-                                background: (!subject.trim() || !message.trim()) ? T.border : T.green,
-                                color: "#fff",
-                                border: "none",
-                                borderRadius: 6,
-                                padding: "11px 24px",
-                                fontSize: 13,
-                                fontWeight: 700,
-                                letterSpacing: 0.6,
-                                cursor: (!subject.trim() || !message.trim()) ? "not-allowed" : "pointer",
-                                fontFamily: "inherit",
-                                transition: "background 0.15s",
-                                opacity: status === "sending" ? 0.7 : 1,
-                            }}
-                        >
-                            {status === "sending" ? "SENDING…" : "SEND MESSAGE"}
-                        </button>
-                    </div>
-                </div>
-            )}
+            {/* Bottom note */}
+            <p style={{
+                marginTop: 52,
+                fontSize: 11,
+                lineHeight: 1.7,
+                color: "rgba(15,23,42,0.36)",
+                fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                letterSpacing: "0.02em",
+            }}>
+                We typically respond within 1–2 business days.<br />
+                Your feedback makes TradeEdge better for everyone.
+            </p>
         </div>
     );
 }
@@ -25548,7 +25512,7 @@ const closeLegal = () => {
     const clearTickerRoute = useCallback(() => {
         if (typeof window === "undefined") return;
         if (!window.location.pathname.startsWith("/ticker/")) return;
-        syncRoute("/", false);
+        syncRoute("/", true); // replaceState: don't leave a ghost "/" entry in history
     }, [syncRoute]);
 
     const navigateToTicker = useCallback((rawSymbol, options = {}) => {
@@ -25561,7 +25525,12 @@ const closeLegal = () => {
         setOpenDropdown(null);
         setTopbarSearch(symbol);
         topbarResolvedSymRef.current = symbol;
-        syncRoute(`/ticker/${encodeURIComponent(symbol)}`, options.replace === true);
+        // Replace history if already on a ticker page (ticker→ticker nav)
+        // to avoid stacking up ghost ticker entries the back button walks through.
+        const alreadyOnTicker =
+            typeof window !== "undefined" &&
+            window.location.pathname.startsWith("/ticker/");
+        syncRoute(`/ticker/${encodeURIComponent(symbol)}`, options.replace === true || alreadyOnTicker);
     }, [syncRoute]);
 
     const handleTechnoFundaScan = ({ label, tickers }, source = "screens") => {
@@ -26006,7 +25975,13 @@ const closeLegal = () => {
 
     useEffect(() => {
         const handlePopState = () => {
-            setRoute(parseAppRoute(window.location.pathname));
+            const parsed = parseAppRoute(window.location.pathname);
+            setRoute(parsed);
+            // Clear stale ticker state when back-navigating away from a ticker route
+            if (parsed.kind === "app") {
+                setTopbarSearch("");
+                topbarResolvedSymRef.current = null;
+            }
         };
         window.addEventListener("popstate", handlePopState);
         return () => window.removeEventListener("popstate", handlePopState);

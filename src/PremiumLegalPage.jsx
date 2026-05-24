@@ -1,100 +1,47 @@
-import { useState } from "react";
 
 function PremiumContactForm({ T }) {
-    const [subject, setSubject] = useState("");
-    const [message, setMessage] = useState("");
-    const [attachment, setAttachment] = useState(null);
-    const [status, setStatus] = useState(null);
     const panelBorder = "rgba(15,23,42,0.08)";
-    const inputStyle = {
-        width: "100%",
-        boxSizing: "border-box",
-        border: `1px solid ${panelBorder}`,
-        borderRadius: 16,
-        padding: "14px 16px",
-        fontSize: 14,
-        color: T.text,
-        background: "rgba(255,255,255,0.94)",
-        outline: "none",
-        fontFamily: "inherit",
-    };
-
-    const handleSend = () => {
-        if (!subject.trim() || !message.trim()) return;
-        setStatus("sending");
-        const composed = attachment ? `${message}\n\nAttachment referenced: ${attachment.name}` : message;
-        window.location.href = `mailto:kumodiit@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(composed)}`;
-        setTimeout(() => {
-            setStatus("sent");
-            setSubject("");
-            setMessage("");
-            setAttachment(null);
-        }, 800);
-    };
-
     return (
-        <div style={{ maxWidth: 800, margin: "0 auto" }}>
-            {/* Email Contact Information Message */}
-            <div style={{ borderRadius: 28, padding: "32px 30px", background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(16,185,129,0.08))", border: `1px solid ${panelBorder}`, boxShadow: "0 12px 32px rgba(15,23,42,0.10)" }}>
-                <div style={{ display: "flex", alignItems: "start", gap: 20 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg, rgba(59,130,246,0.20), rgba(16,185,129,0.20))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>✉️</div>
-                    <div style={{ flex: 1 }}>
-                        <h3 style={{ margin: "0 0 12px", fontSize: 22, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.01em" }}>Get in Touch</h3>
-                        <p style={{ margin: "0 0 20px", fontSize: 15, lineHeight: 1.7, color: "rgba(15,23,42,0.72)" }}>
-                            Have suggestions, improvements, or queries? We'd love to hear from you. Reach out to us at:
-                        </p>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderRadius: 14, background: "rgba(255,255,255,0.85)", border: `1px solid ${panelBorder}`, boxShadow: "0 2px 8px rgba(15,23,42,0.04)" }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: "#64748b", minWidth: 70 }}>Primary:</span>
-                                <a href="mailto:kmk03072018@gmail.com" style={{ fontSize: 15, fontWeight: 700, color: "#0ea5e9", textDecoration: "none", transition: "color 0.2s" }}>kmk03072018@gmail.com</a>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderRadius: 14, background: "rgba(255,255,255,0.85)", border: `1px solid ${panelBorder}`, boxShadow: "0 2px 8px rgba(15,23,42,0.04)" }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: "#64748b", minWidth: 70 }}>Support:</span>
-                                <a href="mailto:kumodiit@gmail.com" style={{ fontSize: 15, fontWeight: 700, color: "#0ea5e9", textDecoration: "none", transition: "color 0.2s" }}>kumodiit@gmail.com</a>
-                            </div>
-                        </div>
-                        <p style={{ margin: "20px 0 0", fontSize: 13, lineHeight: 1.6, color: "rgba(15,23,42,0.60)", fontStyle: "italic" }}>
-                            We typically respond within 1-2 business days. Your feedback helps us improve TradeEdge for everyone.
-                        </p>
+        <div style={{ maxWidth: 680, margin: "0 auto" }}>
+            <div style={{
+                borderRadius: 28,
+                padding: "40px 36px",
+                background: "linear-gradient(135deg, rgba(59,130,246,0.06), rgba(16,185,129,0.08))",
+                border: `1px solid ${panelBorder}`,
+                boxShadow: "0 16px 48px rgba(15,23,42,0.10)",
+            }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+                    <div style={{
+                        width: 52, height: 52, borderRadius: 16, flexShrink: 0,
+                        background: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(16,185,129,0.22))",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26,
+                    }}>✉️</div>
+                    <div>
+                        <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 800, color: T.green, marginBottom: 4 }}>Contact us</div>
+                        <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>We'd love to hear from you</h3>
                     </div>
                 </div>
-            </div>
-            <div style={{ borderRadius: 28, padding: "28px 24px", background: "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96))", border: `1px solid ${panelBorder}`, boxShadow: "0 28px 80px rgba(15,23,42,0.14)" }}>
-                {status === "sent" ? (
-                    <div style={{ background: "linear-gradient(180deg, rgba(16,185,129,0.12), rgba(16,185,129,0.04))", border: "1px solid rgba(16,185,129,0.26)", borderRadius: 22, padding: "24px 22px", color: T.text }}>
-                        <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 800, color: T.green, marginBottom: 10 }}>Message queued</div>
-                        <div style={{ fontSize: 24, lineHeight: 1.2, fontWeight: 800, marginBottom: 8 }}>Your email draft is ready.</div>
-                        <div style={{ fontSize: 14, lineHeight: 1.8, color: T.subtext }}>Your email client has been opened with the message prefilled. We typically respond within 1-2 business days.</div>
-                        <button onClick={() => setStatus(null)} style={{ marginTop: 18, fontSize: 13, color: T.green, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.18)", cursor: "pointer", padding: "10px 14px", borderRadius: 999, fontFamily: "inherit", fontWeight: 700 }}>Draft another message</button>
-                    </div>
-                ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                        <div>
-                            <div style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 800, color: T.green, marginBottom: 8 }}>Contact desk</div>
-                            <h3 style={{ margin: 0, fontSize: 28, lineHeight: 1.12, fontWeight: 800, color: T.text }}>Send a polished support request</h3>
-                            <p style={{ margin: "10px 0 0", fontSize: 14, color: T.subtext, lineHeight: 1.8 }}>Share the context once and we will route it to the right team.</p>
-                        </div>
-                        <div>
-                            <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Subject</label>
-                            <input type="text" value={subject} onChange={e => setSubject(e.target.value)} style={inputStyle} placeholder="What do you need help with?" />
-                        </div>
-                        <div>
-                            <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 8, letterSpacing: "0.12em", textTransform: "uppercase" }}>Message</label>
-                            <span style={{ fontSize: 12.5, color: T.subtext, marginBottom: 10, display: "block", lineHeight: 1.6 }}>Include any issue details, legal request, or relevant product context.</span>
-                            <textarea value={message} onChange={e => setMessage(e.target.value)} rows={9} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.7, minHeight: 180 }} placeholder="Describe your query in a few clear sentences." />
-                        </div>
-                        <div style={{ padding: "14px 16px", borderRadius: 18, border: "1px dashed rgba(15,23,42,0.18)", background: "rgba(248,250,252,0.95)" }}>
-                            <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>Attachment <span style={{ fontWeight: 500, color: T.subtext, textTransform: "none", letterSpacing: 0, marginLeft: 6 }}>Optional</span></label>
-                            <span style={{ fontSize: 12.5, color: T.subtext, marginBottom: 10, display: "block", lineHeight: 1.6 }}>The selected filename will be referenced in the drafted email. You can attach the actual file from your mail client.</span>
-                            <input type="file" onChange={e => setAttachment(e.target.files[0] || null)} style={{ fontSize: 13, color: T.subtext, fontFamily: "inherit" }} />
-                            {attachment && <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: T.text }}>Selected: {attachment.name}</div>}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                            <div style={{ fontSize: 12.5, lineHeight: 1.6, color: T.subtext, maxWidth: 320 }}>By sending this message, you agree to continue the conversation over email for this request.</div>
-                            <button onClick={handleSend} disabled={!subject.trim() || !message.trim() || status === "sending"} style={{ background: (!subject.trim() || !message.trim()) ? "rgba(148,163,184,0.42)" : "linear-gradient(135deg, #0f172a, #10b981)", color: "#fff", border: "none", borderRadius: 999, padding: "13px 22px", fontSize: 12.5, fontWeight: 800, letterSpacing: "0.12em", cursor: (!subject.trim() || !message.trim()) ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: status === "sending" ? 0.8 : 1, textTransform: "uppercase" }}>{status === "sending" ? "Opening draft..." : "Send message"}</button>
-                        </div>
-                    </div>
-                )}
+                <p style={{ margin: "0 0 28px", fontSize: 15, lineHeight: 1.8, color: "rgba(15,23,42,0.70)" }}>
+                    Have suggestions, improvements, or queries about TradeEdge? Feel free to write to us directly — we read every message and aim to respond within 1–2 business days.
+                </p>
+                <div style={{
+                    display: "inline-flex", alignItems: "center", gap: 12,
+                    padding: "14px 22px", borderRadius: 16,
+                    background: "rgba(255,255,255,0.90)",
+                    border: `1px solid ${panelBorder}`,
+                    boxShadow: "0 2px 10px rgba(15,23,42,0.06)",
+                }}>
+                    <span style={{ fontSize: 18 }}>📧</span>
+                    <a
+                        href="mailto:kmk03072018@gmail.com"
+                        style={{ fontSize: 16, fontWeight: 700, color: "#0ea5e9", textDecoration: "none", letterSpacing: "0.01em" }}
+                    >
+                        kmk03072018@gmail.com
+                    </a>
+                </div>
+                <p style={{ margin: "24px 0 0", fontSize: 13, lineHeight: 1.6, color: "rgba(15,23,42,0.48)", fontStyle: "italic" }}>
+                    Your feedback helps us make TradeEdge better for everyone. Thank you for taking the time to reach out.
+                </p>
             </div>
         </div>
     );
