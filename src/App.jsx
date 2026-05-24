@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule"
 import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule"
+import AnnouncementsModule from "./AnnouncementsModule";
 import StockDashboard from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 
@@ -25994,6 +25995,7 @@ const closeLegal = () => {
                 { id: "screener", label: "Screener", description: "Filter the market with structured factor and quality rules." },
                 { id: "fiidii",   label: "FII / DII Flow", description: "Track institutional cash and derivatives participation." },
                 { id: "ownership", label: "Ownership Scans", description: "Review promoter, fund, and shareholder positioning." },
+                { id: "announcements", label: "Announcements", description: "Track corporate disclosures and regulatory filings in real time." },
             ],
         },
         {
@@ -26587,6 +26589,11 @@ const closeLegal = () => {
                                 <div style={{ display: financialSubPage === "ownership" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
                                   <OwnershipScansModule T={T} />
                                 </div>
+                                {financialSubPage === "announcements" && (
+                                    <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
+                                        <AnnouncementsModule T={T} />
+                                    </div>
+                                )}
                             </div>
                         )}
 
