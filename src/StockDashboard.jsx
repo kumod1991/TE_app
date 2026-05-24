@@ -1,8 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
-const SUPABASE_URL      = "https://munqjcjvzgqyxzlmuyjj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q";
-
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // ─── TWO-LEVEL CACHE  (memory + sessionStorage)  ────────────────────────────────
 //
 //  Layer 1 – in-memory Map  : sub-millisecond reads, survives re-renders.

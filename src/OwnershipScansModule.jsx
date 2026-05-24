@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://munqjcjvzgqyxzlmuyjj.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 function sbH() {
   return { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
 }
@@ -596,104 +595,229 @@ function DrilldownModal({ stock, T, onClose }) {
     verticalAlign: "middle", textAlign: "right", ...mono, ...extra,
   });
 
+  // Use state-based mobile detection so it's reactive and available on SSR
+  const [isMobileModal, setIsMobileModal] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= 768 : false
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobileModal(window.innerWidth <= 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Lock body scroll when modal open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  const chipColor = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f97316"][stock.ticker.charCodeAt(0) % 8];
+
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 9999,
-      background: "rgba(2,6,23,0.62)", backdropFilter: "blur(10px)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      background: isDark ? "rgba(2,6,23,0.72)" : "rgba(15,23,42,0.48)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+      display: "flex",
+      alignItems: isMobileModal ? "flex-end" : "center",
+      justifyContent: "center",
+      padding: isMobileModal ? 0 : 20,
     }}
       onClick={e => e.target === e.currentTarget && onClose()}>
+
+      <style>{`
+        @keyframes slideUp { from { transform: translateY(40px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+        @keyframes modalIn { from { transform: scale(0.96) translateY(8px); opacity: 0 } to { transform: scale(1) translateY(0); opacity: 1 } }
+      `}</style>
+
       <div style={{
-        background: isDark
-          ? "linear-gradient(180deg, rgba(15,26,43,0.98) 0%, rgba(11,18,32,0.99) 100%)"
-          : "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(248,250,252,0.99) 100%)",
-        border: `1px solid ${isDark ? "rgba(148,163,184,0.16)" : "rgba(15,23,42,0.08)"}`, borderRadius: 24,
-        width: "min(95vw,780px)", maxHeight: "90vh", overflow: "auto", padding: "28px 32px",
-        boxShadow: `0 40px 110px rgba(0,0,0,0.34)`,
-        animation: "modalIn .2s cubic-bezier(.16,1,.3,1)",
+        background: isDark ? "rgba(11,18,33,0.98)" : "rgba(255,255,255,0.99)",
+        border: `1px solid ${isDark ? "rgba(148,163,184,0.13)" : "rgba(15,23,42,0.08)"}`,
+        borderRadius: isMobileModal ? "20px 20px 0 0" : 20,
+        width: isMobileModal ? "100vw" : "min(96vw, 760px)",
+        /* CRITICAL FIX: On mobile use calc(100% - env(safe-area-inset-top)) so the
+           sheet never extends behind the status bar / notch and the header is always
+           visible. The close strip is pinned to the bottom via its own fixed bar. */
+        height: isMobileModal ? "calc(92dvh - env(safe-area-inset-top, 0px))" : "auto",
+        maxHeight: isMobileModal ? "calc(92dvh - env(safe-area-inset-top, 0px))" : "88vh",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        boxShadow: isDark
+          ? "0 -4px 0 rgba(255,255,255,0.04), 0 40px 100px rgba(0,0,0,0.5)"
+          : "0 -1px 0 rgba(15,23,42,0.05), 0 40px 100px rgba(15,23,42,0.22)",
+        animation: isMobileModal ? "slideUp .26s cubic-bezier(.16,1,.3,1)" : "modalIn .2s cubic-bezier(.16,1,.3,1)",
       }}>
 
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-              <span style={{ fontSize: 24, fontWeight: 700, color: T.text, letterSpacing: "-0.5px",
-                fontFamily: "'DM Mono', 'IBM Plex Mono', monospace" }}>{stock.ticker}</span>
-              <SignalBadge signal={stock.signal} />
-              <span style={{
-                background: T.surface, border: `1px solid ${T.border}`, borderRadius: 4,
-                padding: "2px 8px", fontSize: 10, fontWeight: 600, color: pCfg.color, letterSpacing: "0.02em",
-              }}>
-                {pCfg.icon} {stock.phase}
+        {/* ── Sticky Header ── */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: isMobileModal ? "14px 16px 12px" : "22px 28px 16px",
+          flexShrink: 0,
+          borderBottom: `1px solid ${isDark ? "rgba(148,163,184,0.09)" : "rgba(15,23,42,0.07)"}`,
+          background: isDark ? "rgba(11,18,33,0.98)" : "rgba(255,255,255,0.99)",
+          position: "relative",
+          zIndex: 2,
+        }}>
+          {/* Drag handle (mobile) */}
+          {isMobileModal && (
+            <div style={{
+              position: "absolute", left: "50%", top: 6,
+              transform: "translateX(-50%)",
+              width: 32, height: 3.5, borderRadius: 999,
+              background: isDark ? "rgba(148,163,184,0.22)" : "rgba(15,23,42,0.13)",
+            }} />
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+            {/* Ticker chip */}
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+              background: `${chipColor}16`, border: `1px solid ${chipColor}28`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color: chipColor, letterSpacing: "0.07em", ...mono }}>
+                {stock.ticker.slice(0, 4)}
               </span>
             </div>
-            <div style={{ fontSize: 13, color: T.subtext, fontWeight: 400 }}>{stock.name}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 2 }}>
+                <span style={{ fontSize: isMobileModal ? 16 : 19, fontWeight: 700, color: T.text, letterSpacing: "-0.4px", ...mono }}>
+                  {stock.ticker}
+                </span>
+                <SignalBadge signal={stock.signal} />
+                <span style={{
+                  background: `${pCfg.color}12`, border: `1px solid ${pCfg.color}28`,
+                  borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 600,
+                  color: pCfg.color, letterSpacing: "0.02em",
+                }}>
+                  {pCfg.icon} {stock.phase}
+                </span>
+              </div>
+              <div style={{ fontSize: 11.5, color: T.subtext, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {stock.name}
+              </div>
+            </div>
           </div>
+
+          {/* Close button — always visible on desktop; on mobile we also show a bottom bar */}
           <button onClick={onClose} style={{
-            background: isDark ? "rgba(10,18,32,0.8)" : "rgba(255,255,255,0.8)", border: `1px solid ${isDark ? "rgba(148,163,184,0.16)" : "rgba(15,23,42,0.08)"}`,
-            color: T.muted, borderRadius: 12, padding: "8px 14px", cursor: "pointer", fontSize: 12,
-            fontFamily: "inherit", flexShrink: 0, letterSpacing: "0.02em",
-            transition: "all .12s",
-          }}>✕ Close</button>
+            flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 32, height: 32,
+            background: isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.06)",
+            border: `1px solid ${isDark ? "rgba(148,163,184,0.15)" : "rgba(15,23,42,0.09)"}`,
+            borderRadius: 8,
+            cursor: "pointer",
+            color: T.muted,
+            fontSize: 16, lineHeight: 1,
+            fontFamily: "inherit",
+            transition: "background .12s, border-color .12s",
+            marginLeft: 10,
+          }} aria-label="Close">✕</button>
         </div>
 
-        {/* Insight banner */}
+        {/* ── Scrollable body ── */}
         <div style={{
-          background: `linear-gradient(180deg, ${cfg.bg} 0%, ${isDark ? "rgba(10,18,32,0.82)" : "rgba(255,255,255,0.82)"} 100%)`, border: `1px solid ${cfg.border}`, borderRadius: 18,
-          padding: "18px 20px", marginBottom: 18,
+          flex: 1, overflowY: "auto", overflowX: "hidden",
+          /* Bottom padding accounts for the mobile close strip height (60px) so content isn't hidden behind it */
+          padding: isMobileModal ? "16px 16px 80px" : "20px 28px 28px",
+          WebkitOverflowScrolling: "touch",
         }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: cfg.color, letterSpacing: ".1em",
-            textTransform: "uppercase", marginBottom: 8 }}>
-            Flow Summary · {stock.latestDate}
+
+        {/* ── Flow Summary Banner ── */}
+        <div style={{
+          background: isDark
+            ? `linear-gradient(135deg, ${cfg.bg} 0%, rgba(10,18,32,0.85) 100%)`
+            : `linear-gradient(135deg, ${cfg.bg} 0%, rgba(252,253,255,0.9) 100%)`,
+          border: `1px solid ${cfg.border}`,
+          borderRadius: 14,
+          padding: "16px 18px",
+          marginBottom: 12,
+        }}>
+          {/* Header row */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 6 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: cfg.color, letterSpacing: ".1em", textTransform: "uppercase" }}>
+              Flow Summary · {stock.latestDate}
+            </span>
+            {stock.anomalies.length > 0 && (
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {stock.anomalies.map(a => (
+                  <span key={a} style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 4,
+                    background: "rgba(220,38,38,0.07)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.18)" }}>
+                    ⚠ {a}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          <div style={{ fontSize: 13, color: T.text, lineHeight: 1.65, marginBottom: stock.inflect ? 8 : 0 }}>
-            💡 {stock.insight}
+
+          {/* Insight text */}
+          <div style={{ fontSize: 13, color: T.text, lineHeight: 1.65, marginBottom: 12 }}>
+            {stock.insight}
           </div>
+
           {stock.inflect && (
-            <div style={{ fontSize: 12, color: T.subtext, marginBottom: stock.anomalies.length > 0 ? 8 : 0 }}>
-              📍 FII inflection: <strong style={{ color: T.text }}>{stock.inflect}</strong>
+            <div style={{ fontSize: 11.5, color: T.subtext, marginBottom: 12 }}>
+              FII inflection: <strong style={{ color: T.text, ...mono }}>{stock.inflect}</strong>
             </div>
           )}
-          {stock.anomalies.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-              {stock.anomalies.map(a => (
-                <span key={a} style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px",
-                  borderRadius: 4, background: "rgba(220,38,38,0.07)", color: "#dc2626",
-                  border: "1px solid rgba(220,38,38,0.2)" }}>🚨 {a}</span>
-              ))}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 24, marginTop: 14, flexWrap: "wrap" }}>
+
+          {/* Key metrics row */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobileModal ? "repeat(3, 1fr)" : "repeat(6, 1fr)",
+            gap: 0,
+            borderRadius: 10,
+            overflow: "hidden",
+            border: `1px solid ${isDark ? "rgba(148,163,184,0.10)" : "rgba(15,23,42,0.07)"}`,
+          }}>
             {[
-              { label: "Score",         val: fmt(stock.score),              color: stock.score > 3 ? "#059669" : stock.score < -3 ? "#dc2626" : T.subtext },
-              { label: "Conviction",    val: stock.conviction,              color: stock.conviction === "High" ? "#059669" : T.subtext },
+              { label: "Score",    val: fmt(stock.score),              color: stock.score > 3 ? "#059669" : stock.score < -3 ? "#dc2626" : T.text },
+              { label: "Conviction", val: stock.conviction,            color: stock.conviction === "High" ? "#059669" : T.subtext },
               { label: "Combined Flow", val: fmt(stock.combinedFlow) + "%", color: stock.combinedFlow > 0 ? "#059669" : "#dc2626" },
-              { label: "Timing",        val: stock.timing,                  color: stock.timing === "Recent" ? "#10b981" : stock.timing === "Mature" ? T.muted : T.subtext },
-              { label: "Dominance",     val: stock.dominance,               color: stock.dominance === "Balanced" ? "#8b5cf6" : "#3b82f6" },
-              { label: "FII Accel.",    val: fmt(stock.accel.fii) + "%",    color: stock.accel.fii > 0 ? "#059669" : "#dc2626" },
-            ].map(c => (
-              <div key={c.label}>
-                <div style={{ fontSize: 9, color: T.muted, letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 3 }}>{c.label}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: c.color, ...mono }}>{c.val}</div>
+              { label: "Timing",   val: stock.timing,                  color: stock.timing === "Recent" ? "#10b981" : T.subtext },
+              { label: "Dominance", val: stock.dominance,              color: stock.dominance === "Balanced" ? "#8b5cf6" : "#3b82f6" },
+              { label: "FII Accel.", val: fmt(stock.accel.fii) + "%", color: stock.accel.fii > 0 ? "#059669" : "#dc2626" },
+            ].map((c, idx, arr) => (
+              <div key={c.label} style={{
+                padding: "10px 12px",
+                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.7)",
+                borderRight: idx < arr.length - 1 ? `1px solid ${isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.06)"}` : "none",
+                borderBottom: isMobileModal && idx < 3 ? `1px solid ${isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.06)"}` : "none",
+              }}>
+                <div style={{ fontSize: 8.5, color: T.muted, letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 4 }}>{c.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: c.color, ...mono }}>{c.val}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Ownership Story */}
+        {/* ── Ownership Story ── */}
         {stock.story && (
           <div style={{
-            background: isDark ? "rgba(10,18,32,0.78)" : "rgba(255,255,255,0.82)", border: `1px solid ${isDark ? "rgba(148,163,184,0.12)" : "rgba(15,23,42,0.07)"}`, borderRadius: 18,
-            padding: "16px 18px", marginBottom: 18,
+            border: `1px solid ${isDark ? "rgba(148,163,184,0.09)" : "rgba(15,23,42,0.07)"}`,
+            borderRadius: 14,
+            padding: "14px 16px",
+            marginBottom: 12,
+            background: isDark ? "rgba(255,255,255,0.02)" : "rgba(248,250,252,0.8)",
           }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em",
-              textTransform: "uppercase", marginBottom: 8 }}>Ownership Story</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase", marginBottom: 8 }}>
+              Ownership Story
+            </div>
             <div style={{ fontSize: 13, color: T.text, lineHeight: 1.7 }}>{stock.story}</div>
           </div>
         )}
 
-        {/* Ownership vs Flow cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+        {/* ── Ownership Position + Flow side-by-side ── */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobileModal ? "1fr" : "1fr 1fr",
+          gap: 10,
+          marginBottom: 12,
+        }}>
           {[
             {
               title: "Ownership (Position)",
@@ -715,15 +839,25 @@ function DrilldownModal({ stock, T, onClose }) {
             },
           ].map(panel => (
             <div key={panel.title} style={{
-              background: isDark ? "rgba(10,18,32,0.78)" : "rgba(255,255,255,0.84)", border: `1px solid ${isDark ? "rgba(148,163,184,0.12)" : "rgba(15,23,42,0.07)"}`, borderRadius: 18, padding: "16px 18px",
+              border: `1px solid ${isDark ? "rgba(148,163,184,0.09)" : "rgba(15,23,42,0.07)"}`,
+              borderRadius: 14,
+              overflow: "hidden",
             }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em",
-                textTransform: "uppercase", marginBottom: 14 }}>{panel.title}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                {panel.items.map(c => (
-                  <div key={c.label}>
-                    <div style={{ fontSize: 9, color: T.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: ".05em" }}>{c.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 600, color: c.color, ...mono }}>{c.val}</div>
+              <div style={{
+                padding: "10px 14px 9px",
+                borderBottom: `1px solid ${isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.06)"}`,
+                background: isDark ? "rgba(255,255,255,0.02)" : "rgba(248,250,252,0.9)",
+                fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase",
+              }}>{panel.title}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
+                {panel.items.map((c, idx, arr) => (
+                  <div key={c.label} style={{
+                    padding: "12px 10px 10px",
+                    borderRight: idx < arr.length - 1 ? `1px solid ${isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.06)"}` : "none",
+                    background: isDark ? "transparent" : "rgba(255,255,255,0.7)",
+                  }}>
+                    <div style={{ fontSize: 8.5, color: T.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: ".05em" }}>{c.label}</div>
+                    <div style={{ fontSize: isMobileModal ? 14 : 17, fontWeight: 700, color: c.color, ...mono }}>{c.val}</div>
                   </div>
                 ))}
               </div>
@@ -731,11 +865,20 @@ function DrilldownModal({ stock, T, onClose }) {
           ))}
         </div>
 
-        {/* Chart */}
-        <div style={{ background: isDark ? "rgba(10,18,32,0.78)" : "rgba(255,255,255,0.84)", border: `1px solid ${isDark ? "rgba(148,163,184,0.12)" : "rgba(15,23,42,0.07)"}`, borderRadius: 18,
-          padding: "16px 14px 12px", marginBottom: 18 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em",
-            textTransform: "uppercase", marginBottom: 10, paddingLeft: 6 }}>Shareholding Trend (%)</div>
+        {/* ── Chart ── */}
+        <div style={{
+          border: `1px solid ${isDark ? "rgba(148,163,184,0.09)" : "rgba(15,23,42,0.07)"}`,
+          borderRadius: 14,
+          overflow: "hidden",
+          marginBottom: 12,
+        }}>
+          <div style={{
+            padding: "10px 14px 9px",
+            borderBottom: `1px solid ${isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.06)"}`,
+            background: isDark ? "rgba(255,255,255,0.02)" : "rgba(248,250,252,0.9)",
+            fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase",
+          }}>Shareholding Trend (%)</div>
+          <div style={{ padding: "14px 12px 10px", background: isDark ? "transparent" : "rgba(255,255,255,0.7)" }}>
           <svg width="100%" viewBox={`0 0 ${W} ${H + 22}`} style={{ display: "block" }}>
             {[0, 0.33, 0.66, 1].map(f => {
               const y = gY(mn + f * r);
@@ -760,22 +903,32 @@ function DrilldownModal({ stock, T, onClose }) {
               </text>
             ))}
           </svg>
-          <div style={{ display: "flex", gap: 16, paddingLeft: 6, flexWrap: "wrap", marginTop: 4 }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10 }}>
             {series.map(s => (
               <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 16, height: 2, background: s.color, borderRadius: 2 }} />
+                <div style={{ width: 14, height: 2, background: s.color, borderRadius: 2 }} />
                 <span style={{ fontSize: 11, color: T.subtext }}>{s.label}</span>
               </div>
             ))}
           </div>
+          </div>
         </div>
 
-        {/* Quarterly history table */}
-        <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em",
-          textTransform: "uppercase", marginBottom: 10 }}>Quarterly History</div>
-        <div style={{ background: isDark ? "rgba(10,18,32,0.78)" : "rgba(255,255,255,0.9)", border: `1px solid ${isDark ? "rgba(148,163,184,0.12)" : "rgba(15,23,42,0.07)"}`, borderRadius: 18,
-          overflow: "hidden", marginBottom: 16 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        {/* ── Quarterly History Table ── */}
+        <div style={{
+          border: `1px solid ${isDark ? "rgba(148,163,184,0.09)" : "rgba(15,23,42,0.07)"}`,
+          borderRadius: 14,
+          overflow: "hidden",
+          marginBottom: 14,
+        }}>
+          <div style={{
+            padding: "10px 14px 9px",
+            borderBottom: `1px solid ${isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.06)"}`,
+            background: isDark ? "rgba(255,255,255,0.02)" : "rgba(248,250,252,0.9)",
+            fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase",
+          }}>Quarterly History</div>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 460 }}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, textAlign: "left" }}>Date</th>
@@ -797,6 +950,7 @@ function DrilldownModal({ stock, T, onClose }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {qs.some(q => q.number_of_shareholders) && (
@@ -810,6 +964,36 @@ function DrilldownModal({ stock, T, onClose }) {
                   ? Number(qs[qs.length-1].number_of_shareholders).toLocaleString() : "—"}
               </span>
             </div>
+          </div>
+        )}
+        </div>
+
+        {/* ── MOBILE CLOSE STRIP — always visible above browser chrome ──
+             This sits outside the scrollable body so it's never scrolled off.
+             It's a flexShrink:0 row at the very bottom of the modal sheet.     */}
+        {isMobileModal && (
+          <div style={{
+            flexShrink: 0,
+            padding: "10px 16px calc(10px + env(safe-area-inset-bottom, 0px))",
+            borderTop: `1px solid ${isDark ? "rgba(148,163,184,0.10)" : "rgba(15,23,42,0.07)"}`,
+            background: isDark ? "rgba(11,18,33,0.98)" : "rgba(255,255,255,0.99)",
+          }}>
+            <button onClick={onClose} style={{
+              width: "100%",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              padding: "13px 20px",
+              background: isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.05)",
+              border: `1px solid ${isDark ? "rgba(148,163,184,0.15)" : "rgba(15,23,42,0.09)"}`,
+              borderRadius: 12,
+              cursor: "pointer",
+              color: T.subtext,
+              fontSize: 13, fontWeight: 600,
+              fontFamily: "inherit",
+              letterSpacing: "0.01em",
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              Close
+            </button>
           </div>
         )}
       </div>
@@ -1319,13 +1503,13 @@ export default function OwnershipScansModule({ T }) {
         style={{
           width: "100%",
           border: `1px solid ${elevatedBorder}`,
-          borderRadius: 18,
+          borderRadius: 16,
           background: sectionCardBg,
-          padding: isMobile ? 16 : 18,
+          padding: isMobile ? 14 : 18,
           cursor: "pointer",
           textAlign: "left",
           color: "inherit",
-          boxShadow: isDark ? "0 10px 22px rgba(0,0,0,0.14)" : "0 8px 18px rgba(15,23,42,0.04)",
+          boxShadow: isDark ? "0 6px 16px rgba(0,0,0,0.12)" : "0 4px 12px rgba(15,23,42,0.04)",
           transition: "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
         }}
       >
@@ -1400,21 +1584,21 @@ export default function OwnershipScansModule({ T }) {
           ))}
         </div>
 
-        <div style={{ borderRadius: 18, padding: "12px 14px", background: positiveFlow ? "rgba(5,150,105,0.06)" : "rgba(220,38,38,0.05)", border: `1px solid ${positiveFlow ? "rgba(5,150,105,0.12)" : "rgba(220,38,38,0.12)"}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+        <div style={{ borderRadius: 14, padding: "11px 13px", background: positiveFlow ? "rgba(5,150,105,0.05)" : "rgba(220,38,38,0.04)", border: `1px solid ${positiveFlow ? "rgba(5,150,105,0.10)" : "rgba(220,38,38,0.10)"}` }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
             <SignalBadge signal={stock.signal} />
-            <span style={{ fontSize: 11.5, color: T.subtext }}>{stock.phase}</span>
+            <span style={{ fontSize: 11, color: T.subtext, fontWeight: 500 }}>{stock.phase}</span>
           </div>
-          <div style={{ fontSize: 12.5, lineHeight: 1.65, color: T.subtext }}>
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: T.subtext, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {stock.story || "Institutional ownership pattern available in the drilldown."}
           </div>
         </div>
 
-        <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ fontSize: 11.5, color: T.muted }}>
-            #{rowNum} in current ranking
+        <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontSize: 11, color: T.muted }}>
+            #{rowNum} · Tap to expand
           </div>
-          <div style={{ transform: "scale(0.96)", transformOrigin: "right center" }}>
+          <div style={{ transform: "scale(0.92)", transformOrigin: "right center" }}>
             <TrendSparklines stock={stock} T={T} />
           </div>
         </div>
@@ -1448,6 +1632,7 @@ export default function OwnershipScansModule({ T }) {
         "@keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(.98) } to { opacity: 1; transform: none } }",
         "@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }",
         "@keyframes floatIn { from { opacity: 0; transform: translateY(16px) scale(.985) } to { opacity: 1; transform: translateY(0) scale(1) } }",
+        "@keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }",
         ".os-row { transition: box-shadow .15s; }",
         ".os-row td { transition: background .1s; }",
         ".os-row:hover td { background: " + (isDark ? "rgba(99,131,179,0.04)" : "rgba(15,23,42,0.025)") + " !important; }",
@@ -1524,61 +1709,61 @@ export default function OwnershipScansModule({ T }) {
         </div>
 
         {/* EDUCATION PANEL */}
-        {showEdu && (
-          <div style={{
-            background: sectionCardBg,
-            border: `1px solid ${elevatedBorder}`, borderRadius: 18,
-            padding: "18px 22px", marginBottom: 20,
-            animation: "fadeIn .18s cubic-bezier(.16,1,.3,1)",
-            boxShadow: isDark ? "0 12px 28px rgba(0,0,0,0.16)" : "0 10px 22px rgba(15,23,42,0.04)",
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 14 }}>
-              How To Use Ownership Scans
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "10px 28px", fontSize: 12.5, color: T.subtext, lineHeight: 1.75 }}>
-              <div><span style={{ color: T.text, fontWeight: 600 }}>1. Start with filters</span> to isolate Smart Money, Recent Entry, Accelerating, Promoter Led, or Distribution setups.</div>
-              <div><span style={{ color: T.text, fontWeight: 600 }}>2. Use Score and 4Q flows</span> to rank conviction. Higher positive FII and DII flows usually indicate stronger institutional interest.</div>
-              <div><span style={{ color: T.text, fontWeight: 600 }}>3. Treat Ownership % as context</span>, but treat flow change over QoQ and 4Q as the main decision signal.</div>
-              <div><span style={{ color: "#3b82f6", fontWeight: 600 }}>4. FII Flow ↑</span> suggests foreign participation. <span style={{ color: "#8b5cf6", fontWeight: 600 }}>DII Flow ↑</span> suggests domestic conviction.</div>
-              <div><span style={{ color: "#059669", fontWeight: 600 }}>5. Open any stock</span> to inspect the quarterly ownership chart, flow summary, and ownership story before acting.</div>
-              <div><span style={{ color: T.text, fontWeight: 600 }}>6. Watch for divergence</span> where promoter selling is absorbed by institutions, or where both FIIs and DIIs distribute together.</div>
-            </div>
-          </div>
-        )}
+        {/*{showEdu && (*/}
+        {/*  <div style={{*/}
+        {/*    background: sectionCardBg,*/}
+        {/*    border: `1px solid ${elevatedBorder}`, borderRadius: 18,*/}
+        {/*    padding: "18px 22px", marginBottom: 20,*/}
+        {/*    animation: "fadeIn .18s cubic-bezier(.16,1,.3,1)",*/}
+        {/*    boxShadow: isDark ? "0 12px 28px rgba(0,0,0,0.16)" : "0 10px 22px rgba(15,23,42,0.04)",*/}
+        {/*  }}>*/}
+        {/*    <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 14 }}>*/}
+        {/*      How To Use Ownership Scans*/}
+        {/*    </div>*/}
+        {/*    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "10px 28px", fontSize: 12.5, color: T.subtext, lineHeight: 1.75 }}>*/}
+        {/*      <div><span style={{ color: T.text, fontWeight: 600 }}>1. Start with filters</span> to isolate Smart Money, Recent Entry, Accelerating, Promoter Led, or Distribution setups.</div>*/}
+        {/*      <div><span style={{ color: T.text, fontWeight: 600 }}>2. Use Score and 4Q flows</span> to rank conviction. Higher positive FII and DII flows usually indicate stronger institutional interest.</div>*/}
+        {/*      <div><span style={{ color: T.text, fontWeight: 600 }}>3. Treat Ownership % as context</span>, but treat flow change over QoQ and 4Q as the main decision signal.</div>*/}
+        {/*      <div><span style={{ color: "#3b82f6", fontWeight: 600 }}>4. FII Flow ↑</span> suggests foreign participation. <span style={{ color: "#8b5cf6", fontWeight: 600 }}>DII Flow ↑</span> suggests domestic conviction.</div>*/}
+        {/*      <div><span style={{ color: "#059669", fontWeight: 600 }}>5. Open any stock</span> to inspect the quarterly ownership chart, flow summary, and ownership story before acting.</div>*/}
+        {/*      <div><span style={{ color: T.text, fontWeight: 600 }}>6. Watch for divergence</span> where promoter selling is absorbed by institutions, or where both FIIs and DIIs distribute together.</div>*/}
+        {/*    </div>*/}
+        {/*  </div>*/}
+        {/*)}*/}
 
         {/* TOP INSIGHT CARD */}
-        {(() => {
-          const top = processed.length ? [...processed].sort((a,b) => b.score - a.score)[0] : null;
-          const accelCount = processed.filter(x => x.accel.fii > 0.5 && x.accel.dii > 0.5).length;
-          const topSectorCounts = {};
-          processed.filter(x => x.sector && ["Aggressive Accumulation","Strong Accumulation"].includes(x.signal))
-            .forEach(x => { topSectorCounts[x.sector] = (topSectorCounts[x.sector] || 0) + 1; });
-          const topSector = Object.entries(topSectorCounts).sort((a,b) => b[1]-a[1])[0];
-          if (!top) return null;
-          return (
-            <div style={{ border: `1px solid ${elevatedBorder}`, borderRadius: 16, background: sectionCardBg, padding: isMobile ? "14px 16px" : "16px 22px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", boxShadow: isDark ? "0 8px 20px rgba(0,0,0,0.14)" : "0 6px 16px rgba(15,23,42,0.04)" }}>
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 6 }}>Top Insight Today</div>
-                {topSector ? (
-                  <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
-                    <span style={{ fontWeight: 700, color: "#059669" }}>{topSector[0]}</span>
-                    <span style={{ color: T.subtext }}> showing strongest institutional accumulation — </span>
-                    <span style={{ fontWeight: 600, color: T.text }}>{topSector[1]} stocks</span>
-                    {accelCount > 0 && <span style={{ color: T.subtext }}> with {accelCount} dual FII+DII acceleration</span>}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 13, color: T.subtext }}>Top-ranked name: <span style={{ fontWeight: 700, color: T.text }}>{top.name || top.ticker}</span> — score <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#059669", fontWeight: 700 }}>{fmt(top.score)}</span></div>
-                )}
-              </div>
-              {top && (
-                <button onClick={() => setSelected(top)} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", color: T.subtext, fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}>
-                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: T.text, fontWeight: 700 }}>{top.ticker}</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                </button>
-              )}
-            </div>
-          );
-        })()}
+        {/*{(() => {*/}
+        {/*  const top = processed.length ? [...processed].sort((a,b) => b.score - a.score)[0] : null;*/}
+        {/*  const accelCount = processed.filter(x => x.accel.fii > 0.5 && x.accel.dii > 0.5).length;*/}
+        {/*  const topSectorCounts = {};*/}
+        {/*  processed.filter(x => x.sector && ["Aggressive Accumulation","Strong Accumulation"].includes(x.signal))*/}
+        {/*    .forEach(x => { topSectorCounts[x.sector] = (topSectorCounts[x.sector] || 0) + 1; });*/}
+        {/*  const topSector = Object.entries(topSectorCounts).sort((a,b) => b[1]-a[1])[0];*/}
+        {/*  if (!top) return null;*/}
+        {/*  return (*/}
+        {/*    <div style={{ border: `1px solid ${elevatedBorder}`, borderRadius: 16, background: sectionCardBg, padding: isMobile ? "14px 16px" : "16px 22px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", boxShadow: isDark ? "0 8px 20px rgba(0,0,0,0.14)" : "0 6px 16px rgba(15,23,42,0.04)" }}>*/}
+        {/*      */}{/*<div>*/}
+        {/*      */}{/*  <div style={{ fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 6 }}>Top Insight Today</div>*/}
+        {/*      */}{/*  {topSector ? (*/}
+        {/*      */}{/*    <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>*/}
+        {/*      */}{/*      <span style={{ fontWeight: 700, color: "#059669" }}>{topSector[0]}</span>*/}
+        {/*      */}{/*      <span style={{ color: T.subtext }}> showing strongest institutional accumulation — </span>*/}
+        {/*      */}{/*      <span style={{ fontWeight: 600, color: T.text }}>{topSector[1]} stocks</span>*/}
+        {/*      */}{/*      {accelCount > 0 && <span style={{ color: T.subtext }}> with {accelCount} dual FII+DII acceleration</span>}*/}
+        {/*      */}{/*    </div>*/}
+        {/*      */}{/*  ) : (*/}
+        {/*      */}{/*    <div style={{ fontSize: 13, color: T.subtext }}>Top-ranked name: <span style={{ fontWeight: 700, color: T.text }}>{top.name || top.ticker}</span> — score <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#059669", fontWeight: 700 }}>{fmt(top.score)}</span></div>*/}
+        {/*      */}{/*  )}*/}
+        {/*      */}{/*</div>*/}
+        {/*      */}{/*{top && (*/}
+        {/*      */}{/*  <button onClick={() => setSelected(top)} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", color: T.subtext, fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}>*/}
+        {/*      */}{/*    <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: T.text, fontWeight: 700 }}>{top.ticker}</span>*/}
+        {/*      */}{/*    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>*/}
+        {/*      */}{/*  </button>*/}
+        {/*      */}{/*)}*/}
+        {/*    </div>*/}
+        {/*  );*/}
+        {/*})()}*/}
 
         {/* INTEL STRIP */}
         <div style={{ marginBottom: 14 }}>
@@ -1688,9 +1873,9 @@ export default function OwnershipScansModule({ T }) {
           <div style={{ padding: isMobile ? "16px 14px 12px" : "18px 20px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", borderBottom: `1px solid ${T.border}` }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 4 }}>Top-ranked ownership names</div>
-              <div style={{ fontSize: 12.5, color: T.subtext }}>
-                {isMobile ? "Card-first mobile scan view." : "Preview table aligned with the main dashboard layout."}
-              </div>
+              {/*<div style={{ fontSize: 12.5, color: T.subtext }}>*/}
+              {/*  {isMobile ? "Card-first mobile scan view." : "Preview table aligned with the main dashboard layout."}*/}
+              {/*</div>*/}
             </div>
             {filtered.length > PREVIEW_SIZE && (
               <button onClick={() => { setFullScreen(true); setFullPage(1); }} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "9px 14px", borderRadius: 12, background: "transparent", border: `1px solid ${T.border}`, color: T.text, cursor: "pointer", fontSize: 12.5, fontFamily: "inherit", fontWeight: 700 }}>
