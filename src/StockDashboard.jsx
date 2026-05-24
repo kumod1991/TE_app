@@ -2336,7 +2336,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin })
                         hideCount={isCompact}
                     />
                 </div>
-                <RsLoginGate T={D} isLocked={!userToken} onLogin={onLogin}>
+                <RsLoginGate T={D} isLocked={false} onLogin={onLogin}>
                     {activeRsTab === "all" ? (
                         <AllRsTable T={D} data={allHighRsStocks} loading={loadingAllRs} onTickerClick={onTickerClick} isCompact={isCompact} />
                     ) : industry ? (

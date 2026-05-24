@@ -24305,7 +24305,7 @@ function LegalCenter({ T, onNavigate, initialTab }) {
 
 /*  TopNavItem  desktop nav item with fixed-position dropdown  */
 // Tabs that require login to access (dashboard is free)
-const PROTECTED_TABS = new Set(["watchlist", "financial", "technical", "tradevault"]);
+const PROTECTED_TABS = new Set([]); // All tabs are freely accessible; login only needed to persist data
 
 /*  TopNavItem  desktop nav item with fixed-position dropdown  */
 function TopNavItem({
@@ -25458,6 +25458,9 @@ export default function App() {
 
 const [page, setPage] = useState("dashboard");
 const [productTab, setProductTab] = useState("dashboard");
+
+// Auto-save guest journal data to localStorage whenever it changes (only when not logged in / not demo)
+// eslint-disable-next-line react-hooks/exhaustive-deps
 const [previousState, setPreviousState] = useState(null);
 const [legalInitialTab, setLegalInitialTab] = useState("disclaimer");
 
@@ -25696,28 +25699,78 @@ const closeLegal = () => {
         } catch (e) { console.error(e); }
     };
 
+    // ── Guest data helpers (localStorage) ────────────────────────────────────
+    const GUEST_LS_KEY = "te_guest_journal";
+    const saveGuestData = (t, f, d) => {
+        try { localStorage.setItem(GUEST_LS_KEY, JSON.stringify({ trades: t, funds: f, dividends: d })); } catch { }
+    };
+    const loadGuestData = () => {
+        try {
+            const raw = localStorage.getItem(GUEST_LS_KEY);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch { return null; }
+    };
+    const clearGuestData = () => { try { localStorage.removeItem(GUEST_LS_KEY); } catch { } };
+
+    // Auto-save guest data whenever trades/funds/dividends change (only when not logged in and not demo)
+    useEffect(() => {
+        if (!session && !isDemo) {
+            saveGuestData(trades, funds, dividends);
+        }
+    }, [trades, funds, dividends, session, isDemo]);
+
     useEffect(() => {
         supabase.auth.getSessionFromHash().then(sess => {
             if (sess?.access_token && sess.user?.id) {
-                prefetchOwnershipData(); // fire FIRST  before any await in loadTrades
+                prefetchOwnershipData();
                 prefetchFiiDiiData();
-                setSession(sess); loadTrades(sess); loadFunds(sess); loadDividends(sess);
+                setSession(sess);
+                loadTrades(sess); loadFunds(sess); loadDividends(sess);
+            } else {
+                // No session – load any previously saved guest data
+                const guest = loadGuestData();
+                if (guest) {
+                    if (Array.isArray(guest.trades))    setTrades(guest.trades);
+                    if (Array.isArray(guest.funds))     setFunds(guest.funds);
+                    if (Array.isArray(guest.dividends)) setDividends(guest.dividends);
+                }
             }
             setChecking(false);
         });
     }, []);
-    const handleLogin = (sess) => {
+
+    const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
         prefetchOwnershipData();
         prefetchFiiDiiData();
         setSession(sess);
         setIsDemo(false);
-        setProductTab(SAFE_PRODUCT_TAB);
-        setPage("dashboard");
-        loadTrades(sess);
-        loadFunds(sess);
-        loadDividends(sess);
+
+        // Upload any guest trades/funds/dividends to Supabase before reloading
+        const guest = loadGuestData();
+        if (guest) {
+            const h = supabase._h(sess.access_token);
+            try {
+                if (Array.isArray(guest.trades) && guest.trades.length) {
+                    const payload = guest.trades.map(({ id, ...t }) => ({ ...t, user_id: sess.user.id }));
+                    await fetch(`${SUPABASE_URL}/rest/v1/trades`, { method: "POST", headers: { ...h, Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+                }
+                if (Array.isArray(guest.funds) && guest.funds.length) {
+                    const payload = guest.funds.map(({ id, ...f }) => ({ ...f, user_id: sess.user.id }));
+                    await fetch(`${SUPABASE_URL}/rest/v1/funds`, { method: "POST", headers: { ...h, Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+                }
+                if (Array.isArray(guest.dividends) && guest.dividends.length) {
+                    const payload = guest.dividends.map(({ id, ...d }) => ({ ...d, user_id: sess.user.id }));
+                    await fetch(`${SUPABASE_URL}/rest/v1/dividends`, { method: "POST", headers: { ...h, Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+                }
+            } catch (e) { console.warn("[Guest sync] Upload error:", e); }
+            clearGuestData();
+        }
+
+        loadTrades(sess); loadFunds(sess); loadDividends(sess);
     };
+
     const handleDemo = () => {
         setIsDemo(true);
         setTrades(DEMO_TRADES);
@@ -25727,7 +25780,22 @@ const closeLegal = () => {
         setPage("dashboard");
         setSession({ email: "demo@tradeedge.app" });
     };
-    const handleLogout = () => { setSession(null); setIsDemo(false); setTrades([]); setFunds([]); setDividends([]); setProductTab(SAFE_PRODUCT_TAB); setPage("dashboard"); };
+
+    const handleLogout = () => {
+        setSession(null);
+        setIsDemo(false);
+        setProductTab(SAFE_PRODUCT_TAB);
+        setPage("dashboard");
+        // Restore guest data (if any) after logout
+        const guest = loadGuestData();
+        if (guest) {
+            setTrades(Array.isArray(guest.trades) ? guest.trades : []);
+            setFunds(Array.isArray(guest.funds) ? guest.funds : []);
+            setDividends(Array.isArray(guest.dividends) ? guest.dividends : []);
+        } else {
+            setTrades([]); setFunds([]); setDividends([]);
+        }
+    };
 
     const handleSave = async (form) => {
         // _tab is a UI-only hint, not a DB field
@@ -25954,7 +26022,7 @@ const closeLegal = () => {
         },
     ];
 
-    const emailDisplay = isDemo ? "demo@tradeedge.app" : (session?.user?.email || session?.email || "User");
+    const emailDisplay = isDemo ? "demo@tradeedge.app" : (session?.user?.email || session?.email || "Guest");
     const isLight = theme === "light";
     const D = !isLight;
 
@@ -26423,9 +26491,6 @@ const closeLegal = () => {
 
                         {/* JOURNAL MODULE */}
                         {productTab === "tradevault" && (
-                            !(session || isDemo) ? (
-                                <LoginGate T={T} theme={theme} tabLabel="Journal" onLogin={() => setShowLoginModal(true)} onBack={() => setProductTab("dashboard")} />
-                            ) : (
                             <div className="journal-layout">
                                 <QuoteContext.Provider value={{ quotes, setQuotes }}>
                                     <main className="journal-main">
@@ -26441,7 +26506,6 @@ const closeLegal = () => {
                                     </main>
                                 </QuoteContext.Provider>
                             </div>
-                            )
                         )}
 
                         {/* WATCHLIST */}
@@ -26466,9 +26530,6 @@ const closeLegal = () => {
                             </ModuleErrorBoundary>
                         )}
                         {productTab === "watchlist" && (
-                            !(session || isDemo) ? (
-                                <LoginGate T={T} theme={theme} tabLabel="Watchlists" onLogin={() => setShowLoginModal(true)} onBack={() => setProductTab("dashboard")} />
-                            ) : (
                             <ModuleErrorBoundary
                               T={T}
                               moduleName="Watchlist"
@@ -26494,14 +26555,10 @@ const closeLegal = () => {
                                   isMarketLive={isMarketLive}
                                 />
                             </ModuleErrorBoundary>
-                            )
                         )}
 
                         {/* FUNDAMENTALS */}
                         {productTab === "financial" && (
-                            !(session || isDemo) ? (
-                                <LoginGate T={T} theme={theme} tabLabel="Fundamentals" onLogin={() => setShowLoginModal(true)} onBack={() => setProductTab("dashboard")} />
-                            ) : (
                             <div style={{ display: "flex", flex: 1, overflow: "hidden", background: T.bg, flexDirection: "column", minHeight: 0 }}>
                                 {financialSubPage === "search" && <FinancialAnalyticsModule T={T} externalSearchRequest={topbarSearchRequest} />}
                                                     {financialSubPage === "screener" && (
@@ -26532,16 +26589,11 @@ const closeLegal = () => {
                                   <OwnershipScansModule T={T} />
                                 </div>
                             </div>
-                            )
                         )}
 
                         {/* TECHNICALS */}
                         {productTab === "technical" && (
-                            !(session || isDemo) ? (
-                                <LoginGate T={T} theme={theme} tabLabel="Technicals" onLogin={() => setShowLoginModal(true)} onBack={() => setProductTab("dashboard")} />
-                            ) : (
-                                <TechnicalAnalyticsModule T={T} subPage={technicalSubPage} onTechnoFundaScan={handleTechnoFundaScan} />
-                            )
+                            <TechnicalAnalyticsModule T={T} subPage={technicalSubPage} onTechnoFundaScan={handleTechnoFundaScan} />
                         )}
 
                             </>
