@@ -7,6 +7,22 @@ function sbH() {
   return { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
 }
 
+// Fetch with a 20-second timeout — prevents infinite hang if office network
+// silently drops requests to the Supabase server.
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } catch (e) {
+    if (e?.name === "AbortError") throw new Error("Request timed out. Your network may be blocking access to the data server.");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ─── CACHE (7-day localStorage TTL) ──────────────────────────────────────────
 const CACHE_KEY    = "ownership_processed_v8";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -93,7 +109,7 @@ async function fetchAllPages(path) {
 
   let total = null;
   try {
-    const head = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    const head = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`, {
       method: "HEAD",
       headers: { ...sbH(), "Range-Unit": "items", Prefer: "count=exact" },
     });
@@ -106,7 +122,7 @@ async function fetchAllPages(path) {
     for (let o = 0; o < total; o += PAGE) offsets.push(o);
     const pages = await Promise.all(
       offsets.map(offset =>
-        fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+        fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`, {
           headers: { ...sbH(), Range: `${offset}-${offset + PAGE - 1}`, "Range-Unit": "items" },
         }).then(r => {
           if (!r.ok) throw new Error(`HTTP ${r.status} on ${path}`);
@@ -119,7 +135,7 @@ async function fetchAllPages(path) {
 
   let offset = 0, all = [];
   while (true) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`, {
       headers: { ...sbH(), Range: `${offset}-${offset + PAGE - 1}`, "Range-Unit": "items", Prefer: "count=exact" },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} on ${path}`);
@@ -868,7 +884,16 @@ async function buildProcessedAsync(rawData, sectorMap) {
     results.push(...chunk);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
-  return results;
+  // Deduplicate by normalised company name — safety net for when bse_code is
+  // missing from company_financials (fallback fetch path) and BSE/NSE twins
+  // both survive buildRawData's bseDups filter.
+  const seenNames = new Set();
+  return results.filter(s => {
+    const key = (s.name || s.ticker).toLowerCase().trim();
+    if (seenNames.has(key)) return false;
+    seenNames.add(key);
+    return true;
+  });
 }
 
 function getInit() {

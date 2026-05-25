@@ -390,6 +390,15 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
     return { ...base, _filterPairs: filterPairs };
 }
 
+// ─── Module-level cache (persists across tab navigations) ────────────────────
+// Key: stringified {activeFilter, debouncedSearch}
+// Value: { announcements: [], offset: number, hasMore: boolean }
+const announcementsCache = new Map();
+
+function getCacheKey(activeFilter, debouncedSearch) {
+    return JSON.stringify({ activeFilter, debouncedSearch });
+}
+
 export default function AnnouncementsModule({ T }) {
     const darkMode = T?.bg === "#0f1117" || T?.bg === "#111827" || (T?.bg && parseInt(T.bg.replace("#",""), 16) < 0x888888 * 3 / 3);
     const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -410,7 +419,8 @@ export default function AnnouncementsModule({ T }) {
     const [debouncedSearch, setDebouncedSearch] = useState("");
 
     const [announcements, setAnnouncements] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [revalidating, setRevalidating] = useState(false);
     const [error, setError] = useState(null);
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
@@ -429,8 +439,24 @@ export default function AnnouncementsModule({ T }) {
     }, [activeFilter, debouncedSearch]);
 
     const fetchPage = useCallback(async (pageOffset, reset = false) => {
-        setLoading(true);
-        setError(null);
+        const cacheKey = getCacheKey(activeFilter, debouncedSearch);
+
+        if (reset) {
+            setError(null);
+            const cached = announcementsCache.get(cacheKey);
+            if (cached) {
+                // Show stale data immediately; refresh silently in background
+                setAnnouncements(cached.announcements);
+                setOffset(cached.offset);
+                setHasMore(cached.hasMore);
+                setRevalidating(true);
+            } else {
+                // No cache yet — show full loading spinner
+                setLoading(true);
+                setAnnouncements([]);
+            }
+        }
+
         try {
             const { _filterPairs, ...baseParams } = buildServerParams(activeFilter, customFilters, debouncedSearch);
 
@@ -442,30 +468,51 @@ export default function AnnouncementsModule({ T }) {
             // Append each filter pair (key may repeat, e.g. multiple "or" params AND together)
             (_filterPairs || []).forEach(([k, v]) => url.searchParams.append(k, v));
 
-            const resp = await fetch(url.toString(), {
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                    "Content-Type": "application/json",
-                    // Ask PostgREST to return total count
-                    Prefer: "count=exact",
-                },
-            });
+            const controller = new AbortController();
+            const fetchTimeout = setTimeout(() => controller.abort(), 15000); // 15s timeout — prevents infinite loading if office network silently drops the request
+            let resp;
+            try {
+                resp = await fetch(url.toString(), {
+                    signal: controller.signal,
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                        "Content-Type": "application/json",
+                        // Ask PostgREST to return total count
+                        Prefer: "count=exact",
+                    },
+                });
+            } finally {
+                clearTimeout(fetchTimeout);
+            }
             const data = await resp.json();
             if (!Array.isArray(data)) throw new Error(data?.message || "Unexpected response from server");
 
             if (reset) {
+                const newOffset = PAGE_SIZE;
+                const newHasMore = data.length === PAGE_SIZE;
                 setAnnouncements(data);
-                setOffset(PAGE_SIZE);
+                setOffset(newOffset);
+                setHasMore(newHasMore);
+                // Store fresh data in cache
+                announcementsCache.set(cacheKey, { announcements: data, offset: newOffset, hasMore: newHasMore });
             } else {
-                setAnnouncements(prev => [...prev, ...data]);
+                setAnnouncements(prev => {
+                    const merged = [...prev, ...data];
+                    announcementsCache.set(cacheKey, { announcements: merged, offset: pageOffset + PAGE_SIZE, hasMore: data.length === PAGE_SIZE });
+                    return merged;
+                });
                 setOffset(prev => prev + PAGE_SIZE);
+                setHasMore(data.length === PAGE_SIZE);
             }
-            setHasMore(data.length === PAGE_SIZE);
         } catch (e) {
-            setError(e.message || "Failed to load announcements");
+            const msg = e?.name === "AbortError"
+                ? "Request timed out (15s). Your network may be blocking access to the data server."
+                : (e.message || "Failed to load announcements");
+            setError(msg);
         } finally {
             setLoading(false);
+            setRevalidating(false);
         }
     }, [activeFilter, customFilters, debouncedSearch]);
 
@@ -623,6 +670,27 @@ export default function AnnouncementsModule({ T }) {
             </div>
 
             {/* Content */}
+            {/* Subtle revalidation indicator — shown while background refresh is in progress */}
+            {revalidating && (
+                <div style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    marginBottom: 12, padding: "6px 14px", borderRadius: 8,
+                    background: darkMode ? "rgba(99,102,241,0.12)" : "#eef2ff",
+                    border: `1px solid ${darkMode ? "rgba(99,102,241,0.25)" : "#c7d2fe"}`,
+                    width: "fit-content",
+                }}>
+                    <div style={{
+                        width: 14, height: 14, borderRadius: "50%",
+                        border: `2px solid ${darkMode ? "rgba(99,102,241,0.3)" : "#c7d2fe"}`,
+                        borderTopColor: "#6366f1",
+                        animation: "te-spin 0.7s linear infinite",
+                        flexShrink: 0,
+                    }} />
+                    <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 500 }}>Refreshing…</span>
+                    <style>{`@keyframes te-spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+            )}
+
             {loading && announcements.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 80, gap: 16 }}>
                     <div style={{
