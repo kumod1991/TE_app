@@ -22,6 +22,25 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const SAFE_PRODUCT_TAB = "watchlist";
+const DEFAULT_APP_STATE = {
+    productTab: "dashboard",
+    page: "dashboard",
+    financialSubPage: "screener",
+    technicalSubPage: "breadth",
+    legalInitialTab: "disclaimer",
+};
+const APP_ROUTE_MAP = {
+    dashboard: "/dashboard",
+    watchlist: "/watchlist",
+    financial: "/fundamentals",
+    technical: "/technicals",
+    tradevault: "/journal",
+    disclaimer: "/legal",
+};
+const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements"]);
+const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "heatmap", "rotation"]);
+const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "portfolio", "funds", "dividends"]);
+const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact"]);
 const BreadthDataContext = createContext({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], rsAcceleration: [], nameMap: {}, industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
 
@@ -2591,7 +2610,52 @@ function parseAppRoute(pathname = "/") {
             symbol: decodeURIComponent(match[1] || "").trim().toUpperCase(),
         };
     }
-    return { kind: "app" };
+    const segments = pathname.split("/").filter(Boolean).map(s => decodeURIComponent(s).toLowerCase());
+    const [section, sub] = segments;
+    if (!section) return { kind: "app", ...DEFAULT_APP_STATE };
+    if (section === "dashboard") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "dashboard" };
+    if (section === "watchlist") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "watchlist" };
+    if (section === "fundamentals") {
+        return {
+            kind: "app",
+            ...DEFAULT_APP_STATE,
+            productTab: "financial",
+            financialSubPage: FINANCIAL_ROUTE_SEGMENTS.has(sub) ? sub : DEFAULT_APP_STATE.financialSubPage,
+        };
+    }
+    if (section === "technicals") {
+        return {
+            kind: "app",
+            ...DEFAULT_APP_STATE,
+            productTab: "technical",
+            technicalSubPage: TECHNICAL_ROUTE_SEGMENTS.has(sub) ? sub : DEFAULT_APP_STATE.technicalSubPage,
+        };
+    }
+    if (section === "journal") {
+        return {
+            kind: "app",
+            ...DEFAULT_APP_STATE,
+            productTab: "tradevault",
+            page: JOURNAL_ROUTE_SEGMENTS.has(sub) ? sub : DEFAULT_APP_STATE.page,
+        };
+    }
+    if (section === "legal") {
+        return {
+            kind: "app",
+            ...DEFAULT_APP_STATE,
+            productTab: "disclaimer",
+            legalInitialTab: LEGAL_ROUTE_SEGMENTS.has(sub) ? sub : DEFAULT_APP_STATE.legalInitialTab,
+        };
+    }
+    return { kind: "app", ...DEFAULT_APP_STATE };
+}
+
+function appPathFromState({ productTab, page, financialSubPage, technicalSubPage, legalInitialTab }) {
+    if (productTab === "financial") return `${APP_ROUTE_MAP.financial}/${financialSubPage || DEFAULT_APP_STATE.financialSubPage}`;
+    if (productTab === "technical") return `${APP_ROUTE_MAP.technical}/${technicalSubPage || DEFAULT_APP_STATE.technicalSubPage}`;
+    if (productTab === "tradevault") return `${APP_ROUTE_MAP.tradevault}/${page || DEFAULT_APP_STATE.page}`;
+    if (productTab === "disclaimer") return `${APP_ROUTE_MAP.disclaimer}/${legalInitialTab || DEFAULT_APP_STATE.legalInitialTab}`;
+    return APP_ROUTE_MAP[productTab] || APP_ROUTE_MAP.dashboard;
 }
 
 function clampScore(value) {
@@ -26292,6 +26356,8 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
 }
 
 export default function App() {
+    const initialRoute = parseAppRoute(typeof window !== "undefined" ? window.location.pathname : "/");
+    const restoringHistoryRef = useRef(false);
     const [session, setSession] = useState(null);
     const [openDropdown, setOpenDropdown] = useState(null);
     const [isDemo, setIsDemo] = useState(false);
@@ -26300,13 +26366,13 @@ export default function App() {
     const [funds, setFunds] = useState([]);
     const [dividends, setDividends] = useState([]);
 
-    const [page, setPage] = useState("dashboard");
-    const [productTab, setProductTab] = useState("dashboard");
+    const [page, setPage] = useState(initialRoute.page || DEFAULT_APP_STATE.page);
+    const [productTab, setProductTab] = useState(initialRoute.productTab || DEFAULT_APP_STATE.productTab);
 
     // Auto-save guest journal data to localStorage whenever it changes (only when not logged in / not demo)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const [previousState, setPreviousState] = useState(null);
-    const [legalInitialTab, setLegalInitialTab] = useState("disclaimer");
+    const [legalInitialTab, setLegalInitialTab] = useState(initialRoute.legalInitialTab || DEFAULT_APP_STATE.legalInitialTab);
 
     const openLegal = (tabId) => {
         setPreviousState({
@@ -26332,9 +26398,9 @@ export default function App() {
         }
     };
 
-    const [route, setRoute] = useState(() => parseAppRoute(typeof window !== "undefined" ? window.location.pathname : "/"));
-    const [financialSubPage, setFinancialSubPage] = useState("search");
-    const [technicalSubPage, setTechnicalSubPage] = useState("breadth");
+    const [route, setRoute] = useState(initialRoute);
+    const [financialSubPage, setFinancialSubPage] = useState(initialRoute.financialSubPage || DEFAULT_APP_STATE.financialSubPage);
+    const [technicalSubPage, setTechnicalSubPage] = useState(initialRoute.technicalSubPage || DEFAULT_APP_STATE.technicalSubPage);
     const [topbarSearch, setTopbarSearch] = useState("");
     const [topbarSuggestions, setTopbarSuggestions] = useState([]);
     const [showTopbarSuggestions, setShowTopbarSuggestions] = useState(false);
@@ -26359,8 +26425,10 @@ export default function App() {
     const clearTickerRoute = useCallback(() => {
         if (typeof window === "undefined") return;
         if (!window.location.pathname.startsWith("/ticker/")) return;
-        syncRoute("/", true); // replaceState: don't leave a ghost "/" entry in history
-    }, [syncRoute]);
+        setRoute({ kind: "app", productTab, page, financialSubPage, technicalSubPage, legalInitialTab });
+        setTopbarSearch("");
+        topbarResolvedSymRef.current = null;
+    }, [productTab, page, financialSubPage, technicalSubPage, legalInitialTab]);
 
     const navigateToTicker = useCallback((rawSymbol, options = {}) => {
         const symbol = (rawSymbol || "").trim().toUpperCase();
@@ -26395,6 +26463,17 @@ export default function App() {
         setOpenDropdown(null);
         setTopbarSearchRequest({ ...payload, key: Date.now() + Math.random() });
     };
+
+    const applyAppRouteState = useCallback((parsed) => {
+        setProductTab(parsed.productTab || DEFAULT_APP_STATE.productTab);
+        setPage(parsed.page || DEFAULT_APP_STATE.page);
+        setFinancialSubPage(parsed.financialSubPage || DEFAULT_APP_STATE.financialSubPage);
+        setTechnicalSubPage(parsed.technicalSubPage || DEFAULT_APP_STATE.technicalSubPage);
+        setLegalInitialTab(parsed.legalInitialTab || DEFAULT_APP_STATE.legalInitialTab);
+        setTechnoFundaFilter(null);
+        setTechnoFundaSource(null);
+        setOpenDropdown(null);
+    }, []);
     const [modal, setModal] = useState(null);
     const [checking, setChecking] = useState(true);
     const [railCollapsed, setRailCollapsed] = useState(true);   //  changed to true
@@ -26889,19 +26968,33 @@ export default function App() {
     useEffect(() => {
         const handlePopState = () => {
             const parsed = parseAppRoute(window.location.pathname);
+            restoringHistoryRef.current = true;
             setRoute(parsed);
             // Clear stale ticker state when back-navigating away from a ticker route
             if (parsed.kind === "app") {
                 setTopbarSearch("");
                 topbarResolvedSymRef.current = null;
-                // Reset to dashboard so the financial search page doesn't ghost-render
-                setProductTab("dashboard");
-                setFinancialSubPage("search");
+                applyAppRouteState(parsed);
             }
         };
         window.addEventListener("popstate", handlePopState);
         return () => window.removeEventListener("popstate", handlePopState);
-    }, []);
+    }, [applyAppRouteState]);
+
+    useEffect(() => {
+        if (route.kind === "ticker") return;
+        const nextPath = appPathFromState({ productTab, page, financialSubPage, technicalSubPage, legalInitialTab });
+        if (typeof window === "undefined" || window.location.pathname === nextPath) {
+            restoringHistoryRef.current = false;
+            return;
+        }
+        if (restoringHistoryRef.current) {
+            restoringHistoryRef.current = false;
+            return;
+        }
+        window.history.pushState(null, "", nextPath);
+        setRoute(parseAppRoute(nextPath));
+    }, [route.kind, productTab, page, financialSubPage, technicalSubPage, legalInitialTab]);
 
     useEffect(() => {
         if (route.kind !== "ticker" || !route.symbol) return;
