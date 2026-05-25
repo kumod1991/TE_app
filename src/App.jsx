@@ -27564,16 +27564,21 @@ export default function App() {
                         {/* Right: links */}
                         <div style={{ display: "flex", alignItems: "center", gap: 0, flexWrap: "wrap" }}>
                             {[
-                                { label: "Disclaimer", tabId: "disclaimer" },
-                                { label: "Privacy", tabId: "privacy" },
-                                { label: "Terms", tabId: "terms" },
-                                { label: "Contact Us", tabId: "contact" },
+                                { label: "Disclaimer", tabId: "disclaimer", href: "/legal/disclaimer" },
+                                { label: "Privacy", tabId: "privacy", href: "/legal/privacy" },
+                                { label: "Terms", tabId: "terms", href: "/legal/terms" },
+                                { label: "Contact Us", tabId: "contact", href: "/legal/contact" },
                             ].map((link, i) => (
                                 <span key={link.label} style={{ display: "flex", alignItems: "center" }}>
                                     {i > 0 && <span style={{ fontSize: 11, color: T.border, margin: "0 5px", userSelect: "none" }}>{"\u00B7"}</span>}
-                                    <button onClick={() => openLegal(link.tabId)}
-                                        style={{ fontSize: 11, color: T.green, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit", fontWeight: 500, opacity: .85 }}
-                                    >{link.label}</button>
+                                    <a
+                                        href={link.href}
+                                        onClick={(event) => {
+                                            event.preventDefault();
+                                            openLegal(link.tabId);
+                                        }}
+                                        style={{ fontSize: 11, color: T.green, cursor: "pointer", padding: 0, fontFamily: "inherit", fontWeight: 500, opacity: .85, textDecoration: "none" }}
+                                    >{link.label}</a>
                                 </span>
                             ))}
                         </div>
