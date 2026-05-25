@@ -24,6 +24,7 @@ async function sbFetchAll(table, params = {}) {
     const r = await fetch(url, {
       headers: {
         ...SB_H,
+        "Cache-Control": "no-cache",
         // Range header: ask for rows offset→offset+PAGE_SIZE-1
         "Range": `${offset}-${offset + PAGE_SIZE - 1}`,
         "Range-Unit": "items",
@@ -292,9 +293,25 @@ function writeModuleCache(data) {
   } catch {}
 }
 
+function latestCashDate(data) {
+  return data?.cashData?.[data.cashData.length - 1]?.date || null;
+}
+
+async function fetchLatestCashDate() {
+  const rows = await sbFetchAll("fii_dii_activity", {
+    select: "date",
+    order: "date.desc",
+    limit: 1,
+  });
+  return rows?.[0]?.date || null;
+}
+
 async function fetchModuleData() {
   const cached = readModuleCache();
-  if (cached.data && !cached.stale) return cached.data;
+  if (cached.data && !cached.stale) {
+    const remoteLatest = await fetchLatestCashDate().catch(() => null);
+    if (!remoteLatest || remoteLatest <= latestCashDate(cached.data)) return cached.data;
+  }
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
     const [cash, derivRaw, sector] = await Promise.all([
