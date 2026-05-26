@@ -70,13 +70,20 @@ function _wlAggregateToWeekly(rows) {
     const diff = (d.getDay() === 0 ? -6 : 1) - d.getDay();
     const mon = new Date(d); mon.setDate(d.getDate() + diff);
     const key = mon.toISOString().slice(0, 10);
+    // Adjustment factor: ratio of adj_close to raw close (handles splits/dividends).
+    // Fall back to 1 if adj_close is missing or close is 0.
+    const factor = (r.adj_close != null && r.close) ? r.adj_close / r.close : 1;
+    const adjO = r.open  * factor;
+    const adjH = r.high  * factor;
+    const adjL = r.low   * factor;
+    const adjC = r.adj_close ?? r.close;
     if (!weeks[key]) {
-      weeks[key] = { date: key, o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume ?? 0 };
+      weeks[key] = { date: key, o: adjO, h: adjH, l: adjL, c: adjC, v: r.volume ?? 0 };
     } else {
       const w = weeks[key];
-      if (r.high > w.h) w.h = r.high;
-      if (r.low  < w.l) w.l = r.low;
-      w.c = r.close;
+      if (adjH > w.h) w.h = adjH;
+      if (adjL < w.l) w.l = adjL;
+      w.c = adjC;
       w.v += r.volume ?? 0;
     }
   }
@@ -97,7 +104,7 @@ async function fetchWlWeeklyOHLC(ticker) {
         + `?ticker=eq.${encodeURIComponent(ticker)}`
         + `&exchange=eq.NSE`
         + `&date=gte.${cutoffStr}`
-        + `&select=date,open,high,low,close,volume`
+        + `&select=date,open,high,low,close,adj_close,volume`
         + `&order=date.asc`
         + `&limit=400`;
       const r = await fetch(url, {
