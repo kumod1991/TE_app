@@ -1155,6 +1155,45 @@ a:hover { text-decoration: underline; }
   border-top: 1px solid ${T.navBorder};
   display: flex; flex-direction: column; gap: 0;
 }
+.top-nav-mobile-legal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  margin-top: auto;
+  border-top: 1px solid ${T.navBorder};
+  background: ${D ? 'rgba(2, 8, 23, 0.22)' : 'rgba(255, 255, 255, 0.08)'};
+  color: ${T.muted};
+  font-size: 11px;
+  line-height: 1.35;
+}
+.top-nav-mobile-legal-meta {
+  color: ${T.muted};
+  font-size: 10.5px;
+  opacity: .72;
+  text-align: center;
+}
+.top-nav-mobile-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 0;
+}
+.top-nav-mobile-legal a {
+  color: ${T.green};
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  opacity: .88;
+}
+.top-nav-mobile-legal a:hover { opacity: 1; text-decoration: underline; }
+.top-nav-mobile-legal-dot {
+  color: ${T.navBorder};
+  margin: 0 6px;
+  user-select: none;
+}
 
 /* Hide desktop breadth chart grid on mobile and swap in dedicated mobile chart stack */
 .breadth-mobile-charts { display: none; }
@@ -26536,6 +26575,12 @@ export default function App() {
             setPage("dashboard");
         }
     };
+    const legalFooterLinks = [
+        { label: "Disclaimer", tabId: "disclaimer", href: "/legal/disclaimer" },
+        { label: "Privacy", tabId: "privacy", href: "/legal/privacy" },
+        { label: "Terms", tabId: "terms", href: "/legal/terms" },
+        { label: "Contact Us", tabId: "contact", href: "/legal/contact" },
+    ];
 
     const [route, setRoute] = useState(initialRoute);
     const [financialSubPage, setFinancialSubPage] = useState(initialRoute.financialSubPage || DEFAULT_APP_STATE.financialSubPage);
@@ -27538,6 +27583,28 @@ export default function App() {
                             </div>
                         )}
                     </div>
+                    <div className="top-nav-mobile-legal">
+                        <div className="top-nav-mobile-legal-meta">
+                            {"\u00A9"} {new Date().getFullYear()} TradeEdge {"\u00B7"} Not SEBI registered
+                        </div>
+                        <div className="top-nav-mobile-legal-links">
+                            {legalFooterLinks.map((link, i) => (
+                                <Fragment key={link.label}>
+                                    {i > 0 && <span className="top-nav-mobile-legal-dot">{"\u00B7"}</span>}
+                                    <a
+                                        href={link.href}
+                                        onClick={(event) => {
+                                            event.preventDefault();
+                                            openLegal(link.tabId);
+                                            setRailCollapsed(true);
+                                        }}
+                                    >
+                                        {link.label}
+                                    </a>
+                                </Fragment>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 {/* 
@@ -27723,12 +27790,7 @@ export default function App() {
                         </span>
                         {/* Right: links */}
                         <div style={{ display: "flex", alignItems: "center", gap: 0, flexWrap: "wrap" }}>
-                            {[
-                                { label: "Disclaimer", tabId: "disclaimer", href: "/legal/disclaimer" },
-                                { label: "Privacy", tabId: "privacy", href: "/legal/privacy" },
-                                { label: "Terms", tabId: "terms", href: "/legal/terms" },
-                                { label: "Contact Us", tabId: "contact", href: "/legal/contact" },
-                            ].map((link, i) => (
+                            {legalFooterLinks.map((link, i) => (
                                 <span key={link.label} style={{ display: "flex", alignItems: "center" }}>
                                     {i > 0 && <span style={{ fontSize: 11, color: T.border, margin: "0 5px", userSelect: "none" }}>{"\u00B7"}</span>}
                                     <a
