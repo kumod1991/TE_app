@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo } from "react";
 import { createPortal } from "react-dom";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 //import ForumModule from "./ForumModule"
 import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule"
@@ -27831,6 +27832,7 @@ export default function App() {
                     theme={theme}
                 />
             )}
+            <VercelAnalytics />
         </>
     );
 }
