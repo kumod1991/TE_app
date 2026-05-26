@@ -27608,6 +27608,25 @@ export default function App() {
                                                 navigateToTicker(ticker);
                                             }}
                                             onLogin={() => setShowLoginModal(true)}
+                                            onNavigate={(target, subPage) => {
+                                                clearTickerRoute();
+                                                if (target === "financial") {
+                                                    setProductTab("financial");
+                                                    setFinancialSubPage(subPage || "screener");
+                                                    if (subPage !== "screener") {
+                                                        setTechnoFundaFilter(null);
+                                                        setTechnoFundaSource(null);
+                                                    }
+                                                } else if (target === "technical") {
+                                                    setProductTab("technical");
+                                                    setTechnicalSubPage(subPage || "breadth");
+                                                } else if (target === "tradevault") {
+                                                    setProductTab("tradevault");
+                                                    setPage(subPage || "dashboard");
+                                                } else if (target === "watchlist") {
+                                                    setProductTab("watchlist");
+                                                }
+                                            }}
                                         />
                                     </ModuleErrorBoundary>
                                 )}

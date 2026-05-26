@@ -314,11 +314,17 @@ async function fetchModuleData() {
   }
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
-    const [cash, derivRaw, sector] = await Promise.all([
+    const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
       sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc" }),
       sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc" }),
       sbFetchAll("fii_sector_flows", { select: "*", order: "date.desc" }),
     ]);
+    if (cashResult.status !== "fulfilled") throw cashResult.reason;
+    if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", derivResult.reason);
+    if (sectorResult.status === "rejected") console.warn("[FIIDII] Sector flow data unavailable; loading without sector tab data.", sectorResult.reason);
+    const cash = cashResult.value || [];
+    const derivRaw = derivResult.status === "fulfilled" ? derivResult.value || [] : [];
+    const sector = sectorResult.status === "fulfilled" ? sectorResult.value || [] : [];
     const data = {
       cashData: [...cash].sort((a, b) => new Date(a.date) - new Date(b.date)),
       derivData: pivotDerivData(derivRaw),
@@ -807,7 +813,14 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         setSectorData(data.sectorData || []);
         setError(null);
       } catch (e) {
-        if (!cancelled) setError(e.message);
+        if (!cancelled) {
+          if (cached.data) {
+            console.warn("[FIIDII] Refresh failed; keeping cached module data.", e);
+            setError(null);
+          } else {
+            setError(e.message);
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

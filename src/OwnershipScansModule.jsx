@@ -24,8 +24,9 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
 }
 
 // ─── CACHE (7-day localStorage TTL) ──────────────────────────────────────────
-const CACHE_KEY    = "ownership_processed_v8";
+const CACHE_KEY    = "ownership_processed_v9";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MIN_EXPECTED_UNIVERSE = 3000;
 
 function cacheRead() {
   try {
@@ -33,12 +34,21 @@ function cacheRead() {
     if (!raw) return null;
     const { ts, processed } = JSON.parse(raw);
     if (Date.now() - ts > CACHE_TTL_MS) return null;
+    if (!Array.isArray(processed) || processed.length < MIN_EXPECTED_UNIVERSE) return null;
     return { processed, ts };
   } catch { return null; }
 }
 
 function cacheWrite(processed) {
+  if (!Array.isArray(processed) || processed.length < MIN_EXPECTED_UNIVERSE) return;
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), processed })); } catch {}
+}
+
+function assertCompleteUniverse(processed, sourceCount) {
+  if (Array.isArray(processed) && processed.length >= MIN_EXPECTED_UNIVERSE) return;
+  const scanned = Array.isArray(processed) ? processed.length : 0;
+  const fetched = Number.isFinite(sourceCount) ? ` from ${sourceCount} fetched rows` : "";
+  throw new Error(`Ownership scan loaded only ${scanned}${fetched}. This looks like a partial network/cache response; please refresh on a stable connection.`);
 }
 
 function cacheInvalidate() {
@@ -91,6 +101,7 @@ export function prefetchOwnershipData() {
     const cfNames   = buildCfNameMap(mp);
     const rawData   = buildRawData(sh, mp, cfNames);
     const processed = await buildProcessedAsync(rawData, sectorMap);
+    assertCompleteUniverse(processed, sh.length);
     cacheWrite(processed);
     window.__ownershipInit = {
       processed,
@@ -1070,6 +1081,7 @@ export default function OwnershipScansModule({ T }) {
     const sMap = buildSectorMap(mapping);
     const raw  = buildRawData(shareholding, mapping, cfNames);
     const proc = await buildProcessedAsync(raw, sMap);
+    assertCompleteUniverse(proc, shareholding.length);
     cacheWrite(proc);
     window.__ownershipInit = { processed: proc, loading: false, refreshing: false, cacheAge: 0, fetchedAt: Date.now() };
     setProcessed(proc);

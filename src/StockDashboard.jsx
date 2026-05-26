@@ -450,6 +450,186 @@ function SectionCard({ T, children, style = {}, className = "" }) {
     );
 }
 
+function DashboardLensIcon({ type, size = 16 }) {
+    const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+    if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
+    if (type === "ownership") return <svg {...common}><path d="M12 3l8 4v6c0 4.5-3.1 7.4-8 8-4.9-.6-8-3.5-8-8V7l8-4z" /><path d="M9 12l2 2 4-5" /></svg>;
+    if (type === "watchlist") return <svg {...common}><path d="M4 5h16" /><path d="M4 12h10" /><path d="M4 19h7" /><path d="M18 14v6" /><path d="M15 17h6" /></svg>;
+    if (type === "journal") return <svg {...common}><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M14 3v5h5" /><path d="M9 14h6" /></svg>;
+    if (type === "screens") return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9h10" /><path d="M7 14h6" /></svg>;
+    return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
+}
+
+function PremiumDashboardHero({ D, isCompact, lastUpdated, gainers, losers, nearHigh, nearLow, allHighRsStocks, rsIndustrySummary, onNavigate }) {
+    const topIndustry = rsIndustrySummary?.[0];
+    const leadershipCount = allHighRsStocks?.length || 0;
+    const gainerCount = gainers?.length || 0;
+    const loserCount = losers?.length || 0;
+    const highCount = nearHigh?.length || 0;
+    const lowCount = nearLow?.length || 0;
+    const netBreadth = gainerCount - loserCount;
+    const tone = leadershipCount >= 250 || (netBreadth > 0 && highCount >= lowCount)
+        ? "Constructive"
+        : leadershipCount < 120 && lowCount > highCount
+            ? "Defensive"
+            : "Selective";
+    const toneColor = tone === "Constructive" ? D.pos : tone === "Defensive" ? D.neg : D.accent;
+    const toneBg = tone === "Constructive" ? D.posSoft : tone === "Defensive" ? D.negSoft : withAlpha(D.accent, D.isDark ? 0.16 : 0.09);
+    const heroMetrics = [
+        { label: "Market Tone", value: tone, sub: lastUpdated || "Live snapshot", color: toneColor },
+        { label: "RS > 85", value: leadershipCount || EMPTY_VALUE, sub: "latest leadership list", color: D.text },
+        { label: "52W Pressure", value: `${highCount}/${lowCount}`, sub: "near high / near low", color: highCount >= lowCount ? D.pos : D.neg },
+        { label: "Leading Industry", value: topIndustry?.industry || EMPTY_VALUE, sub: topIndustry ? `${topIndustry.count}/${topIndustry.total} above RS 85` : "waiting for RS data", color: D.accent },
+    ];
+    const lenses = [
+        { type: "screens", title: "Breadth", meta: `${gainerCount} gainers`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
+        { type: "momentum", title: "Momentum", meta: `${leadershipCount || 0} leaders`, action: "RS Screens", onClick: () => onNavigate?.("technical", "screens") },
+        { type: "flow", title: "Institutions", meta: "FII / DII", action: "Flow Desk", onClick: () => onNavigate?.("financial", "fiidii") },
+        { type: "ownership", title: "Ownership", meta: "Promoter / funds", action: "Scans", onClick: () => onNavigate?.("financial", "ownership") },
+        { type: "watchlist", title: "Watchlist", meta: "Saved setups", action: "Open", onClick: () => onNavigate?.("watchlist") },
+        { type: "journal", title: "Journal", meta: "P&L / execution", action: "Review", onClick: () => onNavigate?.("tradevault", "dashboard") },
+    ];
+
+    return (
+        <section style={{
+            marginBottom: isCompact ? 14 : 18,
+            borderRadius: 12,
+            border: `1px solid ${D.panelBorder}`,
+            background: D.isDark
+                ? `linear-gradient(135deg, ${withAlpha("#020617", 0.96)} 0%, ${withAlpha("#0f172a", 0.94)} 52%, ${withAlpha(D.accent, 0.16)} 100%)`
+                : `linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.96) 58%, ${withAlpha(D.accent, 0.10)} 100%)`,
+            boxShadow: D.shadowLg,
+            overflow: "hidden",
+            position: "relative",
+        }}>
+            <div style={{
+                position: "absolute",
+                inset: 0,
+                background: `linear-gradient(90deg, transparent, ${withAlpha(D.accent, D.isDark ? 0.08 : 0.05)}, transparent)`,
+                pointerEvents: "none",
+            }} />
+            <div style={{ position: "relative", padding: isCompact ? "18px 16px" : "24px 26px" }}>
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 1.1fr) minmax(420px, 0.9fr)",
+                    gap: isCompact ? 18 : 24,
+                    alignItems: "stretch",
+                }}>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            background: toneBg,
+                            border: `1px solid ${withAlpha(toneColor, 0.22)}`,
+                            color: toneColor,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase",
+                            marginBottom: 14,
+                        }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: toneColor }} />
+                            {tone}
+                        </div>
+                        <h1 style={{
+                            margin: 0,
+                            color: D.text,
+                            fontSize: isCompact ? 27 : 40,
+                            lineHeight: 1.02,
+                            fontWeight: 800,
+                            letterSpacing: "0",
+                            maxWidth: 760,
+                        }}>
+                            Market command center
+                        </h1>
+                        <p style={{
+                            margin: "12px 0 0",
+                            color: D.subtext,
+                            fontSize: isCompact ? 13 : 14,
+                            lineHeight: 1.65,
+                            maxWidth: 720,
+                        }}>
+                            Indian equities across breadth, momentum, institutional flow, ownership, watchlist, and execution.
+                        </p>
+                    </div>
+
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))",
+                        gap: 10,
+                    }}>
+                        {heroMetrics.map(metric => (
+                            <div key={metric.label} style={{
+                                minWidth: 0,
+                                borderRadius: 10,
+                                padding: isCompact ? "12px 12px" : "14px 14px",
+                                background: D.isDark ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.72)",
+                                border: `1px solid ${D.panelBorder}`,
+                            }}>
+                                <div style={{ fontSize: 10, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 7 }}>{metric.label}</div>
+                                <div style={{
+                                    color: metric.color,
+                                    fontFamily: "IBM Plex Mono, monospace",
+                                    fontSize: isCompact ? 15 : 18,
+                                    fontWeight: 800,
+                                    lineHeight: 1.2,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                }}>{metric.value}</div>
+                                <div style={{ color: D.subtext, fontSize: 11, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{metric.sub}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
+                    gap: 8,
+                    marginTop: isCompact ? 18 : 22,
+                }}>
+                    {lenses.map(lens => (
+                        <button key={lens.title} onClick={lens.onClick} type="button" style={{
+                            minWidth: 0,
+                            minHeight: isCompact ? 86 : 94,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-start",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            textAlign: "left",
+                            borderRadius: 10,
+                            border: `1px solid ${D.panelBorder}`,
+                            background: D.isDark ? "rgba(15,23,42,0.54)" : "rgba(255,255,255,0.70)",
+                            color: D.text,
+                            cursor: "pointer",
+                            padding: "12px",
+                            fontFamily: "inherit",
+                            transition: "transform .14s ease, border-color .14s ease, background .14s ease",
+                        }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(D.accent, 0.42); }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
+                        >
+                            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent }}>
+                                <DashboardLensIcon type={lens.type} />
+                            </span>
+                            <span style={{ minWidth: 0, width: "100%" }}>
+                                <span style={{ display: "block", fontSize: 13, fontWeight: 800, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lens.title}</span>
+                                <span style={{ display: "block", fontSize: 11, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lens.meta}</span>
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: D.accent, letterSpacing: "0.04em" }}>{lens.action}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </section>
+    );
+}
+
 function exportCSV(data, filename) {
     if (!data.length) return;
     const headers = Object.keys(data[0]);
@@ -1825,7 +2005,7 @@ function enrichRsStocks(tirsData, returnsMap) {
     });
 }
 
-export default function StockDashboard({ T, userToken, onTickerClick, onLogin }) {
+export default function StockDashboard({ T, userToken, onTickerClick, onLogin, onNavigate }) {
     const D = useMemo(() => buildDashboardTheme(T), [T]);
     const { isCompact, isTablet } = useViewportFlags();
     // â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2185,6 +2365,19 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin })
                 </div>
             )}
 
+            <PremiumDashboardHero
+                D={D}
+                isCompact={isCompact}
+                lastUpdated={lastUpdated}
+                gainers={gainers}
+                losers={losers}
+                nearHigh={nearHigh}
+                nearLow={nearLow}
+                allHighRsStocks={allHighRsStocks}
+                rsIndustrySummary={rsIndustrySummary}
+                onNavigate={onNavigate}
+            />
+
             {/* â”€â”€ MARKET OVERVIEW (Index Cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} />
 
@@ -2379,7 +2572,5 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin })
         </div>
     );
 }
-
-
 
 
