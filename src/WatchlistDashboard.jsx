@@ -141,12 +141,16 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
   const W = width - pad.l - pad.r;
   const H = height - pad.t - pad.b;
 
-  const valid = candles.filter(c => c.h != null && c.l != null);
+  const valid = candles.filter(c => c.h != null && c.l != null && c.l > 0);
   const pMin  = Math.min(...valid.map(c => c.l));
   const pMax  = Math.max(...valid.map(c => c.h));
-  const pRange = pMax - pMin || 1;
 
-  const py = v => pad.t + H - ((v - pMin) / pRange) * H;
+  // Logarithmic price scale
+  const logMin   = Math.log(pMin);
+  const logMax   = Math.log(pMax);
+  const logRange = logMax - logMin || 1;
+
+  const py = v => pad.t + H - ((Math.log(Math.max(v, 0.0001)) - logMin) / logRange) * H;
   const n = candles.length;
   const slotW = W / n;
   const bodyW = Math.max(1.5, slotW * 0.58);
@@ -166,15 +170,17 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
     return `${pad.l + (i + 0.5) * slotW},${vy(avg)}`;
   }).filter(Boolean).join(" ");
 
+  // 10WMA in log space for correct placement on the log scale
   const maPoints = candles.map((c, i) => {
-    if (i < 9) return null;
-    const avg = candles.slice(i - 9, i + 1).reduce((s, x) => s + x.c, 0) / 10;
-    return `${pad.l + (i + 0.5) * slotW},${py(avg)}`;
+    if (i < 9 || !c.c) return null;
+    const logAvg = candles.slice(i - 9, i + 1).reduce((s, x) => s + Math.log(Math.max(x.c, 0.0001)), 0) / 10;
+    return `${pad.l + (i + 0.5) * slotW},${pad.t + H - ((logAvg - logMin) / logRange) * H}`;
   }).filter(Boolean).join(" ");
 
   const priceFmt = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v).toString();
   const volFmt   = v => v >= 1e7 ? `${(v / 1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v);
-  const axisVals = [pMin, pMin + pRange * 0.5, pMax];
+  // Axis ticks: min, geometric mean, max — evenly spaced on the log scale
+  const axisVals = [pMin, Math.exp((logMin + logMax) / 2), pMax];
 
   return (
     <svg width={width} height={totalH} style={{ display: "block", overflow: "visible" }}>
