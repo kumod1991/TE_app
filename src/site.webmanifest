@@ -1,0 +1,18 @@
+{
+  "name": "TradeEdge",
+  "short_name": "TradeEdge",
+  "description": "Indian stock market analytics, screener, watchlist, portfolio tracker, and trade journal.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#059669",
+  "categories": ["finance", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

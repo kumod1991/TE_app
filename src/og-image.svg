@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="TradeEdge Indian stock market analytics preview">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#10243a"/>
+      <stop offset="1" stop-color="#0b2b22"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" x2="1">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g opacity="0.22" stroke="#ffffff">
+    <path d="M80 120h1040M80 220h1040M80 320h1040M80 420h1040M80 520h1040"/>
+    <path d="M160 80v470M320 80v470M480 80v470M640 80v470M800 80v470M960 80v470"/>
+  </g>
+  <g transform="translate(84 84)">
+    <rect width="86" height="86" rx="20" fill="#0f172a" stroke="#34d399" stroke-opacity="0.45"/>
+    <path d="M20 57l22-22 15 15 25-30" fill="none" stroke="#34d399" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="200" y="140" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="800">TradeEdge</text>
+  <text x="86" y="250" fill="#e2e8f0" font-family="Inter, Arial, sans-serif" font-size="48" font-weight="750">Indian Stock Market Analytics</text>
+  <text x="88" y="316" fill="#a7f3d0" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="600">Screener. Watchlist. FII/DII flows. Market breadth. Trade journal.</text>
+  <path d="M92 465c72-36 128-24 182-72 52-47 92-101 154-62 47 30 70 96 134 54 76-50 92-162 178-144 76 16 95 112 166 98 65-13 86-90 148-104" fill="none" stroke="url(#line)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">
+    <text x="86" y="558">tradeedge.in</text>
+    <text x="892" y="558">Research, not advice</text>
+  </g>
+</svg>

@@ -394,9 +394,76 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
 // Key: stringified {activeFilter, debouncedSearch}
 // Value: { announcements: [], offset: number, hasMore: boolean }
 const announcementsCache = new Map();
+const ANNOUNCEMENTS_LS_KEY = "te_announcements_cache_v1";
+const ANNOUNCEMENTS_LS_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const PAGE_SIZE = 50;
 
 function getCacheKey(activeFilter, debouncedSearch) {
     return JSON.stringify({ activeFilter, debouncedSearch });
+}
+
+function readStoredAnnouncementsCache() {
+    if (typeof window === "undefined") return;
+    try {
+        const raw = window.localStorage.getItem(ANNOUNCEMENTS_LS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || Date.now() - (parsed.ts || 0) > ANNOUNCEMENTS_LS_MAX_AGE_MS) return;
+        Object.entries(parsed.entries || {}).forEach(([key, value]) => {
+            if (Array.isArray(value?.announcements)) announcementsCache.set(key, value);
+        });
+    } catch {}
+}
+
+function writeStoredAnnouncementsCache() {
+    if (typeof window === "undefined") return;
+    try {
+        const entries = {};
+        announcementsCache.forEach((value, key) => { entries[key] = value; });
+        window.localStorage.setItem(ANNOUNCEMENTS_LS_KEY, JSON.stringify({ ts: Date.now(), entries }));
+    } catch {}
+}
+
+readStoredAnnouncementsCache();
+
+async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSearch, pageOffset = 0) {
+    const { _filterPairs, ...baseParams } = buildServerParams(activeFilter, customFilters, debouncedSearch);
+    const url = new URL(`${SUPABASE_URL}/rest/v1/corporate_announcements`);
+    Object.entries({ ...baseParams, limit: PAGE_SIZE, offset: pageOffset })
+        .forEach(([k, v]) => url.searchParams.append(k, String(v)));
+    (_filterPairs || []).forEach(([k, v]) => url.searchParams.append(k, v));
+
+    const controller = new AbortController();
+    const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+    try {
+        const resp = await fetch(url.toString(), {
+            signal: controller.signal,
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json",
+                Prefer: "count=exact",
+            },
+        });
+        const data = await resp.json();
+        if (!Array.isArray(data)) throw new Error(data?.message || "Unexpected response from server");
+        return data;
+    } finally {
+        clearTimeout(fetchTimeout);
+    }
+}
+
+export function prefetchAnnouncementsData() {
+    const cacheKey = getCacheKey("important", "");
+    if (announcementsCache.has(cacheKey)) return Promise.resolve(announcementsCache.get(cacheKey));
+    return fetchAnnouncementsPage("important", [], "", 0)
+        .then(data => {
+            const cached = { announcements: data, offset: PAGE_SIZE, hasMore: data.length === PAGE_SIZE };
+            announcementsCache.set(cacheKey, cached);
+            writeStoredAnnouncementsCache();
+            return cached;
+        })
+        .catch(() => null);
 }
 
 export default function AnnouncementsModule({ T }) {
@@ -424,7 +491,6 @@ export default function AnnouncementsModule({ T }) {
     const [error, setError] = useState(null);
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
-    const PAGE_SIZE = 50;
 
     // Debounce search input — only fire server query after 400 ms of inactivity
     useEffect(() => {
@@ -458,35 +524,7 @@ export default function AnnouncementsModule({ T }) {
         }
 
         try {
-            const { _filterPairs, ...baseParams } = buildServerParams(activeFilter, customFilters, debouncedSearch);
-
-            // Build URL manually — multiple params with the same key are valid PostgREST
-            const url = new URL(`${SUPABASE_URL}/rest/v1/corporate_announcements`);
-            Object.entries({ ...baseParams, limit: PAGE_SIZE, offset: pageOffset })
-                .forEach(([k, v]) => url.searchParams.append(k, String(v)));
-
-            // Append each filter pair (key may repeat, e.g. multiple "or" params AND together)
-            (_filterPairs || []).forEach(([k, v]) => url.searchParams.append(k, v));
-
-            const controller = new AbortController();
-            const fetchTimeout = setTimeout(() => controller.abort(), 15000); // 15s timeout — prevents infinite loading if office network silently drops the request
-            let resp;
-            try {
-                resp = await fetch(url.toString(), {
-                    signal: controller.signal,
-                    headers: {
-                        apikey: SUPABASE_ANON_KEY,
-                        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                        "Content-Type": "application/json",
-                        // Ask PostgREST to return total count
-                        Prefer: "count=exact",
-                    },
-                });
-            } finally {
-                clearTimeout(fetchTimeout);
-            }
-            const data = await resp.json();
-            if (!Array.isArray(data)) throw new Error(data?.message || "Unexpected response from server");
+            const data = await fetchAnnouncementsPage(activeFilter, customFilters, debouncedSearch, pageOffset);
 
             if (reset) {
                 const newOffset = PAGE_SIZE;
@@ -496,10 +534,12 @@ export default function AnnouncementsModule({ T }) {
                 setHasMore(newHasMore);
                 // Store fresh data in cache
                 announcementsCache.set(cacheKey, { announcements: data, offset: newOffset, hasMore: newHasMore });
+                writeStoredAnnouncementsCache();
             } else {
                 setAnnouncements(prev => {
                     const merged = [...prev, ...data];
                     announcementsCache.set(cacheKey, { announcements: merged, offset: pageOffset + PAGE_SIZE, hasMore: data.length === PAGE_SIZE });
+                    writeStoredAnnouncementsCache();
                     return merged;
                 });
                 setOffset(prev => prev + PAGE_SIZE);

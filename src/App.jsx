@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule"
 import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule"
-import AnnouncementsModule from "./AnnouncementsModule";
+import AnnouncementsModule, { prefetchAnnouncementsData } from "./AnnouncementsModule";
 import StockDashboard from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 
@@ -20,6 +20,26 @@ export const QuoteContext = createContext({
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const BRAND_MARK_SRC = "/vite.svg";
+
+function BrandMark({ size = 38, className = "", style = {} }) {
+    return (
+        <img
+            className={className}
+            src={BRAND_MARK_SRC}
+            alt=""
+            aria-hidden="true"
+            style={{
+                width: size,
+                height: size,
+                display: "block",
+                objectFit: "contain",
+                flexShrink: 0,
+                ...style,
+            }}
+        />
+    );
+}
 
 const SAFE_PRODUCT_TAB = "watchlist";
 const DEFAULT_APP_STATE = {
@@ -36,6 +56,64 @@ const APP_ROUTE_MAP = {
     technical: "/technicals",
     tradevault: "/journal",
     disclaimer: "/legal",
+};
+const SITE_NAME = "TradeEdge";
+const DEFAULT_SEO_DESCRIPTION = "TradeEdge is an Indian stock market analytics workspace for watchlists, screeners, FII/DII flows, market breadth, portfolio tracking, trade journaling, and stock research.";
+const ROUTE_SEO = {
+    dashboard: {
+        title: "Indian Stock Market Dashboard",
+        description: "Track Indian market momentum, breadth, leaders, sector moves, and stock analytics from one focused dashboard.",
+    },
+    watchlist: {
+        title: "Stock Watchlist and Portfolio Tracking",
+        description: "Build smarter Indian equity watchlists, monitor setups, compare strength, and follow stocks that matter.",
+    },
+    financial: {
+        title: "Fundamental Stock Screener",
+        description: "Screen Indian stocks using fundamentals, ownership, FII/DII activity, announcements, and research-ready company data.",
+    },
+    technical: {
+        title: "Technical Screens and Market Breadth",
+        description: "Find technical breakouts, pullbacks, relative strength leaders, sector heatmaps, and breadth signals for Indian markets.",
+    },
+    tradevault: {
+        title: "Trade Journal, Portfolio and XIRR Tracker",
+        description: "Record trades, track funds, review dividends, estimate capital gains, and analyze portfolio performance in one journal.",
+    },
+    disclaimer: {
+        title: "Legal, Privacy and Contact",
+        description: "Read TradeEdge disclaimers, privacy policy, terms of use, and contact information.",
+    },
+};
+const SUB_ROUTE_SEO = {
+    financial: {
+        search: { title: "Stock Research", description: "Search Indian listed companies and review financial statements, ratios, charts, ownership, peers, and announcements." },
+        screener: { title: "Indian Stock Screener", description: "Filter Indian equities with quality, valuation, growth, ownership, and market data factors." },
+        fiidii: { title: "FII DII Flow Tracker", description: "Track FII and DII cash, index futures, stock futures, and institutional participation trends." },
+        ownership: { title: "Ownership Scans", description: "Review promoter, FII, DII, public shareholder, and pledge changes across Indian companies." },
+        announcements: { title: "Company Announcements", description: "Follow exchange filings, corporate announcements, presentations, and disclosure events." },
+    },
+    technical: {
+        breadth: { title: "Market Breadth Dashboard", description: "Read participation, new highs, relative strength, trend alignment, and market internals for Indian equities." },
+        screens: { title: "Technical Stock Screens", description: "Surface breakouts, pullbacks, VCP-style setups, high relative strength stocks, and volume-led moves." },
+        heatmap: { title: "Sector Heatmap", description: "Scan index, sector, and stock performance concentration across the Indian market." },
+        rotation: { title: "Sector Rotation RRG", description: "Compare relative sector leadership, laggards, improving groups, and weakening pockets." },
+    },
+    tradevault: {
+        dashboard: { title: "Trading Dashboard", description: "Review realized and unrealized P&L, active exposure, portfolio health, and recent trading activity." },
+        trades: { title: "Trade Journal", description: "Log entries, exits, quantities, prices, and notes to understand trading behavior over time." },
+        analytics: { title: "Trading Analytics", description: "Analyze win rate, expectancy, drawdowns, best trades, worst trades, and execution quality." },
+        "capital-gains": { title: "Capital Gains Tracker", description: "Estimate realized gains across Indian financial years from your trade journal." },
+        portfolio: { title: "Portfolio Tracker", description: "Monitor holdings, live or end-of-day prices, exposure, allocation, and open trade performance." },
+        funds: { title: "Funds and XIRR Tracker", description: "Track capital additions, withdrawals, cash flows, and return efficiency with XIRR context." },
+        dividends: { title: "Dividend Tracker", description: "Audit dividend receipts and income history alongside your stock portfolio." },
+    },
+    legal: {
+        disclaimer: { title: "Disclaimer", description: "Important TradeEdge financial, market data, liability, and investment-risk disclaimers." },
+        privacy: { title: "Privacy Policy", description: "How TradeEdge handles account data, trade journal data, cookies, analytics, and deletion requests." },
+        terms: { title: "Terms of Service", description: "Terms governing access to and use of the TradeEdge platform." },
+        contact: { title: "Contact TradeEdge", description: "Contact TradeEdge for support, feedback, suggestions, and platform queries." },
+    },
 };
 const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements"]);
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "heatmap", "rotation"]);
@@ -2656,6 +2734,83 @@ function appPathFromState({ productTab, page, financialSubPage, technicalSubPage
     if (productTab === "tradevault") return `${APP_ROUTE_MAP.tradevault}/${page || DEFAULT_APP_STATE.page}`;
     if (productTab === "disclaimer") return `${APP_ROUTE_MAP.disclaimer}/${legalInitialTab || DEFAULT_APP_STATE.legalInitialTab}`;
     return APP_ROUTE_MAP[productTab] || APP_ROUTE_MAP.dashboard;
+}
+
+function getSeoProfile({ route, productTab, financialSubPage, technicalSubPage, page, legalInitialTab }) {
+    if (route?.kind === "ticker") {
+        const symbol = route.symbol || "Stock";
+        return {
+            title: `${symbol} Stock Analysis`,
+            description: `Analyze ${symbol} with TradeEdge fundamentals, price charts, ratios, ownership, peer comparison, and announcements for Indian market research.`,
+            type: "article",
+        };
+    }
+
+    if (productTab === "financial") return SUB_ROUTE_SEO.financial[financialSubPage] || ROUTE_SEO.financial;
+    if (productTab === "technical") return SUB_ROUTE_SEO.technical[technicalSubPage] || ROUTE_SEO.technical;
+    if (productTab === "tradevault") return SUB_ROUTE_SEO.tradevault[page] || ROUTE_SEO.tradevault;
+    if (productTab === "disclaimer") return SUB_ROUTE_SEO.legal[legalInitialTab] || ROUTE_SEO.disclaimer;
+    return ROUTE_SEO[productTab] || ROUTE_SEO.dashboard;
+}
+
+function upsertHeadElement(tagName, selector, attributes) {
+    if (typeof document === "undefined") return;
+    let element = document.head.querySelector(selector);
+    if (!element) {
+        element = document.createElement(tagName);
+        document.head.appendChild(element);
+    }
+    Object.entries(attributes).forEach(([key, value]) => {
+        if (value == null) element.removeAttribute(key);
+        else element.setAttribute(key, String(value));
+    });
+}
+
+function updateSeoMetadata(profile, theme) {
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    const origin = window.location.origin;
+    const canonicalUrl = `${origin}${window.location.pathname}`;
+    const title = `${profile.title} | ${SITE_NAME}`;
+    const description = profile.description || DEFAULT_SEO_DESCRIPTION;
+    const imageUrl = `${origin}/og-image.svg`;
+
+    document.title = title;
+    upsertHeadElement("meta", 'meta[name="description"]', { name: "description", content: description });
+    upsertHeadElement("meta", 'meta[name="robots"]', { name: "robots", content: "index,follow,max-image-preview:large" });
+    upsertHeadElement("meta", 'meta[name="theme-color"]', { name: "theme-color", content: theme === "dark" ? "#080b10" : "#f8fafc" });
+    upsertHeadElement("link", 'link[rel="canonical"]', { rel: "canonical", href: canonicalUrl });
+
+    upsertHeadElement("meta", 'meta[property="og:site_name"]', { property: "og:site_name", content: SITE_NAME });
+    upsertHeadElement("meta", 'meta[property="og:type"]', { property: "og:type", content: profile.type || "website" });
+    upsertHeadElement("meta", 'meta[property="og:title"]', { property: "og:title", content: title });
+    upsertHeadElement("meta", 'meta[property="og:description"]', { property: "og:description", content: description });
+    upsertHeadElement("meta", 'meta[property="og:url"]', { property: "og:url", content: canonicalUrl });
+    upsertHeadElement("meta", 'meta[property="og:image"]', { property: "og:image", content: imageUrl });
+    upsertHeadElement("meta", 'meta[property="og:image:alt"]', { property: "og:image:alt", content: "TradeEdge Indian stock market analytics dashboard preview" });
+
+    upsertHeadElement("meta", 'meta[name="twitter:card"]', { name: "twitter:card", content: "summary_large_image" });
+    upsertHeadElement("meta", 'meta[name="twitter:title"]', { name: "twitter:title", content: title });
+    upsertHeadElement("meta", 'meta[name="twitter:description"]', { name: "twitter:description", content: description });
+    upsertHeadElement("meta", 'meta[name="twitter:image"]', { name: "twitter:image", content: imageUrl });
+
+    const structuredData = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: SITE_NAME,
+        applicationCategory: "FinanceApplication",
+        operatingSystem: "Web",
+        url: origin,
+        description: DEFAULT_SEO_DESCRIPTION,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+    };
+    let script = document.head.querySelector('script[type="application/ld+json"][data-seo="tradeedge"]');
+    if (!script) {
+        script = document.createElement("script");
+        script.type = "application/ld+json";
+        script.dataset.seo = "tradeedge";
+        document.head.appendChild(script);
+    }
+    script.textContent = JSON.stringify(structuredData);
 }
 
 function clampScore(value) {
@@ -12056,6 +12211,20 @@ function _preloadScreenerCache() {
         .catch(() => _screenerCache || [])
         .finally(() => { _screenerPrefetchPromise = null; });
     return _screenerPrefetchPromise;
+}
+
+function _warmFundamentalsCaches() {
+    const warm = () => {
+        _preloadScreenerCache();
+        prefetchFiiDiiData();
+        prefetchOwnershipData();
+        prefetchAnnouncementsData();
+    };
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(warm, { timeout: 1500 });
+    } else {
+        setTimeout(warm, 250);
+    }
 }
 
 // ============================================================
@@ -24499,17 +24668,7 @@ function AuthScreen({ onLogin, onDemo, theme, toggleTheme }) {
         }}>
             {/* Logo mark  shown on desktop right panel and mobile */}
             <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 32 }}>
-                <div style={{
-                    width: 34, height: 34, borderRadius: 8,
-                    background: "linear-gradient(135deg,#059669,#1d4ed8)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: "0 4px 12px rgba(5,150,105,0.35)",
-                }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                        <polyline points="16 7 22 7 22 13" />
-                    </svg>
-                </div>
+                <BrandMark size={34} style={{ borderRadius: 8 }} />
                 <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 17, fontWeight: 800, color: R.logoText, letterSpacing: "-.03em" }}>
                     TRADE<span style={{ color: "#059669" }}>EDGE</span>
                 </span>
@@ -24756,12 +24915,7 @@ function AuthScreen({ onLogin, onDemo, theme, toggleTheme }) {
 
                     {/* Logo */}
                     <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative", zIndex: 1, marginBottom: 24, animation: "auth-fadeUp .4s cubic-bezier(.16,1,.3,1)" }}>
-                        <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg,#059669,#1d4ed8)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(5,150,105,0.5)" }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                                <polyline points="16 7 22 7 22 13" />
-                            </svg>
-                        </div>
+                        <BrandMark size={38} style={{ borderRadius: 10 }} />
                         <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 19, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-.03em" }}>
                             TRADE<span style={{ color: "#34d399" }}>EDGE</span>
                         </span>
@@ -25672,22 +25826,7 @@ function LoginModal({ onClose, onLogin, theme }) {
 
                 {/* Logo */}
                 <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 24 }}>
-                    <div style={{
-                        width: 38, height: 38, borderRadius: 8,
-                        background: "#0B1F3A",
-                        border: "1.5px solid #1A3355",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0,
-                    }}>
-                        <svg width="22" height="22" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <line x1="3" y1="22" x2="31" y2="22" stroke="#4A6A8A" strokeWidth="2" strokeLinecap="square" />
-                            <line x1="8" y1="22" x2="8" y2="30" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                            <line x1="16" y1="22" x2="16" y2="27" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                            <polyline points="8,30 16,27 22,22 32,8" fill="none" stroke="#22C55E" strokeWidth="2.4" strokeLinecap="square" strokeLinejoin="miter" />
-                            <polygon points="32,8 24,8 28,16" fill="#22C55E" />
-                            <line x1="22" y1="17" x2="22" y2="27" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="square" opacity="0.55" />
-                        </svg>
-                    </div>
+                    <BrandMark size={38} style={{ borderRadius: 8 }} />
                     <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 16, letterSpacing: ".16em", textTransform: "uppercase", lineHeight: 1 }}>
                         <span style={{ fontWeight: 500, color: isLight ? "#1E3A5F" : "#C9D1D9" }}>TRADE</span><span style={{ fontWeight: 700, color: "#22C55E" }}>EDGE</span>
                     </span>
@@ -26412,6 +26551,7 @@ export default function App() {
     const topbarSearchWrapRef = useRef(null);
     const topbarSearchDropdownRef = useRef(null);
     const topbarResolvedSymRef = useRef(null);
+    const fundamentalsWarmStartedRef = useRef(false);
 
     const syncRoute = useCallback((path, replace = false) => {
         const nextRoute = parseAppRoute(path);
@@ -26662,6 +26802,12 @@ export default function App() {
             setChecking(false);
         });
     }, []);
+
+    useEffect(() => {
+        if (checking || fundamentalsWarmStartedRef.current) return;
+        fundamentalsWarmStartedRef.current = true;
+        _warmFundamentalsCaches();
+    }, [checking]);
 
     const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
@@ -26964,6 +27110,14 @@ export default function App() {
             : [activeNavItem?.label];
     const activeContextLabel = breadcrumb.filter(Boolean).join(" / ") || "Workspace";
     const activeSectionLabel = activeNavItem?.section || "Workspace";
+    const seoProfile = useMemo(() => getSeoProfile({
+        route,
+        productTab,
+        financialSubPage,
+        technicalSubPage,
+        page,
+        legalInitialTab,
+    }), [route, productTab, financialSubPage, technicalSubPage, page, legalInitialTab]);
 
     useEffect(() => {
         const handlePopState = () => {
@@ -27005,6 +27159,10 @@ export default function App() {
         setTopbarSearch(route.symbol);
         topbarResolvedSymRef.current = route.symbol;
     }, [route.kind, route.symbol]);
+
+    useEffect(() => {
+        updateSeoMetadata(seoProfile, theme);
+    }, [seoProfile, theme]);
 
     useEffect(() => {
         if (!topbarSearch.trim()) {
@@ -27102,20 +27260,7 @@ export default function App() {
                     <div className="top-nav-brand">
                         <div className="top-nav-logo">
                             <div className="top-nav-logo-mark">
-                                <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    {/* Horizontal resistance line */}
-                                    <line x1="3" y1="22" x2="31" y2="22" stroke="#4A6A8A" strokeWidth="2" strokeLinecap="square" />
-                                    {/* Candlestick base left */}
-                                    <line x1="8" y1="22" x2="8" y2="30" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                                    {/* Candlestick base mid */}
-                                    <line x1="16" y1="22" x2="16" y2="27" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                                    {/* Breakout line piercing resistance */}
-                                    <polyline points="8,30 16,27 22,22 32,8" fill="none" stroke="#22C55E" strokeWidth="2.4" strokeLinecap="square" strokeLinejoin="miter" />
-                                    {/* Arrowhead */}
-                                    <polygon points="32,8 24,8 28,16" fill="#22C55E" />
-                                    {/* Breakout tick at resistance pierce point */}
-                                    <line x1="22" y1="17" x2="22" y2="27" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="square" opacity="0.55" />
-                                </svg>
+                                <BrandMark size={34} />
                             </div>
                             <div className="top-nav-logo-copy">
                                 <span className="top-nav-logo-text"><span className="logo-trade">TRADE</span><span className="logo-edge">EDGE</span></span>
@@ -27498,38 +27643,34 @@ export default function App() {
                                 {productTab === "financial" && (
                                     <div style={{ display: "flex", flex: 1, overflow: "hidden", background: T.bg, flexDirection: "column", minHeight: 0 }}>
                                         {financialSubPage === "search" && <FinancialAnalyticsModule T={T} externalSearchRequest={topbarSearchRequest} />}
-                                        {financialSubPage === "screener" && (
-                                            <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", flexDirection: "column", width: "100%" }}>
-                                                <ScreenerModule
-                                                    T={T}
-                                                    tickerFilter={technoFundaFilter?.tickers || null}
-                                                    technoFundaLabel={technoFundaFilter?.label || null}
-                                                    onClearTickerFilter={() => { setTechnoFundaFilter(null); setTechnoFundaSource(null); }}
-                                                    onBack={technoFundaFilter ? () => {
-                                                        setTechnoFundaFilter(null);
-                                                        setTechnoFundaSource(null);
-                                                        setFinancialSubPage("search");
-                                                        if (technoFundaSource === "watchlist") {
-                                                            setProductTab("watchlist");
-                                                        } else {
-                                                            setProductTab("technical");
-                                                            setTechnicalSubPage("screens");
-                                                        }
-                                                    } : null}
-                                                />
-                                            </div>
-                                        )}
+                                        <div style={{ display: financialSubPage === "screener" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", flexDirection: "column", width: "100%" }}>
+                                            <ScreenerModule
+                                                T={T}
+                                                tickerFilter={technoFundaFilter?.tickers || null}
+                                                technoFundaLabel={technoFundaFilter?.label || null}
+                                                onClearTickerFilter={() => { setTechnoFundaFilter(null); setTechnoFundaSource(null); }}
+                                                onBack={technoFundaFilter ? () => {
+                                                    setTechnoFundaFilter(null);
+                                                    setTechnoFundaSource(null);
+                                                    setFinancialSubPage("search");
+                                                    if (technoFundaSource === "watchlist") {
+                                                        setProductTab("watchlist");
+                                                    } else {
+                                                        setProductTab("technical");
+                                                        setTechnicalSubPage("screens");
+                                                    }
+                                                } : null}
+                                            />
+                                        </div>
                                         <div style={{ display: financialSubPage === "fiidii" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", justifyContent: "center" }}>
                                             <FiiDiiModule T={T} />
                                         </div>
                                         <div style={{ display: financialSubPage === "ownership" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
                                             <OwnershipScansModule T={T} />
                                         </div>
-                                        {financialSubPage === "announcements" && (
-                                            <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
-                                                <AnnouncementsModule T={T} />
-                                            </div>
-                                        )}
+                                        <div style={{ display: financialSubPage === "announcements" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
+                                            <AnnouncementsModule T={T} />
+                                        </div>
                                     </div>
                                 )}
 
