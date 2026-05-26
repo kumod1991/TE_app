@@ -59,6 +59,239 @@ function slope(arr) {
     return arr[arr.length - 1] - arr[0];
 }
 
+// ─── Weekly Candlestick Chart Helpers ─────────────────────────
+const _wlWeeklyChartCache    = new Map(); // ticker → candles[] | null
+const _wlWeeklyChartInFlight = new Map(); // ticker → Promise
+
+function _wlAggregateToWeekly(rows) {
+  const weeks = {};
+  for (const r of rows) {
+    const d = new Date(r.date);
+    const diff = (d.getDay() === 0 ? -6 : 1) - d.getDay();
+    const mon = new Date(d); mon.setDate(d.getDate() + diff);
+    const key = mon.toISOString().slice(0, 10);
+    if (!weeks[key]) {
+      weeks[key] = { date: key, o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume ?? 0 };
+    } else {
+      const w = weeks[key];
+      if (r.high > w.h) w.h = r.high;
+      if (r.low  < w.l) w.l = r.low;
+      w.c = r.close;
+      w.v += r.volume ?? 0;
+    }
+  }
+  return Object.values(weeks).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+async function fetchWlWeeklyOHLC(ticker) {
+  const cached = _wlWeeklyChartCache.get(ticker);
+  if (cached !== undefined && cached !== "loading") return cached;
+  if (_wlWeeklyChartInFlight.has(ticker)) return _wlWeeklyChartInFlight.get(ticker);
+
+  const promise = (async () => {
+    try {
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - 1);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      const url = `${SUPABASE_URL}/rest/v1/stock_prices_daily`
+        + `?ticker=eq.${encodeURIComponent(ticker)}`
+        + `&exchange=eq.NSE`
+        + `&date=gte.${cutoffStr}`
+        + `&select=date,open,high,low,close,volume`
+        + `&order=date.asc`
+        + `&limit=400`;
+      const r = await fetch(url, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) { _wlWeeklyChartCache.set(ticker, null); return null; }
+      const rows = await r.json();
+      if (!Array.isArray(rows) || rows.length < 5) { _wlWeeklyChartCache.set(ticker, null); return null; }
+      const candles = _wlAggregateToWeekly(rows);
+      _wlWeeklyChartCache.set(ticker, candles);
+      return candles;
+    } catch {
+      _wlWeeklyChartCache.set(ticker, null);
+      return null;
+    } finally {
+      _wlWeeklyChartInFlight.delete(ticker);
+    }
+  })();
+
+  _wlWeeklyChartInFlight.set(ticker, promise);
+  return promise;
+}
+
+// ─── Mini Candlestick Chart (weekly, SVG) ─────────────────────
+function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
+  if (!candles || candles.length < 4) return null;
+  const isDark = T.surface !== "#ffffff" && T.surface !== "#f8fafc";
+
+  const volH  = 30;
+  const gap   = 4;
+  const pad   = { l: 4, r: 36, t: 6, b: 14 };
+  const totalH = height + volH + gap;
+  const W = width - pad.l - pad.r;
+  const H = height - pad.t - pad.b;
+
+  const valid = candles.filter(c => c.h != null && c.l != null);
+  const pMin  = Math.min(...valid.map(c => c.l));
+  const pMax  = Math.max(...valid.map(c => c.h));
+  const pRange = pMax - pMin || 1;
+
+  const py = v => pad.t + H - ((v - pMin) / pRange) * H;
+  const n = candles.length;
+  const slotW = W / n;
+  const bodyW = Math.max(1.5, slotW * 0.58);
+
+  const posClr = isDark ? "#4ade80" : "#16a34a";
+  const negClr = isDark ? "#fb7185" : "#e11d48";
+
+  const volTop    = pad.t + H + pad.b + gap;
+  const volInnerH = volH - 2;
+  const vols = candles.map(c => c.v || 0);
+  const vMax = Math.max(...vols, 1);
+  const vy   = v => volTop + volInnerH - (v / vMax) * volInnerH;
+
+  const volMaPoints = candles.map((c, i) => {
+    if (i < 19) return null;
+    const avg = candles.slice(i - 19, i + 1).reduce((s, x) => s + (x.v || 0), 0) / 20;
+    return `${pad.l + (i + 0.5) * slotW},${vy(avg)}`;
+  }).filter(Boolean).join(" ");
+
+  const maPoints = candles.map((c, i) => {
+    if (i < 9) return null;
+    const avg = candles.slice(i - 9, i + 1).reduce((s, x) => s + x.c, 0) / 10;
+    return `${pad.l + (i + 0.5) * slotW},${py(avg)}`;
+  }).filter(Boolean).join(" ");
+
+  const priceFmt = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v).toString();
+  const volFmt   = v => v >= 1e7 ? `${(v / 1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v);
+  const axisVals = [pMin, pMin + pRange * 0.5, pMax];
+
+  return (
+    <svg width={width} height={totalH} style={{ display: "block", overflow: "visible" }}>
+      {axisVals.map((v, i) => (
+        <line key={i} x1={pad.l} x2={pad.l + W} y1={py(v)} y2={py(v)}
+          stroke={T.border} strokeWidth="0.5" strokeDasharray="3,3" opacity="0.5" />
+      ))}
+      {candles.map((c, i) => {
+        if (!c.o || !c.h || !c.l || !c.c) return null;
+        const bull = c.c >= c.o;
+        const clr  = bull ? posClr : negClr;
+        const cx   = pad.l + (i + 0.5) * slotW;
+        const bodyT = py(Math.max(c.o, c.c));
+        const bodyB = py(Math.min(c.o, c.c));
+        const bH   = Math.max(1, bodyB - bodyT);
+        return (
+          <g key={i}>
+            <line x1={cx} x2={cx} y1={py(c.h)} y2={py(c.l)} stroke={clr} strokeWidth="0.7" opacity="0.7" />
+            <rect x={cx - bodyW / 2} y={bodyT} width={bodyW} height={bH}
+              fill={clr} opacity={bull ? 0.82 : 0.88} rx="0.4" />
+          </g>
+        );
+      })}
+      {maPoints && (
+        <polyline points={maPoints} fill="none"
+          stroke={isDark ? "#f59e0b" : "#d97706"}
+          strokeWidth="1.1" opacity="0.85"
+          strokeLinejoin="round" strokeLinecap="round" />
+      )}
+      {axisVals.map((v, i) => (
+        <text key={i} x={pad.l + W + 3} y={py(v) + 3.5}
+          fontSize="7.5" fill={T.subtext}
+          fontFamily="'IBM Plex Mono',monospace"
+          textAnchor="start" opacity="0.75">
+          {priceFmt(v)}
+        </text>
+      ))}
+      <text x={pad.l + 3} y={pad.t + H + 11}
+        fontSize="7" fill={T.subtext}
+        fontFamily="'IBM Plex Mono',monospace"
+        textAnchor="start" opacity="0.55">
+        {candles.length}W · 10WMA
+      </text>
+      <line x1={pad.l} x2={pad.l + W} y1={volTop - 2} y2={volTop - 2}
+        stroke={T.border} strokeWidth="0.5" opacity="0.4" />
+      {candles.map((c, i) => {
+        const bull = (c.c ?? 0) >= (c.o ?? 0);
+        const clr  = bull ? posClr : negClr;
+        const cx   = pad.l + (i + 0.5) * slotW;
+        const barH = Math.max(1, (c.v || 0) / vMax * volInnerH);
+        return (
+          <rect key={i}
+            x={cx - bodyW / 2} y={volTop + volInnerH - barH}
+            width={bodyW} height={barH}
+            fill={clr} opacity={0.45} rx="0.4" />
+        );
+      })}
+      {volMaPoints && (
+        <polyline points={volMaPoints} fill="none"
+          stroke={isDark ? "#94a3b8" : "#64748b"}
+          strokeWidth="0.9" opacity="0.75"
+          strokeLinejoin="round" strokeLinecap="round"
+          strokeDasharray="2,2" />
+      )}
+      <text x={pad.l + W + 3} y={volTop + 5}
+        fontSize="7" fill={T.subtext}
+        fontFamily="'IBM Plex Mono',monospace"
+        textAnchor="start" opacity="0.65">
+        {volFmt(vMax)}
+      </text>
+      <text x={pad.l + 3} y={volTop + volInnerH - 1}
+        fontSize="7" fill={T.subtext}
+        fontFamily="'IBM Plex Mono',monospace"
+        textAnchor="start" opacity="0.5">
+        VOL · 20W avg
+      </text>
+    </svg>
+  );
+}
+
+// ─── Candlestick section (used in both desktop panel and mobile sheet) ────
+function WlCandleSection({ ticker, T, width }) {
+  const [candles, setCandles] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!ticker) return;
+    let cancelled = false;
+    setLoading(true);
+    setCandles(null);
+    fetchWlWeeklyOHLC(ticker).then(data => {
+      if (!cancelled) { setCandles(data); setLoading(false); }
+    });
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  const chartW = width || 260;
+
+  return (
+    <div style={{ background: T.card, borderRadius: 8, padding: "10px 10px 8px", overflow: "hidden" }}>
+      <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase",
+        letterSpacing: "0.1em", marginBottom: 8, opacity: 0.55, fontFamily: "'DM Sans',sans-serif" }}>
+        Weekly Chart · 52W
+      </div>
+      {loading ? (
+        <div style={{ height: 80, display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", gap: 6, opacity: 0.45 }}>
+          <div style={{ width: 14, height: 14, border: `1.5px solid ${T.border}`,
+            borderTopColor: T.green, borderRadius: "50%",
+            animation: "wlChartSpin 0.7s linear infinite" }} />
+          <span style={{ fontSize: 10, color: T.subtext }}>Loading chart</span>
+        </div>
+      ) : candles ? (
+        <WlMiniCandleChart candles={candles} T={T} width={chartW} height={110} />
+      ) : (
+        <div style={{ height: 70, display: "flex", alignItems: "center", justifyContent: "center",
+          color: T.subtext, fontSize: 11, opacity: 0.4 }}>
+          Chart data unavailable
+        </div>
+      )}
+    </div>
+  );
+}
+
 async function fetchAnnouncements(symbols, token) {
   if (!symbols || symbols.length === 0) return {};
   try {
@@ -1868,6 +2101,7 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
         @keyframes slideInBottom{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes wlPricePulse{0%,100%{opacity:0.35}50%{opacity:1}}
+        @keyframes wlChartSpin{to{transform:rotate(360deg)}}
         @keyframes rowEnter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
         *{box-sizing:border-box}
         ::-webkit-scrollbar{width:6px;height:6px}
@@ -2645,6 +2879,8 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                           <button onClick={()=>setExpandedTicker(null)}
                             style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px", cursor:"pointer", color:T.subtext, fontSize:13 }}>✕</button>
                         </div>
+                        {/* Candlestick Chart — mobile */}
+                        <WlCandleSection ticker={expandedRow.ticker} T={T} width={Math.min(window.innerWidth - 36, 480)} />
                         {[
                           { label:"Performance", rows:[
                             ["3M", fmt.pct(expandedRow.ret_3m), retColor(expandedRow.ret_3m,T)],
@@ -2715,32 +2951,8 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                         >✕</button>
                       </div>
 
-                      {/* Chart */}
-                      {(() => {
-                        const spk=sparklines[expandedRow.ticker];
-                        if(!spk||spk.length<2) return (
-                          <div style={{ height:70, display:"flex", alignItems:"center", justifyContent:"center", color:T.subtext, fontSize:11, opacity:0.4 }}>No chart</div>
-                        );
-                        const vals=spk.map(d=>+d.close);
-                        const mn=Math.min(...vals),mx=Math.max(...vals),rng=mx-mn||1;
-                        const W=260,H=70;
-                        const pts=vals.map((v,i)=>`${(i/(vals.length-1))*W},${H-((v-mn)/rng)*(H-4)-2}`).join(" ");
-                        const isUp=(expandedRow.ret_3m??0)>=0;
-                        const color=isUp?T.pos:T.neg;
-                        return (
-                          <div style={{ borderRadius:6, padding:"10px 10px 6px", background:T.hover, border:"1px solid T.hover" }}>
-                            <div style={{ fontSize:9, color:T.subtext, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:8, opacity:0.5, fontFamily:"'DM Sans',sans-serif" }}>90-Day</div>
-                            <svg width="100%" viewBox={`0 0 ${W} ${H+4}`} preserveAspectRatio="none">
-                              <defs><linearGradient id="dp-g" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor={color} stopOpacity="0.1"/>
-                                <stop offset="100%" stopColor={color} stopOpacity="0"/>
-                              </linearGradient></defs>
-                              <polygon points={`0,${H+4} ${pts} ${W},${H+4}`} fill="url(#dp-g)"/>
-                              <polyline points={pts} fill="none" stroke={color} strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round"/>
-                            </svg>
-                          </div>
-                        );
-                      })()}
+                      {/* Candlestick Chart */}
+                      <WlCandleSection ticker={expandedRow.ticker} T={T} width={260} />
 
                       {[
                         { label:"Performance", rows:[
