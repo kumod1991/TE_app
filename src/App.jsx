@@ -27640,21 +27640,34 @@ export default function App() {
 
                                 {/* JOURNAL MODULE */}
                                 {productTab === "tradevault" && (
-                                    <div className="journal-layout">
-                                        <QuoteContext.Provider value={{ quotes, setQuotes }}>
-                                            <main className="journal-main">
-                                                <div className="journal-main-inner">
-                                                    {page === "dashboard" && <Dashboard trades={trades} isDemo={isDemo} T={T} />}
-                                                    {page === "trades" && <Trades trades={trades} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
-                                                    {page === "analytics" && <Analytics trades={trades} T={T} />}
-                                                    {page === "capital-gains" && <CapitalGains trades={trades} T={T} />}
-                                                    {page === "portfolio" && <Portfolio trades={trades} T={T} />}
-                                                    {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} />}
-                                                    {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
-                                                </div>
-                                            </main>
-                                        </QuoteContext.Provider>
-                                    </div>
+                                    session || isDemo ? (
+                                        <div className="journal-layout">
+                                            <QuoteContext.Provider value={{ quotes, setQuotes }}>
+                                                <main className="journal-main">
+                                                    <div className="journal-main-inner">
+                                                        {page === "dashboard" && <Dashboard trades={trades} isDemo={isDemo} T={T} />}
+                                                        {page === "trades" && <Trades trades={trades} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
+                                                        {page === "analytics" && <Analytics trades={trades} T={T} />}
+                                                        {page === "capital-gains" && <CapitalGains trades={trades} T={T} />}
+                                                        {page === "portfolio" && <Portfolio trades={trades} T={T} />}
+                                                        {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} />}
+                                                        {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
+                                                    </div>
+                                                </main>
+                                            </QuoteContext.Provider>
+                                        </div>
+                                    ) : (
+                                        <LoginGate
+                                            T={T}
+                                            theme={theme}
+                                            tabLabel="Journal"
+                                            onLogin={() => setShowLoginModal(true)}
+                                            onBack={() => {
+                                                setProductTab("dashboard");
+                                                setPage("dashboard");
+                                            }}
+                                        />
+                                    )
                                 )}
 
                                 {/* WATCHLIST */}
