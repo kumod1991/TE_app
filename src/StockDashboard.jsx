@@ -460,26 +460,36 @@ function DashboardLensIcon({ type, size = 16 }) {
     return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
 }
 
-function PremiumDashboardHero({ D, isCompact, lastUpdated, gainers, losers, nearHigh, nearLow, allHighRsStocks, rsIndustrySummary, onNavigate }) {
-    const topIndustry = rsIndustrySummary?.[0];
+function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, onNavigate }) {
+    const topRsSectors = [...(rsIndustrySummary || [])]
+        .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
+        .slice(0, 5);
     const leadershipCount = allHighRsStocks?.length || 0;
     const gainerCount = gainers?.length || 0;
     const loserCount = losers?.length || 0;
-    const highCount = nearHigh?.length || 0;
-    const lowCount = nearLow?.length || 0;
+    const highPct = Number(breadthSnapshot?.near_52w_high);
+    const lowPct = Number(breadthSnapshot?.near_52w_low);
+    const sma50Pct = Number(breadthSnapshot?.above_sma50);
+    const sma200Pct = Number(breadthSnapshot?.above_sma200);
     const netBreadth = gainerCount - loserCount;
-    const tone = leadershipCount >= 250 || (netBreadth > 0 && highCount >= lowCount)
+    const tone = leadershipCount >= 250 || (netBreadth > 0 && highPct >= lowPct)
         ? "Constructive"
-        : leadershipCount < 120 && lowCount > highCount
+        : leadershipCount < 120 && lowPct > highPct
             ? "Defensive"
             : "Selective";
     const toneColor = tone === "Constructive" ? D.pos : tone === "Defensive" ? D.neg : D.accent;
     const toneBg = tone === "Constructive" ? D.posSoft : tone === "Defensive" ? D.negSoft : withAlpha(D.accent, D.isDark ? 0.16 : 0.09);
     const heroMetrics = [
-        { label: "Market Tone", value: tone, sub: lastUpdated || "Live snapshot", color: toneColor },
-        { label: "RS > 85", value: leadershipCount || EMPTY_VALUE, sub: "latest leadership list", color: D.text },
-        { label: "52W Pressure", value: `${highCount}/${lowCount}`, sub: "near high / near low", color: highCount >= lowCount ? D.pos : D.neg },
-        { label: "Leading Industry", value: topIndustry?.industry || EMPTY_VALUE, sub: topIndustry ? `${topIndustry.count}/${topIndustry.total} above RS 85` : "waiting for RS data", color: D.accent },
+        {
+            label: "Breadth",
+            breadth: [
+                { label: "Near 52W High", value: Number.isFinite(highPct) ? `${highPct.toFixed(1)}%` : EMPTY_VALUE, color: highPct >= lowPct ? D.pos : D.text },
+                { label: "Near 52W Low", value: Number.isFinite(lowPct) ? `${lowPct.toFixed(1)}%` : EMPTY_VALUE, color: lowPct > highPct ? D.neg : D.text },
+                { label: "Above 50 SMA", value: Number.isFinite(sma50Pct) ? `${sma50Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma50Pct >= 50 ? D.pos : D.neg },
+                { label: "Above 200 SMA", value: Number.isFinite(sma200Pct) ? `${sma200Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma200Pct >= 50 ? D.pos : D.neg },
+            ],
+        },
+        { label: "Top RS Sectors", sectors: topRsSectors, color: D.accent },
     ];
     const lenses = [
         { type: "screens", title: "Breadth", meta: `${gainerCount} gainers`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
@@ -543,7 +553,7 @@ function PremiumDashboardHero({ D, isCompact, lastUpdated, gainers, losers, near
                             letterSpacing: "0",
                             maxWidth: 760,
                         }}>
-                            Market command center
+                            Dashboard
                         </h1>
                         <p style={{
                             margin: "12px 0 0",
@@ -552,7 +562,7 @@ function PremiumDashboardHero({ D, isCompact, lastUpdated, gainers, losers, near
                             lineHeight: 1.65,
                             maxWidth: 720,
                         }}>
-                            Indian equities across breadth, momentum, institutional flow, ownership, watchlist, and execution.
+                          
                         </p>
                     </div>
 
@@ -570,17 +580,83 @@ function PremiumDashboardHero({ D, isCompact, lastUpdated, gainers, losers, near
                                 border: `1px solid ${D.panelBorder}`,
                             }}>
                                 <div style={{ fontSize: 10, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 7 }}>{metric.label}</div>
-                                <div style={{
-                                    color: metric.color,
-                                    fontFamily: "IBM Plex Mono, monospace",
-                                    fontSize: isCompact ? 15 : 18,
-                                    fontWeight: 800,
-                                    lineHeight: 1.2,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                }}>{metric.value}</div>
-                                <div style={{ color: D.subtext, fontSize: 11, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{metric.sub}</div>
+                                {metric.breadth ? (
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                                        {metric.breadth.map(item => (
+                                            <div key={item.label} style={{ minWidth: 0 }}>
+                                                <div style={{
+                                                    color: D.subtext,
+                                                    fontSize: isCompact ? 9 : 10,
+                                                    lineHeight: 1.2,
+                                                    whiteSpace: "nowrap",
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                }}>{item.label}</div>
+                                                <div style={{
+                                                    color: item.color,
+                                                    fontFamily: "IBM Plex Mono, monospace",
+                                                    fontSize: isCompact ? 13 : 15,
+                                                    fontWeight: 800,
+                                                    marginTop: 3,
+                                                }}>{item.value}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : metric.sectors ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                        {metric.sectors.length ? metric.sectors.map((sector, idx) => (
+                                            <div key={sector.industry || idx} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                                <span style={{
+                                                    width: 18,
+                                                    height: 18,
+                                                    borderRadius: 6,
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    flexShrink: 0,
+                                                    background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10),
+                                                    color: D.accent,
+                                                    fontFamily: "IBM Plex Mono, monospace",
+                                                    fontSize: 10,
+                                                    fontWeight: 800,
+                                                }}>{idx + 1}</span>
+                                                <span style={{
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
+                                                    color: D.text,
+                                                    fontSize: isCompact ? 11 : 12,
+                                                    fontWeight: 700,
+                                                }}>{sector.industry}</span>
+                                                <span style={{
+                                                    flexShrink: 0,
+                                                    color: D.accent,
+                                                    fontFamily: "IBM Plex Mono, monospace",
+                                                    fontSize: isCompact ? 12 : 13,
+                                                    fontWeight: 800,
+                                                }}>{sector.count}</span>
+                                            </div>
+                                        )) : (
+                                            <div style={{ color: D.subtext, fontSize: 11 }}>waiting for RS data</div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div style={{
+                                            color: metric.color,
+                                            fontFamily: "IBM Plex Mono, monospace",
+                                            fontSize: isCompact ? 15 : 18,
+                                            fontWeight: 800,
+                                            lineHeight: 1.2,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                        }}>{metric.value}</div>
+                                        <div style={{ color: D.subtext, fontSize: 11, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{metric.sub}</div>
+                                    </>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -2020,6 +2096,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const TIRS_RS85_PATH   = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
     const TIRS_ALL_PATH    = "ticker_industry_rs?select=industry&order=industry.asc";
     const RETURNS_PATH     = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
+    const BREADTH_LATEST_PATH = "market_breadth?exchange=eq.NSE&select=date,above_sma50,above_sma200,near_52w_high,near_52w_low&order=date.desc&limit=1";
     const RS_TTL           = 60 * 60 * 1000;
     const RETURNS_TTL      = 10 * 60 * 1000;
     // Fetch top 100 directly from indicators table (matches DB query: ORDER BY rs_rating DESC)
@@ -2045,9 +2122,14 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [losers, setLosers] = useState(() => _derivedMovers?.losers || []);
     const [nearHigh, setNearHigh] = useState(() => _derivedMovers?.nearHigh || []);
     const [nearLow, setNearLow] = useState(() => _derivedMovers?.nearLow || []);
+    const [breadthSnapshot, setBreadthSnapshot] = useState(() => {
+        const hit = cacheGet(BREADTH_LATEST_PATH, MOVERS_TTL);
+        return hit?.data?.[0] || null;
+    });
     // Only show skeleton if there's truly nothing cached
     const [loadingMovers, setLoadingMovers] = useState(() => !_derivedMovers);
     const [activeMoversTab, setActiveMoversTab] = useState("gainers");
+    const [activeMobilePanel, setActiveMobilePanel] = useState("pulse");
 
     // ── RS stocks – seed from cache ──────────────────────────────────────────
     const _cachedRs = useMemo(() => {
@@ -2147,6 +2229,21 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // FETCH RS > 85 STOCKS + ALL STOCK RETURNS
     // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    useEffect(() => {
+        (async () => {
+            try {
+                const rows = await sbFetch(BREADTH_LATEST_PATH, userToken, {
+                    ttl: MOVERS_TTL,
+                    onStale: fresh => setBreadthSnapshot(fresh?.[0] || null),
+                });
+                setBreadthSnapshot(rows?.[0] || null);
+            } catch (err) {
+                console.warn("Latest breadth snapshot fetch failed:", err);
+            }
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToken]);
+
     useEffect(() => {
         function applyRsData(tirsData, allIndustryData, allReturnsData) {
             const returnsMap = buildReturnsMap(allReturnsData);
@@ -2368,21 +2465,67 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             <PremiumDashboardHero
                 D={D}
                 isCompact={isCompact}
-                lastUpdated={lastUpdated}
+                breadthSnapshot={breadthSnapshot}
                 gainers={gainers}
                 losers={losers}
-                nearHigh={nearHigh}
-                nearLow={nearLow}
                 allHighRsStocks={allHighRsStocks}
                 rsIndustrySummary={rsIndustrySummary}
                 onNavigate={onNavigate}
             />
 
+            {isCompact && (
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 6,
+                    marginBottom: 12,
+                    padding: 5,
+                    borderRadius: 10,
+                    background: D.softFill,
+                    border: `1px solid ${D.panelBorder}`,
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 20,
+                    backdropFilter: "blur(14px)",
+                    WebkitBackdropFilter: "blur(14px)",
+                }}>
+                    {[
+                        { id: "pulse", label: "Market Pulse" },
+                        { id: "movers", label: "Movers" },
+                        { id: "leaders", label: "RS Leaders" },
+                    ].map(tab => {
+                        const active = activeMobilePanel === tab.id;
+                        return (
+                            <button key={tab.id} onClick={() => setActiveMobilePanel(tab.id)} style={{
+                                minHeight: 38,
+                                border: `1px solid ${active ? D.ring : "transparent"}`,
+                                borderRadius: 8,
+                                background: active ? D.pillBg : "transparent",
+                                color: active ? D.text : D.subtext,
+                                boxShadow: active ? D.shadowMd : "none",
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                fontSize: 11,
+                                fontWeight: 800,
+                                letterSpacing: "0",
+                                padding: "8px 6px",
+                                whiteSpace: "normal",
+                                lineHeight: 1.15,
+                            }}>
+                                {tab.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
             {/* â”€â”€ MARKET OVERVIEW (Index Cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} />
+            {(!isCompact || activeMobilePanel === "pulse") && (
+                <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} />
+            )}
 
             {/* -- MARKET MOVERS CARD -- */}
-            <SectionCard T={D}>
+            {(!isCompact || activeMobilePanel === "movers") && <SectionCard T={D}>
                 <CardHeader
                     T={D}
                     title="Market Movers"
@@ -2404,10 +2547,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     <TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />
                 </div>
                 <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
-            </SectionCard>
+            </SectionCard>}
 
             {/* -- RS RATING CARD -- */}
-            <SectionCard T={D}>
+            {(!isCompact || activeMobilePanel === "leaders") && <SectionCard T={D}>
                 <div style={{
                     display: "flex",
                     flexDirection: isCompact ? "column" : "row",
@@ -2537,7 +2680,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
                     )}
                 </RsLoginGate>
-            </SectionCard>
+            </SectionCard>}
             </div>
             <style>{`
                 .stock-dashboard-shell * {
@@ -2572,5 +2715,3 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         </div>
     );
 }
-
-
