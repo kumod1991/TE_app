@@ -12,6 +12,18 @@ const SB_H = {
 // Paginated fetch — Supabase PostgREST caps responses at 1000 rows by default.
 // We use the HTTP Range header (PostgREST standard) to page through all rows.
 const PAGE_SIZE = 1000;
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (e) {
+    if (e?.name === "AbortError") throw new Error("Request timed out while loading institutional flow data.");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 async function sbFetchAll(table, params = {}) {
   const allRows = [];
   let offset = 0;
@@ -21,10 +33,9 @@ async function sbFetchAll(table, params = {}) {
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join("&");
     const url = `${SUPABASE_URL}/rest/v1/${table}?${qs}`;
-    const r = await fetch(url, {
+    const r = await fetchWithTimeout(url, {
       headers: {
         ...SB_H,
-        "Cache-Control": "no-cache",
         // Range header: ask for rows offset→offset+PAGE_SIZE-1
         "Range": `${offset}-${offset + PAGE_SIZE - 1}`,
         "Range-Unit": "items",
@@ -306,12 +317,7 @@ async function fetchLatestCashDate() {
   return rows?.[0]?.date || null;
 }
 
-async function fetchModuleData() {
-  const cached = readModuleCache();
-  if (cached.data && !cached.stale) {
-    const remoteLatest = await fetchLatestCashDate().catch(() => null);
-    if (!remoteLatest || remoteLatest <= latestCashDate(cached.data)) return cached.data;
-  }
+async function refreshModuleData() {
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
     const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
@@ -336,13 +342,30 @@ async function fetchModuleData() {
   return fiidiiInflightPromise;
 }
 
+async function fetchModuleData({ preferCache = true } = {}) {
+  const cached = readModuleCache();
+  if (preferCache && cached.data && !cached.stale) {
+    fetchLatestCashDate()
+      .then(remoteLatest => {
+        if (remoteLatest && remoteLatest > latestCashDate(cached.data)) refreshModuleData().catch(() => null);
+      })
+      .catch(() => null);
+    return cached.data;
+  }
+  if (preferCache && cached.data && cached.stale) {
+    refreshModuleData().catch(() => null);
+    return cached.data;
+  }
+  return refreshModuleData();
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PURE SVG CHARTS
 // ═══════════════════════════════════════════════════════════════════════════════
 export function prefetchFiiDiiData() {
   const cached = readModuleCache();
   if (cached.data && !cached.stale) return Promise.resolve(cached.data);
-  return fetchModuleData().catch(() => null);
+  return fetchModuleData({ preferCache: false }).catch(() => null);
 }
 
 const PAD = { top: 10, right: 12, bottom: 30, left: 56 };
@@ -806,7 +829,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     (async () => {
       try {
         if (!cached.data) setLoading(true);
-        const data = await fetchModuleData();
+        const data = await fetchModuleData({ preferCache: !cached.data });
         if (cancelled) return;
         setCashData(data.cashData || []);
         setDerivData(data.derivData || []);

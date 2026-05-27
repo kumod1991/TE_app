@@ -10,8 +10,6 @@
     <link rel="manifest" href="/site.webmanifest" />
     <title>TradeEdge | Indian Stock Market Dashboard</title>
     
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4063180365030716"
-     crossorigin="anonymous"></script>
   </head>
   <body>
     <nav aria-label="Legal links" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;">
@@ -22,5 +20,19 @@
     </nav>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      window.addEventListener("load", () => {
+        const loadAds = () => {
+          if (document.querySelector('script[data-tradeedge-adsense]')) return;
+          const s = document.createElement("script");
+          s.async = true;
+          s.crossOrigin = "anonymous";
+          s.dataset.tradeedgeAdsense = "true";
+          s.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4063180365030716";
+          document.head.appendChild(s);
+        };
+        setTimeout(loadAds, 7000);
+      });
+    </script>
   </body>
 </html>

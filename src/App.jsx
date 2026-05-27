@@ -1,12 +1,16 @@
-import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
 //import ForumModule from "./ForumModule"
 import WatchlistDashboard from "./WatchlistDashboard";
-import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule"
-import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule"
-import AnnouncementsModule, { prefetchAnnouncementsData } from "./AnnouncementsModule";
-import StockDashboard from "./StockDashboard";
-import PremiumTickerDashboard from "./PremiumTickerDashboard";
+const FiiDiiModule = lazy(() => import("./FiiDiiModule"));
+const OwnershipScansModule = lazy(() => import("./OwnershipScansModule"));
+const AnnouncementsModule = lazy(() => import("./AnnouncementsModule"));
+const StockDashboard = lazy(() => import("./StockDashboard"));
+const PremiumTickerDashboard = lazy(() => import("./PremiumTickerDashboard"));
+
+const prefetchFiiDiiData = () => import("./FiiDiiModule").then(m => m.prefetchFiiDiiData?.()).catch(() => null);
+const prefetchOwnershipData = () => import("./OwnershipScansModule").then(m => m.prefetchOwnershipData?.()).catch(() => null);
+const prefetchAnnouncementsData = () => import("./AnnouncementsModule").then(m => m.prefetchAnnouncementsData?.()).catch(() => null);
 
 
 

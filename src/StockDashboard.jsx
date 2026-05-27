@@ -18,6 +18,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 //  sessionStorage keys are namespaced under "sbd:" to avoid collisions.
 // ─────────────────────────────────────────────────────────────────────────────────
 const SS_PREFIX  = "sbd:";
+const LS_PREFIX  = "sbd-persist:";
 const _memCache  = new Map();   // key → { data, ts, ttl }
 const _pending   = new Map();   // key → Promise  (dedup concurrent requests)
 
@@ -51,6 +52,21 @@ function _ssSet(key, entry) {
             try { sessionStorage.setItem(_ssKey(key), JSON.stringify(entry)); } catch { /* give up */ }
         } catch { /* private/incognito – ignore silently */ }
     }
+}
+
+function _lsKey(key) { return LS_PREFIX + key; }
+
+function _lsGet(key) {
+    if (typeof localStorage === "undefined") return null;
+    try {
+        const raw = localStorage.getItem(_lsKey(key));
+        return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+}
+
+function _lsSet(key, entry) {
+    if (typeof localStorage === "undefined") return;
+    try { localStorage.setItem(_lsKey(key), JSON.stringify(entry)); } catch {}
 }
 
 // ── Two-level read: returns { data, stale } or null ──────────────────────────
@@ -90,6 +106,24 @@ function cacheSet(key, data, ttl = 5 * 60 * 1000) {
         const keys = [..._memCache.keys()];
         keys.slice(0, Math.floor(keys.length * 0.2)).forEach(k => _memCache.delete(k));
     }
+}
+
+function persistentCacheGet(key, ttl) {
+    const now = Date.now();
+    const mem = _memCache.get(key);
+    if (mem && now - mem.ts <= ttl) return { data: mem.data, stale: false };
+    const ls = _lsGet(key);
+    if (ls?.data !== undefined) {
+        _memCache.set(key, { data: ls.data, ts: ls.ts || 0, ttl });
+        return { data: ls.data, stale: now - (ls.ts || 0) > ttl };
+    }
+    return mem ? { data: mem.data, stale: true } : null;
+}
+
+function persistentCacheSet(key, data, ttl) {
+    const entry = { data, ts: Date.now(), ttl };
+    _memCache.set(key, entry);
+    _lsSet(key, entry);
 }
 
 // ─── SUPABASE FETCH  (SWR-aware) ─────────────────────────────────────────────
@@ -2097,6 +2131,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const TIRS_ALL_PATH    = "ticker_industry_rs?select=industry&order=industry.asc";
     const RETURNS_PATH     = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
     const BREADTH_LATEST_PATH = "market_breadth?exchange=eq.NSE&select=date,above_sma50,above_sma200,near_52w_high,near_52w_low&order=date.desc&limit=1";
+    const RS_SUMMARY_CACHE_KEY = "dashboard-rs-industry-summary-v1";
     const RS_TTL           = 60 * 60 * 1000;
     const RETURNS_TTL      = 10 * 60 * 1000;
     // Fetch top 100 directly from indicators table (matches DB query: ORDER BY rs_rating DESC)
@@ -2170,6 +2205,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         });
         return m;
     }); // total stocks per industry (all ratings)
+    const [cachedRsIndustrySummary, setCachedRsIndustrySummary] = useState(() => {
+        const hit = persistentCacheGet(RS_SUMMARY_CACHE_KEY, RS_TTL);
+        return hit?.data || [];
+    });
 
     // RS Tab: "sector" | "all"
     const [activeRsTab, setActiveRsTab] = useState("sector");
@@ -2245,7 +2284,34 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     }, [userToken]);
 
     useEffect(() => {
-        function applyRsData(tirsData, allIndustryData, allReturnsData) {
+        function buildRsSummary(tirsData, allIndustryData) {
+            const totalsMap = new Map();
+            (allIndustryData || []).forEach(r => {
+                const key = normalizeIndustryKey(r.industry);
+                if (key) totalsMap.set(key, (totalsMap.get(key) || 0) + 1);
+            });
+            const counts = new Map();
+            const labels = new Map();
+            (tirsData || []).forEach(row => {
+                const key = normalizeIndustryKey(row.industry);
+                if (!key) return;
+                labels.set(key, normalizeIndustryName(row.industry));
+                counts.set(key, (counts.get(key) || 0) + 1);
+            });
+            return [...counts.entries()]
+                .map(([industryKey, count]) => {
+                    const total = totalsMap.get(industryKey) || count;
+                    return {
+                        industry: labels.get(industryKey) || industryKey,
+                        count,
+                        total,
+                        pct: total > 0 ? (count / total) * 100 : 0,
+                    };
+                })
+                .sort((a, b) => b.pct - a.pct || a.industry.localeCompare(b.industry));
+        }
+
+        function applyRsData(tirsData, allIndustryData, allReturnsData = []) {
             const returnsMap = buildReturnsMap(allReturnsData);
             stockReturnsMapRef.current = returnsMap;
 
@@ -2263,16 +2329,25 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             setLoadingIndustries(false);
 
             setRsStocks(enrichRsStocks(tirsData, returnsMap));
+
+            const summary = buildRsSummary(tirsData, allIndustryData);
+            setCachedRsIndustrySummary(summary);
+            persistentCacheSet(RS_SUMMARY_CACHE_KEY, summary, RS_TTL);
         }
 
         (async () => {
             // loadingRs / loadingIndustries are false when cache was available at mount.
             setError(null);
             try {
-                const [tirsData, allIndustryData, allReturnsData, latestDateRows] = await Promise.all([
+                const [tirsData, allIndustryData] = await Promise.all([
                     sbFetchAll(TIRS_RS85_PATH, userToken, { ttl: RS_TTL }),
                     sbFetchAll(TIRS_ALL_PATH,  userToken, { ttl: RS_TTL }),
-                    sbFetchAll(RETURNS_PATH,   userToken, { ttl: RETURNS_TTL }),
+                ]);
+                applyRsData(tirsData, allIndustryData);
+                setLoadingRs(false);
+
+                const [allReturnsData, latestDateRows] = await Promise.all([
+                    sbFetchAll(RETURNS_PATH, userToken, { ttl: RETURNS_TTL }),
                     // Step 1: get the latest date in indicators
                     sbFetch(ALL_RS_LATEST_DATE_PATH, userToken, { ttl: ALL_RS_TTL }),
                 ]);
@@ -2364,6 +2439,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     }[activeMoversTab] || [];
 
     const rsIndustrySummary = useMemo(() => {
+        if (!rsStocks.length && !searchTerm.trim() && cachedRsIndustrySummary.length) {
+            return cachedRsIndustrySummary;
+        }
         const counts = new Map();
         const labels = new Map();
         const matchingIndustries = new Set();
