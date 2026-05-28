@@ -496,7 +496,7 @@ function makeCSS(T) {
 html, body, #root {
   width: 100%; height: 100%;
   display: flex;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: ${T.text};
