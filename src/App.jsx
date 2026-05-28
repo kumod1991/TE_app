@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
 //import ForumModule from "./ForumModule"
-import WatchlistDashboard from "./WatchlistDashboard";
+const WatchlistDashboard = lazy(() => import("./WatchlistDashboard"));
 const FiiDiiModule = lazy(() => import("./FiiDiiModule"));
 const OwnershipScansModule = lazy(() => import("./OwnershipScansModule"));
 const AnnouncementsModule = lazy(() => import("./AnnouncementsModule"));
@@ -492,13 +492,11 @@ const THEMES = {
 function makeCSS(T) {
     const D = T === THEMES.dark;
     return `
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@600;700;800&display=swap');
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root {
   width: 100%; height: 100%;
   display: flex;
-  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: ${T.text};
@@ -17640,18 +17638,6 @@ function MarketBreadthModule({ T, onDataReady }) {
 
 }
 
-const FONT_LINK =
-    "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
-
-function injectFonts() {
-    if (document.getElementById("screens-fonts")) return;
-    const l = document.createElement("link");
-    l.id = "screens-fonts";
-    l.rel = "stylesheet";
-    l.href = FONT_LINK;
-    document.head.appendChild(l);
-}
-
 /*  Design tokens (dark & light)  Premium Redesign  */
 const DT = {
     bg: "#080c12",
@@ -24089,7 +24075,6 @@ function SectoralHeatmapModule({ T }) {
 
     //  CSS 
     const css = `
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
         .hm3-animate { animation: hm3FadeUp .24s ease both; }
         @keyframes hm3FadeUp  { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
         @keyframes hm3Spin    { to { transform:rotate(360deg); } }
@@ -24500,7 +24485,6 @@ function AuthScreen({ onLogin, onDemo, theme, toggleTheme }) {
 
     //  Shared font import injected once 
     const authFontCSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @keyframes auth-fadeUp   { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
 @keyframes auth-fadeIn   { from { opacity:0; } to { opacity:1; } }
 @keyframes auth-gridPan  { from { transform:translateY(0); } to { transform:translateY(-60px); } }
@@ -27754,24 +27738,26 @@ export default function App() {
                                         resetKey={`watchlist-${theme}`}
                                         onRecover={() => { setProductTab(SAFE_PRODUCT_TAB); setPage("dashboard"); }}
                                     >
-                                        <WatchlistDashboard
-                                            T={T}
-                                            session={session}
-                                            darkMode={theme === "dark"}
-                                            onToggleDark={toggleTheme}
-                                            onNavigateToScreen={(screenName) => {
-                                                setTechnicalSubPage("screens");
-                                                setProductTab("technical");
-                                                window.__wl_openScreen = screenName;
-                                            }}
-                                            onTechnoFunda={({ label, tickers }) => {
-                                                handleTechnoFundaScan({ label, tickers }, "watchlist");
-                                            }}
-                                            fetchAndCachePrice={_fetchAndCachePrice}
-                                            bestPrice={_bestPrice}
-                                            isPricePending={_isPricePending}
-                                            isMarketLive={isMarketLive}
-                                        />
+                                        <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading watchlist" />}>
+                                            <WatchlistDashboard
+                                                T={T}
+                                                session={session}
+                                                darkMode={theme === "dark"}
+                                                onToggleDark={toggleTheme}
+                                                onNavigateToScreen={(screenName) => {
+                                                    setTechnicalSubPage("screens");
+                                                    setProductTab("technical");
+                                                    window.__wl_openScreen = screenName;
+                                                }}
+                                                onTechnoFunda={({ label, tickers }) => {
+                                                    handleTechnoFundaScan({ label, tickers }, "watchlist");
+                                                }}
+                                                fetchAndCachePrice={_fetchAndCachePrice}
+                                                bestPrice={_bestPrice}
+                                                isPricePending={_isPricePending}
+                                                isMarketLive={isMarketLive}
+                                            />
+                                        </Suspense>
                                     </ModuleErrorBoundary>
                                 )}
 

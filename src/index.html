@@ -60,15 +60,22 @@
     <script>
       window.addEventListener("load", () => {
         const loadAds = () => {
-          if (document.querySelector('script[data-tradeedge-adsense]')) return;
+          if (document.getElementById("tradeedge-adsense")) return;
           const s = document.createElement("script");
+          s.id = "tradeedge-adsense";
           s.async = true;
           s.crossOrigin = "anonymous";
-          s.dataset.tradeedgeAdsense = "true";
           s.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4063180365030716";
           document.head.appendChild(s);
         };
-        setTimeout(loadAds, 7000);
+        const loadAdsWhenIdle = () => {
+          if ("requestIdleCallback" in window) requestIdleCallback(loadAds, { timeout: 3000 });
+          else setTimeout(loadAds, 1);
+        };
+        ["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) => {
+          window.addEventListener(eventName, loadAdsWhenIdle, { once: true, passive: true });
+        });
+        setTimeout(loadAdsWhenIdle, 45000);
       });
     </script>
   </body>

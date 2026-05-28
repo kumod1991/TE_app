@@ -35,8 +35,6 @@ function useInjectStyles(T, isMobile) {
       document.head.appendChild(el);
     }
     el.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
-
       .wls-root * { box-sizing: border-box; }
 
       .wls-root ::-webkit-scrollbar { width: ${isMobile ? "2px" : "3px"}; }
