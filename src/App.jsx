@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo, lazy } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
 //import ForumModule from "./ForumModule"
 import WatchlistDashboard from "./WatchlistDashboard";
@@ -25699,6 +25699,35 @@ function LoginGate({ T, onLogin, theme, tabLabel, onBack }) {
     );
 }
 
+function ModuleSuspenseFallback({ T, label = "Loading" }) {
+    return (
+        <div style={{
+            display: "flex",
+            flex: 1,
+            minHeight: 0,
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+            background: T.bg,
+            color: T.subtext,
+            fontFamily: "'DM Sans', sans-serif",
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+                <span style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: "50%",
+                    border: `2px solid ${T.border}`,
+                    borderTopColor: T.green || T.accent || "#14b8a6",
+                    animation: "finspin .75s linear infinite",
+                    flexShrink: 0,
+                }} />
+                <span>{label}</span>
+            </div>
+        </div>
+    );
+}
+
 // ===== LOGIN MODAL =====
 // A self-contained modal that reuses the same auth logic as AuthScreen but
 // opens as an overlay on top of the dashboard (no full-screen auth page).
@@ -27638,7 +27667,9 @@ export default function App() {
                         {productTab === "disclaimer" ? (
                             <LegalPage T={T} initialTab={legalInitialTab} onClose={closeLegal} />
                         ) : route.kind === "ticker" ? (
-                            <PremiumTickerDashboard symbol={route.symbol} T={T} />
+                            <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading stock view" />}>
+                                <PremiumTickerDashboard symbol={route.symbol} T={T} />
+                            </Suspense>
                         ) : (
                             <>
 
@@ -27683,35 +27714,37 @@ export default function App() {
                                         resetKey={`dashboard-${theme}`}
                                         onRecover={() => { setProductTab(SAFE_PRODUCT_TAB); setPage("dashboard"); }}
                                     >
-                                        <StockDashboard
-                                            T={T}
-                                            userToken={session?.access_token}
-                                            onTickerClick={(ticker) => {
-                                                setTopbarSearch(ticker);
-                                                topbarResolvedSymRef.current = ticker;
-                                                navigateToTicker(ticker);
-                                            }}
-                                            onLogin={() => setShowLoginModal(true)}
-                                            onNavigate={(target, subPage) => {
-                                                clearTickerRoute();
-                                                if (target === "financial") {
-                                                    setProductTab("financial");
-                                                    setFinancialSubPage(subPage || "screener");
-                                                    if (subPage !== "screener") {
-                                                        setTechnoFundaFilter(null);
-                                                        setTechnoFundaSource(null);
+                                        <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading market dashboard" />}>
+                                            <StockDashboard
+                                                T={T}
+                                                userToken={session?.access_token}
+                                                onTickerClick={(ticker) => {
+                                                    setTopbarSearch(ticker);
+                                                    topbarResolvedSymRef.current = ticker;
+                                                    navigateToTicker(ticker);
+                                                }}
+                                                onLogin={() => setShowLoginModal(true)}
+                                                onNavigate={(target, subPage) => {
+                                                    clearTickerRoute();
+                                                    if (target === "financial") {
+                                                        setProductTab("financial");
+                                                        setFinancialSubPage(subPage || "screener");
+                                                        if (subPage !== "screener") {
+                                                            setTechnoFundaFilter(null);
+                                                            setTechnoFundaSource(null);
+                                                        }
+                                                    } else if (target === "technical") {
+                                                        setProductTab("technical");
+                                                        setTechnicalSubPage(subPage || "breadth");
+                                                    } else if (target === "tradevault") {
+                                                        setProductTab("tradevault");
+                                                        setPage(subPage || "dashboard");
+                                                    } else if (target === "watchlist") {
+                                                        setProductTab("watchlist");
                                                     }
-                                                } else if (target === "technical") {
-                                                    setProductTab("technical");
-                                                    setTechnicalSubPage(subPage || "breadth");
-                                                } else if (target === "tradevault") {
-                                                    setProductTab("tradevault");
-                                                    setPage(subPage || "dashboard");
-                                                } else if (target === "watchlist") {
-                                                    setProductTab("watchlist");
-                                                }
-                                            }}
-                                        />
+                                                }}
+                                            />
+                                        </Suspense>
                                     </ModuleErrorBoundary>
                                 )}
                                 {productTab === "watchlist" && (
@@ -27766,13 +27799,19 @@ export default function App() {
                                             />
                                         </div>
                                         <div style={{ display: financialSubPage === "fiidii" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", justifyContent: "center" }}>
-                                            <FiiDiiModule T={T} />
+                                            <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading FII / DII flow" />}>
+                                                <FiiDiiModule T={T} />
+                                            </Suspense>
                                         </div>
                                         <div style={{ display: financialSubPage === "ownership" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
-                                            <OwnershipScansModule T={T} />
+                                            <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading ownership scans" />}>
+                                                <OwnershipScansModule T={T} />
+                                            </Suspense>
                                         </div>
                                         <div style={{ display: financialSubPage === "announcements" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
-                                            <AnnouncementsModule T={T} />
+                                            <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading announcements" />}>
+                                                <AnnouncementsModule T={T} />
+                                            </Suspense>
                                         </div>
                                     </div>
                                 )}
