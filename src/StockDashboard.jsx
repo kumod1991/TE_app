@@ -90,7 +90,18 @@ function cacheGet(key, ttl) {
         return { data: ss.data, stale };
     }
 
-    // 3. Memory stale but sessionStorage empty – surface the stale memory value
+    // 3. Check persistent storage so a browser restart can still paint instantly.
+    const ls = _lsGet(key);
+    if (ls && ls.data !== undefined) {
+        const effectiveTtl = ttl ?? ls.ttl ?? 0;
+        const stale = Date.now() - (ls.ts || 0) > effectiveTtl;
+        const entry = { data: ls.data, ts: ls.ts || 0, ttl: ls.ttl ?? effectiveTtl };
+        _memCache.set(key, entry);
+        _ssSet(key, entry);
+        return { data: ls.data, stale };
+    }
+
+    // 4. Memory stale but sessionStorage/localStorage empty – surface the stale memory value
     if (mem) return { data: mem.data, stale: true };
 
     return null;  // cache miss
@@ -100,6 +111,7 @@ function cacheSet(key, data, ttl = 5 * 60 * 1000) {
     const entry = { data, ts: Date.now(), ttl };
     _memCache.set(key, entry);
     _ssSet(key, entry);
+    _lsSet(key, entry);
 
     // Trim memory cache ceiling
     if (_memCache.size > 150) {
@@ -199,16 +211,34 @@ function _backgroundFetch(path, token, ttl, onStale) {
         .catch(err => console.warn("[sbFetch SWR bg]", path.split("?")[0], err.message));
 }
 
-async function sbFetchAll(path, token, { ttl = 5 * 60 * 1000, pageSize = 1000 } = {}) {
+async function sbFetchAll(path, token, { ttl = 5 * 60 * 1000, pageSize = 1000, onStale } = {}) {
     const rows = [];
+    const refreshedPages = new Map();
+    const expectedOffsets = new Set();
+    let initialPagingComplete = false;
+    const emitStaleAll = () => {
+        if (!onStale || !initialPagingComplete || refreshedPages.size !== expectedOffsets.size) return;
+        const merged = [];
+        [...expectedOffsets].sort((a, b) => a - b).forEach(key => merged.push(...(refreshedPages.get(key) || [])));
+        onStale(merged);
+    };
     let offset = 0;
 
     while (true) {
         const separator = path.includes("?") ? "&" : "?";
+        const pageOffset = offset;
+        expectedOffsets.add(pageOffset);
         const page = await sbFetch(
             `${path}${separator}limit=${pageSize}&offset=${offset}`,
             token,
-            { ttl }
+            {
+                ttl,
+                onStale: freshPage => {
+                    if (!Array.isArray(freshPage)) return;
+                    refreshedPages.set(pageOffset, freshPage);
+                    emitStaleAll();
+                },
+            }
         );
 
         if (!Array.isArray(page) || !page.length) break;
@@ -217,8 +247,67 @@ async function sbFetchAll(path, token, { ttl = 5 * 60 * 1000, pageSize = 1000 } 
         offset += pageSize;
     }
 
+    initialPagingComplete = true;
+    emitStaleAll();
     return rows;
 }
+
+function cacheGetAllPages(path, ttl, pageSize = 1000, maxPages = 20) {
+    const rows = [];
+    for (let offset = 0, pageIndex = 0; pageIndex < maxPages; offset += pageSize, pageIndex += 1) {
+        const separator = path.includes("?") ? "&" : "?";
+        const hit = cacheGet(`${path}${separator}limit=${pageSize}&offset=${offset}`, ttl);
+        if (!hit || !Array.isArray(hit.data) || hit.data.length === 0) break;
+        rows.push(...hit.data);
+        if (hit.data.length < pageSize) break;
+    }
+    return rows.length ? rows : null;
+}
+
+// ─── GLOBAL NAME MAP  (ticker → company name) ────────────────────────────────
+//
+//  Built synchronously at module load by scanning all bhav_copy entries already
+//  in sessionStorage / localStorage.  On any revisit – or hard refresh when
+//  localStorage is warm – names are available before the first render, so the
+//  movers table paints ticker+name together with zero flicker.
+//  Updated eagerly whenever batchFetchBhavNames resolves new rows.
+// ─────────────────────────────────────────────────────────────────────────────
+const _nameMap = new Map(); // ticker → name
+
+function _seedNameMapFromCache() {
+    const scanEntries = (storage, prefix) => {
+        try {
+            for (let i = 0; i < storage.length; i++) {
+                const k = storage.key(i);
+                if (!k || !k.includes("bhav_copy")) continue;
+                try {
+                    const entry = JSON.parse(storage.getItem(k) || "{}");
+                    if (Array.isArray(entry.data)) {
+                        for (const row of entry.data) {
+                            if (row.ticker && row.name && !_nameMap.has(row.ticker))
+                                _nameMap.set(row.ticker, row.name);
+                        }
+                    }
+                } catch { /* malformed – skip */ }
+            }
+        } catch { /* storage unavailable */ }
+    };
+    try { scanEntries(sessionStorage, SS_PREFIX); } catch {}
+    try { scanEntries(localStorage,   LS_PREFIX); } catch {}
+}
+_seedNameMapFromCache();
+
+function _updateNameMap(nameRows) {
+    for (const row of nameRows) {
+        if (row.ticker && row.name) _nameMap.set(row.ticker, row.name);
+    }
+}
+
+/** Enrich rows with names from the global map – instant when map is warm. */
+function applyNamesFromMap(rows) {
+    return rows.map(r => ({ ...r, name: _nameMap.get(r.ticker) || r.name || null }));
+}
+
 
 // â”€â”€â”€ BATCH FETCH (splits large ticker lists to avoid query timeouts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const BATCH_SIZE = 50;
@@ -285,6 +374,42 @@ async function batchFetchTickerIndustryRs(tickers, userToken) {
         })
     );
     return results.flat();
+}
+
+async function batchFetchBhavNames(tickers, userToken) {
+    if (!tickers.length) return [];
+    const chunks = [];
+    for (let i = 0; i < tickers.length; i += BATCH_SIZE) {
+        chunks.push(tickers.slice(i, i + BATCH_SIZE));
+    }
+    const allRows = [];
+    // Fetch sequentially per chunk to avoid racing cache writes
+    for (const chunk of chunks) {
+        const tickersIn = toSupabaseInList(chunk);
+        try {
+            // order=ticker.asc,date.desc → for each ticker, latest date row first
+            const rows = await sbFetch(
+                `bhav_copy?select=ticker,name&ticker=in.${tickersIn}&order=ticker.asc,date.desc`,
+                userToken,
+                { ttl: 60 * 60 * 1000 }
+            );
+            if (Array.isArray(rows)) allRows.push(...rows);
+        } catch (e) {
+            console.warn("[batchFetchBhavNames] chunk failed:", e.message);
+        }
+    }
+    // Deduplicate: keep only the first (= latest-date) row per ticker
+    const seen = new Set();
+    const deduped = [];
+    for (const row of allRows) {
+        if (!row || !row.ticker || seen.has(row.ticker)) continue;
+        seen.add(row.ticker);
+        if (row.name) deduped.push({ ticker: row.ticker, name: row.name });
+    }
+    console.log("[batchFetchBhavNames] resolved", deduped.length, "names for", tickers.length, "tickers");
+    // Keep global name map up-to-date so subsequent renders are instant
+    _updateNameMap(deduped);
+    return deduped;
 }
 
 async function batchFetchStockReturns(tickers, userToken) {
@@ -457,10 +582,12 @@ function SectionCard({ T, children, style = {}, className = "" }) {
         <div
             className={className}
             style={{
-                background: T.panelBg,
+                background: T.isDark
+                    ? `linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(15,23,42,0.6) 100%)`
+                    : `linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.92) 100%)`,
                 border: `1px solid ${T.panelBorder}`,
                 boxShadow: T.shadowMd,
-                borderRadius: 24,
+                borderRadius: 22,
                 padding: 20,
                 marginBottom: 18,
                 backdropFilter: "blur(18px)",
@@ -473,7 +600,7 @@ function SectionCard({ T, children, style = {}, className = "" }) {
             <div style={{
                 position: "absolute",
                 inset: 1,
-                borderRadius: 23,
+                borderRadius: 21,
                 border: `1px solid ${T.insetBorder}`,
                 pointerEvents: "none",
             }} />
@@ -494,7 +621,112 @@ function DashboardLensIcon({ type, size = 16 }) {
     return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
 }
 
-function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, onNavigate }) {
+function FiiDiiFlowBars({ D, data, isCompact }) {
+    // data: array of fii_dii_activity rows, sorted desc by date
+    const rows = (data || []).slice(0, 7).reverse(); // show last 7 days, oldest→newest
+    if (!rows.length) {
+        return <div style={{ color: D.muted, fontSize: 11 }}>waiting for data</div>;
+    }
+
+    const allValues = rows.flatMap(r => [r.fii_net, r.dii_net]).filter(v => v != null);
+    const absMax = Math.max(...allValues.map(Math.abs), 1);
+
+    const fmtCr = v => {
+        if (v == null) return "-";
+        // raw values from DB are already in Crores
+        const sign = v >= 0 ? "+" : "";
+        const abs = Math.abs(v);
+        if (abs >= 1e5) return `${sign}${(v / 1e5).toFixed(1)}L`;
+        return `${sign}${Math.round(v).toLocaleString("en-IN")}`;
+    };
+
+    const barMaxH = 44;
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, width: "100%" }}>
+            {/* bars + date labels: one column per day, fills available width */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, width: "100%", minWidth: 0 }}>
+                {rows.map((r, i) => {
+                    const fiiH = Math.max(2, Math.round(Math.abs(r.fii_net || 0) / absMax * barMaxH));
+                    const diiH = Math.max(2, Math.round(Math.abs(r.dii_net || 0) / absMax * barMaxH));
+                    const fiiPos = (r.fii_net || 0) >= 0;
+                    const diiPos = (r.dii_net || 0) >= 0;
+                    const d = r.date ? String(r.date).slice(5) : "";
+                    return (
+                        <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                            {/* bar pair */}
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: barMaxH, width: "100%", justifyContent: "center" }}>
+                                <div title={`FII: ${fmtCr(r.fii_net)}Cr`} style={{
+                                    flex: 1,
+                                    maxWidth: 14,
+                                    height: fiiH,
+                                    borderRadius: "2px 2px 0 0",
+                                    background: fiiPos ? withAlpha(D.pos || "#10b981", 0.85) : withAlpha(D.neg || "#ef4444", 0.82),
+                                }} />
+                                <div title={`DII: ${fmtCr(r.dii_net)}Cr`} style={{
+                                    flex: 1,
+                                    maxWidth: 14,
+                                    height: diiH,
+                                    borderRadius: "2px 2px 0 0",
+                                    background: diiPos ? withAlpha(D.accent || "#2563eb", 0.78) : withAlpha("#f59e0b", 0.78),
+                                }} />
+                            </div>
+                            {/* date */}
+                            <div style={{
+                                fontSize: 8,
+                                color: D.muted,
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                letterSpacing: "-0.02em",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "clip",
+                                width: "100%",
+                                textAlign: "center",
+                            }}>{d}</div>
+                        </div>
+                    );
+                })}
+            </div>
+            {/* latest day net values */}
+            {rows.length > 0 && (() => {
+                const latest = rows[rows.length - 1];
+                // raw DB values are already in Crores – no conversion needed
+                const fiiNet = latest.fii_net || 0;
+                const diiNet = latest.dii_net || 0;
+                return (
+                    <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: 1, flexShrink: 0,
+                                background: fiiNet >= 0 ? withAlpha(D.pos || "#10b981", 0.85) : withAlpha(D.neg || "#ef4444", 0.82),
+                            }} />
+                            <span style={{ fontSize: 9, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>FII</span>
+                            <span style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                color: fiiNet >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
+                            }}>{fmtCr(fiiNet)}Cr</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: 1, flexShrink: 0,
+                                background: diiNet >= 0 ? withAlpha(D.accent || "#2563eb", 0.78) : withAlpha("#f59e0b", 0.78),
+                            }} />
+                            <span style={{ fontSize: 9, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>DII</span>
+                            <span style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                color: diiNet >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
+                            }}>{fmtCr(diiNet)}Cr</span>
+                        </div>
+                    </div>
+                );
+            })()}
+        </div>
+    );
+}
+
+function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, onNavigate }) {
     const topRsSectors = [...(rsIndustrySummary || [])]
         .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
         .slice(0, 5);
@@ -524,6 +756,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
             ],
         },
         { label: "Top RS Sectors", sectors: topRsSectors, color: D.accent },
+        { label: "FII / DII Daily Flow", fiiDii: true },
     ];
     const lenses = [
         { type: "screens", title: "Breadth", meta: `${gainerCount} gainers`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
@@ -537,7 +770,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
     return (
         <section style={{
             marginBottom: isCompact ? 14 : 18,
-            borderRadius: 12,
+            borderRadius: 22,
             border: `1px solid ${D.panelBorder}`,
             background: D.isDark
                 ? `linear-gradient(135deg, ${withAlpha("#020617", 0.96)} 0%, ${withAlpha("#0f172a", 0.94)} 52%, ${withAlpha(D.accent, 0.16)} 100%)`
@@ -555,7 +788,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
             <div style={{ position: "relative", padding: isCompact ? "18px 16px" : "24px 26px" }}>
                 <div style={{
                     display: "grid",
-                    gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 1.1fr) minmax(420px, 0.9fr)",
+                    gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 1fr) minmax(580px, 1.1fr)",
                     gap: isCompact ? 18 : 24,
                     alignItems: "stretch",
                 }}>
@@ -569,10 +802,11 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                             background: toneBg,
                             border: `1px solid ${withAlpha(toneColor, 0.22)}`,
                             color: toneColor,
-                            fontSize: 11,
-                            fontWeight: 800,
-                            letterSpacing: "0.12em",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: "0.08em",
                             textTransform: "uppercase",
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                             marginBottom: 14,
                         }}>
                             <span style={{ width: 6, height: 6, borderRadius: "50%", background: toneColor }} />
@@ -581,20 +815,22 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                         <h1 style={{
                             margin: 0,
                             color: D.text,
-                            fontSize: isCompact ? 27 : 40,
-                            lineHeight: 1.02,
+                            fontSize: isCompact ? 24 : 36,
+                            lineHeight: 1.05,
                             fontWeight: 800,
-                            letterSpacing: "0",
+                            letterSpacing: "-0.03em",
                             maxWidth: 760,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                         }}>
                             Dashboard
                         </h1>
                         <p style={{
-                            margin: "12px 0 0",
+                            margin: "10px 0 0",
                             color: D.subtext,
-                            fontSize: isCompact ? 13 : 14,
-                            lineHeight: 1.65,
+                            fontSize: 13,
+                            lineHeight: 1.6,
                             maxWidth: 720,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                         }}>
                           
                         </p>
@@ -602,7 +838,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))",
+                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(140px, 1fr))",
                         gap: 10,
                     }}>
                         {heroMetrics.map(metric => (
@@ -612,9 +848,12 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                 padding: isCompact ? "12px 12px" : "14px 14px",
                                 background: D.isDark ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.72)",
                                 border: `1px solid ${D.panelBorder}`,
+                                ...(metric.fiiDii && isCompact ? { gridColumn: "span 2" } : {}),
                             }}>
-                                <div style={{ fontSize: 10, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 7 }}>{metric.label}</div>
-                                {metric.breadth ? (
+                                <div style={{ fontSize: 10, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.10em", marginBottom: 7, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{metric.label}</div>
+                                {metric.fiiDii ? (
+                                    <FiiDiiFlowBars D={D} data={fiiDiiData} isCompact={isCompact} />
+                                ) : metric.breadth ? (
                                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
                                         {metric.breadth.map(item => (
                                             <div key={item.label} style={{ minWidth: 0 }}>
@@ -625,10 +864,12 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                                     whiteSpace: "nowrap",
                                                     overflow: "hidden",
                                                     textOverflow: "ellipsis",
+                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                    fontWeight: 600,
                                                 }}>{item.label}</div>
                                                 <div style={{
                                                     color: item.color,
-                                                    fontFamily: "IBM Plex Mono, monospace",
+                                                    fontFamily: "'IBM Plex Mono', monospace",
                                                     fontSize: isCompact ? 13 : 15,
                                                     fontWeight: 800,
                                                     marginTop: 3,
@@ -650,7 +891,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                                     flexShrink: 0,
                                                     background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10),
                                                     color: D.accent,
-                                                    fontFamily: "IBM Plex Mono, monospace",
+                                                    fontFamily: "'IBM Plex Mono', monospace",
                                                     fontSize: 10,
                                                     fontWeight: 800,
                                                 }}>{idx + 1}</span>
@@ -667,7 +908,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                                 <span style={{
                                                     flexShrink: 0,
                                                     color: D.accent,
-                                                    fontFamily: "IBM Plex Mono, monospace",
+                                                    fontFamily: "'IBM Plex Mono', monospace",
                                                     fontSize: isCompact ? 12 : 13,
                                                     fontWeight: 800,
                                                 }}>{sector.count}</span>
@@ -680,7 +921,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                     <>
                                         <div style={{
                                             color: metric.color,
-                                            fontFamily: "IBM Plex Mono, monospace",
+                                            fontFamily: "'IBM Plex Mono', monospace",
                                             fontSize: isCompact ? 15 : 18,
                                             fontWeight: 800,
                                             lineHeight: 1.2,
@@ -712,7 +953,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                             justifyContent: "space-between",
                             gap: 10,
                             textAlign: "left",
-                            borderRadius: 10,
+                            borderRadius: 12,
                             border: `1px solid ${D.panelBorder}`,
                             background: D.isDark ? "rgba(15,23,42,0.54)" : "rgba(255,255,255,0.70)",
                             color: D.text,
@@ -728,10 +969,10 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                 <DashboardLensIcon type={lens.type} />
                             </span>
                             <span style={{ minWidth: 0, width: "100%" }}>
-                                <span style={{ display: "block", fontSize: 13, fontWeight: 800, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lens.title}</span>
-                                <span style={{ display: "block", fontSize: 11, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lens.meta}</span>
+                                <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.title}</span>
+                                <span style={{ display: "block", fontSize: 11, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.meta}</span>
                             </span>
-                            <span style={{ fontSize: 11, fontWeight: 800, color: D.accent, letterSpacing: "0.04em" }}>{lens.action}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: D.accent, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.action}</span>
                         </button>
                     ))}
                 </div>
@@ -859,22 +1100,24 @@ function IndexCard({ T, label, value, changePct, sparkData, compact = false }) {
         }}>
             <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{
-                    fontSize: compact ? 11 : 12,
-                    color: T.subtext || T.muted,
+                    fontSize: 10,
+                    color: T.muted,
                     marginBottom: 5,
                     whiteSpace: "nowrap",
                     textTransform: "uppercase",
-                    letterSpacing: "0.12em",
-                    fontWeight: 700,
+                    letterSpacing: "0.10em",
+                    fontWeight: 800,
+                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                 }}>
                     {label}
                 </div>
                 <div style={{
-                    fontSize: compact ? 15 : 17,
+                    fontSize: compact ? 15 : 18,
                     fontWeight: 700,
                     color: T.text,
-                    fontFamily: "IBM Plex Mono, monospace",
+                    fontFamily: "'IBM Plex Mono', monospace",
                     letterSpacing: "-0.03em",
+                    fontVariantNumeric: "tabular-nums",
                 }}>
                     {value != null ? Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : EMPTY_VALUE}
                 </div>
@@ -908,7 +1151,7 @@ function IndexCard({ T, label, value, changePct, sparkData, compact = false }) {
     );
 }
 
-function MarketOverview({ T, userToken, isCompact, isTablet }) {
+function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = false, style = {} }) {
     const IDX_PATH = "index_prices?select=*&order=date.desc&limit=20";
     const IDX_TTL  = 5 * 60 * 1000;
 
@@ -982,13 +1225,13 @@ function MarketOverview({ T, userToken, isCompact, isTablet }) {
     );
 
     const activeIndices = activeIndexTab === "core" ? coreIndices : sectoralIndices;
-    const columnCount = isCompact ? 1 : 2;
+    const columnCount = (isCompact || isSideBySide) ? 1 : 2;
     const rowHeight = isCompact ? 112 : 104;
     const visibleRows = Math.ceil(Math.min(activeIndices.length, DEFAULT_VISIBLE_ITEMS) / columnCount) || 1;
     const gridMaxHeight = visibleRows * rowHeight + Math.max(visibleRows - 1, 0) * 14;
 
     return (
-        <SectionCard T={T} style={{ padding: isCompact ? 18 : 22 }}>
+        <SectionCard T={T} style={{ padding: isCompact ? 18 : 22, marginBottom: isSideBySide ? 0 : undefined, ...style }}>
             <div style={{
                 display: "flex",
                 alignItems: isCompact ? "flex-start" : "center",
@@ -999,12 +1242,11 @@ function MarketOverview({ T, userToken, isCompact, isTablet }) {
             }}>
                 <div>
                     <div style={{
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: 700,
-                        letterSpacing: "0.14em",
-                        textTransform: "uppercase",
-                        color: T.subtext,
-                        fontFamily: "IBM Plex Mono, monospace",
+                        letterSpacing: "-0.01em",
+                        color: T.text,
+                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                     }}>Market Pulse</div>
                     <div style={{
                         fontSize: isCompact ? 18 : 22,
@@ -1015,23 +1257,23 @@ function MarketOverview({ T, userToken, isCompact, isTablet }) {
                     }}>
                     </div>
                 </div>
-                <span style={{
-                    fontSize: 13,
-                    color: T.muted,
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    background: T.pillBg,
-                    border: `1px solid ${T.pillBorder}`,
-                    fontFamily: "IBM Plex Mono, monospace",
-                }}>1D returns with 15-session trend</span>
+                {/*<span style={{*/}
+                {/*    fontSize: 13,*/}
+                {/*    color: T.muted,*/}
+                {/*    padding: "8px 12px",*/}
+                {/*    borderRadius: 999,*/}
+                {/*    background: T.pillBg,*/}
+                {/*    border: `1px solid ${T.pillBorder}`,*/}
+                {/*    fontFamily: "'IBM Plex Mono', monospace",*/}
+                {/*}}>1D returns with 15-session trend</span>*/}
             </div>
 
             <div style={{
                 display: "flex",
-                gap: 8,
+                gap: 6,
                 marginBottom: 16,
-                padding: "6px",
-                background: T.softFill,
+                padding: "5px",
+                background: T.isDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.85)",
                 borderRadius: 999,
                 flexWrap: "wrap",
                 border: `1px solid ${T.panelBorder}`,
@@ -1041,7 +1283,7 @@ function MarketOverview({ T, userToken, isCompact, isTablet }) {
             </div>
 
             {loading ? (
-                <div style={{ display: "grid", gridTemplateColumns: isCompact ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 14, marginTop: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: (isCompact || isSideBySide) ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 14, marginTop: 8 }}>
                     {[...Array(isCompact ? 4 : 6)].map((_, i) => (
                         <Skeleton key={i} T={T} h={88} style={{ borderRadius: 18 }} />
                     ))}
@@ -1059,7 +1301,7 @@ function MarketOverview({ T, userToken, isCompact, isTablet }) {
                 }}>
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: isCompact ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                        gridTemplateColumns: (isCompact || isSideBySide) ? "1fr" : "repeat(2, minmax(0, 1fr))",
                         gap: 14,
                         maxHeight: activeIndices.length > DEFAULT_VISIBLE_ITEMS ? gridMaxHeight : "none",
                         overflowY: activeIndices.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
@@ -1089,7 +1331,7 @@ function MarketOverview({ T, userToken, isCompact, isTablet }) {
                             marginTop: 12,
                             fontSize: 12,
                             color: T.muted,
-                            fontFamily: "IBM Plex Mono, monospace",
+                            fontFamily: "'IBM Plex Mono', monospace",
                         }}>
                             Showing 6 at a time. Scroll to view the remaining indices.
                         </div>
@@ -1117,34 +1359,65 @@ function Skeleton({ T, h = 16, w = "100%", style = {} }) {
 
 function SortIcon({ dir }) {
     return (
-        <svg width="9" height="9" viewBox="0 0 10 10" fill="none"
-            style={{ marginLeft: 3, opacity: dir ? 1 : 0.25, flexShrink: 0 }}>
-            <path d="M5 1L9 6H1L5 1Z"
-                fill={dir === "asc"  ? "currentColor" : "none"}
-                stroke="currentColor" strokeWidth="1.2" />
-            <path d="M5 9L1 4H9L5 9Z"
-                fill={dir === "desc" ? "currentColor" : "none"}
-                stroke="currentColor" strokeWidth="1.2" />
-        </svg>
+        <span style={{ display: "inline-flex", flexDirection: "column", gap: 1.5, marginLeft: 5, flexShrink: 0, opacity: dir ? 1 : 0 }}>
+            <svg width="7" height="4" viewBox="0 0 7 4" fill="none" style={{ display: "block" }}>
+                <path d="M3.5 0L7 4H0L3.5 0Z" fill={dir === "asc" ? "currentColor" : "rgba(100,116,139,0.35)"} />
+            </svg>
+            <svg width="7" height="4" viewBox="0 0 7 4" fill="none" style={{ display: "block" }}>
+                <path d="M3.5 4L0 0H7L3.5 4Z" fill={dir === "desc" ? "currentColor" : "rgba(100,116,139,0.35)"} />
+            </svg>
+        </span>
+    );
+}
+
+// ─── SHARED PREMIUM TABLE SHELL ───────────────────────────────────────────────
+function PremiumTableShell({ T, children, minWidth, maxHeight, isScrollable }) {
+    return (
+        <div style={{
+            overflowX: "auto",
+            overflowY: isScrollable ? "auto" : "visible",
+            maxHeight: isScrollable ? maxHeight : "none",
+            borderRadius: 14,
+            border: `1px solid ${T.panelBorder}`,
+            background: T.isDark
+                ? "linear-gradient(180deg, rgba(15,23,42,0.7) 0%, rgba(15,23,42,0.5) 100%)"
+                : "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.92) 100%)",
+            boxShadow: T.isDark
+                ? "inset 0 1px 0 rgba(255,255,255,0.06)"
+                : "inset 0 1px 0 rgba(255,255,255,0.9)",
+        }}>
+            <table style={{
+                width: "100%",
+                borderCollapse: "separate",
+                borderSpacing: 0,
+                minWidth,
+                tableLayout: "auto",
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                fontSize: 13,
+            }}>
+                {children}
+            </table>
+        </div>
     );
 }
 
 function CardHeader({ T, title, count, right, style = {} }) {
+    const accentGrn = T.pos || "#10b981";
     return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10, flexWrap: "wrap", ...style }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0, flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0, flex: 1 }}>
                 <span style={{
-                    fontSize: 14, fontWeight: 700, letterSpacing: "0.14em",
-                    textTransform: "uppercase", color: T.subtext, fontFamily: "IBM Plex Mono, monospace",
+                    fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
+                    color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
                 }}>{title}</span>
                 {typeof count === "number" && (
                     <span style={{
-                        fontSize: 10, fontWeight: 700, color: T.muted,
-                        padding: "5px 8px", borderRadius: 999,
-                        background: T.pillBg,
-                        border: `1px solid ${T.pillBorder}`,
-                        fontFamily: "IBM Plex Mono, monospace",
+                        fontSize: 10, fontWeight: 700, color: accentGrn,
+                        padding: "2px 8px", borderRadius: 20,
+                        background: withAlpha(accentGrn, T.isDark ? 0.18 : 0.10),
+                        border: `1px solid ${withAlpha(accentGrn, 0.30)}`,
+                        fontFamily: "'IBM Plex Mono', monospace",
                     }}>{count}</span>
                 )}
             </div>
@@ -1154,23 +1427,27 @@ function CardHeader({ T, title, count, right, style = {} }) {
 }
 
 function TabButton({ T, active, label, count, onClick, hideCount }) {
+    const accentGrn = T.pos || "#10b981";
     return (
         <button onClick={onClick} style={{
             flex: "1 1 auto",
-            padding: "8px 10px",
-            fontSize: 14,
+            padding: "7px 12px",
+            fontSize: 12,
             fontWeight: active ? 700 : 600,
-            color: active ? T.text : T.muted,
-            background: active ? T.pillBg : "transparent",
-            border: `1px solid ${active ? T.ring : "transparent"}`,
+            letterSpacing: "0.01em",
+            color: active ? accentGrn : T.subtext,
+            background: active ? withAlpha(accentGrn, T.isDark ? 0.14 : 0.09) : "transparent",
+            border: `1px solid ${active ? withAlpha(accentGrn, 0.30) : (T.isDark ? "rgba(148,163,184,0.14)" : "rgba(15,23,42,0.09)")}`,
             borderRadius: 999,
             cursor: "pointer",
-            transition: "all 0.18s ease",
-            fontFamily: "inherit",
+            transition: "all 0.15s ease",
+            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
             whiteSpace: "nowrap",
-            boxShadow: active ? T.shadowMd : "none",
+            boxShadow: active ? `0 10px 22px ${withAlpha(accentGrn, 0.12)}` : "none",
         }}>
-            {label}{!hideCount && <span style={{ color: active ? T.text : T.muted, opacity: 0.75, marginLeft: 4 }}>({count})</span>}
+            {label}{!hideCount && typeof count === "number" && (
+                <span style={{ opacity: 0.65, marginLeft: 5, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }}>({count})</span>
+            )}
         </button>
     );
 }
@@ -1188,10 +1465,11 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
     if (!data.length) {
         return (
             <div style={{
-                padding: "40px 20px",
+                padding: "48px 20px",
                 textAlign: "center",
                 color: T.muted,
-                fontSize: 15,
+                fontSize: 13,
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
             }}>
                 No industries with RS &gt; 85 stocks
             </div>
@@ -1226,7 +1504,7 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
                                 <div style={{ fontWeight: 700, lineHeight: 1.4 }}>{row.industry}</div>
-                                <div style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 14, color }}>{pct.toFixed(1)}%</div>
+                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, color }}>{pct.toFixed(1)}%</div>
                             </div>
                             <div style={{
                                 height: 8,
@@ -1242,7 +1520,7 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                                     background: color,
                                 }} />
                             </div>
-                            <div style={{ color: T.muted, fontSize: 14, fontFamily: "IBM Plex Mono, monospace" }}>
+                            <div style={{ color: T.muted, fontSize: 14, fontFamily: "'IBM Plex Mono', monospace" }}>
                                 {row.count}/{row.total} stocks above RS 85
                             </div>
                         </button>
@@ -1252,101 +1530,83 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
         );
     }
 
+    const thStyle = {
+        padding: "11px 16px",
+        textAlign: "left",
+        fontWeight: 800,
+        fontSize: 10,
+        color: T.muted,
+        textTransform: "uppercase",
+        letterSpacing: "0.10em",
+        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+        background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+        borderBottom: `1px solid ${T.panelBorder}`,
+        whiteSpace: "nowrap",
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+    };
+
     return (
-        <div style={{ 
-            overflowX: "auto",
-            overflowY: data.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-            maxHeight: data.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_TABLE_MAX_HEIGHT : "none",
-            borderRadius: 20,
-            border: `1px solid ${T.panelBorder}`,
-            background: T.pillBg,
-        }}>
-            <table style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: isCompact ? 12 : 13,
-            minWidth: 620,
-            }}>
+        <PremiumTableShell T={T} minWidth={520} isScrollable={data.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
-            <tr style={{ 
-            background: T.tableHeadBg,
-            borderBottom: `1px solid ${T.panelBorder}`,
-            }}>
-            <th style={{
-            padding: "12px 14px",
-            textAlign: "left",
-            fontWeight: 600,
-            fontSize: isCompact ? 11 : 12,
-            color: T.subtext,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            }}>Industry</th>
-            <th style={{
-            padding: "12px 14px",
-            textAlign: "right",
-            fontWeight: 600,
-            fontSize: isCompact ? 11 : 12,
-            color: T.subtext,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            width: 220,
-            }}>% Above RS 85</th>
-            </tr>
-            </thead>                <tbody>
-                    {data.map((row, i) => {
-                        const pct   = row.pct   || 0;
-                        const color = pct >= 60 ? "#22c55e" : pct >= 35 ? "#f59e0b" : "#ef4444";
-                        return (
+                <tr>
+                    <th style={{ ...thStyle }}>Industry</th>
+                    <th style={{ ...thStyle, textAlign: "right", width: 260 }}>Coverage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {data.map((row, i) => {
+                    const pct   = row.pct   || 0;
+                    const color = pct >= 60 ? "#22c55e" : pct >= 35 ? "#f59e0b" : "#ef4444";
+                    const isLast = i === data.length - 1;
+                    return (
                         <tr
                             key={row.industry}
                             onClick={() => onIndustryClick(row.industry)}
                             style={{
-                                borderBottom: i < data.length - 1 ? `1px solid ${T.border}` : "none",
+                                borderBottom: isLast ? "none" : `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`,
                                 cursor: "pointer",
-                                transition: "background 0.1s ease",
+                                transition: "background 0.12s ease",
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = T.hoverBg || "rgba(241, 245, 249, 0.4)"}
-                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)";
+                            }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
-                            <td style={{
-                                padding: "12px 14px",
-                                color: T.text,
-                                fontWeight: 500,
-                            }}>{row.industry}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "right" }}>
+                            <td style={{ padding: "13px 16px", color: T.text, fontWeight: 500, fontSize: 13, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                                {row.industry}
+                            </td>
+                            <td style={{ padding: "13px 16px" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
-                                    {/* progress bar */}
                                     <div style={{
-                                        width: 100, height: 6, borderRadius: 3,
-                                        background: T.mutedFill || "rgba(100,116,139,0.12)",
+                                        width: 90, height: 4, borderRadius: 999,
+                                        background: T.isDark ? "rgba(71,85,105,0.4)" : "rgba(203,213,225,0.6)",
                                         overflow: "hidden", flexShrink: 0,
                                     }}>
                                         <div style={{
                                             width: `${Math.min(pct, 100)}%`,
                                             height: "100%",
-                                            borderRadius: 3,
+                                            borderRadius: 999,
                                             background: color,
-                                            transition: "width 0.4s ease",
+                                            transition: "width 0.5s ease",
                                         }} />
                                     </div>
-                                    {/* pct label */}
                                     <span style={{
-                                        fontFamily: "monospace", fontWeight: 700,
-                                        fontSize: 14, color, minWidth: 42, textAlign: "right",
+                                        fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
+                                        fontSize: 13, color, minWidth: 40, textAlign: "right",
                                     }}>{pct.toFixed(1)}%</span>
-                                    {/* count / total */}
                                     <span style={{
-                                        fontFamily: "monospace", fontSize: 13,
-                                        color: T.muted, minWidth: 52, textAlign: "right",
-                                    }}>({row.count}/{row.total})</span>
+                                        fontFamily: "'IBM Plex Mono', monospace", fontSize: 12,
+                                        color: T.muted, minWidth: 50, textAlign: "right",
+                                    }}>{row.count}/{row.total}</span>
                                 </div>
                             </td>
                         </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        </div>
+                    );
+                })}
+            </tbody>
+        </PremiumTableShell>
     );
 }
 
@@ -1386,174 +1646,122 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
     if (!data.length) {
         return (
             <div style={{
-                padding: "40px 20px",
+                padding: "48px 20px",
                 textAlign: "center",
                 color: T.muted,
-                fontSize: 15,
+                fontSize: 13,
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
             }}>
                 No stocks with RS &gt; 85 in this industry
             </div>
         );
     }
 
-    const Th = ({ k, label }) => (
-        <th
-            onClick={() => handleSort(k)}
-            style={{
-                padding: "12px 14px",
-                textAlign: k === "ticker" ? "left" : "right",
-                fontWeight: 600,
-                fontSize: isCompact ? 11 : 12,
-                color: T.subtext,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                cursor: "pointer",
-                userSelect: "none",
-                position: "relative",
-            }}
-        >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: k === "ticker" ? "flex-start" : "flex-end" }}>
-                {label}
-                <SortIcon dir={sortKey === k ? sortDir : null} />
-            </div>
-        </th>
-    );
+    const thBaseRT = {
+        fontWeight: 800,
+        fontSize: 10,
+        color: T.muted,
+        textTransform: "uppercase",
+        letterSpacing: "0.10em",
+        cursor: "pointer",
+        userSelect: "none",
+        whiteSpace: "nowrap",
+        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+        background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+        borderBottom: `1px solid ${T.panelBorder}`,
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+    };
 
-    if (isCompact) {
+    const RTTh = ({ k, label }) => {
+        const a = k === "ticker" ? "left" : "right";
         return (
-            <div style={{
-                display: "grid",
-                gap: 12,
-                maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_VISIBLE_ITEMS * 88 : "none",
-                overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-                paddingRight: sorted.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
-            }}>
-                {sorted.map(row => (
-                    <button
+            <th onClick={() => handleSort(k)} style={{ ...thBaseRT, padding: "11px 16px", textAlign: a }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: a === "left" ? "flex-start" : "flex-end", gap: 2 }}>
+                    <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
+                    <SortIcon dir={sortKey === k ? sortDir : null} />
+                </div>
+            </th>
+        );
+    };
+
+    return (
+        <PremiumTableShell T={T} minWidth={580} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+            <thead>
+                <tr>
+                    <RTTh k="ticker"    label="Ticker" />
+                    <RTTh k="rs_rating" label="RS" />
+                    <RTTh k="ret_3m"    label="3M" />
+                    <RTTh k="ret_6m"    label="6M" />
+                    <RTTh k="ret_12m"   label="12M" />
+                </tr>
+            </thead>
+            <tbody>
+                {sorted.map((row, i) => (
+                    <tr
                         key={row.ticker}
                         onClick={() => onTickerClick?.(row.ticker)}
                         style={{
-                            textAlign: "left",
-                            padding: 16,
-                            borderRadius: 18,
-                            border: `1px solid ${T.panelBorder}`,
-                            background: T.pillBg,
-                            color: T.text,
+                            borderBottom: i < sorted.length - 1
+                                ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
+                                : "none",
                             cursor: onTickerClick ? "pointer" : "default",
+                            transition: "background 0.12s ease",
                         }}
+                        onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                            <div>
-                                <div style={{ fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, fontSize: 15 }}>{row.ticker}</div>
-                                <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 11, fontFamily: "monospace" }}>
-                                    <span style={{ color: row.ret_3m != null ? (row.ret_3m >= 0 ? T.pos : T.neg) : T.muted }}>
-                                        3M: {row.ret_3m != null ? fmtPct(row.ret_3m) : EMPTY_VALUE}
-                                    </span>
-                                    <span style={{ color: row.ret_6m != null ? (row.ret_6m >= 0 ? T.pos : T.neg) : T.muted }}>
-                                        6M: {row.ret_6m != null ? fmtPct(row.ret_6m) : EMPTY_VALUE}
-                                    </span>
-                                    <span style={{ color: row.ret_12m != null ? (row.ret_12m >= 0 ? T.pos : T.neg) : T.muted }}>
-                                        12M: {row.ret_12m != null ? fmtPct(row.ret_12m) : EMPTY_VALUE}
-                                    </span>
-                                </div>
-                            </div>
+                        {/* Name + ticker cell – mirrors MoversTable layout */}
+                        <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
                             <div style={{
-                                padding: "7px 10px",
-                                borderRadius: 999,
-                                background: T.posSoft,
+                                fontWeight: 600,
+                                fontSize: 13,
                                 color: T.text,
-                                fontFamily: "IBM Plex Mono, monospace",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                lineHeight: 1.3,
+                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                            }}>{row.name || row.ticker}</div>
+                            {row.name && (
+                                <div style={{
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontSize: 11,
+                                    color: T.muted,
+                                    marginTop: 2,
+                                    letterSpacing: "0.03em",
+                                }}>{row.ticker}</div>
+                            )}
+                        </td>
+                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                            <span style={{
+                                display: "inline-block",
+                                padding: "3px 9px",
+                                borderRadius: 6,
+                                background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
+                                border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
+                                color: T.pos || "#0ea67a",
+                                fontFamily: "'IBM Plex Mono', monospace",
                                 fontWeight: 700,
-                                fontSize: 14,
-                            }}>
-                                RS {row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}
-                            </div>
-                        </div>
-                    </button>
-                ))}
-            </div>
-        );
-    }
-
-    return (
-        <div style={{ 
-            overflowX: "auto",
-            overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-            maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_TABLE_MAX_HEIGHT : "none",
-            borderRadius: 20,
-            border: `1px solid ${T.panelBorder}`,
-            background: T.pillBg,
-        }}>
-            <table style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: isCompact ? 12 : 13,
-                minWidth: 620,
-            }}>
-                <thead>
-                    <tr style={{ 
-                        background: T.tableHeadBg,
-                        borderBottom: `1px solid ${T.panelBorder}`,
-                    }}>
-                        <Th k="ticker" label="Ticker" />
-                        <Th k="rs_rating" label="RS Rating" />
-                        <Th k="ret_3m" label="3M Returns" />
-                        <Th k="ret_6m" label="6M Returns" />
-                        <Th k="ret_12m" label="12M Returns" />
+                                fontSize: 13,
+                                fontVariantNumeric: "tabular-nums",
+                            }}>{row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}</span>
+                        </td>
+                        {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
+                            <td key={key} style={{
+                                padding: "12px 16px",
+                                textAlign: "right",
+                                color: val != null ? (val >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444")) : T.muted,
+                                fontWeight: 600,
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                fontSize: 13,
+                            }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
+                        ))}
                     </tr>
-                </thead>
-                <tbody>
-                    {sorted.map((row, i) => (
-                        <tr
-                            key={row.ticker}
-                            onClick={() => onTickerClick?.(row.ticker)}
-                            style={{
-                                borderBottom: i < sorted.length - 1 ? `1px solid ${T.border}` : "none",
-                                cursor: onTickerClick ? "pointer" : "default",
-                                transition: "background 0.1s ease",
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = T.hoverBg || "rgba(241, 245, 249, 0.4)"}
-                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                        >
-                            <td style={{
-                                padding: "12px 14px",
-                                color: T.text,
-                                fontWeight: 600,
-                                fontFamily: "monospace",
-                            }}>{row.ticker}</td>
-                            <td style={{
-                                padding: "12px 14px",
-                                textAlign: "right",
-                                color: T.text,
-                                fontWeight: 600,
-                                fontFamily: "monospace",
-                            }}>{row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}</td>
-                            <td style={{
-                                padding: "12px 14px",
-                                textAlign: "right",
-                                color: row.ret_3m != null ? (row.ret_3m >= 0 ? T.pos : T.neg) : T.text,
-                                fontWeight: 600,
-                                fontFamily: "monospace",
-                            }}>{row.ret_3m != null ? fmtPct(row.ret_3m) : EMPTY_VALUE}</td>
-                            <td style={{
-                                padding: "12px 14px",
-                                textAlign: "right",
-                                color: row.ret_6m != null ? (row.ret_6m >= 0 ? T.pos : T.neg) : T.text,
-                                fontWeight: 600,
-                                fontFamily: "monospace",
-                            }}>{row.ret_6m != null ? fmtPct(row.ret_6m) : EMPTY_VALUE}</td>
-                            <td style={{
-                                padding: "12px 14px",
-                                textAlign: "right",
-                                color: row.ret_12m != null ? (row.ret_12m >= 0 ? T.pos : T.neg) : T.text,
-                                fontWeight: 600,
-                                fontFamily: "monospace",
-                            }}>{row.ret_12m != null ? fmtPct(row.ret_12m) : EMPTY_VALUE}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+                ))}
+            </tbody>
+        </PremiumTableShell>
     );
 }
 
@@ -1609,114 +1817,112 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
         return T.muted;
     };
 
-    const Th = ({ k, label }) => (
-        <th
-            onClick={() => handleSort(k)}
-            style={{
-                padding: "12px 14px",
-                textAlign: k === "ticker" || k === "cap_category" ? "left" : "right",
-                fontWeight: 600, fontSize: isCompact ? 11 : 12, color: T.subtext,
-                textTransform: "uppercase", letterSpacing: "0.05em",
-                cursor: "pointer", userSelect: "none",
-            }}
-        >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: (k === "ticker" || k === "cap_category") ? "flex-start" : "flex-end" }}>
-                {label}
+
+    const thBaseAR = {
+        fontWeight: 800,
+        fontSize: 10,
+        color: T.muted,
+        textTransform: "uppercase",
+        letterSpacing: "0.10em",
+        cursor: "pointer",
+        userSelect: "none",
+        whiteSpace: "nowrap",
+        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+        fontVariantNumeric: "tabular-nums",
+        background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+        borderBottom: `1px solid ${T.panelBorder}`,
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+    };
+
+    const ARTh = ({ k, label, align = "right" }) => (
+        <th onClick={() => handleSort(k)} style={{ ...thBaseAR, padding: "11px 16px", textAlign: align }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: align === "left" ? "flex-start" : "flex-end", gap: 2 }}>
+                <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
                 <SortIcon dir={sortKey === k ? sortDir : null} />
             </div>
         </th>
     );
 
-    if (isCompact) {
-        return (
-            <div style={{
-                display: "grid", gap: 12,
-                maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_VISIBLE_ITEMS * 88 : "none",
-                overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-                paddingRight: sorted.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
-            }}>
+    return (
+        <PremiumTableShell T={T} minWidth={660} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+            <thead>
+                <tr>
+                    <th style={{ ...thBaseAR, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
+                    <ARTh k="name"         label="Name"       align="left" />
+                    <ARTh k="rs_rating"    label="RS" />
+                    <ARTh k="ret_3m"       label="3M" />
+                    <ARTh k="ret_6m"       label="6M" />
+                    <ARTh k="ret_12m"      label="12M" />
+                </tr>
+            </thead>
+            <tbody>
                 {sorted.map((row, i) => (
-                    <button
+                    <tr
                         key={row.ticker}
                         onClick={() => onTickerClick?.(row.ticker)}
                         style={{
-                            textAlign: "left", padding: 16, borderRadius: 18,
-                            border: `1px solid ${T.panelBorder}`, background: T.pillBg,
-                            color: T.text, cursor: onTickerClick ? "pointer" : "default",
+                            borderBottom: i < sorted.length - 1
+                                ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
+                                : "none",
+                            cursor: onTickerClick ? "pointer" : "default",
+                            transition: "background 0.12s ease",
                         }}
+                        onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                            <div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    <span style={{ color: T.muted, fontSize: 13, fontFamily: "monospace" }}>#{i + 1}</span>
-                                    <span style={{ fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, fontSize: 14 }}>{row.ticker}</span>
-                                    {row.cap_category && (
-                                        <span style={{
-                                            fontSize: 12, fontWeight: 600, padding: "2px 7px", borderRadius: 999,
-                                            background: withAlpha(capColor(row.cap_category), 0.12),
-                                            color: capColor(row.cap_category), textTransform: "capitalize",
-                                        }}>{row.cap_category}</span>
-                                    )}
-                                </div>
-                                <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 13, fontFamily: "monospace" }}>
-                                    <span style={{ color: row.ret_3m != null ? (row.ret_3m >= 0 ? T.pos : T.neg) : T.muted }}>3M: {row.ret_3m != null ? fmtPct(row.ret_3m) : EMPTY_VALUE}</span>
-                                    <span style={{ color: row.ret_6m != null ? (row.ret_6m >= 0 ? T.pos : T.neg) : T.muted }}>6M: {row.ret_6m != null ? fmtPct(row.ret_6m) : EMPTY_VALUE}</span>
-                                    <span style={{ color: row.ret_12m != null ? (row.ret_12m >= 0 ? T.pos : T.neg) : T.muted }}>12M: {row.ret_12m != null ? fmtPct(row.ret_12m) : EMPTY_VALUE}</span>
-                                </div>
-                            </div>
-                            <div style={{ padding: "7px 10px", borderRadius: 999, background: T.posSoft, color: T.text, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, fontSize: 14 }}>
-                                RS {row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}
-                            </div>
-                        </div>
-                    </button>
-                ))}
-            </div>
-        );
-    }
-
-    return (
-        <div style={{
-            overflowX: "auto",
-            overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-            maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_TABLE_MAX_HEIGHT : "none",
-            borderRadius: 20, border: `1px solid ${T.panelBorder}`, background: T.pillBg,
-        }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: isCompact ? 12 : 13, minWidth: 680 }}>
-                <thead>
-                    <tr style={{ background: T.tableHeadBg, borderBottom: `1px solid ${T.panelBorder}` }}>
-                        <th style={{ padding: "12px 14px", textAlign: "left", fontWeight: 600, fontSize: isCompact ? 11 : 12, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.05em", width: 42 }}>#</th>
-                        <Th k="ticker"       label="Ticker" />
-                        <Th k="rs_rating"    label="RS Rating" />
-                        <Th k="ret_3m"       label="3M Returns" />
-                        <Th k="ret_6m"       label="6M Returns" />
-                        <Th k="ret_12m"      label="12M Returns" />
+                        <td style={{ padding: "12px 16px", color: T.muted, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                        {/* Name + ticker cell – mirrors MoversTable layout */}
+                        <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                            <div style={{
+                                fontWeight: 600,
+                                fontSize: 13,
+                                color: T.text,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                lineHeight: 1.3,
+                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                            }}>{row.name || row.ticker}</div>
+                            {row.name && (
+                                <div style={{
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontSize: 11,
+                                    color: T.muted,
+                                    marginTop: 2,
+                                    letterSpacing: "0.03em",
+                                }}>{row.ticker}</div>
+                            )}
+                        </td>
+                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                            <span style={{
+                                display: "inline-block",
+                                padding: "3px 9px",
+                                borderRadius: 6,
+                                background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
+                                border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
+                                color: T.pos || "#0ea67a",
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                fontWeight: 700,
+                                fontSize: 13,
+                                fontVariantNumeric: "tabular-nums",
+                            }}>{row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}</span>
+                        </td>
+                        {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
+                            <td key={key} style={{
+                                padding: "12px 16px",
+                                textAlign: "right",
+                                color: val != null ? (val >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444")) : T.muted,
+                                fontWeight: 600,
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                fontSize: 13,
+                            }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
+                        ))}
                     </tr>
-                </thead>
-                <tbody>
-                    {sorted.map((row, i) => (
-                        <tr
-                            key={row.ticker}
-                            onClick={() => onTickerClick?.(row.ticker)}
-                            style={{ borderBottom: i < sorted.length - 1 ? `1px solid ${T.border}` : "none", cursor: onTickerClick ? "pointer" : "default", transition: "background 0.1s ease" }}
-                            onMouseEnter={e => e.currentTarget.style.background = T.hoverBg || "rgba(241,245,249,0.4)"}
-                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                        >
-                            <td style={{ padding: "12px 14px", color: T.muted, fontFamily: "monospace", fontSize: 13 }}>{i + 1}</td>
-                            <td style={{ padding: "12px 14px", color: T.text, fontWeight: 600, fontFamily: "monospace" }}>{row.ticker}</td>
-                            {/*<td style={{ padding: "12px 14px" }}>*/}
-                            {/*    {row.cap_category ? (*/}
-                            {/*        <span style={{ fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 999, background: withAlpha(capColor(row.cap_category), 0.12), color: capColor(row.cap_category), textTransform: "capitalize" }}>{row.cap_category}</span>*/}
-                            {/*    ) : <span style={{ color: T.muted }}>-</span>}*/}
-                            {/*</td>*/}
-                            <td style={{ padding: "12px 14px", textAlign: "right", color: T.text, fontWeight: 700, fontFamily: "monospace" }}>{row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "right", color: row.ret_3m != null ? (row.ret_3m >= 0 ? T.pos : T.neg) : T.text, fontWeight: 600, fontFamily: "monospace" }}>{row.ret_3m != null ? fmtPct(row.ret_3m) : EMPTY_VALUE}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "right", color: row.ret_6m != null ? (row.ret_6m >= 0 ? T.pos : T.neg) : T.text, fontWeight: 600, fontFamily: "monospace" }}>{row.ret_6m != null ? fmtPct(row.ret_6m) : EMPTY_VALUE}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "right", color: row.ret_12m != null ? (row.ret_12m >= 0 ? T.pos : T.neg) : T.text, fontWeight: 600, fontFamily: "monospace" }}>{row.ret_12m != null ? fmtPct(row.ret_12m) : EMPTY_VALUE}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+                ))}
+            </tbody>
+        </PremiumTableShell>
     );
 }
 
@@ -1774,10 +1980,11 @@ function MoversTable({ T, data, loading, type, isCompact }) {
     if (!data.length) {
         return (
             <div style={{
-                padding: "40px 20px",
+                padding: "48px 20px",
                 textAlign: "center",
                 color: T.muted,
-                fontSize: 15,
+                fontSize: 13,
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
             }}>
                 No data available
             </div>
@@ -1790,13 +1997,19 @@ function MoversTable({ T, data, loading, type, isCompact }) {
             style={{
                 padding: "12px 14px",
                 textAlign: k === "ticker" || k === "name" ? "left" : "right",
-                fontWeight: 600,
-                fontSize: isCompact ? 11 : 12,
-                color: T.subtext,
+                fontWeight: 800,
+                fontSize: 10,
+                color: T.muted,
                 textTransform: "uppercase",
-                letterSpacing: "0.05em",
+                letterSpacing: "0.10em",
                 cursor: "pointer",
                 userSelect: "none",
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+                borderBottom: `1px solid ${T.panelBorder}`,
+                position: "sticky",
+                top: 0,
+                zIndex: 1,
             }}
         >
             <div style={{ display: "flex", alignItems: "center", justifyContent: k === "ticker" || k === "name" ? "flex-start" : "flex-end" }}>
@@ -1834,43 +2047,47 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                             }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                                <div style={{ fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, fontSize: 15, color: T.text }}>{row.ticker}</div>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 15, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
+                                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2 }}>{row.ticker}</div>
+                                </div>
                                 <div style={{
                                     padding: "7px 10px",
                                     borderRadius: 999,
                                     background: toneBg,
                                     color: tone,
-                                    fontFamily: "IBM Plex Mono, monospace",
+                                    fontFamily: "'IBM Plex Mono', monospace",
                                     fontWeight: 700,
                                     fontSize: 14,
+                                    flexShrink: 0,
                                 }}>
                                     {fmtPct(chg)}
                                 </div>
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
                                 <div>
-                                    <div style={{ color: T.muted, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>LTP</div>
-                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "IBM Plex Mono, monospace" }}>{fmt(row.ltp)}</div>
+                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
+                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.ltp)}</div>
                                 </div>
                                 {showDist && (
                                     <div>
-                                        <div style={{ color: T.muted, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                             {type === "near_high" ? "From 52W High" : "From 52W Low"}
                                         </div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "IBM Plex Mono, monospace" }}>
+                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
                                             {row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}
                                         </div>
                                     </div>
                                 )}
                                 <div>
-                                    <div style={{ color: T.muted, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>Volume</div>
-                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "IBM Plex Mono, monospace" }}>{fmtVol(row.volume)}</div>
+                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
+                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.volume)}</div>
                                 </div>
                                 <div>
-                                    <div style={{ color: T.muted, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>Rel Vol</div>
+                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
                                     <div style={{
                                         marginTop: 4,
-                                        fontFamily: "IBM Plex Mono, monospace",
+                                        fontFamily: "'IBM Plex Mono', monospace",
                                         fontWeight: 600,
                                         color: row.rel_volume == null ? T.muted
                                             : row.rel_volume >= 2 ? (T.pos || "#10b981")
@@ -1888,101 +2105,391 @@ function MoversTable({ T, data, loading, type, isCompact }) {
         );
     }
 
-    return (
-        <div style={{ 
-            overflowX: "auto",
-            overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-            maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_TABLE_MAX_HEIGHT : "none",
-            borderRadius: 20,
-            border: `1px solid ${T.panelBorder}`,
-            background: T.pillBg,
-        }}>
-            <table style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: isCompact ? 12 : 13,
-                minWidth: showDist ? 860 : 720,
-            }}>
-                <thead>
-                    <tr style={{ 
-                        background: T.tableHeadBg,
-                        borderBottom: `1px solid ${T.panelBorder}`,
-                    }}>
-                        <Th k="ticker" label="Ticker" />
-                        <Th k="ltp" label="LTP" />
-                        <Th k="change_pct" label="Chg %" />
-                        {showDist && <Th k="dist_pct" label={type === "near_high" ? "% from 52W High" : "% from 52W Low"} />}
-                        <Th k="volume" label="Volume" />
-                        <Th k="rel_volume" label="Rel Vol" />
-                    </tr>
-                </thead>
-                <tbody>
-                    {sorted.map((row, i) => {
-                        const chg = row.change_pct;
-                        const isPos = chg != null && chg > 0;
-                        const isNeg = chg != null && chg < 0;
+    const thBase = {
+        fontWeight: 800,
+        fontSize: 10,
+        color: T.muted,
+        textTransform: "uppercase",
+        letterSpacing: "0.10em",
+        cursor: "pointer",
+        userSelect: "none",
+        whiteSpace: "nowrap",
+        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+        background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+        borderBottom: `1px solid ${T.panelBorder}`,
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+    };
 
-                        return (
-                            <tr
-                                key={row.ticker}
-                                style={{
-                                    borderBottom: i < sorted.length - 1 ? `1px solid ${T.border}` : "none",
-                                }}
-                            >
-                                <td style={{
-                                    padding: "12px 14px",
-                                    color: T.text,
+    const MTh = ({ k, label, align }) => {
+        const a = align || (k === "ticker" || k === "name" ? "left" : "right");
+        return (
+            <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "11px 16px", textAlign: a }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: a === "left" ? "flex-start" : "flex-end", gap: 2 }}>
+                    <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
+                    <SortIcon dir={sortKey === k ? sortDir : null} />
+                </div>
+            </th>
+        );
+    };
+
+    return (
+        <PremiumTableShell T={T} minWidth={showDist ? 820 : 680} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+            <thead>
+                <tr>
+                    <MTh k="name"       label="Name" />
+                    <MTh k="ltp"        label="LTP" />
+                    <MTh k="change_pct" label="Chg %" />
+                    {showDist && <MTh k="dist_pct" label={type === "near_high" ? "From High" : "From Low"} />}
+                    <MTh k="volume"     label="Volume" />
+                    <MTh k="rel_volume" label="Rel Vol" />
+                </tr>
+            </thead>
+            <tbody>
+                {sorted.map((row, i) => {
+                    const chg = row.change_pct;
+                    const isPos = chg != null && chg > 0;
+                    const isNeg = chg != null && chg < 0;
+                    const chgColor = isPos ? (T.pos || "#0ea67a") : isNeg ? (T.neg || "#ef4444") : T.muted;
+                    const relVol = row.rel_volume;
+                    const relVolColor = relVol == null ? T.muted
+                        : relVol >= 2 ? (T.pos || "#10b981")
+                        : relVol >= 1.5 ? "#f59e0b"
+                        : T.text;
+
+                    return (
+                        <tr
+                            key={row.ticker}
+                            style={{
+                                borderBottom: i < sorted.length - 1
+                                    ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
+                                    : "none",
+                                transition: "background 0.12s ease",
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                            {/* Name cell */}
+                            <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                                <div style={{
                                     fontWeight: 600,
-                                    fontFamily: "monospace",
-                                }}>{row.ticker}</td>
-                                <td style={{
-                                    padding: "12px 14px",
-                                    textAlign: "right",
+                                    fontSize: 13,
                                     color: T.text,
-                                    fontFamily: "monospace",
-                                }}>{fmt(row.ltp)}</td>
-                                <td style={{
-                                    padding: "12px 14px",
-                                    textAlign: "right",
-                                    color: isPos ? T.pos : isNeg ? T.neg : T.text,
-                                    fontWeight: 600,
-                                    fontFamily: "monospace",
-                                }}>{fmtPct(chg)}</td>
-                                {showDist && (
-                                    <td style={{
-                                        padding: "12px 14px",
-                                        textAlign: "right",
-                                        color: T.text,
-                                        fontFamily: "monospace",
-                                    }}>{row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}</td>
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    lineHeight: 1.3,
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                }}>{row.name || row.ticker}</div>
+                                {row.name && (
+                                    <div style={{
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontSize: 11,
+                                        color: T.muted,
+                                        marginTop: 2,
+                                        letterSpacing: "0.03em",
+                                    }}>{row.ticker}</div>
                                 )}
-                                <td style={{
-                                    padding: "12px 14px",
+                            </td>
+                            {/* LTP */}
+                            <td style={{
+                                padding: "12px 16px",
+                                textAlign: "right",
+                                color: T.text,
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                fontSize: 13,
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
+                                fontVariantNumeric: "tabular-nums",
+                            }}>{fmt(row.ltp)}</td>
+                            {/* Chg % — pill badge */}
+                            <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                                <span style={{
+                                    display: "inline-block",
+                                    padding: "3px 8px",
+                                    borderRadius: 6,
+                                    background: isPos
+                                        ? withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10)
+                                        : isNeg
+                                            ? withAlpha(T.neg || "#ef4444", T.isDark ? 0.18 : 0.10)
+                                            : withAlpha(T.muted, 0.10),
+                                    color: chgColor,
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                    minWidth: 64,
                                     textAlign: "right",
-                                    color: T.muted,
-                                    fontFamily: "monospace",
-                                }}>{fmtVol(row.volume)}</td>
+                                }}>{fmtPct(chg)}</span>
+                            </td>
+                            {/* From high/low */}
+                            {showDist && (
                                 <td style={{
-                                    padding: "12px 14px",
+                                    padding: "12px 16px",
                                     textAlign: "right",
-                                    fontFamily: "monospace",
-                                    fontWeight: 600,
-                                    color: row.rel_volume == null ? T.muted
-                                        : row.rel_volume >= 2 ? (T.pos || "#10b981")
-                                        : row.rel_volume >= 1.5 ? "#f59e0b"
-                                        : T.text,
-                                }}>
-                                    {row.rel_volume != null ? `${row.rel_volume.toFixed(2)}x` : EMPTY_VALUE}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        </div>
+                                    color: T.text,
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontSize: 13,
+                                }}>{row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}</td>
+                            )}
+                            {/* Volume */}
+                            <td style={{
+                                padding: "12px 16px",
+                                textAlign: "right",
+                                color: T.subtext,
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                fontSize: 13,
+                            }}>{fmtVol(row.volume)}</td>
+                            {/* Rel Vol */}
+                            <td style={{
+                                padding: "12px 16px",
+                                textAlign: "right",
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                fontWeight: 600,
+                                fontSize: 13,
+                                color: relVolColor,
+                            }}>
+                                {relVol != null ? `${relVol.toFixed(2)}x` : EMPTY_VALUE}
+                            </td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </PremiumTableShell>
     );
 }
 
+
+// ─── VOLUME SHOCKERS TABLE ───────────────────────────────────────────────────
+function VolumeShockersTable({ T, data, loading, isCompact }) {
+    const [sortKey, setSortKey] = useState("volume_ratio");
+    const [sortDir, setSortDir] = useState("desc");
+
+    const handleSort = key => {
+        if (sortKey === key) {
+            setSortDir(prev => prev === "asc" ? "desc" : "asc");
+        } else {
+            setSortKey(key);
+            setSortDir("desc");
+        }
+    };
+
+    const sorted = useMemo(() => {
+        if (!data.length) return [];
+        return [...data].sort((a, b) => {
+            const aVal = a[sortKey];
+            const bVal = b[sortKey];
+            const cmp = typeof aVal === "number" && typeof bVal === "number"
+                ? aVal - bVal
+                : String(aVal || "").localeCompare(String(bVal || ""));
+            return sortDir === "asc" ? cmp : -cmp;
+        });
+    }, [data, sortKey, sortDir]);
+
+    if (loading) {
+        return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {[...Array(8)].map((_, i) => <Skeleton key={i} T={T} h={56} />)}
+            </div>
+        );
+    }
+
+    if (!data.length) {
+        return (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 15 }}>
+                No volume shockers available
+            </div>
+        );
+    }
+
+    const Th = ({ k, label }) => (
+        <th
+            onClick={() => handleSort(k)}
+            style={{
+                padding: "12px 14px",
+                textAlign: k === "ticker" || k === "name" ? "left" : "right",
+                fontWeight: 800,
+                fontSize: 10,
+                color: T.muted,
+                textTransform: "uppercase",
+                letterSpacing: "0.10em",
+                cursor: "pointer",
+                userSelect: "none",
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+                borderBottom: `1px solid ${T.panelBorder}`,
+                position: "sticky",
+                top: 0,
+                zIndex: 1,
+            }}
+        >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: k === "ticker" || k === "name" ? "flex-start" : "flex-end" }}>
+                {label}
+                <SortIcon dir={sortKey === k ? sortDir : null} />
+            </div>
+        </th>
+    );
+
+    if (isCompact) {
+        return (
+            <div style={{
+                display: "grid",
+                gap: 12,
+                maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_VISIBLE_ITEMS * 120 : "none",
+                overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
+                paddingRight: sorted.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
+            }}>
+                {sorted.map(row => {
+                    const chg = row.change_pct;
+                    const isPos = chg != null && chg > 0;
+                    const isNeg = chg != null && chg < 0;
+                    const tone = isPos ? (T.pos || "#10b981") : isNeg ? (T.neg || "#ef4444") : T.text;
+                    const toneBg = isPos ? T.posSoft : isNeg ? T.negSoft : T.softFill;
+                    return (
+                        <div key={row.ticker} style={{
+                            padding: 16,
+                            borderRadius: 18,
+                            border: `1px solid ${T.panelBorder}`,
+                            background: T.pillBg,
+                        }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 15, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
+                                    {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2 }}>{row.ticker}</div>}
+                                </div>
+                                <div style={{ padding: "7px 10px", borderRadius: 999, background: toneBg, color: tone, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                                    {fmtPct(chg)}
+                                </div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
+                                <div>
+                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
+                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</div>
+                                </div>
+                                <div>
+                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
+                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.today_volume)}</div>
+                                </div>
+                                <div>
+                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
+                                    <div style={{
+                                        marginTop: 4,
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontWeight: 600,
+                                        color: row.volume_ratio == null ? T.muted
+                                            : row.volume_ratio >= 10 ? (T.pos || "#10b981")
+                                            : row.volume_ratio >= 5 ? "#f59e0b"
+                                            : T.text,
+                                    }}>
+                                        {row.volume_ratio != null ? `${Number(row.volume_ratio).toFixed(2)}x` : EMPTY_VALUE}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+
+    const thBase = {
+        fontWeight: 800,
+        fontSize: 10,
+        color: T.muted,
+        textTransform: "uppercase",
+        letterSpacing: "0.10em",
+        cursor: "pointer",
+        userSelect: "none",
+        whiteSpace: "nowrap",
+        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+        background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+        borderBottom: `1px solid ${T.panelBorder}`,
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+    };
+
+    const VTh = ({ k, label }) => {
+        const a = (k === "ticker" || k === "name") ? "left" : "right";
+        return (
+            <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "11px 16px", textAlign: a }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: a === "left" ? "flex-start" : "flex-end", gap: 2 }}>
+                    <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
+                    <SortIcon dir={sortKey === k ? sortDir : null} />
+                </div>
+            </th>
+        );
+    };
+
+    return (
+        <PremiumTableShell T={T} minWidth={680} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+            <thead>
+                <tr>
+                    <VTh k="name"         label="Name" />
+                    <VTh k="close"        label="LTP" />
+                    <VTh k="change_pct"   label="Chg %" />
+                    <VTh k="today_volume" label="Volume" />
+                    <VTh k="volume_ratio" label="Rel Vol" />
+                </tr>
+            </thead>
+            <tbody>
+                {sorted.map((row, i) => {
+                    const chg = row.change_pct;
+                    const isPos = chg != null && chg > 0;
+                    const isNeg = chg != null && chg < 0;
+                    const chgColor = isPos ? (T.pos || "#0ea67a") : isNeg ? (T.neg || "#ef4444") : T.muted;
+                    const vr = row.volume_ratio;
+                    const vrColor = vr == null ? T.muted
+                        : vr >= 10 ? (T.pos || "#10b981")
+                        : vr >= 5 ? "#f59e0b"
+                        : T.text;
+
+                    return (
+                        <tr
+                            key={row.ticker}
+                            style={{
+                                borderBottom: i < sorted.length - 1
+                                    ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
+                                    : "none",
+                                transition: "background 0.12s ease",
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                            <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                                <div style={{ fontWeight: 600, fontSize: 13, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{row.name || row.ticker}</div>
+                                {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>}
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                                <span style={{
+                                    display: "inline-block",
+                                    padding: "3px 8px",
+                                    borderRadius: 6,
+                                    background: isPos
+                                        ? withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10)
+                                        : isNeg
+                                            ? withAlpha(T.neg || "#ef4444", T.isDark ? 0.18 : 0.10)
+                                            : withAlpha(T.muted, 0.10),
+                                    color: chgColor,
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                    minWidth: 64,
+                                    textAlign: "right",
+                                }}>{fmtPct(chg)}</span>
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13 }}>{fmtVol(row.today_volume)}</td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 13, color: vrColor }}>
+                                {vr != null ? `${Number(vr).toFixed(2)}x` : EMPTY_VALUE}
+                            </td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </PremiumTableShell>
+    );
+}
 
 // ─── RS LOGIN GATE ────────────────────────────────────────────────────────────
 function RsLoginGate({ T, isLocked, onLogin, children }) {
@@ -2066,7 +2573,7 @@ function deriveMovers(moversData, stock52wRows) {
         const rel_volume = vol != null && ma20 != null && ma20 > 0 ? vol / ma20 : null;
         return {
             ticker:      p.symbol,
-            name:        null,
+            name:        _nameMap.get(p.symbol) || null,
             ltp:         Number(p.ltp)     || 0,
             volume:      p.volume,
             rel_volume,
@@ -2132,6 +2639,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const RETURNS_PATH     = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
     const BREADTH_LATEST_PATH = "market_breadth?exchange=eq.NSE&select=date,above_sma50,above_sma200,near_52w_high,near_52w_low&order=date.desc&limit=1";
     const RS_SUMMARY_CACHE_KEY = "dashboard-rs-industry-summary-v1";
+    const ALL_RS_STOCKS_CACHE_KEY = "dashboard-all-rs-stocks-v1";
     const RS_TTL           = 60 * 60 * 1000;
     const RETURNS_TTL      = 10 * 60 * 1000;
     // Fetch top 100 directly from indicators table (matches DB query: ORDER BY rs_rating DESC)
@@ -2149,17 +2657,43 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const _derivedMovers = useMemo(() => {
         if (!_cachedMovers) return null;
         const s52Hit = cacheGet(STOCK52W_PATH, RETURNS_TTL);
-        const s52Rows = s52Hit ? s52Hit.data || [] : [];
+        const s52Rows = s52Hit ? s52Hit.data || [] : (cacheGetAllPages(STOCK52W_PATH, RETURNS_TTL) || []);
         return deriveMovers(_cachedMovers, s52Rows);
     }, [_cachedMovers]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const [gainers, setGainers] = useState(() => _derivedMovers?.gainers || []);
-    const [losers, setLosers] = useState(() => _derivedMovers?.losers || []);
-    const [nearHigh, setNearHigh] = useState(() => _derivedMovers?.nearHigh || []);
-    const [nearLow, setNearLow] = useState(() => _derivedMovers?.nearLow || []);
+    // Apply names from the global map at init – if map is warm (revisit), names appear instantly.
+    const [gainers, setGainers] = useState(() => applyNamesFromMap(_derivedMovers?.gainers || []));
+    const [losers, setLosers] = useState(() => applyNamesFromMap(_derivedMovers?.losers || []));
+    const [nearHigh, setNearHigh] = useState(() => applyNamesFromMap(_derivedMovers?.nearHigh || []));
+    const [nearLow, setNearLow] = useState(() => applyNamesFromMap(_derivedMovers?.nearLow || []));
+    const [volumeShockers, setVolumeShockers] = useState(() => {
+        // Seed from cache so the Volume Shockers tab renders instantly on revisit
+        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=50";
+        const hit = cacheGet(VS_PATH, 5 * 60 * 1000);
+        if (!hit || !Array.isArray(hit.data)) return [];
+        return applyNamesFromMap(hit.data.map(r => ({
+            ...r,
+            name: _nameMap.get(r.ticker) || null,
+            change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
+        })));
+    });
+    const [loadingVolumeShockers, setLoadingVolumeShockers] = useState(() => {
+        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=50";
+        const hit = cacheGet(VS_PATH, 5 * 60 * 1000);
+        return !(hit && Array.isArray(hit.data) && hit.data.length > 0);
+    });
+
     const [breadthSnapshot, setBreadthSnapshot] = useState(() => {
         const hit = cacheGet(BREADTH_LATEST_PATH, MOVERS_TTL);
         return hit?.data?.[0] || null;
+    });
+
+    // ── FII / DII daily flow ─────────────────────────────────────────────────
+    const FII_DII_PATH = "fii_dii_activity?select=date,fii_buy,fii_sell,fii_net,dii_buy,dii_sell,dii_net&order=date.desc&limit=10";
+    const FII_DII_TTL = 30 * 60 * 1000;
+    const [fiiDiiData, setFiiDiiData] = useState(() => {
+        const hit = cacheGet(FII_DII_PATH, FII_DII_TTL);
+        return hit?.data || [];
     });
     // Only show skeleton if there's truly nothing cached
     const [loadingMovers, setLoadingMovers] = useState(() => !_derivedMovers);
@@ -2169,13 +2703,13 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // ── RS stocks – seed from cache ──────────────────────────────────────────
     const _cachedRs = useMemo(() => {
         const hit = cacheGet(TIRS_RS85_PATH, RS_TTL);
-        return hit ? hit.data || [] : null;
+        return hit ? hit.data || [] : cacheGetAllPages(TIRS_RS85_PATH, RS_TTL);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const [rsStocks, setRsStocks] = useState(() => {
         if (!_cachedRs) return [];
         const retHit = cacheGet(RETURNS_PATH, RETURNS_TTL);
-        const retRows = retHit ? retHit.data || [] : [];
+        const retRows = retHit ? retHit.data || [] : (cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || []);
         const retMap = buildReturnsMap(retRows);
         return enrichRsStocks(_cachedRs, retMap);
     });
@@ -2184,22 +2718,32 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [searchTerm, setSearchTerm] = useState("");
 
     // ── Top 100 RS stocks directly from indicators table ──────────────────────
-    const [allRsStocks, setAllRsStocks] = useState([]);
-    const [loadingAllRs, setLoadingAllRs] = useState(true);
+    const [allRsStocks, setAllRsStocks] = useState(() => {
+        const hit = persistentCacheGet(ALL_RS_STOCKS_CACHE_KEY, ALL_RS_TTL);
+        if (!hit?.data?.length) return [];
+        // Apply names from global map – instant on any revisit where bhav cache is warm
+        return applyNamesFromMap(hit.data);
+    });
+    const [loadingAllRs, setLoadingAllRs] = useState(() => {
+        const hit = persistentCacheGet(ALL_RS_STOCKS_CACHE_KEY, ALL_RS_TTL);
+        return !hit?.data?.length;
+    });
     const [industries, setIndustries] = useState(() => {
         const hit = cacheGet(TIRS_ALL_PATH, RS_TTL);
-        if (!hit) return [];
-        return [...new Set((hit.data || []).map(r => normalizeIndustryName(r.industry)).filter(Boolean))].sort();
+        const rows = hit ? hit.data || [] : (cacheGetAllPages(TIRS_ALL_PATH, RS_TTL) || []);
+        if (!rows.length) return [];
+        return [...new Set(rows.map(r => normalizeIndustryName(r.industry)).filter(Boolean))].sort();
     });
     const [loadingIndustries, setLoadingIndustries] = useState(() => {
         const hit = cacheGet(TIRS_ALL_PATH, RS_TTL);
-        return !hit;
+        return !(hit || cacheGetAllPages(TIRS_ALL_PATH, RS_TTL));
     });
     const [industryTotals, setIndustryTotals] = useState(() => {
         const hit = cacheGet(TIRS_ALL_PATH, RS_TTL);
-        if (!hit) return new Map();
+        const rows = hit ? hit.data || [] : (cacheGetAllPages(TIRS_ALL_PATH, RS_TTL) || []);
+        if (!rows.length) return new Map();
         const m = new Map();
-        (hit.data || []).forEach(r => {
+        rows.forEach(r => {
             const key = normalizeIndustryKey(r.industry);
             if (key) m.set(key, (m.get(key) || 0) + 1);
         });
@@ -2223,10 +2767,11 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         // applyMovers: takes raw API rows and updates all mover state slices.
         function applyMovers(moversData, stock52wRows) {
             const derived = deriveMovers(moversData, stock52wRows);
-            setGainers(derived.gainers);
-            setLosers(derived.losers);
-            setNearHigh(derived.nearHigh);
-            setNearLow(derived.nearLow);
+            // applyNamesFromMap fills names for tickers already in the global map (instant on revisit)
+            setGainers(applyNamesFromMap(derived.gainers));
+            setLosers(applyNamesFromMap(derived.losers));
+            setNearHigh(applyNamesFromMap(derived.nearHigh));
+            setNearLow(applyNamesFromMap(derived.nearLow));
             if (moversData[0]?.created_at) {
                 setLastUpdated(new Date(moversData[0].created_at).toLocaleString("en-IN", {
                     day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true,
@@ -2241,20 +2786,51 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             try {
                 // Both calls respect SWR: they return stale cache immediately
                 // and call onStale when a background refresh completes.
-                let freshMovers = null;
-                let freshS52    = null;
+                let latestMovers = _cachedMovers || null;
+                let latestS52 = cacheGetAllPages(STOCK52W_PATH, RETURNS_TTL) || [];
 
                 const [moversData, stock52wData] = await Promise.all([
                     sbFetch(MOVERS_PATH, userToken, {
                         ttl: MOVERS_TTL,
-                        onStale: fresh => { freshMovers = fresh; if (freshS52 !== null) applyMovers(freshMovers, freshS52); },
+                        onStale: fresh => {
+                            latestMovers = fresh;
+                            applyMovers(latestMovers, latestS52);
+                        },
                     }),
-                    fetchAllStock52wVolume(userToken),
+                    sbFetchAll(STOCK52W_PATH, userToken, {
+                        ttl: RETURNS_TTL,
+                        onStale: fresh => {
+                            latestS52 = fresh || [];
+                            if (latestMovers) applyMovers(latestMovers, latestS52);
+                        },
+                    }),
                 ]);
 
                 // If we got a stale SWR hit, the onStale cb fires later.
                 // The synchronous return here is used for the initial render.
+                latestMovers = moversData;
+                latestS52 = stock52wData || [];
                 applyMovers(moversData, stock52wData);
+
+                // ── Enrich mover rows with names (background, non-blocking) ────────
+                // Names already present from _nameMap for cached tickers.
+                // This fetch fills in any that were missing (new tickers).
+                try {
+                    const allTickers = [...new Set((moversData || []).map(r => r.symbol).filter(Boolean))];
+                    const missingTickers = allTickers.filter(t => !_nameMap.has(t));
+                    if (missingTickers.length) {
+                        const nameRows = await batchFetchBhavNames(missingTickers, userToken);
+                        // _updateNameMap is called inside batchFetchBhavNames; push update to UI
+                        if (nameRows.length) {
+                            setGainers(prev => applyNamesFromMap(prev));
+                            setLosers(prev => applyNamesFromMap(prev));
+                            setNearHigh(prev => applyNamesFromMap(prev));
+                            setNearLow(prev => applyNamesFromMap(prev));
+                        }
+                    }
+                } catch (nameErr) {
+                    console.warn("Could not enrich mover names from bhav_copy:", nameErr.message);
+                }
             } catch (err) {
                 console.error("Error fetching movers:", err);
                 setError(`Failed to load market movers: ${err.message}`);
@@ -2265,8 +2841,59 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
-    // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-    // FETCH RS > 85 STOCKS + ALL STOCK RETURNS
+    // ─────────────────────────────────────────────────────────────────────────
+    // FETCH VOLUME SHOCKERS
+    // ─────────────────────────────────────────────────────────────────────────
+    useEffect(() => {
+        const VOLUME_SHOCKERS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=50";
+        const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
+        (async () => {
+            try {
+                // mapRow enriches each row with change_pct and applies cached names instantly
+                const mapRow = r => ({
+                    ...r,
+                    name: _nameMap.get(r.ticker) || r.name || null,
+                    change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
+                });
+                const cached = cacheGet(VOLUME_SHOCKERS_PATH, VOLUME_SHOCKERS_TTL);
+                let vsData = null;
+                if (cached && !cached.stale && Array.isArray(cached.data)) {
+                    vsData = cached.data;
+                    setVolumeShockers(vsData.map(mapRow));
+                    setLoadingVolumeShockers(false);
+                } else {
+                    vsData = await sbFetch(VOLUME_SHOCKERS_PATH, userToken, {
+                        ttl: VOLUME_SHOCKERS_TTL,
+                        onStale: fresh => {
+                            if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow));
+                        },
+                    });
+                    setVolumeShockers((vsData || []).map(mapRow));
+                }
+
+                // ── Enrich volume shocker rows with names (missing tickers only) ──
+                try {
+                    const allTickers = [...new Set((vsData || []).map(r => r.ticker).filter(Boolean))];
+                    const missingTickers = allTickers.filter(t => !_nameMap.has(t));
+                    if (missingTickers.length) {
+                        const nameRows = await batchFetchBhavNames(missingTickers, userToken);
+                        if (nameRows.length) {
+                            setVolumeShockers(prev => applyNamesFromMap(prev));
+                        }
+                    }
+                } catch (nameErr) {
+                    console.warn("Could not enrich volume shocker names from bhav_copy:", nameErr.message);
+                }
+            } catch (err) {
+                console.error("Error fetching volume shockers:", err);
+            } finally {
+                setLoadingVolumeShockers(false);
+            }
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToken]);
+
+
     // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     useEffect(() => {
         (async () => {
@@ -2283,6 +2910,22 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
+
+    // ── FII / DII fetch ──────────────────────────────────────────────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                const rows = await sbFetch(FII_DII_PATH, userToken, {
+                    ttl: FII_DII_TTL,
+                    onStale: fresh => setFiiDiiData(Array.isArray(fresh) ? fresh : []),
+                });
+                if (Array.isArray(rows)) setFiiDiiData(rows);
+            } catch (err) {
+                console.warn("FII/DII fetch failed:", err);
+            }
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToken]);
     useEffect(() => {
         function buildRsSummary(tirsData, allIndustryData) {
             const totalsMap = new Map();
@@ -2308,7 +2951,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         pct: total > 0 ? (count / total) * 100 : 0,
                     };
                 })
-                .sort((a, b) => b.pct - a.pct || a.industry.localeCompare(b.industry));
+                .sort((a, b) => (b.count || 0) - (a.count || 0) || a.industry.localeCompare(b.industry));
         }
 
         function applyRsData(tirsData, allIndustryData, allReturnsData = []) {
@@ -2339,18 +2982,49 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             // loadingRs / loadingIndustries are false when cache was available at mount.
             setError(null);
             try {
+                let latestTirsData = _cachedRs || [];
+                let latestAllIndustryData = cacheGetAllPages(TIRS_ALL_PATH, RS_TTL) || [];
+                let latestReturnsData = cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || [];
+                const applyLatestRsData = () => {
+                    if (latestTirsData.length && latestAllIndustryData.length) {
+                        applyRsData(latestTirsData, latestAllIndustryData, latestReturnsData);
+                        setLoadingRs(false);
+                    }
+                };
+
                 const [tirsData, allIndustryData] = await Promise.all([
-                    sbFetchAll(TIRS_RS85_PATH, userToken, { ttl: RS_TTL }),
-                    sbFetchAll(TIRS_ALL_PATH,  userToken, { ttl: RS_TTL }),
+                    sbFetchAll(TIRS_RS85_PATH, userToken, {
+                        ttl: RS_TTL,
+                        onStale: fresh => {
+                            latestTirsData = fresh || [];
+                            applyLatestRsData();
+                        },
+                    }),
+                    sbFetchAll(TIRS_ALL_PATH,  userToken, {
+                        ttl: RS_TTL,
+                        onStale: fresh => {
+                            latestAllIndustryData = fresh || [];
+                            applyLatestRsData();
+                        },
+                    }),
                 ]);
+                latestTirsData = tirsData || [];
+                latestAllIndustryData = allIndustryData || [];
                 applyRsData(tirsData, allIndustryData);
                 setLoadingRs(false);
 
                 const [allReturnsData, latestDateRows] = await Promise.all([
-                    sbFetchAll(RETURNS_PATH, userToken, { ttl: RETURNS_TTL }),
+                    sbFetchAll(RETURNS_PATH, userToken, {
+                        ttl: RETURNS_TTL,
+                        onStale: fresh => {
+                            latestReturnsData = fresh || [];
+                            applyLatestRsData();
+                        },
+                    }),
                     // Step 1: get the latest date in indicators
                     sbFetch(ALL_RS_LATEST_DATE_PATH, userToken, { ttl: ALL_RS_TTL }),
                 ]);
+                latestReturnsData = allReturnsData || [];
                 applyRsData(tirsData, allIndustryData, allReturnsData);
 
                 // Step 2: fetch all stocks with RS >= 85 for latest date, NSE only (avoids BSE duplicates)
@@ -2358,24 +3032,51 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 const ALL_RS_PATH = latestDate
                     ? `indicators?select=ticker,rs_rating,rs_score,cap_category&date=eq.${latestDate}&exchange=eq.NSE&rs_rating=gte.85&order=rs_rating.desc.nullslast`
                     : `indicators?select=ticker,rs_rating,rs_score,cap_category&exchange=eq.NSE&rs_rating=gte.85&order=rs_rating.desc.nullslast`;
-                const indicatorsHighRS = await sbFetch(ALL_RS_PATH, userToken, { ttl: ALL_RS_TTL });
+                const buildAllRsStocks = (indicatorsRows, returnsRows) => {
+                    const returnsMap = buildReturnsMap(returnsRows);
+                    return (indicatorsRows || []).map((r, idx) => {
+                        const ret = returnsMap.get(r.ticker);
+                        return {
+                            ticker:       r.ticker,
+                            name:         _nameMap.get(r.ticker) || null,
+                            rs_rating:    r.rs_rating,
+                            rs_score:     r.rs_score,
+                            cap_category: r.cap_category,
+                            rank:         idx + 1,
+                            ret_3m:       ret?.ret_3m  ?? null,
+                            ret_6m:       ret?.ret_6m  ?? null,
+                            ret_12m:      ret?.ret_12m ?? null,
+                        };
+                    });
+                };
+                const indicatorsHighRS = await sbFetch(ALL_RS_PATH, userToken, {
+                    ttl: ALL_RS_TTL,
+                    onStale: fresh => {
+                        const enriched = buildAllRsStocks(fresh, latestReturnsData);
+                        setAllRsStocks(enriched);
+                        persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
+                    },
+                });
 
                 // Build allRsStocks: join indicators with returns
-                const returnsMap = buildReturnsMap(allReturnsData);
-                const enriched = (indicatorsHighRS || []).map((r, idx) => {
-                    const ret = returnsMap.get(r.ticker);
-                    return {
-                        ticker:       r.ticker,
-                        rs_rating:    r.rs_rating,
-                        rs_score:     r.rs_score,
-                        cap_category: r.cap_category,
-                        rank:         idx + 1,
-                        ret_3m:       ret?.ret_3m  ?? null,
-                        ret_6m:       ret?.ret_6m  ?? null,
-                        ret_12m:      ret?.ret_12m ?? null,
-                    };
-                });
+                const enriched = buildAllRsStocks(indicatorsHighRS, allReturnsData);
                 setAllRsStocks(enriched);
+                persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
+
+                // ── Enrich allRsStocks with names (only missing tickers) ──────
+                try {
+                    const allTickers = (indicatorsHighRS || []).map(r => r.ticker).filter(Boolean);
+                    const missingTickers = [...new Set(allTickers)].filter(t => !_nameMap.has(t));
+                    if (missingTickers.length) {
+                        const nameRows = await batchFetchBhavNames(missingTickers, userToken);
+                        if (nameRows.length) {
+                            // _updateNameMap already called inside batchFetchBhavNames
+                            setAllRsStocks(prev => applyNamesFromMap(prev));
+                        }
+                    }
+                } catch (nameErr) {
+                    console.warn("Could not enrich allRsStocks names:", nameErr.message);
+                }
             } catch (err) {
                 console.error("Error fetching RS stocks:", err);
                 setError(`Failed to load RS stocks: ${err.message}`);
@@ -2436,6 +3137,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         losers: losers,
         near_high: nearHigh,
         near_low: nearLow,
+        volume_shockers: volumeShockers,
     }[activeMoversTab] || [];
 
     const rsIndustrySummary = useMemo(() => {
@@ -2475,7 +3177,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     pct,
                 };
             })
-            .sort((a, b) => b.pct - a.pct || a.industry.localeCompare(b.industry));
+            .sort((a, b) => (b.count || 0) - (a.count || 0) || a.industry.localeCompare(b.industry));
     }, [rsStocks, industryTotals, searchTerm]);
 
     // Reset industry selection when starting a new search to show matching sectors in summary
@@ -2548,6 +3250,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 losers={losers}
                 allHighRsStocks={allHighRsStocks}
                 rsIndustrySummary={rsIndustrySummary}
+                fiiDiiData={fiiDiiData}
                 onNavigate={onNavigate}
             />
 
@@ -2558,14 +3261,15 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     gap: 6,
                     marginBottom: 12,
                     padding: 5,
-                    borderRadius: 10,
-                    background: D.softFill,
+                    borderRadius: 12,
+                    background: D.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.88)",
                     border: `1px solid ${D.panelBorder}`,
                     position: "sticky",
                     top: 0,
                     zIndex: 20,
-                    backdropFilter: "blur(14px)",
-                    WebkitBackdropFilter: "blur(14px)",
+                    backdropFilter: "blur(16px)",
+                    WebkitBackdropFilter: "blur(16px)",
+                    boxShadow: D.shadowMd,
                 }}>
                     {[
                         { id: "pulse", label: "Market Pulse" },
@@ -2576,19 +3280,20 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         return (
                             <button key={tab.id} onClick={() => setActiveMobilePanel(tab.id)} style={{
                                 minHeight: 38,
-                                border: `1px solid ${active ? D.ring : "transparent"}`,
+                                border: `1px solid ${active ? withAlpha(D.pos || "#10b981", 0.30) : "transparent"}`,
                                 borderRadius: 8,
-                                background: active ? D.pillBg : "transparent",
-                                color: active ? D.text : D.subtext,
-                                boxShadow: active ? D.shadowMd : "none",
+                                background: active ? withAlpha(D.pos || "#10b981", D.isDark ? 0.14 : 0.09) : "transparent",
+                                color: active ? (D.pos || "#10b981") : D.subtext,
+                                boxShadow: active ? `0 8px 18px ${withAlpha(D.pos || "#10b981", 0.12)}` : "none",
                                 cursor: "pointer",
-                                fontFamily: "inherit",
+                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                 fontSize: 11,
-                                fontWeight: 800,
-                                letterSpacing: "0",
+                                fontWeight: active ? 700 : 600,
+                                letterSpacing: "0.01em",
                                 padding: "8px 6px",
                                 whiteSpace: "normal",
                                 lineHeight: 1.15,
+                                transition: "all 0.15s ease",
                             }}>
                                 {tab.label}
                             </button>
@@ -2598,37 +3303,60 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             )}
 
             {/* â”€â”€ MARKET OVERVIEW (Index Cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            {(!isCompact || activeMobilePanel === "pulse") && (
-                <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} />
-            )}
+                        {/* ── MARKET PULSE + MOVERS side-by-side on desktop ─── */}
+            <div style={{
+                display: isCompact ? "block" : "grid",
+                gridTemplateColumns: isTablet ? "1fr 1fr" : "420px 1fr",
+                gap: 18,
+                alignItems: "stretch",
+                marginBottom: 18,
+            }}>
+                {/* Market Pulse */}
+                {(!isCompact || activeMobilePanel === "pulse") && (
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                        <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} isSideBySide={!isCompact} style={{ flex: 1 }} />
+                    </div>
+                )}
 
-            {/* -- MARKET MOVERS CARD -- */}
-            {(!isCompact || activeMobilePanel === "movers") && <SectionCard T={D}>
-                <CardHeader
-                    T={D}
-                    title="Market Movers"
-                    count={currentMoversData.length}
-                />
-                <div style={{
-                    display: "flex",
-                    gap: isCompact ? 6 : 8,
-                    marginBottom: 16,
-                    padding: "6px",
-                    background: D.softFill,
-                    borderRadius: 999,
-                    flexWrap: "wrap",
-                    border: `1px solid ${D.panelBorder}`,
-                }}>
-                    <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
-                    <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
-                    <TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />
-                    <TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />
-                </div>
-                <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
-            </SectionCard>}
+                {/* Right column: Market Movers + RS Rating stacked */}
+                {(!isCompact || activeMobilePanel === "movers" || activeMobilePanel === "leaders") && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 18, minHeight: 0 }}>
+
+                {/* Market Movers */}
+                {(!isCompact || activeMobilePanel === "movers") && (
+                    <SectionCard T={D} style={{ marginBottom: 0 }}>
+                        <CardHeader
+                            T={D}
+                            title="Market Movers"
+                            count={currentMoversData.length}
+                        />
+                        <div style={{
+                            display: "flex",
+                            gap: isCompact ? 5 : 6,
+                            marginBottom: 16,
+                            padding: "5px",
+                            background: D.isDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.85)",
+                            borderRadius: 999,
+                            flexWrap: "wrap",
+                            border: `1px solid ${D.panelBorder}`,
+                            backdropFilter: "blur(8px)",
+                            WebkitBackdropFilter: "blur(8px)",
+                        }}>
+                            <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
+                            <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
+                            <TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />
+                            <TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />
+                            <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
+                        </div>
+                        {activeMoversTab === "volume_shockers"
+                            ? <VolumeShockersTable T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} />
+                            : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
+                        }
+                    </SectionCard>
+                )}
 
             {/* -- RS RATING CARD -- */}
-            {(!isCompact || activeMobilePanel === "leaders") && <SectionCard T={D}>
+            <SectionCard T={D} style={{ marginBottom: 0, flex: 1 }}>
                 <div style={{
                     display: "flex",
                     flexDirection: isCompact ? "column" : "row",
@@ -2666,19 +3394,18 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                             onChange={e => setSearchTerm(e.target.value)}
                             style={{
                                 width: "100%",
-                                padding: "10px 14px 10px 38px",
-                                borderRadius: 12,
-                                border: `1px solid ${D.pillBorder}`,
-                                background: D.pillBg,
+                                padding: "8px 12px 8px 32px",
+                                borderRadius: 8,
+                                border: `1px solid ${D.panelBorder}`,
+                                background: D.isDark ? "rgba(255,255,255,0.06)" : "#fff",
                                 color: D.text,
-                                fontSize: 15,
-                                fontWeight: 500,
-                                fontFamily: "inherit",
+                                fontSize: 12.5,
+                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                 outline: "none",
-                                transition: "all 0.2s ease",
+                                transition: "border-color 0.15s",
                             }}
-                            onFocus={e => e.target.style.borderColor = D.accent}
-                            onBlur={e => e.target.style.borderColor = D.pillBorder}
+                            onFocus={e => e.target.style.borderColor = `${D.pos || "#10b981"}60`}
+                            onBlur={e => e.target.style.borderColor = D.panelBorder}
                         />
                         <svg 
                             width="14" height="14" viewBox="0 0 24 24" fill="none" 
@@ -2725,10 +3452,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 {/* RS sub-tabs */}
                 <div style={{
                     display: "flex",
-                    gap: isCompact ? 6 : 8,
+                    gap: isCompact ? 5 : 6,
                     marginBottom: 16,
-                    padding: "6px",
-                    background: D.softFill,
+                    padding: "5px",
+                    background: D.isDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.85)",
                     borderRadius: 999,
                     border: `1px solid ${D.panelBorder}`,
                     width: "fit-content",
@@ -2758,11 +3485,18 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
                     )}
                 </RsLoginGate>
-            </SectionCard>}
+            </SectionCard>
+
+                    </div>
+                )}
             </div>
             <style>{`
                 .stock-dashboard-shell * {
                     box-sizing: border-box;
+                }
+                .stock-dashboard-shell {
+                    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+                    font-size: 13px;
                 }
                 .stock-dashboard-shell button {
                     outline: none;
@@ -2790,6 +3524,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     50% { opacity: 0.16; }
                 }
             `}</style>
+        </div>
         </div>
     );
 }
