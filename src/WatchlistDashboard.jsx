@@ -964,7 +964,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
 }
 
 // ─── Ticker Autocomplete ──────────────────────────────────────
-function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compact }) {
+function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compact, isMobile = false }) {
   const [sugg, setSugg] = useState([]);
   const [open, setOpen] = useState(false);
   const [hi, setHi]     = useState(-1);
@@ -993,7 +993,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
   };
   return (
     <div ref={ref} style={{position:"relative"}}>
-      <div style={{display:"flex",gap:5}}>
+      <div style={{display:"flex",gap:isMobile ? 8 : 6, alignItems:"center"}}>
         <div style={{flex:1,position:"relative"}}>
           <input
             value={value}
@@ -1002,24 +1002,52 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
             onFocus={()=>sugg.length>0&&setOpen(true)}
             placeholder="Add ticker…"
             style={{
-              width:"100%", padding:"5px 26px 5px 8px",
+              width:"100%", padding:isMobile ? "12px 38px 12px 13px" : "8px 32px 8px 10px",
               background:T.card, border:`1px solid ${addError?"#dc2626":T.border}`,
-              borderRadius:5, color:T.text, fontSize:12, outline:"none",
+              borderRadius:isMobile ? 12 : 8, color:T.text, fontSize:isMobile ? 16 : 12, outline:"none",
               fontFamily:"'IBM Plex Mono',monospace", textTransform:"uppercase",
+              letterSpacing:"0.04em",
+              boxShadow:addError ? "none" : "inset 0 1px 0 rgba(255,255,255,0.04)",
+              transition:"border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease",
+            }}
+            onFocusCapture={e => {
+              e.currentTarget.style.borderColor = addError ? "#dc2626" : `${T.green}90`;
+              e.currentTarget.style.boxShadow = `0 0 0 3px ${T.green}18`;
+              if (sugg.length > 0) setOpen(true);
+            }}
+            onBlur={e => {
+              e.currentTarget.style.borderColor = addError ? "#dc2626" : T.border;
+              e.currentTarget.style.boxShadow = addError ? "none" : "inset 0 1px 0 rgba(255,255,255,0.04)";
             }}
           />
-          <span style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",fontSize:busy?9:11,color:T.subtext,animation:busy?"spin 0.8s linear infinite":"none",display:"inline-block",pointerEvents:"none"}}>{busy?"↺":"⌕"}</span>
+          <span style={{position:"absolute",right:isMobile ? 12 : 9,top:"50%",transform:"translateY(-50%)",fontSize:busy?10:12,color:T.subtext,animation:busy?"spin 0.8s linear infinite":"none",display:"inline-block",pointerEvents:"none",opacity:0.7}}>{busy ? "..." : "+"}</span>
         </div>
         {compact && (
           <button onClick={onSubmit} disabled={!value.trim()}
-            style={{padding:"5px 9px",background:T.green,color:"#fff",border:"none",borderRadius:5,fontSize:13,fontWeight:700,cursor:!value.trim()?"not-allowed":"pointer",opacity:!value.trim()?0.4:1,flexShrink:0}}>+</button>
+            style={{
+              width:isMobile ? 42 : 32,
+              height:isMobile ? 42 : 32,
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"center",
+              background:value.trim()?T.green:"transparent",
+              color:value.trim()?"#06120c":T.subtext,
+              border:`1px solid ${value.trim()?T.green:T.border}`,
+              borderRadius:isMobile ? 12 : 8,
+              fontSize:16,
+              fontWeight:700,
+              cursor:!value.trim()?"not-allowed":"pointer",
+              opacity:!value.trim()?0.45:1,
+              flexShrink:0,
+              transition:"transform 0.14s ease, opacity 0.14s ease, background 0.14s ease",
+            }}>+</button>
         )}
       </div>
       {open && sugg.length>0 && (
-        <div style={{position:"absolute",top:"calc(100% + 3px)",left:0,zIndex:400,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,minWidth:"100%",maxHeight:240,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.2)"}}>
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:400,background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,minWidth:"100%",maxHeight:240,overflowY:"auto",boxShadow:"0 18px 44px rgba(0,0,0,0.22)",overflow:"hidden"}}>
           {sugg.map((s,i)=>(
             <div key={s.ticker} onMouseDown={()=>pick(s)} onMouseEnter={()=>setHi(i)}
-              style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 10px",cursor:"pointer",background:i===hi?T.hover:"transparent",borderBottom:`1px solid ${T.border}`}}>
+              style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:isMobile ? "10px 12px" : "8px 10px",cursor:"pointer",background:i===hi?T.hover:"transparent",borderBottom:`1px solid ${T.border}`}}>
               <span style={{fontWeight:600,fontSize:12,color:T.text,fontFamily:"'IBM Plex Mono',monospace"}}>{s.ticker}</span>
               {s.close!=null&&<span style={{fontSize:11,color:T.subtext,fontFamily:"'IBM Plex Mono',monospace"}}>₹{(+s.close).toLocaleString("en-IN",{maximumFractionDigits:0})}</span>}
             </div>
@@ -2167,11 +2195,18 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
           .wl-stock-row { padding: 12px 12px 12px 10px !important; }
           .wl-remove-btn { opacity: 0.35 !important; }
           .wl-mobile-bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; }
+          .wl-mobile-sidebar-shell { will-change: transform; }
+          .wl-toolbar-btn { min-width: 36px; min-height: 36px; }
           .wl-premium-shell::before{
             background:
               radial-gradient(circle at top center, ${dark ? "rgba(16,185,129,0.12)" : "rgba(5,150,105,0.10)"} 0, transparent 34%),
               radial-gradient(circle at bottom right, ${dark ? "rgba(99,102,241,0.14)" : "rgba(37,99,235,0.10)"} 0, transparent 36%);
           }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .wl-mobile-sidebar-shell,
+          .wl-mobile-backdrop,
+          .wl-toolbar-btn { transition: none !important; }
         }
       `}</style>
 
@@ -2190,19 +2225,24 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
           }}>
 
         {/* ── MOBILE OVERLAY BACKDROP ───────────────────────── */}
-        {isMobile && sidebarOpen && (
+        {isMobile && (
           <div
             onClick={() => setSidebarOpen(false)}
+            className="wl-mobile-backdrop"
             style={{
               position: "fixed", inset: 0, zIndex: 150,
-              background: "rgba(0,0,0,0.5)", backdropFilter: "blur(2px)",
+              background: dark ? "rgba(2,6,23,0.58)" : "rgba(15,23,42,0.30)",
+              backdropFilter: sidebarOpen ? "blur(4px)" : "blur(0px)",
+              opacity: sidebarOpen ? 1 : 0,
+              pointerEvents: sidebarOpen ? "auto" : "none",
+              transition: "opacity 0.24s ease, backdrop-filter 0.24s ease",
             }}
           />
         )}
 
               {/* ══ SIDEBAR ═══════════════════════════════════════════ */}
-              <div style={{
-                  width: sidebarOpen ? (isMobile ? "85vw" : 240) : 0,
+              <div className={isMobile ? "wl-mobile-sidebar-shell" : undefined} style={{
+                  width: isMobile ? "min(86vw, 340px)" : (sidebarOpen ? 240 : 0),
                   maxWidth: isMobile ? 340 : 240,
                   flexShrink: 0,
                   background: isMobile
@@ -2213,10 +2253,12 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
-                  transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+                  transition: isMobile
+                    ? "transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease"
+                    : "width 0.22s cubic-bezier(0.4,0,0.2,1)",
                   boxShadow: isMobile ? "none" : (dark ? "0 16px 34px rgba(2,6,23,0.28)" : "0 12px 28px rgba(15,23,42,0.08)"),
 
-                  ...(isMobile && sidebarOpen ? {
+                  ...(isMobile ? {
                       position: "fixed",
                       top: 0,
                       left: 0,
@@ -2228,24 +2270,24 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                       bottom: "auto",
 
                       zIndex: 200,
-                      width: "85vw",
+                      width: "min(86vw, 340px)",
                       maxWidth: 340,
-                      boxShadow: dark ? "12px 0 40px rgba(2,6,23,0.55)" : "12px 0 36px rgba(15,23,42,0.18)"
+                      transform: sidebarOpen ? "translate3d(0,0,0)" : "translate3d(-104%,0,0)",
+                      pointerEvents: sidebarOpen ? "auto" : "none",
+                      boxShadow: sidebarOpen
+                        ? (dark ? "18px 0 46px rgba(2,6,23,0.50)" : "18px 0 42px rgba(15,23,42,0.18)")
+                        : "none"
                   } : {}),
 
-                  ...(isMobile && !sidebarOpen ? {
-                      width: 0,
-                      position: "fixed"
-                  } : {}),
               }}>
 
                   {/* HEADER */}
                   <div style={{
                       flexShrink: 0,
-                      padding: isMobile ? "16px 14px 12px" : "16px 14px 12px",
+                      padding: isMobile ? "14px 14px 13px" : "16px 14px 12px",
                       borderBottom: `1px solid ${T.border}`,
                       background: isMobile
-                        ? (dark ? "linear-gradient(180deg, rgba(16,185,129,0.10), rgba(99,102,241,0.08) 55%, transparent)" : "linear-gradient(180deg, rgba(5,150,105,0.08), rgba(37,99,235,0.06) 55%, transparent)")
+                        ? (dark ? "rgba(8,15,28,0.78)" : "rgba(255,255,255,0.78)")
                         : "transparent"
                   }}>
                       <div style={{
@@ -2293,37 +2335,6 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                           </div>
                       </div>
 
-                      {isMobile && (
-                        <div style={{
-                          marginBottom: 12,
-                          padding: "12px 12px 11px",
-                          borderRadius: 16,
-                          border: `1px solid ${dark ? "rgba(148,163,184,0.14)" : "rgba(148,163,184,0.18)"}`,
-                          background: dark ? "rgba(15,23,42,0.44)" : "rgba(255,255,255,0.72)",
-                          boxShadow: dark ? "0 16px 30px rgba(2,6,23,0.22)" : "0 10px 24px rgba(15,23,42,0.08)",
-                          backdropFilter: "blur(16px)",
-                        }}>
-                          <div style={{
-                            fontSize: 16,
-                            fontWeight: 700,
-                            color: T.text,
-                            letterSpacing: "-0.03em",
-                            marginBottom: 4,
-                            fontFamily: "'DM Sans', sans-serif",
-                          }}>
-                            Focused watchlists
-                          </div>
-                          <div style={{
-                            fontSize: 12,
-                            color: T.subtext,
-                            lineHeight: 1.45,
-                            fontFamily: "'DM Sans', sans-serif",
-                          }}>
-                            Organize leaders, setups, and high-conviction names with a cleaner mobile workflow.
-                          </div>
-                        </div>
-                      )}
-
                       <TickerSearch
                           value={addTicker}
                           onChange={v => { setAddTicker(v); setAddError(""); }}
@@ -2332,6 +2343,7 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                           addError={addError}
                           T={T}
                           compact
+                          isMobile={isMobile}
                       />
                   </div>
 
@@ -2361,25 +2373,25 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                                       if (isMobile) setSidebarOpen(false);
                                   }}
                                   style={{
-                                      margin: isMobile ? "0 10px 8px" : "2px 10px",
-                                      padding: isMobile ? "15px 13px" : "9px 10px",
-                                      borderRadius: isMobile ? 16 : 6,
+                                      margin: isMobile ? "0 10px 6px" : "2px 10px",
+                                      padding: isMobile ? "13px 12px" : "9px 10px",
+                                      borderRadius: isMobile ? 12 : 8,
                                       cursor: "pointer",
                                       position: "relative",
 
                                       background: isActive
-                                          ? (dark ? "linear-gradient(180deg, rgba(16,185,129,0.18), rgba(99,102,241,0.10))" : "linear-gradient(180deg, rgba(5,150,105,0.12), rgba(37,99,235,0.08))")
+                                          ? (dark ? "rgba(16,185,129,0.13)" : "rgba(5,150,105,0.10)")
                                           : (isMobile ? (dark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.75)") : "transparent"),
 
                                       borderLeft: isActive
-                                          ? `3px solid ${T.green}`
-                                          : "3px solid transparent",
+                                          ? `2px solid ${T.green}`
+                                          : "2px solid transparent",
 
                                       border: `1px solid ${isActive ? `${T.green}40` : (isMobile ? `${T.border}b0` : "transparent")}`,
                                       boxShadow: isMobile
                                         ? (isActive
-                                          ? (dark ? "0 14px 28px rgba(2,6,23,0.20)" : "0 10px 24px rgba(15,23,42,0.08)")
-                                          : "0 6px 16px rgba(15,23,42,0.04)")
+                                          ? (dark ? "0 10px 22px rgba(2,6,23,0.16)" : "0 8px 20px rgba(15,23,42,0.07)")
+                                          : "none")
                                         : "none",
                                       transition: "all 0.15s ease"
                                   }}
@@ -2438,7 +2450,7 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                       bottom: 0,
                       zIndex: 20,
                       background: isMobile
-                        ? (dark ? "linear-gradient(180deg, rgba(10,20,34,0.82), rgba(10,20,34,0.96))" : "linear-gradient(180deg, rgba(244,248,251,0.82), rgba(244,248,251,0.96))")
+                        ? (dark ? "rgba(10,20,34,0.96)" : "rgba(248,250,252,0.96)")
                         : T.surface,
                       borderTop: `1px solid ${T.border}`,
 
@@ -2448,7 +2460,7 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                           : "10px",
 
                       boxShadow: isMobile
-                          ? (dark ? "0 -12px 30px rgba(2,6,23,0.34)" : "0 -10px 28px rgba(15,23,42,0.12)")
+                          ? (dark ? "0 -10px 28px rgba(2,6,23,0.28)" : "0 -8px 24px rgba(15,23,42,0.10)")
                           : "none"
                   }}>
                       {isMobile && (
@@ -2464,33 +2476,60 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                           Create Collection
                         </div>
                       )}
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <input
                               value={newWlName}
-                              onChange={e => setNewWlName(e.target.value)}
-                              placeholder="New watchlist"
+                              onChange={e => { setNewWlName(e.target.value); setWlError(""); }}
+                              placeholder={atWatchlistLimit ? "Limit reached" : "New watchlist"}
+                              disabled={atWatchlistLimit}
                               style={{
                                   flex: 1,
-                                  padding: isMobile ? "11px 12px" : "8px 10px",
-                                  borderRadius: isMobile ? 12 : 6,
-                                  border: `1px solid ${T.border}`,
+                                  padding: isMobile ? "12px 13px" : "8px 10px",
+                                  borderRadius: isMobile ? 12 : 8,
+                                  border: `1px solid ${wlError ? "#ef4444" : T.border}`,
                                   background: dark ? "rgba(255,255,255,0.04)" : T.card,
-                                  color: T.text
+                                  color: atWatchlistLimit ? T.subtext : T.text,
+                                  opacity: atWatchlistLimit ? 0.45 : 1,
+                                  outline: "none",
+                                  fontFamily: "'DM Sans', sans-serif",
+                                  fontSize: isMobile ? 15 : 12,
+                                  transition: "border-color 0.16s ease, box-shadow 0.16s ease",
+                              }}
+                              onFocus={e => {
+                                e.currentTarget.style.borderColor = wlError ? "#ef4444" : `${T.green}90`;
+                                e.currentTarget.style.boxShadow = `0 0 0 3px ${T.green}16`;
+                              }}
+                              onBlur={e => {
+                                e.currentTarget.style.borderColor = wlError ? "#ef4444" : T.border;
+                                e.currentTarget.style.boxShadow = "none";
                               }}
                           />
 
                           <button onClick={createWatchlist}
+                              disabled={!newWlName.trim() || creatingWl || atWatchlistLimit}
                               style={{
-                                  padding: isMobile ? "0 14px" : "8px 12px",
-                                  background: T.green,
-                                  color: "#000",
-                                  border: "none",
-                                  borderRadius: isMobile ? 12 : 6,
-                                  fontWeight: 700
+                                  width: isMobile ? 44 : 34,
+                                  height: isMobile ? 44 : 34,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.green : "transparent",
+                                  color: newWlName.trim() && !creatingWl && !atWatchlistLimit ? "#06120c" : T.subtext,
+                                  border: `1px solid ${newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.green : T.border}`,
+                                  borderRadius: isMobile ? 12 : 8,
+                                  fontWeight: 700,
+                                  cursor: !newWlName.trim() || creatingWl || atWatchlistLimit ? "not-allowed" : "pointer",
+                                  opacity: !newWlName.trim() || creatingWl || atWatchlistLimit ? 0.45 : 1,
+                                  transition: "background 0.16s ease, opacity 0.16s ease, border-color 0.16s ease",
                               }}>
                               +
                           </button>
                       </div>
+                      {wlError && (
+                        <div style={{ marginTop: 7, fontSize: 11, color: "#ef4444", fontFamily: "'DM Sans', sans-serif" }}>
+                          {wlError}
+                        </div>
+                      )}
                   </div>
               </div>
 
@@ -2524,15 +2563,21 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
                       {/* Sidebar toggle */}
                       <button className="wl-toolbar-btn" onClick={() => setSidebarOpen(o => !o)}
                           style={{
-                              padding: isMobile ? "6px 9px" : "5px 8px",
-                              background: "transparent",
-                              border: `1px solid ${T.border}`,
-                              borderRadius: 5,
+                              width: isMobile ? 38 : 34,
+                              height: isMobile ? 38 : 34,
+                              padding: 0,
+                              background: sidebarOpen && isMobile ? `${T.green}12` : T.card,
+                              border: `1px solid ${sidebarOpen && isMobile ? `${T.green}55` : T.border}`,
+                              borderRadius: 10,
                               cursor: "pointer",
-                              color: T.subtext,
-                              fontSize: 12,
-                              opacity: 0.6,
+                              color: sidebarOpen && isMobile ? T.green : T.subtext,
+                              fontSize: 15,
+                              opacity: 1,
                               flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease",
                           }}
                           title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
                           {sidebarOpen ? "◀" : "▶"}

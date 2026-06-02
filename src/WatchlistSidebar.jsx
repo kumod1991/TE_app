@@ -59,9 +59,7 @@ function useInjectStyles(T, isMobile) {
         position: absolute;
         inset: 0;
         pointer-events: none;
-        background:
-          radial-gradient(circle at top left, ${T.green}12 0, transparent 28%),
-          radial-gradient(circle at bottom right, ${(T.accent ?? "#2563eb")}12 0, transparent 32%);
+        background: linear-gradient(180deg, ${T.green}08 0%, transparent 36%);
         z-index: -1;
       }
 
@@ -189,11 +187,11 @@ const WatchlistItem = memo(function WatchlistItem({
       className="wls-item-wrap"
       style={{
         margin: isMobile ? "1px 8px" : "1px 6px",
-        borderRadius: 14,
-        background: isActive ? `${T.green}18` : hov ? T.hover : T.card,
+        borderRadius: 10,
+        background: isActive ? `${T.green}12` : hov ? T.hover : T.card,
         borderLeft,
         border: `1px solid ${isActive ? `${T.green}35` : hov ? T.border : `${T.border}90`}`,
-        boxShadow: isActive ? `0 10px 24px ${T.shadow ?? "rgba(15,23,42,0.08)"}` : "none",
+        boxShadow: isActive ? `0 8px 20px ${T.shadow ?? "rgba(15,23,42,0.08)"}` : "none",
         transition: "background 0.12s ease, border-color 0.15s",
         cursor: isEditing ? "default" : "pointer",
       }}
@@ -230,9 +228,9 @@ const WatchlistItem = memo(function WatchlistItem({
         <div style={{
           display: "flex",
           alignItems: "center",
-          padding: isMobile ? "14px 12px" : "9px 10px",
-          minHeight: isMobile ? 48 : "auto",
-          gap: 6,
+          padding: isMobile ? "13px 12px" : "9px 10px",
+          minHeight: isMobile ? 46 : "auto",
+          gap: 7,
         }}>
           {/* Heat dot — visible on BOTH mobile and desktop (was missing on mobile) */}
           <span style={{
@@ -417,12 +415,12 @@ export default function WatchlistSidebar({
         flexShrink: 0,
         background: T.surface,
         borderRight: isMobile ? "none" : `1px solid ${T.border}`,
-        borderRadius: isMobile ? 0 : 24,
+        borderRadius: isMobile ? 0 : 18,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
         fontFamily: "'DM Sans', sans-serif",
-        boxShadow: isMobile ? "none" : `0 16px 36px ${T.shadow ?? "rgba(15,23,42,0.08)"}`,
+        boxShadow: isMobile ? "none" : `0 12px 30px ${T.shadow ?? "rgba(15,23,42,0.08)"}`,
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -515,35 +513,15 @@ export default function WatchlistSidebar({
 
         {/* Add-ticker row */}
         <div style={{ paddingBottom: isMobile ? 11 : 9 }}>
-          {isMobile && (
-            <div style={{
-              marginBottom: 8,
-              padding: "12px 12px 11px",
-              borderRadius: 16,
-              border: `1px solid ${T.border}`,
-              background: T.card,
-              boxShadow: `0 10px 24px ${T.shadow ?? "rgba(15,23,42,0.08)"}`,
-            }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: T.text, letterSpacing: "-0.03em", marginBottom: 4, fontFamily: "'DM Sans', sans-serif" }}>
-                Focused watchlists
-              </div>
-              <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.45, fontFamily: "'DM Sans', sans-serif" }}>
-                Organize leaders, setups, and high-conviction names with a cleaner mobile workflow.
-              </div>
-            </div>
-          )}
           <div style={{
             marginBottom: 8,
-            padding: isMobile ? "10px 11px" : "9px 10px",
-            borderRadius: 14,
+            padding: isMobile ? "9px 10px" : "8px 10px",
+            borderRadius: 10,
             border: `1px solid ${T.border}`,
             background: T.card,
           }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: T.text, marginBottom: 3, fontFamily: "'DM Sans', sans-serif" }}>
-              Curate leaders, breakouts, and setups
-            </div>
-            <div style={{ fontSize: 11, color: T.subtext, lineHeight: 1.45, fontFamily: "'DM Sans', sans-serif" }}>
-              Add a ticker to keep this watchlist actionable across desktop and mobile.
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.subtext, marginBottom: 6, fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: "0.14em", opacity: 0.68 }}>
+              Add ticker
             </div>
           </div>
           <TickerSearch
@@ -651,7 +629,7 @@ export default function WatchlistSidebar({
                   : "10px",
 
               boxShadow: isMobile
-                  ? "0 -6px 20px rgba(0,0,0,0.25)"
+                  ? "0 -8px 24px rgba(0,0,0,0.18)"
                   : "none",
           }}>
         {/* Section label */}
@@ -681,12 +659,12 @@ export default function WatchlistSidebar({
             disabled={atWatchlistLimit}
             style={{
               flex: 1,
-              padding: isMobile ? "10px 11px" : "6px 9px",
+              padding: isMobile ? "12px 13px" : "8px 10px",
               background: T.card,
               border: `1px solid ${newInputBorder}`,
-              borderRadius: 6,
+              borderRadius: isMobile ? 12 : 8,
               color: atWatchlistLimit ? T.border : T.text,
-              fontSize: isMobile ? 14 : 12,
+              fontSize: isMobile ? 15 : 12,
               outline: "none",
               opacity: atWatchlistLimit ? 0.35 : 1,
               fontFamily: "'DM Sans', sans-serif",
@@ -700,8 +678,8 @@ export default function WatchlistSidebar({
             disabled={createDisabled}
             title="Create watchlist"
             style={{
-              width: isMobile ? 42 : 29,
-              height: isMobile ? 42 : 29,
+              width: isMobile ? 44 : 34,
+              height: isMobile ? 44 : 34,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -709,7 +687,7 @@ export default function WatchlistSidebar({
               background: createBg,
               color: createColor,
               border: `1px solid ${createBorder}`,
-              borderRadius: 6,
+              borderRadius: isMobile ? 12 : 8,
               cursor: createDisabled ? "not-allowed" : "pointer",
               opacity: createDisabled ? 0.35 : 1,
               transition: "all 0.15s",
