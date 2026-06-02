@@ -563,6 +563,8 @@ async function fetchAllStock52wVolume(userToken) {
 const EMPTY_VALUE = "-";
 const DEFAULT_VISIBLE_ITEMS = 6;
 const DEFAULT_TABLE_MAX_HEIGHT = 44 + DEFAULT_VISIBLE_ITEMS * 49;
+const MOVERS_INITIAL_ROWS = 20;
+const MOVERS_LOAD_MORE_ROWS = 20;
 
 const fmt = (n, d = 2) => n == null ? EMPTY_VALUE : Number(n).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtPct = (n) => n == null ? EMPTY_VALUE : `${Number(n) > 0 ? "+" : ""}${fmt(n)}%`;
@@ -2098,6 +2100,7 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
 
 // â”€â”€â”€ MOVERS TABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MoversTable({ T, data, loading, type, isCompact }) {
+    const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState(() => {
         if (type === "gainers" || type === "losers") return "change_pct";
         if (type === "near_high" || type === "near_low") return "dist_pct";
@@ -2116,6 +2119,7 @@ function MoversTable({ T, data, loading, type, isCompact }) {
             setSortKey("dist_pct");
             setSortDir(type === "near_low" ? "asc" : "desc");
         }
+        setVisibleCount(MOVERS_INITIAL_ROWS);
     }, [type]);
 
     const handleSort = key => {
@@ -2138,6 +2142,8 @@ function MoversTable({ T, data, loading, type, isCompact }) {
             return sortDir === "asc" ? cmp : -cmp;
         });
     }, [data, sortKey, sortDir]);
+    const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
+    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
 
     if (loading) {
         return (
@@ -2193,85 +2199,85 @@ function MoversTable({ T, data, loading, type, isCompact }) {
 
     if (isCompact) {
         return (
-            <div style={{
-                display: "grid",
-                gap: 12,
-                maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_VISIBLE_ITEMS * 120 : "none",
-                overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-                paddingRight: sorted.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
-            }}>
-                {sorted.map(row => {
-                    const chg = row.change_pct;
-                    const isPos = chg != null && chg > 0;
-                    const isNeg = chg != null && chg < 0;
-                    const tone = isPos ? (T.pos || "#10b981") : isNeg ? (T.neg || "#ef4444") : T.text;
-                    const toneBg = isPos ? T.posSoft : isNeg ? T.negSoft : T.softFill;
-                    return (
-                        <div
-                            key={row.ticker}
-                            style={{
-                                padding: 16,
-                                borderRadius: 18,
-                                border: `1px solid ${T.panelBorder}`,
-                                background: T.pillBg,
-                            }}
-                        >
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 15, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
-                                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2 }}>{row.ticker}</div>
-                                </div>
-                                <div style={{
-                                    padding: "7px 10px",
-                                    borderRadius: 999,
-                                    background: toneBg,
-                                    color: tone,
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontWeight: 700,
-                                    fontSize: 14,
-                                    flexShrink: 0,
-                                }}>
-                                    {fmtPct(chg)}
-                                </div>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
-                                <div>
-                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
-                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.ltp)}</div>
-                                </div>
-                                {showDist && (
-                                    <div>
-                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                                            {type === "near_high" ? "From 52W High" : "From 52W Low"}
-                                        </div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
-                                            {row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}
-                                        </div>
+            <>
+                <div style={{
+                    display: "grid",
+                    gap: 12,
+                }}>
+                    {visibleRows.map(row => {
+                        const chg = row.change_pct;
+                        const isPos = chg != null && chg > 0;
+                        const isNeg = chg != null && chg < 0;
+                        const tone = isPos ? (T.pos || "#10b981") : isNeg ? (T.neg || "#ef4444") : T.text;
+                        const toneBg = isPos ? T.posSoft : isNeg ? T.negSoft : T.softFill;
+                        return (
+                            <div
+                                key={`${type}:${row.ticker}`}
+                                style={{
+                                    padding: 16,
+                                    borderRadius: 18,
+                                    border: `1px solid ${T.panelBorder}`,
+                                    background: T.pillBg,
+                                }}
+                            >
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontWeight: 700, fontSize: 15, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
+                                        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2 }}>{row.ticker}</div>
                                     </div>
-                                )}
-                                <div>
-                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
-                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.volume)}</div>
-                                </div>
-                                <div>
-                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
                                     <div style={{
-                                        marginTop: 4,
+                                        padding: "7px 10px",
+                                        borderRadius: 999,
+                                        background: toneBg,
+                                        color: tone,
                                         fontFamily: "'IBM Plex Mono', monospace",
-                                        fontWeight: 600,
-                                        color: row.rel_volume == null ? T.muted
-                                            : row.rel_volume >= 2 ? (T.pos || "#10b981")
-                                                : row.rel_volume >= 1.5 ? "#f59e0b"
-                                                    : T.text,
+                                        fontWeight: 700,
+                                        fontSize: 14,
+                                        flexShrink: 0,
                                     }}>
-                                        {row.rel_volume != null ? `${row.rel_volume.toFixed(2)}x` : EMPTY_VALUE}
+                                        {fmtPct(chg)}
+                                    </div>
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
+                                    <div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
+                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.ltp)}</div>
+                                    </div>
+                                    {showDist && (
+                                        <div>
+                                            <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                                                {type === "near_high" ? "From 52W High" : "From 52W Low"}
+                                            </div>
+                                            <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
+                                                {row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
+                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.volume)}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
+                                        <div style={{
+                                            marginTop: 4,
+                                            fontFamily: "'IBM Plex Mono', monospace",
+                                            fontWeight: 600,
+                                            color: row.rel_volume == null ? T.muted
+                                                : row.rel_volume >= 2 ? (T.pos || "#10b981")
+                                                    : row.rel_volume >= 1.5 ? "#f59e0b"
+                                                        : T.text,
+                                        }}>
+                                            {row.rel_volume != null ? `${row.rel_volume.toFixed(2)}x` : EMPTY_VALUE}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+            </>
         );
     }
 
@@ -2305,7 +2311,8 @@ function MoversTable({ T, data, loading, type, isCompact }) {
     };
 
     return (
-        <PremiumTableShell T={T} minWidth={showDist ? 820 : 680} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <>
+        <PremiumTableShell T={T} minWidth={showDist ? 820 : 680} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <MTh k="name" label="Name" />
@@ -2317,7 +2324,7 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                 </tr>
             </thead>
             <tbody>
-                {sorted.map((row, i) => {
+                {visibleRows.map((row, i) => {
                     const chg = row.change_pct;
                     const isPos = chg != null && chg > 0;
                     const isNeg = chg != null && chg < 0;
@@ -2330,9 +2337,9 @@ function MoversTable({ T, data, loading, type, isCompact }) {
 
                     return (
                         <tr
-                            key={row.ticker}
+                            key={`${type}:${row.ticker}`}
                             style={{
-                                borderBottom: i < sorted.length - 1
+                                borderBottom: i < visibleRows.length - 1
                                     ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                     : "none",
                                 transition: "background 0.12s ease",
@@ -2426,12 +2433,15 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                 })}
             </tbody>
         </PremiumTableShell>
+        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+        </>
     );
 }
 
 
 // ─── VOLUME SHOCKERS TABLE ───────────────────────────────────────────────────
 function VolumeShockersTable({ T, data, loading, isCompact }) {
+    const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("volume_ratio");
     const [sortDir, setSortDir] = useState("desc");
 
@@ -2442,6 +2452,7 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
             setSortKey(key);
             setSortDir("desc");
         }
+        setVisibleCount(MOVERS_INITIAL_ROWS);
     };
 
     const sorted = useMemo(() => {
@@ -2455,6 +2466,8 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
             return sortDir === "asc" ? cmp : -cmp;
         });
     }, [data, sortKey, sortDir]);
+    const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
+    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
 
     if (loading) {
         return (
@@ -2502,63 +2515,63 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
 
     if (isCompact) {
         return (
-            <div style={{
-                display: "grid",
-                gap: 12,
-                maxHeight: sorted.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_VISIBLE_ITEMS * 120 : "none",
-                overflowY: sorted.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-                paddingRight: sorted.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
-            }}>
-                {sorted.map(row => {
-                    const chg = row.change_pct;
-                    const isPos = chg != null && chg > 0;
-                    const isNeg = chg != null && chg < 0;
-                    const tone = isPos ? (T.pos || "#10b981") : isNeg ? (T.neg || "#ef4444") : T.text;
-                    const toneBg = isPos ? T.posSoft : isNeg ? T.negSoft : T.softFill;
-                    return (
-                        <div key={row.ticker} style={{
-                            padding: 16,
-                            borderRadius: 18,
-                            border: `1px solid ${T.panelBorder}`,
-                            background: T.pillBg,
-                        }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 15, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
-                                    {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2 }}>{row.ticker}</div>}
+            <>
+                <div style={{
+                    display: "grid",
+                    gap: 12,
+                }}>
+                    {visibleRows.map(row => {
+                        const chg = row.change_pct;
+                        const isPos = chg != null && chg > 0;
+                        const isNeg = chg != null && chg < 0;
+                        const tone = isPos ? (T.pos || "#10b981") : isNeg ? (T.neg || "#ef4444") : T.text;
+                        const toneBg = isPos ? T.posSoft : isNeg ? T.negSoft : T.softFill;
+                        return (
+                            <div key={`volume_shockers:${row.ticker}`} style={{
+                                padding: 16,
+                                borderRadius: 18,
+                                border: `1px solid ${T.panelBorder}`,
+                                background: T.pillBg,
+                            }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontWeight: 700, fontSize: 15, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
+                                        {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2 }}>{row.ticker}</div>}
+                                    </div>
+                                    <div style={{ padding: "7px 10px", borderRadius: 999, background: toneBg, color: tone, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                                        {fmtPct(chg)}
+                                    </div>
                                 </div>
-                                <div style={{ padding: "7px 10px", borderRadius: 999, background: toneBg, color: tone, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-                                    {fmtPct(chg)}
-                                </div>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
-                                <div>
-                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
-                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</div>
-                                </div>
-                                <div>
-                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
-                                    <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.today_volume)}</div>
-                                </div>
-                                <div>
-                                    <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
-                                    <div style={{
-                                        marginTop: 4,
-                                        fontFamily: "'IBM Plex Mono', monospace",
-                                        fontWeight: 600,
-                                        color: row.volume_ratio == null ? T.muted
-                                            : row.volume_ratio >= 10 ? (T.pos || "#10b981")
-                                                : row.volume_ratio >= 5 ? "#f59e0b"
-                                                    : T.text,
-                                    }}>
-                                        {row.volume_ratio != null ? `${Number(row.volume_ratio).toFixed(2)}x` : EMPTY_VALUE}
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
+                                    <div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
+                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
+                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.today_volume)}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
+                                        <div style={{
+                                            marginTop: 4,
+                                            fontFamily: "'IBM Plex Mono', monospace",
+                                            fontWeight: 600,
+                                            color: row.volume_ratio == null ? T.muted
+                                                : row.volume_ratio >= 10 ? (T.pos || "#10b981")
+                                                    : row.volume_ratio >= 5 ? "#f59e0b"
+                                                        : T.text,
+                                        }}>
+                                            {row.volume_ratio != null ? `${Number(row.volume_ratio).toFixed(2)}x` : EMPTY_VALUE}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+            </>
         );
     }
 
@@ -2592,7 +2605,8 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
     };
 
     return (
-        <PremiumTableShell T={T} minWidth={680} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <>
+        <PremiumTableShell T={T} minWidth={680} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <VTh k="name" label="Name" />
@@ -2603,7 +2617,7 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
                 </tr>
             </thead>
             <tbody>
-                {sorted.map((row, i) => {
+                {visibleRows.map((row, i) => {
                     const chg = row.change_pct;
                     const isPos = chg != null && chg > 0;
                     const isNeg = chg != null && chg < 0;
@@ -2616,9 +2630,9 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
 
                     return (
                         <tr
-                            key={row.ticker}
+                            key={`volume_shockers:${row.ticker}`}
                             style={{
-                                borderBottom: i < sorted.length - 1
+                                borderBottom: i < visibleRows.length - 1
                                     ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                     : "none",
                                 transition: "background 0.12s ease",
@@ -2658,6 +2672,8 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
                 })}
             </tbody>
         </PremiumTableShell>
+        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+        </>
     );
 }
 
@@ -3557,8 +3573,8 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                         <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
                                     </TabBar>
                                     {activeMoversTab === "volume_shockers"
-                                        ? <VolumeShockersTable T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} />
-                                        : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
+                                        ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} />
+                                        : <MoversTable key={activeMoversTab} T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
                                     }
                                 </SectionCard>
                             )}
@@ -3724,6 +3740,33 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 }
             `}</style>
             </div>
+        </div>
+    );
+}
+
+function LoadMoreRowsButton({ T, visibleCount, totalCount, onLoadMore }) {
+    if (visibleCount >= totalCount) return null;
+    const remaining = totalCount - visibleCount;
+    return (
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 12 }}>
+            <button
+                type="button"
+                onClick={onLoadMore}
+                style={{
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    border: `1px solid ${T.panelBorder}`,
+                    background: T.pillBg,
+                    color: T.text,
+                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: T.isDark ? "none" : "0 4px 12px rgba(15,23,42,0.06)",
+                }}
+            >
+                Load {Math.min(MOVERS_LOAD_MORE_ROWS, remaining)} more
+            </button>
         </div>
     );
 }
