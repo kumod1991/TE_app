@@ -343,6 +343,73 @@ function _updateNameMap(nameRows) {
     if (changed) _persistNameMap();
 }
 
+// ─── GLOBAL NAME MAP PREFETCH  ───────────────────────────────────────────────
+//
+//  On a cold start (new device / cleared storage), names arrive *after* the
+//  first render because each table only fetches names for the tickers it sees.
+//  This function eagerly bulk-fetches ALL company names from company_financials
+//  in one shot and writes them to _nameMap + localStorage so that:
+//    • The current session has instant names after the prefetch resolves.
+//    • Every future session on this device (and the rest of the current session)
+//      reads names from localStorage at module load – zero network cost.
+//
+//  A session-level flag (sessionStorage key "sbd:names-prefetched") prevents
+//  the bulk fetch from running more than once per browser session.
+// ─────────────────────────────────────────────────────────────────────────────
+const _NAME_PREFETCH_SS_KEY = "sbd:names-prefetched";
+
+async function prefetchGlobalNameMap(userToken) {
+    // Skip if already done this session or if map is already large (warm cache)
+    try {
+        if (sessionStorage.getItem(_NAME_PREFETCH_SS_KEY)) return;
+    } catch { /* private mode – ignore */ }
+
+    // If localStorage already has a reasonably populated name map, mark as done
+    // and skip the network call for this session.
+    if (_nameMap.size >= 100) {
+        try { sessionStorage.setItem(_NAME_PREFETCH_SS_KEY, "1"); } catch { }
+        return;
+    }
+
+    try {
+        // Paginate through all company_financials rows (ticker + name only).
+        // Each page is 1000 rows; typical NSE universe is ~2000–5000 rows so
+        // this is usually 2–5 fast requests, run in parallel after the first page.
+        const PAGE = 1000;
+        const firstPage = await sbFetch(
+            `company_financials?select=ticker,name&order=ticker.asc&limit=${PAGE}&offset=0`,
+            userToken,
+            { ttl: 24 * 60 * 60 * 1000 }   // names are stable – cache 24 h
+        );
+        if (!Array.isArray(firstPage) || firstPage.length === 0) return;
+
+        _updateNameMap(firstPage);
+
+        // If the first page was full, fetch remaining pages in parallel
+        if (firstPage.length === PAGE) {
+            // Optimistically fetch up to 9 more pages (covers 10 000 tickers)
+            const remainingPages = await Promise.all(
+                Array.from({ length: 9 }, (_, i) => {
+                    const offset = (i + 1) * PAGE;
+                    return sbFetch(
+                        `company_financials?select=ticker,name&order=ticker.asc&limit=${PAGE}&offset=${offset}`,
+                        userToken,
+                        { ttl: 24 * 60 * 60 * 1000 }
+                    ).catch(() => []);
+                })
+            );
+            for (const page of remainingPages) {
+                if (Array.isArray(page) && page.length) _updateNameMap(page);
+            }
+        }
+
+        console.log("[prefetchGlobalNameMap] name map size:", _nameMap.size);
+        try { sessionStorage.setItem(_NAME_PREFETCH_SS_KEY, "1"); } catch { }
+    } catch (err) {
+        console.warn("[prefetchGlobalNameMap] failed:", err.message);
+    }
+}
+
 /** Enrich rows with names from the global map – instant when map is warm. */
 function applyNamesFromMap(rows) {
     return rows.map(r => ({ ...r, name: _nameMap.get(r.ticker) || r.name || null }));
