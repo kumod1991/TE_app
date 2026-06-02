@@ -19,6 +19,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // ─────────────────────────────────────────────────────────────────────────────────
 const SS_PREFIX = "sbd:";
 const LS_PREFIX = "sbd-persist:";
+const NAME_MAP_LS_KEY = "sbd-persist:name-map"; // flat { ticker: name } object – survives sessions
 const _memCache = new Map();   // key → { data, ts, ttl }
 const _pending = new Map();   // key → Promise  (dedup concurrent requests)
 
@@ -275,7 +276,23 @@ function cacheGetAllPages(path, ttl, pageSize = 1000, maxPages = 20) {
 const _nameMap = new Map(); // ticker → name
 
 function _seedNameMapFromCache() {
-    const scanEntries = (storage, prefix) => {
+    // ── Layer 1: dedicated flat name-map (single localStorage read, always fresh) ──
+    // Written by _persistNameMap() after every batchFetchBhavNames call.
+    // This is the fast path: O(1) read regardless of how many tickers are known.
+    try {
+        const raw = localStorage.getItem(NAME_MAP_LS_KEY);
+        if (raw) {
+            const obj = JSON.parse(raw); // { ticker: name, … }
+            for (const [ticker, name] of Object.entries(obj)) {
+                if (ticker && name) _nameMap.set(ticker, name);
+            }
+        }
+    } catch { /* storage unavailable or malformed – fall through */ }
+
+    // ── Layer 2: legacy scan of bhav_copy chunk cache entries ─────────────────
+    // Picks up any tickers that were cached before the flat map existed, or in
+    // another tab that hasn't yet called _persistNameMap.
+    const scanEntries = (storage) => {
         try {
             for (let i = 0; i < storage.length; i++) {
                 const k = storage.key(i);
@@ -292,15 +309,38 @@ function _seedNameMapFromCache() {
             }
         } catch { /* storage unavailable */ }
     };
-    try { scanEntries(sessionStorage, SS_PREFIX); } catch { }
-    try { scanEntries(localStorage, LS_PREFIX); } catch { }
+    try { scanEntries(sessionStorage); } catch { }
+    try { scanEntries(localStorage); } catch { }
 }
 _seedNameMapFromCache();
 
-function _updateNameMap(nameRows) {
-    for (const row of nameRows) {
-        if (row.ticker && row.name) _nameMap.set(row.ticker, row.name);
+/** Persist the entire _nameMap to a single localStorage key so future sessions
+ *  can load all known names in one read instead of scanning bhav_copy chunks. */
+function _persistNameMap() {
+    try {
+        const obj = Object.fromEntries(_nameMap);
+        localStorage.setItem(NAME_MAP_LS_KEY, JSON.stringify(obj));
+    } catch {
+        // QuotaExceededError – evict half of the known names (oldest by insertion order)
+        // and retry once; the map will self-heal on the next successful fetch.
+        try {
+            const entries = [..._nameMap.entries()];
+            const keep = entries.slice(Math.floor(entries.length / 2));
+            localStorage.setItem(NAME_MAP_LS_KEY, JSON.stringify(Object.fromEntries(keep)));
+        } catch { /* give up silently */ }
     }
+}
+
+function _updateNameMap(nameRows) {
+    let changed = false;
+    for (const row of nameRows) {
+        if (row.ticker && row.name && !_nameMap.has(row.ticker)) {
+            _nameMap.set(row.ticker, row.name);
+            changed = true;
+        }
+    }
+    // Persist the enriched map so the next session (or hard-refresh) sees names instantly.
+    if (changed) _persistNameMap();
 }
 
 /** Enrich rows with names from the global map – instant when map is warm. */
