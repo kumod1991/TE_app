@@ -281,7 +281,7 @@ function WlCandleSection({ ticker, T, width }) {
 
   return (
     <div style={{ background: T.card, borderRadius: 8, padding: "10px 10px 8px", overflow: "hidden" }}>
-      <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase",
+      <div style={{ fontSize: 9, color: T.subtext, fontWeight: 500, textTransform: "uppercase",
         letterSpacing: "0.1em", marginBottom: 8, opacity: 0.55, fontFamily: "'DM Sans',sans-serif" }}>
         Weekly Chart · 52W
       </div>
@@ -847,7 +847,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
   if (!visible) return null;
   const NumField = (label, key, ph) => (
     <div style={{ display:"flex", flexDirection:"column", gap:isMobile ? 6 : 7, minWidth:0 }}>
-      <label style={{ fontSize:isMobile ? 11 : 10, fontWeight:700, color:T.subtext, textTransform:"uppercase", letterSpacing:isMobile ? "0.08em" : "0.1em" }}>{label}</label>
+      <label style={{ fontSize:isMobile ? 11 : 10, fontWeight:500, color:T.subtext, textTransform:"uppercase", letterSpacing:isMobile ? "0.08em" : "0.1em" }}>{label}</label>
       <input type="number" value={filters[key]??""} placeholder={ph}
         onChange={e=>onChange(key, e.target.value===""?null:+e.target.value)}
         style={{ padding: isMobile ? "12px 12px" : "10px 12px",
@@ -875,14 +875,14 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
       <div style={{ padding: isMobile ? "0 16px 0" : 18, overflowY: isMobile ? "auto" : "visible", flex: isMobile ? 1 : "none" }}>
         {isMobile && (
           <div style={{ marginBottom:18 }}>
-            <div style={{ fontSize:18, fontWeight:700, color:T.text, marginBottom:4, letterSpacing:"-0.03em", fontFamily:"'DM Sans', sans-serif" }}>Filters</div>
+            <div style={{ fontSize:18, fontWeight:500, color:T.text, marginBottom:4, letterSpacing:"-0.03em", fontFamily:"'DM Sans', sans-serif" }}>Filters</div>
             <div style={{ fontSize:12, color:T.subtext, lineHeight:1.45, fontFamily:"'DM Sans', sans-serif" }}>Refine quality, momentum, and trend structure for this watchlist.</div>
           </div>
         )}
         {!isMobile && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:T.subtext, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>Filters</div>
-            <div style={{ fontSize:13, fontWeight:600, color:T.text, fontFamily:"'DM Sans', sans-serif" }}>Screen for leaders with cleaner structure</div>
+            <div style={{ fontSize:10, fontWeight:500, color:T.subtext, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>Filters</div>
+            <div style={{ fontSize:13, fontWeight:500, color:T.text, fontFamily:"'DM Sans', sans-serif" }}>Screen for leaders with cleaner structure</div>
           </div>
         )}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: isMobile ? 12 : 12, marginBottom: isMobile ? 18 : 14 }}>
@@ -1176,7 +1176,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
             }}>
                 <span style={{
                     fontSize: 13,
-                    fontWeight: 600,
+                    fontWeight: 500,
                     letterSpacing: "0.06em",
                     color: T.text,
                     fontFamily: "'DM Mono', monospace",
@@ -1188,7 +1188,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                     {rsVal != null && (
                         <span style={{
                             fontSize: 11,
-                            fontWeight: 600,
+                            fontWeight: 500,
                             color: rsVal >= 90 ? T.green : T.subtext,
                             fontFamily: "'DM Mono', monospace",
                             letterSpacing: "0.04em",
@@ -1305,7 +1305,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                                     title={canNav ? `View screen: ${screenName}` : screenName}
                                     onClick={canNav ? e => { e.stopPropagation(); onNavigateToScreen(screenName); } : undefined}
                                     style={{
-                                        fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3,
+                                        fontSize: 9, fontWeight: 500, padding: "2px 6px", borderRadius: 3,
                                         background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
                                         whiteSpace: "nowrap", letterSpacing: "0.05em", textTransform: "uppercase",
                                         flexShrink: 0, cursor: canNav ? "pointer" : "default", transition: "opacity 0.12s",
@@ -1318,7 +1318,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                         })}
                         {!showAllSignals && hiddenCount > 0 && (
                             <span onClick={e => { e.stopPropagation(); setShowAllSignals(true); }}
-                                style={{ fontSize:9, color:T.green, flexShrink:0, cursor:"pointer", fontWeight:600,
+                                style={{ fontSize:9, color:T.green, flexShrink:0, cursor:"pointer", fontWeight:500,
                                   fontFamily:"'DM Mono',monospace", opacity:0.7 }}>+{hiddenCount}</span>
                         )}
                         {showAllSignals && sortedScreens.length > MAX_VISIBLE && (
@@ -1345,7 +1345,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 return (
                     <div style={{ display:"flex", alignItems:"center", gap:5, marginTop: tickerScreens.length > 0 ? 5 : 6 }}>
                         <span style={{
-                            fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3,
+                            fontSize: 9, fontWeight: 500, padding: "2px 6px", borderRadius: 3,
                             background: `${urgColor}15`, border: `1px solid ${urgColor}40`,
                             color: urgColor, whiteSpace: "nowrap", letterSpacing: "0.04em",
                             fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
@@ -1384,7 +1384,7 @@ function ComparePanel({ watchlists, token, onClose, T }) {
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:22,width:580,maxHeight:"80vh",overflow:"auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-          <h3 style={{fontSize:13,fontWeight:700,color:T.text,margin:0}}>Compare Watchlists</h3>
+          <h3 style={{fontSize:13,fontWeight:500,color:T.text,margin:0}}>Compare Watchlists</h3>
           <button onClick={onClose} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:5,color:T.subtext,cursor:"pointer",fontSize:12,padding:"4px 8px"}}>✕</button>
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:12}}>

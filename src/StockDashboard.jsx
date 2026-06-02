@@ -17,10 +17,10 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 //
 //  sessionStorage keys are namespaced under "sbd:" to avoid collisions.
 // ─────────────────────────────────────────────────────────────────────────────────
-const SS_PREFIX  = "sbd:";
-const LS_PREFIX  = "sbd-persist:";
-const _memCache  = new Map();   // key → { data, ts, ttl }
-const _pending   = new Map();   // key → Promise  (dedup concurrent requests)
+const SS_PREFIX = "sbd:";
+const LS_PREFIX = "sbd-persist:";
+const _memCache = new Map();   // key → { data, ts, ttl }
+const _pending = new Map();   // key → Promise  (dedup concurrent requests)
 
 // ── sessionStorage helpers ────────────────────────────────────────────────────
 function _ssKey(key) { return SS_PREFIX + key; }
@@ -66,7 +66,7 @@ function _lsGet(key) {
 
 function _lsSet(key, entry) {
     if (typeof localStorage === "undefined") return;
-    try { localStorage.setItem(_lsKey(key), JSON.stringify(entry)); } catch {}
+    try { localStorage.setItem(_lsKey(key), JSON.stringify(entry)); } catch { }
 }
 
 // ── Two-level read: returns { data, stale } or null ──────────────────────────
@@ -203,7 +203,7 @@ function _doFetch(path, token, ttl, noCache) {
 function _backgroundFetch(path, token, ttl, onStale) {
     if (_pending.has(path)) {
         // Piggyback on the already in-flight request
-        if (onStale) _pending.get(path).then(onStale).catch(() => {});
+        if (onStale) _pending.get(path).then(onStale).catch(() => { });
         return;
     }
     _doFetch(path, token, ttl, false)
@@ -292,8 +292,8 @@ function _seedNameMapFromCache() {
             }
         } catch { /* storage unavailable */ }
     };
-    try { scanEntries(sessionStorage, SS_PREFIX); } catch {}
-    try { scanEntries(localStorage,   LS_PREFIX); } catch {}
+    try { scanEntries(sessionStorage, SS_PREFIX); } catch { }
+    try { scanEntries(localStorage, LS_PREFIX); } catch { }
 }
 _seedNameMapFromCache();
 
@@ -457,9 +457,9 @@ const EMPTY_VALUE = "-";
 const DEFAULT_VISIBLE_ITEMS = 6;
 const DEFAULT_TABLE_MAX_HEIGHT = 44 + DEFAULT_VISIBLE_ITEMS * 49;
 
-const fmt    = (n, d = 2) => n == null ? EMPTY_VALUE : Number(n).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
-const fmtPct = (n)        => n == null ? EMPTY_VALUE : `${Number(n) > 0 ? "+" : ""}${fmt(n)}%`;
-const fmtVol = (n)        => {
+const fmt = (n, d = 2) => n == null ? EMPTY_VALUE : Number(n).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtPct = (n) => n == null ? EMPTY_VALUE : `${Number(n) > 0 ? "+" : ""}${fmt(n)}%`;
+const fmtVol = (n) => {
     if (n == null) return EMPTY_VALUE;
     if (n >= 1e7) return `${(n / 1e7).toFixed(2)}Cr`;
     if (n >= 1e5) return `${(n / 1e5).toFixed(2)}L`;
@@ -696,7 +696,8 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
                 return (
                     <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ width: 6, height: 6, borderRadius: 1, flexShrink: 0,
+                            <span style={{
+                                width: 6, height: 6, borderRadius: 1, flexShrink: 0,
                                 background: fiiNet >= 0 ? withAlpha(D.pos || "#10b981", 0.85) : withAlpha(D.neg || "#ef4444", 0.82),
                             }} />
                             <span style={{ fontSize: 9, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>FII</span>
@@ -708,7 +709,8 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
                             }}>{fmtCr(fiiNet)}Cr</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ width: 6, height: 6, borderRadius: 1, flexShrink: 0,
+                            <span style={{
+                                width: 6, height: 6, borderRadius: 1, flexShrink: 0,
                                 background: diiNet >= 0 ? withAlpha(D.accent || "#2563eb", 0.78) : withAlpha("#f59e0b", 0.78),
                             }} />
                             <span style={{ fontSize: 9, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>DII</span>
@@ -832,7 +834,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                             maxWidth: 720,
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                         }}>
-                          
+
                         </p>
                     </div>
 
@@ -984,11 +986,11 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 function exportCSV(data, filename) {
     if (!data.length) return;
     const headers = Object.keys(data[0]);
-    const rows    = data.map(r => headers.map(h => JSON.stringify(r[h] ?? "")).join(","));
-    const blob    = new Blob([[headers.join(","), ...rows].join("\n")], { type: "text/csv" });
-    const a       = document.createElement("a");
-    a.href        = URL.createObjectURL(blob);
-    a.download    = filename;
+    const rows = data.map(r => headers.map(h => JSON.stringify(r[h] ?? "")).join(","));
+    const blob = new Blob([[headers.join(","), ...rows].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
 }
@@ -997,45 +999,45 @@ function exportCSV(data, filename) {
 // Exact columns from index_prices table schema, in preferred display order.
 // The component will auto-skip any column whose latest value is null/missing.
 const INDEX_META = [
-    { key: "nifty_50",                          label: "Nifty 50"                    },
-    { key: "nifty_500",                         label: "Nifty 500"                   },
-    { key: "nifty_bank",                        label: "Nifty Bank"                  },
-    { key: "nifty_auto",                        label: "Nifty Auto"                  },
-    { key: "nifty_it",                          label: "Nifty IT"                    },
-    { key: "nifty_fmcg",                        label: "Nifty FMCG"                  },
-    { key: "nifty_energy",                      label: "Nifty Energy"                },
-    { key: "nifty_financial_services",          label: "Nifty Financial Services"    },
-    { key: "nifty_pharma",                      label: "Nifty Pharma"                },
-    { key: "nifty_healthcare",                  label: "Nifty Healthcare"            },
-    { key: "nifty_midcap_100",                  label: "Nifty Midcap 100"            },
-    { key: "nifty_midcap_150",                  label: "Nifty Midcap 150"            },
-    { key: "nifty_smallcap_100",                label: "Nifty Smallcap 100"          },
-    { key: "nifty_smallcap_250",                label: "Nifty Smallcap 250"          },
-    { key: "nifty_midsmallcap_400",             label: "Nifty MidSmallcap 400"       },
-    { key: "nifty_private_bank",                label: "Nifty Private Bank"          },
-    { key: "nifty_psu_bank",                    label: "Nifty PSU Bank"              },
-    { key: "nifty_realty",                      label: "Nifty Realty"                },
-    { key: "nifty_metal",                       label: "Nifty Metal"                 },
-    { key: "nifty_media",                       label: "Nifty Media"                 },
-    { key: "nifty_mnc",                         label: "Nifty MNC"                   },
-    { key: "nifty_infrastructure",              label: "Nifty Infrastructure"        },
-    { key: "nifty_commodities",                 label: "Nifty Commodities"           },
-    { key: "nifty_pse",                         label: "Nifty PSE"                   },
-    { key: "nifty_cpse",                        label: "Nifty CPSE"                  },
-    { key: "nifty_services_sector",             label: "Nifty Services Sector"       },
-    { key: "nifty_india_consumption",           label: "Nifty India Consumption"     },
-    { key: "nifty_oil_gas",                     label: "Nifty Oil & Gas"             },
-    { key: "nifty_capital_markets",             label: "Nifty Capital Markets"       },
-    { key: "nifty_housing",                     label: "Nifty Housing"               },
-    { key: "nifty_consumer_durables",           label: "Nifty Consumer Durables"     },
-    { key: "nifty_mobility",                    label: "Nifty Mobility"              },
-    { key: "nifty_india_defence",               label: "Nifty India Defence"         },
-    { key: "nifty_transportation_logistics",    label: "Nifty Transportation & Logistics" },
-    { key: "nifty_india_railways_psu",          label: "Nifty India Railways PSU"    },
-    { key: "nifty_india_tourism",               label: "Nifty India Tourism"         },
-    { key: "nifty_chemicals",                   label: "Nifty Chemicals"             },
-    { key: "nifty_cement",                      label: "Nifty Cement"                },
-    { key: "nifty_financial_services_ex_bank",  label: "Nifty Fin Services Ex-Bank"  },
+    { key: "nifty_50", label: "Nifty 50" },
+    { key: "nifty_500", label: "Nifty 500" },
+    { key: "nifty_bank", label: "Nifty Bank" },
+    { key: "nifty_auto", label: "Nifty Auto" },
+    { key: "nifty_it", label: "Nifty IT" },
+    { key: "nifty_fmcg", label: "Nifty FMCG" },
+    { key: "nifty_energy", label: "Nifty Energy" },
+    { key: "nifty_financial_services", label: "Nifty Financial Services" },
+    { key: "nifty_pharma", label: "Nifty Pharma" },
+    { key: "nifty_healthcare", label: "Nifty Healthcare" },
+    { key: "nifty_midcap_100", label: "Nifty Midcap 100" },
+    { key: "nifty_midcap_150", label: "Nifty Midcap 150" },
+    { key: "nifty_smallcap_100", label: "Nifty Smallcap 100" },
+    { key: "nifty_smallcap_250", label: "Nifty Smallcap 250" },
+    { key: "nifty_midsmallcap_400", label: "Nifty MidSmallcap 400" },
+    { key: "nifty_private_bank", label: "Nifty Private Bank" },
+    { key: "nifty_psu_bank", label: "Nifty PSU Bank" },
+    { key: "nifty_realty", label: "Nifty Realty" },
+    { key: "nifty_metal", label: "Nifty Metal" },
+    { key: "nifty_media", label: "Nifty Media" },
+    { key: "nifty_mnc", label: "Nifty MNC" },
+    { key: "nifty_infrastructure", label: "Nifty Infrastructure" },
+    { key: "nifty_commodities", label: "Nifty Commodities" },
+    { key: "nifty_pse", label: "Nifty PSE" },
+    { key: "nifty_cpse", label: "Nifty CPSE" },
+    { key: "nifty_services_sector", label: "Nifty Services Sector" },
+    { key: "nifty_india_consumption", label: "Nifty India Consumption" },
+    { key: "nifty_oil_gas", label: "Nifty Oil & Gas" },
+    { key: "nifty_capital_markets", label: "Nifty Capital Markets" },
+    { key: "nifty_housing", label: "Nifty Housing" },
+    { key: "nifty_consumer_durables", label: "Nifty Consumer Durables" },
+    { key: "nifty_mobility", label: "Nifty Mobility" },
+    { key: "nifty_india_defence", label: "Nifty India Defence" },
+    { key: "nifty_transportation_logistics", label: "Nifty Transportation & Logistics" },
+    { key: "nifty_india_railways_psu", label: "Nifty India Railways PSU" },
+    { key: "nifty_india_tourism", label: "Nifty India Tourism" },
+    { key: "nifty_chemicals", label: "Nifty Chemicals" },
+    { key: "nifty_cement", label: "Nifty Cement" },
+    { key: "nifty_financial_services_ex_bank", label: "Nifty Fin Services Ex-Bank" },
 ];
 
 const CORE_INDEX_KEYS = [
@@ -1062,7 +1064,7 @@ function MiniSparkline({ values, positive, width = 120, height = 48 }) {
     const polyline = pts.join(" ");
     // build fill area path
     const firstX = pad;
-    const lastX  = pad + (W - pad * 2);
+    const lastX = pad + (W - pad * 2);
     const fillPath = `M${firstX},${H} L${pts[0]} L${polyline.split(" ").slice(1).join(" L")} L${lastX},${H} Z`;
     const color = positive ? "#0ea67a" : "#ef4444";
     const fillColor = positive ? "rgba(14,166,122,0.12)" : "rgba(239,68,68,0.10)";
@@ -1153,10 +1155,10 @@ function IndexCard({ T, label, value, changePct, sparkData, compact = false }) {
 
 function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = false, style = {} }) {
     const IDX_PATH = "index_prices?select=*&order=date.desc&limit=20";
-    const IDX_TTL  = 5 * 60 * 1000;
+    const IDX_TTL = 5 * 60 * 1000;
 
     // Seed state from cache immediately so there's no blank frame on re-visit.
-    const [rows, setRows]       = useState(() => {
+    const [rows, setRows] = useState(() => {
         const hit = cacheGet(IDX_PATH, IDX_TTL);
         return hit ? hit.data || [] : [];
     });
@@ -1183,12 +1185,12 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
                 setLoading(false);
             }
         })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
     // rows[0] = latest (most recent date), rows[1] = previous trading day
     const latest = rows[0];
-    const prev   = rows[1];
+    const prev = rows[1];
 
     // Chronological order for sparklines (oldest to newest)
     const chrono = useMemo(() => [...rows].reverse().slice(-15), [rows]);
@@ -1268,19 +1270,10 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
                 {/*}}>1D returns with 15-session trend</span>*/}
             </div>
 
-            <div style={{
-                display: "flex",
-                gap: 6,
-                marginBottom: 16,
-                padding: "5px",
-                background: T.isDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.85)",
-                borderRadius: 999,
-                flexWrap: "wrap",
-                border: `1px solid ${T.panelBorder}`,
-            }}>
+            <TabBar T={T} style={{ marginBottom: 16, flexWrap: "wrap" }}>
                 <TabButton T={T} active={activeIndexTab === "core"} label="Core Indices" count={coreIndices.length} onClick={() => setActiveIndexTab("core")} />
                 <TabButton T={T} active={activeIndexTab === "sectoral"} label="Sectoral Indices" count={sectoralIndices.length} onClick={() => setActiveIndexTab("sectoral")} />
-            </div>
+            </TabBar>
 
             {loading ? (
                 <div style={{ display: "grid", gridTemplateColumns: (isCompact || isSideBySide) ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 14, marginTop: 8 }}>
@@ -1429,26 +1422,96 @@ function CardHeader({ T, title, count, right, style = {} }) {
 function TabButton({ T, active, label, count, onClick, hideCount }) {
     const accentGrn = T.pos || "#10b981";
     return (
-        <button onClick={onClick} style={{
-            flex: "1 1 auto",
-            padding: "7px 12px",
-            fontSize: 12,
-            fontWeight: active ? 700 : 600,
-            letterSpacing: "0.01em",
-            color: active ? accentGrn : T.subtext,
-            background: active ? withAlpha(accentGrn, T.isDark ? 0.14 : 0.09) : "transparent",
-            border: `1px solid ${active ? withAlpha(accentGrn, 0.30) : (T.isDark ? "rgba(148,163,184,0.14)" : "rgba(15,23,42,0.09)")}`,
-            borderRadius: 999,
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-            whiteSpace: "nowrap",
-            boxShadow: active ? `0 10px 22px ${withAlpha(accentGrn, 0.12)}` : "none",
-        }}>
-            {label}{!hideCount && typeof count === "number" && (
-                <span style={{ opacity: 0.65, marginLeft: 5, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }}>({count})</span>
+        <button
+            onClick={onClick}
+            style={{
+                position: "relative",
+                flex: "0 0 auto",
+                padding: "6px 14px",
+                fontSize: 12,
+                fontWeight: active ? 700 : 500,
+                letterSpacing: active ? "0.005em" : "0.01em",
+                color: active ? accentGrn : T.muted,
+                background: active
+                    ? T.isDark
+                        ? `linear-gradient(135deg, ${withAlpha(accentGrn, 0.18)} 0%, ${withAlpha(accentGrn, 0.08)} 100%)`
+                        : `linear-gradient(135deg, ${withAlpha(accentGrn, 0.12)} 0%, ${withAlpha(accentGrn, 0.05)} 100%)`
+                    : "transparent",
+                border: "none",
+                borderRadius: 8,
+                cursor: "pointer",
+                transition: "color 0.18s ease, background 0.18s ease",
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                outline: "none",
+            }}
+        >
+            {label}
+            {!hideCount && typeof count === "number" && (
+                <span style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: 20,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: 5,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    letterSpacing: "0.02em",
+                    color: active ? accentGrn : T.muted,
+                    background: active
+                        ? withAlpha(accentGrn, T.isDark ? 0.22 : 0.13)
+                        : withAlpha(T.muted, T.isDark ? 0.14 : 0.10),
+                    transition: "background 0.18s, color 0.18s",
+                }}>{count}</span>
+            )}
+            {/* Active indicator bar */}
+            {active && (
+                <span style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: "40%",
+                    height: 2,
+                    borderRadius: "2px 2px 0 0",
+                    background: `linear-gradient(90deg, ${withAlpha(accentGrn, 0)}, ${accentGrn}, ${withAlpha(accentGrn, 0)})`,
+                    pointerEvents: "none",
+                }} />
             )}
         </button>
+    );
+}
+
+// ─── TAB BAR WRAPPER (replaces bare flex div) ────────────────────────────────
+// Wraps TabButtons in a consistent premium container. Use instead of the
+// inline `display:flex + background + border` pattern at each call-site.
+function TabBar({ T, children, style = {} }) {
+    return (
+        <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 2,
+            padding: "4px",
+            background: T.isDark
+                ? "rgba(15,23,42,0.55)"
+                : "rgba(248,250,252,0.90)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            borderRadius: 12,
+            border: `1px solid ${T.panelBorder}`,
+            boxShadow: T.isDark
+                ? "inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 4px rgba(0,0,0,0.18)"
+                : "inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 4px rgba(15,23,42,0.06)",
+            ...style,
+        }}>
+            {children}
+        </div>
     );
 }
 
@@ -1557,7 +1620,7 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
             </thead>
             <tbody>
                 {data.map((row, i) => {
-                    const pct   = row.pct   || 0;
+                    const pct = row.pct || 0;
                     const color = pct >= 60 ? "#22c55e" : pct >= 35 ? "#f59e0b" : "#ef4444";
                     const isLast = i === data.length - 1;
                     return (
@@ -1690,11 +1753,11 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
         <PremiumTableShell T={T} minWidth={580} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
-                    <RTTh k="ticker"    label="Ticker" />
+                    <RTTh k="ticker" label="Ticker" />
                     <RTTh k="rs_rating" label="RS" />
-                    <RTTh k="ret_3m"    label="3M" />
-                    <RTTh k="ret_6m"    label="6M" />
-                    <RTTh k="ret_12m"   label="12M" />
+                    <RTTh k="ret_3m" label="3M" />
+                    <RTTh k="ret_6m" label="6M" />
+                    <RTTh k="ret_12m" label="12M" />
                 </tr>
             </thead>
             <tbody>
@@ -1812,7 +1875,7 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
         if (!cap) return T.muted;
         const c = String(cap).toLowerCase();
         if (c === "large") return T.accent || "#2563eb";
-        if (c === "mid")   return "#f59e0b";
+        if (c === "mid") return "#f59e0b";
         if (c === "small") return T.pos || "#10b981";
         return T.muted;
     };
@@ -1850,11 +1913,11 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
             <thead>
                 <tr>
                     <th style={{ ...thBaseAR, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
-                    <ARTh k="name"         label="Name"       align="left" />
-                    <ARTh k="rs_rating"    label="RS" />
-                    <ARTh k="ret_3m"       label="3M" />
-                    <ARTh k="ret_6m"       label="6M" />
-                    <ARTh k="ret_12m"      label="12M" />
+                    <ARTh k="name" label="Name" align="left" />
+                    <ARTh k="rs_rating" label="RS" />
+                    <ARTh k="ret_3m" label="3M" />
+                    <ARTh k="ret_6m" label="6M" />
+                    <ARTh k="ret_12m" label="12M" />
                 </tr>
             </thead>
             <tbody>
@@ -2091,8 +2154,8 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                                         fontWeight: 600,
                                         color: row.rel_volume == null ? T.muted
                                             : row.rel_volume >= 2 ? (T.pos || "#10b981")
-                                            : row.rel_volume >= 1.5 ? "#f59e0b"
-                                            : T.text,
+                                                : row.rel_volume >= 1.5 ? "#f59e0b"
+                                                    : T.text,
                                     }}>
                                         {row.rel_volume != null ? `${row.rel_volume.toFixed(2)}x` : EMPTY_VALUE}
                                     </div>
@@ -2138,11 +2201,11 @@ function MoversTable({ T, data, loading, type, isCompact }) {
         <PremiumTableShell T={T} minWidth={showDist ? 820 : 680} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
-                    <MTh k="name"       label="Name" />
-                    <MTh k="ltp"        label="LTP" />
+                    <MTh k="name" label="Name" />
+                    <MTh k="ltp" label="LTP" />
                     <MTh k="change_pct" label="Chg %" />
                     {showDist && <MTh k="dist_pct" label={type === "near_high" ? "From High" : "From Low"} />}
-                    <MTh k="volume"     label="Volume" />
+                    <MTh k="volume" label="Volume" />
                     <MTh k="rel_volume" label="Rel Vol" />
                 </tr>
             </thead>
@@ -2155,8 +2218,8 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                     const relVol = row.rel_volume;
                     const relVolColor = relVol == null ? T.muted
                         : relVol >= 2 ? (T.pos || "#10b981")
-                        : relVol >= 1.5 ? "#f59e0b"
-                        : T.text;
+                            : relVol >= 1.5 ? "#f59e0b"
+                                : T.text;
 
                     return (
                         <tr
@@ -2378,8 +2441,8 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
                                         fontWeight: 600,
                                         color: row.volume_ratio == null ? T.muted
                                             : row.volume_ratio >= 10 ? (T.pos || "#10b981")
-                                            : row.volume_ratio >= 5 ? "#f59e0b"
-                                            : T.text,
+                                                : row.volume_ratio >= 5 ? "#f59e0b"
+                                                    : T.text,
                                     }}>
                                         {row.volume_ratio != null ? `${Number(row.volume_ratio).toFixed(2)}x` : EMPTY_VALUE}
                                     </div>
@@ -2425,9 +2488,9 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
         <PremiumTableShell T={T} minWidth={680} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
-                    <VTh k="name"         label="Name" />
-                    <VTh k="close"        label="LTP" />
-                    <VTh k="change_pct"   label="Chg %" />
+                    <VTh k="name" label="Name" />
+                    <VTh k="close" label="LTP" />
+                    <VTh k="change_pct" label="Chg %" />
                     <VTh k="today_volume" label="Volume" />
                     <VTh k="volume_ratio" label="Rel Vol" />
                 </tr>
@@ -2441,8 +2504,8 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
                     const vr = row.volume_ratio;
                     const vrColor = vr == null ? T.muted
                         : vr >= 10 ? (T.pos || "#10b981")
-                        : vr >= 5 ? "#f59e0b"
-                        : T.text;
+                            : vr >= 5 ? "#f59e0b"
+                                : T.text;
 
                     return (
                         <tr
@@ -2496,64 +2559,64 @@ function RsLoginGate({ T, isLocked, onLogin, children }) {
     if (isLocked) {
         return (
             <div style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 24px 40px",
+                gap: 16,
+                minHeight: 280,
+            }}>
+                <div style={{
+                    width: 96,
+                    height: 96,
+                    borderRadius: "50%",
+                    background: withAlpha(T.accent || "#2563eb", 0.10),
                     display: "flex",
-                    flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
-                    padding: "48px 24px 40px",
-                    gap: 16,
-                    minHeight: 280,
+                    marginBottom: 4,
                 }}>
-                    <div style={{
-                        width: 96,
-                        height: 96,
-                        borderRadius: "50%",
-                        background: withAlpha(T.accent || "#2563eb", 0.10),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: 4,
-                    }}>
-                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
-                            <rect x="3" y="3" width="18" height="18" rx="3" stroke={T.accent || "#2563eb"} strokeWidth="1.8" fill={withAlpha(T.accent || "#2563eb", 0.12)} />
-                            <line x1="3" y1="9" x2="21" y2="9" stroke={T.accent || "#2563eb"} strokeWidth="1.6" />
-                            <line x1="9" y1="9" x2="9" y2="21" stroke={T.accent || "#2563eb"} strokeWidth="1.6" />
-                            <circle cx="17" cy="17" r="4" fill={T.accent || "#2563eb"} />
-                            <line x1="15.6" y1="17" x2="18.4" y2="17" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
-                            <line x1="17" y1="15.6" x2="17" y2="18.4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
-                        </svg>
-                    </div>
-                    <div style={{ textAlign: "center", maxWidth: 280 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 8 }}>
-                            Login to access RS Table
-                        </div>
-                        <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.6 }}>
-                            Login to view, filter, and analyse RS ratings across all sectors and industries.
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => onLogin && onLogin()}
-                        style={{
-                            marginTop: 4,
-                            padding: "11px 32px",
-                            borderRadius: 999,
-                            background: T.accent || "#2563eb",
-                            color: "#fff",
-                            border: "none",
-                            fontSize: 15,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            fontFamily: "inherit",
-                            letterSpacing: "0.02em",
-                            boxShadow: `0 4px 16px ${withAlpha(T.accent || "#2563eb", 0.28)}`,
-                            transition: "opacity 0.15s ease",
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
-                        onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                    >
-                        Login
-                    </button>
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+                        <rect x="3" y="3" width="18" height="18" rx="3" stroke={T.accent || "#2563eb"} strokeWidth="1.8" fill={withAlpha(T.accent || "#2563eb", 0.12)} />
+                        <line x1="3" y1="9" x2="21" y2="9" stroke={T.accent || "#2563eb"} strokeWidth="1.6" />
+                        <line x1="9" y1="9" x2="9" y2="21" stroke={T.accent || "#2563eb"} strokeWidth="1.6" />
+                        <circle cx="17" cy="17" r="4" fill={T.accent || "#2563eb"} />
+                        <line x1="15.6" y1="17" x2="18.4" y2="17" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+                        <line x1="17" y1="15.6" x2="17" y2="18.4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
                 </div>
+                <div style={{ textAlign: "center", maxWidth: 280 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 8 }}>
+                        Login to access RS Table
+                    </div>
+                    <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.6 }}>
+                        Login to view, filter, and analyse RS ratings across all sectors and industries.
+                    </div>
+                </div>
+                <button
+                    onClick={() => onLogin && onLogin()}
+                    style={{
+                        marginTop: 4,
+                        padding: "11px 32px",
+                        borderRadius: 999,
+                        background: T.accent || "#2563eb",
+                        color: "#fff",
+                        border: "none",
+                        fontSize: 15,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        letterSpacing: "0.02em",
+                        boxShadow: `0 4px 16px ${withAlpha(T.accent || "#2563eb", 0.28)}`,
+                        transition: "opacity 0.15s ease",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
+                    onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                >
+                    Login
+                </button>
+            </div>
         );
     }
     return children;
@@ -2564,6 +2627,12 @@ function RsLoginGate({ T, isLocked, onLogin, children }) {
 // Kept outside the component so they're stable references and can be called
 // synchronously during the lazy-init phase of useState.
 
+/** Returns true if a row should be excluded because it is an ETF. */
+function isETF(r) {
+    const etfRe = /etf/i;
+    return etfRe.test(r.ticker || "") || etfRe.test(r.name || "");
+}
+
 /** Build the four mover lists from raw market_movers + stock_52w rows. */
 function deriveMovers(moversData, stock52wRows) {
     const volMa20Map = new Map((stock52wRows || []).map(r => [r.ticker, Number(r.volume_ma20) || null]));
@@ -2572,26 +2641,30 @@ function deriveMovers(moversData, stock52wRows) {
         const ma20 = volMa20Map.get(p.symbol) || null;
         const rel_volume = vol != null && ma20 != null && ma20 > 0 ? vol / ma20 : null;
         return {
-            ticker:      p.symbol,
-            name:        _nameMap.get(p.symbol) || null,
-            ltp:         Number(p.ltp)     || 0,
-            volume:      p.volume,
+            ticker: p.symbol,
+            name: _nameMap.get(p.symbol) || null,
+            ltp: Number(p.ltp) || 0,
+            volume: p.volume,
             rel_volume,
-            change_pct:  Number(p.pchange) ?? null,
-            dist_high:   Number(p.pct_from_high) ?? null,
-            dist_low:    Number(p.pct_from_low)  ?? null,
-            dist_pct:    Number(p.pct_from_high) ?? null,
+            change_pct: Number(p.pchange) ?? null,
+            dist_high: Number(p.pct_from_high) ?? null,
+            dist_low: Number(p.pct_from_low) ?? null,
+            dist_pct: Number(p.pct_from_high) ?? null,
             rank_gainer: p.rank_gainer,
-            rank_loser:  p.rank_loser,
-            near_high:   p.near_high,
-            near_low:    p.near_low,
+            rank_loser: p.rank_loser,
+            near_high: p.near_high,
+            near_low: p.near_low,
         };
     });
+    // Filter out stocks with gain > 50% (outliers) or loss > 20% (circuit filters)
+    const validGainer = r => r.change_pct == null || r.change_pct <= 50;
+    const validLoser = r => r.change_pct == null || r.change_pct >= -20;
+    const validBoth = r => validGainer(r) && validLoser(r);
     return {
-        gainers: enriched.filter(r => r.rank_gainer != null).sort((a, b) => (a.rank_gainer || 9999) - (b.rank_gainer || 9999)).slice(0, 20),
-        losers:  enriched.filter(r => r.rank_loser  != null).sort((a, b) => (a.rank_loser  || 9999) - (b.rank_loser  || 9999)).slice(0, 20),
-        nearHigh: enriched.filter(r => r.near_high === true).map(r => ({ ...r, dist_pct: r.dist_high })).sort((a, b) => (b.dist_high || -999) - (a.dist_high || -999)).slice(0, 20),
-        nearLow:  enriched.filter(r => r.near_low  === true).map(r => ({ ...r, dist_pct: r.dist_low  })).sort((a, b) => (a.dist_low  ||  999) - (b.dist_low  ||  999)).slice(0, 20),
+        gainers: enriched.filter(r => r.rank_gainer != null && validGainer(r) && !isETF(r)).sort((a, b) => (a.rank_gainer || 9999) - (b.rank_gainer || 9999)).slice(0, 100),
+        losers: enriched.filter(r => r.rank_loser != null && validLoser(r) && !isETF(r)).sort((a, b) => (a.rank_loser || 9999) - (b.rank_loser || 9999)).slice(0, 100),
+        nearHigh: enriched.filter(r => r.near_high === true && validBoth(r) && !isETF(r)).map(r => ({ ...r, dist_pct: r.dist_high })).sort((a, b) => (b.dist_high || -999) - (a.dist_high || -999)).slice(0, 100),
+        nearLow: enriched.filter(r => r.near_low === true && validBoth(r) && !isETF(r)).map(r => ({ ...r, dist_pct: r.dist_low })).sort((a, b) => (a.dist_low || 999) - (b.dist_low || 999)).slice(0, 100),
     };
 }
 
@@ -2611,13 +2684,13 @@ function enrichRsStocks(tirsData, returnsMap) {
     return (tirsData || []).map(row => {
         const ret = returnsMap.get(row.ticker);
         return {
-            ticker:    row.ticker,
-            industry:  normalizeIndustryName(row.industry),
+            ticker: row.ticker,
+            industry: normalizeIndustryName(row.industry),
             rs_rating: row.rs_rating,
-            name:      null,
-            ret_3m:    ret?.ret_3m  ?? null,
-            ret_6m:    ret?.ret_6m  ?? null,
-            ret_12m:   ret?.ret_12m ?? null,
+            name: null,
+            ret_3m: ret?.ret_3m ?? null,
+            ret_6m: ret?.ret_6m ?? null,
+            ret_12m: ret?.ret_12m ?? null,
         };
     });
 }
@@ -2634,18 +2707,18 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const STOCK52W_PATH = "stock_52w?select=ticker,volume_ma20";
     const MOVERS_TTL = 5 * 60 * 1000;
 
-    const TIRS_RS85_PATH   = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
-    const TIRS_ALL_PATH    = "ticker_industry_rs?select=industry&order=industry.asc";
-    const RETURNS_PATH     = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
+    const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
+    const TIRS_ALL_PATH = "ticker_industry_rs?select=industry&order=industry.asc";
+    const RETURNS_PATH = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
     const BREADTH_LATEST_PATH = "market_breadth?exchange=eq.NSE&select=date,above_sma50,above_sma200,near_52w_high,near_52w_low&order=date.desc&limit=1";
     const RS_SUMMARY_CACHE_KEY = "dashboard-rs-industry-summary-v1";
     const ALL_RS_STOCKS_CACHE_KEY = "dashboard-all-rs-stocks-v1";
-    const RS_TTL           = 60 * 60 * 1000;
-    const RETURNS_TTL      = 10 * 60 * 1000;
+    const RS_TTL = 60 * 60 * 1000;
+    const RETURNS_TTL = 10 * 60 * 1000;
     // Fetch top 100 directly from indicators table (matches DB query: ORDER BY rs_rating DESC)
     // We first get the latest date, then query that date + NSE only to avoid BSE duplicates
     const ALL_RS_LATEST_DATE_PATH = "indicators?select=date&order=date.desc&limit=1";
-    const ALL_RS_TTL       = 10 * 60 * 1000;
+    const ALL_RS_TTL = 10 * 60 * 1000;
 
     // ── Market Movers – seed from cache so first paint is instant ────────────
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2668,17 +2741,17 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [nearLow, setNearLow] = useState(() => applyNamesFromMap(_derivedMovers?.nearLow || []));
     const [volumeShockers, setVolumeShockers] = useState(() => {
         // Seed from cache so the Volume Shockers tab renders instantly on revisit
-        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=50";
+        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
         const hit = cacheGet(VS_PATH, 5 * 60 * 1000);
         if (!hit || !Array.isArray(hit.data)) return [];
         return applyNamesFromMap(hit.data.map(r => ({
             ...r,
             name: _nameMap.get(r.ticker) || null,
             change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
-        })));
+        })).filter(r => !isETF(r)));
     });
     const [loadingVolumeShockers, setLoadingVolumeShockers] = useState(() => {
-        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=50";
+        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
         const hit = cacheGet(VS_PATH, 5 * 60 * 1000);
         return !(hit && Array.isArray(hit.data) && hit.data.length > 0);
     });
@@ -2711,7 +2784,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         const retHit = cacheGet(RETURNS_PATH, RETURNS_TTL);
         const retRows = retHit ? retHit.data || [] : (cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || []);
         const retMap = buildReturnsMap(retRows);
-        return enrichRsStocks(_cachedRs, retMap);
+        return enrichRsStocks(_cachedRs, retMap).filter(r => !isETF(r));
     });
     const [loadingRs, setLoadingRs] = useState(() => !_cachedRs);
     const [industry, setIndustry] = useState("");
@@ -2722,7 +2795,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         const hit = persistentCacheGet(ALL_RS_STOCKS_CACHE_KEY, ALL_RS_TTL);
         if (!hit?.data?.length) return [];
         // Apply names from global map – instant on any revisit where bhav cache is warm
-        return applyNamesFromMap(hit.data);
+        return applyNamesFromMap(hit.data).filter(r => !isETF(r));
     });
     const [loadingAllRs, setLoadingAllRs] = useState(() => {
         const hit = persistentCacheGet(ALL_RS_STOCKS_CACHE_KEY, ALL_RS_TTL);
@@ -2838,14 +2911,14 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 setLoadingMovers(false);
             }
         })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // FETCH VOLUME SHOCKERS
     // ─────────────────────────────────────────────────────────────────────────
     useEffect(() => {
-        const VOLUME_SHOCKERS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=50";
+        const VOLUME_SHOCKERS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
         const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
         (async () => {
             try {
@@ -2857,18 +2930,36 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 });
                 const cached = cacheGet(VOLUME_SHOCKERS_PATH, VOLUME_SHOCKERS_TTL);
                 let vsData = null;
-                if (cached && !cached.stale && Array.isArray(cached.data)) {
+                if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+                    // Paint stale or fresh data immediately — no spinner
                     vsData = cached.data;
-                    setVolumeShockers(vsData.map(mapRow));
+                    setVolumeShockers(vsData.map(mapRow).filter(r => !isETF(r)));
                     setLoadingVolumeShockers(false);
+                    if (!cached.stale) {
+                        // Fresh — background name enrichment only
+                    } else {
+                        // Stale — background refresh, don't block UI
+                        sbFetch(VOLUME_SHOCKERS_PATH, userToken, {
+                            ttl: VOLUME_SHOCKERS_TTL,
+                            noCache: false,
+                            onStale: fresh => {
+                                if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r)));
+                            },
+                        }).then(fresh => {
+                            if (Array.isArray(fresh)) {
+                                vsData = fresh;
+                                setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r)));
+                            }
+                        }).catch(() => { });
+                    }
                 } else {
                     vsData = await sbFetch(VOLUME_SHOCKERS_PATH, userToken, {
                         ttl: VOLUME_SHOCKERS_TTL,
                         onStale: fresh => {
-                            if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow));
+                            if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r)));
                         },
                     });
-                    setVolumeShockers((vsData || []).map(mapRow));
+                    setVolumeShockers((vsData || []).map(mapRow).filter(r => !isETF(r)));
                 }
 
                 // ── Enrich volume shocker rows with names (missing tickers only) ──
@@ -2878,7 +2969,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     if (missingTickers.length) {
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
                         if (nameRows.length) {
-                            setVolumeShockers(prev => applyNamesFromMap(prev));
+                            setVolumeShockers(prev => applyNamesFromMap(prev).filter(r => !isETF(r)));
                         }
                     }
                 } catch (nameErr) {
@@ -2890,7 +2981,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 setLoadingVolumeShockers(false);
             }
         })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
 
@@ -2907,7 +2998,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 console.warn("Latest breadth snapshot fetch failed:", err);
             }
         })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
 
@@ -2924,7 +3015,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 console.warn("FII/DII fetch failed:", err);
             }
         })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
     useEffect(() => {
         function buildRsSummary(tirsData, allIndustryData) {
@@ -2971,7 +3062,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             setIndustries(uniqueInds);
             setLoadingIndustries(false);
 
-            setRsStocks(enrichRsStocks(tirsData, returnsMap));
+            setRsStocks(enrichRsStocks(tirsData, returnsMap).filter(r => !isETF(r)));
 
             const summary = buildRsSummary(tirsData, allIndustryData);
             setCachedRsIndustrySummary(summary);
@@ -3000,7 +3091,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                             applyLatestRsData();
                         },
                     }),
-                    sbFetchAll(TIRS_ALL_PATH,  userToken, {
+                    sbFetchAll(TIRS_ALL_PATH, userToken, {
                         ttl: RS_TTL,
                         onStale: fresh => {
                             latestAllIndustryData = fresh || [];
@@ -3037,15 +3128,15 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     return (indicatorsRows || []).map((r, idx) => {
                         const ret = returnsMap.get(r.ticker);
                         return {
-                            ticker:       r.ticker,
-                            name:         _nameMap.get(r.ticker) || null,
-                            rs_rating:    r.rs_rating,
-                            rs_score:     r.rs_score,
+                            ticker: r.ticker,
+                            name: _nameMap.get(r.ticker) || null,
+                            rs_rating: r.rs_rating,
+                            rs_score: r.rs_score,
                             cap_category: r.cap_category,
-                            rank:         idx + 1,
-                            ret_3m:       ret?.ret_3m  ?? null,
-                            ret_6m:       ret?.ret_6m  ?? null,
-                            ret_12m:      ret?.ret_12m ?? null,
+                            rank: idx + 1,
+                            ret_3m: ret?.ret_3m ?? null,
+                            ret_6m: ret?.ret_6m ?? null,
+                            ret_12m: ret?.ret_12m ?? null,
                         };
                     });
                 };
@@ -3053,14 +3144,14 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     ttl: ALL_RS_TTL,
                     onStale: fresh => {
                         const enriched = buildAllRsStocks(fresh, latestReturnsData);
-                        setAllRsStocks(enriched);
+                        setAllRsStocks(enriched.filter(r => !isETF(r)));
                         persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
                     },
                 });
 
                 // Build allRsStocks: join indicators with returns
                 const enriched = buildAllRsStocks(indicatorsHighRS, allReturnsData);
-                setAllRsStocks(enriched);
+                setAllRsStocks(enriched.filter(r => !isETF(r)));
                 persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
 
                 // ── Enrich allRsStocks with names (only missing tickers) ──────
@@ -3071,7 +3162,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
                         if (nameRows.length) {
                             // _updateNameMap already called inside batchFetchBhavNames
-                            setAllRsStocks(prev => applyNamesFromMap(prev));
+                            setAllRsStocks(prev => applyNamesFromMap(prev).filter(r => !isETF(r)));
                         }
                     }
                 } catch (nameErr) {
@@ -3085,7 +3176,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 setLoadingAllRs(false);
             }
         })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
 
@@ -3100,7 +3191,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         prefetchRef.current = setTimeout(() => {
             const idx = industries.indexOf(industry);
             [industries[idx - 1], industries[idx + 1]].filter(Boolean).forEach(ind => {
-                sbFetch(`company_financials?select=ticker,name&industry=eq.${encodeURIComponent(ind)}`, userToken, { ttl: 10 * 60 * 1000 }).catch(() => {});
+                sbFetch(`company_financials?select=ticker,name&industry=eq.${encodeURIComponent(ind)}`, userToken, { ttl: 10 * 60 * 1000 }).catch(() => { });
             });
         }, 800);
         return () => clearTimeout(prefetchRef.current);
@@ -3152,10 +3243,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         rsStocks.forEach(row => {
             const key = normalizeIndustryKey(row.industry);
             if (!key) return;
-            
+
             labels.set(key, normalizeIndustryName(row.industry));
             counts.set(key, (counts.get(key) || 0) + 1);
-            
+
             if (term && (row.ticker || "").toUpperCase().includes(term)) {
                 matchingIndustries.add(key);
             }
@@ -3193,7 +3284,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 .filter(row => normalizeIndustryKey(row.industry) === normalizeIndustryKey(industry))
                 .sort((a, b) => (Number(b.rs_rating) || 0) - (Number(a.rs_rating) || 0) || (a.ticker || "").localeCompare(b.ticker || ""))
             : [];
-        
+
         if (searchTerm.trim()) {
             const term = searchTerm.trim().toUpperCase();
             stocks = stocks.filter(s => (s.ticker || "").toUpperCase().includes(term));
@@ -3219,278 +3310,279 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
 
             {/* â”€â”€ ERROR BANNER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div style={{ width: "100%", maxWidth: 1400, margin: "0 auto" }}>
-            {error && (
-                <div style={{
-                    display: "flex", alignItems: "flex-start", gap: 10,
-                    padding: "12px 16px", marginBottom: 16, borderRadius: 18,
-                    background: D.negSoft,
-                    border: `1px solid ${withAlpha(D.neg || "#ef4444", 0.22)}`,
-                    fontSize: 14, color: D.negText || D.neg,
-                    boxShadow: D.shadowMd,
-                }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        style={{ flexShrink: 0, marginTop: 1 }}>
-                        <circle cx="12" cy="12" r="10"/>
-                        <line x1="12" y1="8" x2="12" y2="12"/>
-                        <line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
-                    <span style={{ flex: 1 }}>{String(error || "")}</span>
-                    <button onClick={() => setError(null)} style={{
-                        background: "none", border: "none", cursor: "pointer",
-                        color: "inherit", fontSize: 16, lineHeight: 1, padding: 0,
-                    }}>x</button>
-                </div>
-            )}
-
-            <PremiumDashboardHero
-                D={D}
-                isCompact={isCompact}
-                breadthSnapshot={breadthSnapshot}
-                gainers={gainers}
-                losers={losers}
-                allHighRsStocks={allHighRsStocks}
-                rsIndustrySummary={rsIndustrySummary}
-                fiiDiiData={fiiDiiData}
-                onNavigate={onNavigate}
-            />
-
-            {isCompact && (
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                    gap: 6,
-                    marginBottom: 12,
-                    padding: 5,
-                    borderRadius: 12,
-                    background: D.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.88)",
-                    border: `1px solid ${D.panelBorder}`,
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 20,
-                    backdropFilter: "blur(16px)",
-                    WebkitBackdropFilter: "blur(16px)",
-                    boxShadow: D.shadowMd,
-                }}>
-                    {[
-                        { id: "pulse", label: "Market Pulse" },
-                        { id: "movers", label: "Movers" },
-                        { id: "leaders", label: "RS Leaders" },
-                    ].map(tab => {
-                        const active = activeMobilePanel === tab.id;
-                        return (
-                            <button key={tab.id} onClick={() => setActiveMobilePanel(tab.id)} style={{
-                                minHeight: 38,
-                                border: `1px solid ${active ? withAlpha(D.pos || "#10b981", 0.30) : "transparent"}`,
-                                borderRadius: 8,
-                                background: active ? withAlpha(D.pos || "#10b981", D.isDark ? 0.14 : 0.09) : "transparent",
-                                color: active ? (D.pos || "#10b981") : D.subtext,
-                                boxShadow: active ? `0 8px 18px ${withAlpha(D.pos || "#10b981", 0.12)}` : "none",
-                                cursor: "pointer",
-                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                fontSize: 11,
-                                fontWeight: active ? 700 : 600,
-                                letterSpacing: "0.01em",
-                                padding: "8px 6px",
-                                whiteSpace: "normal",
-                                lineHeight: 1.15,
-                                transition: "all 0.15s ease",
-                            }}>
-                                {tab.label}
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* â”€â”€ MARKET OVERVIEW (Index Cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-                        {/* ── MARKET PULSE + MOVERS side-by-side on desktop ─── */}
-            <div style={{
-                display: isCompact ? "block" : "grid",
-                gridTemplateColumns: isTablet ? "1fr 1fr" : "420px 1fr",
-                gap: 18,
-                alignItems: "stretch",
-                marginBottom: 18,
-            }}>
-                {/* Market Pulse */}
-                {(!isCompact || activeMobilePanel === "pulse") && (
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                        <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} isSideBySide={!isCompact} style={{ flex: 1 }} />
-                    </div>
-                )}
-
-                {/* Right column: Market Movers + RS Rating stacked */}
-                {(!isCompact || activeMobilePanel === "movers" || activeMobilePanel === "leaders") && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 18, minHeight: 0 }}>
-
-                {/* Market Movers */}
-                {(!isCompact || activeMobilePanel === "movers") && (
-                    <SectionCard T={D} style={{ marginBottom: 0 }}>
-                        <CardHeader
-                            T={D}
-                            title="Market Movers"
-                            count={currentMoversData.length}
-                        />
-                        <div style={{
-                            display: "flex",
-                            gap: isCompact ? 5 : 6,
-                            marginBottom: 16,
-                            padding: "5px",
-                            background: D.isDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.85)",
-                            borderRadius: 999,
-                            flexWrap: "wrap",
-                            border: `1px solid ${D.panelBorder}`,
-                            backdropFilter: "blur(8px)",
-                            WebkitBackdropFilter: "blur(8px)",
-                        }}>
-                            <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
-                            <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
-                            <TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />
-                            <TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />
-                            <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
-                        </div>
-                        {activeMoversTab === "volume_shockers"
-                            ? <VolumeShockersTable T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} />
-                            : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
-                        }
-                    </SectionCard>
-                )}
-
-            {/* -- RS RATING CARD -- */}
-            <SectionCard T={D} style={{ marginBottom: 0, flex: 1 }}>
-                <div style={{
-                    display: "flex",
-                    flexDirection: isCompact ? "column" : "row",
-                    justifyContent: "space-between",
-                    alignItems: isCompact ? "flex-start" : "center",
-                    marginBottom: 16,
-                    gap: 12
-                }}>
-                    <CardHeader
-                        T={D}
-                        title={
-                            activeRsTab === "all"
-                                ? "All Stocks with RS Rating > 85"
-                                : industry
-                                    ? `RS Rating > 85 - ${industry}`
-                                    : "RS Rating > 85 - All Industries"
-                        }
-                        count={
-                            activeRsTab === "all"
-                                ? allHighRsStocks.length
-                                : industry
-                                    ? rsIndustryStocks.length
-                                    : searchTerm.trim()
-                                        ? rsIndustrySummary.reduce((sum, row) => sum + row.count, 0)
-                                        : rsIndustrySummary.length
-                        }
-                        style={{ marginBottom: 0 }}
-                    />
-                    
-                    <div style={{ position: "relative", width: isCompact ? "100%" : 240 }}>
-                        <input
-                            type="text"
-                            placeholder="Search ticker..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            style={{
-                                width: "100%",
-                                padding: "8px 12px 8px 32px",
-                                borderRadius: 8,
-                                border: `1px solid ${D.panelBorder}`,
-                                background: D.isDark ? "rgba(255,255,255,0.06)" : "#fff",
-                                color: D.text,
-                                fontSize: 12.5,
-                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                outline: "none",
-                                transition: "border-color 0.15s",
-                            }}
-                            onFocus={e => e.target.style.borderColor = `${D.pos || "#10b981"}60`}
-                            onBlur={e => e.target.style.borderColor = D.panelBorder}
-                        />
-                        <svg 
-                            width="14" height="14" viewBox="0 0 24 24" fill="none" 
-                            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                            style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: D.muted }}
-                        >
-                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                {error && (
+                    <div style={{
+                        display: "flex", alignItems: "flex-start", gap: 10,
+                        padding: "12px 16px", marginBottom: 16, borderRadius: 18,
+                        background: D.negSoft,
+                        border: `1px solid ${withAlpha(D.neg || "#ef4444", 0.22)}`,
+                        fontSize: 14, color: D.negText || D.neg,
+                        boxShadow: D.shadowMd,
+                    }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            style={{ flexShrink: 0, marginTop: 1 }}>
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
                         </svg>
-                        {searchTerm && (
-                            <button 
-                                onClick={() => setSearchTerm("")}
-                                style={{
-                                    position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                                    background: "none", border: "none", cursor: "pointer", color: D.muted, padding: 4
-                                }}
-                            >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                            </button>
-                        )}
-                    </div>
-
-                    {activeRsTab === "sector" && industry && (
-                        <button
-                            onClick={() => setIndustry("")}
-                            style={{
-                                padding: isCompact ? "8px 12px" : "10px 14px",
-                                fontSize: 14,
-                                fontWeight: 600,
-                                color: D.text,
-                                background: D.pillBg,
-                                border: `1px solid ${D.pillBorder}`,
-                                borderRadius: 999,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                                whiteSpace: "nowrap",
-                            }}
-                        >
-                            {"← Back"}
-                        </button>
-                    )}
-                </div>
-                {/* RS sub-tabs */}
-                <div style={{
-                    display: "flex",
-                    gap: isCompact ? 5 : 6,
-                    marginBottom: 16,
-                    padding: "5px",
-                    background: D.isDark ? "rgba(15,23,42,0.5)" : "rgba(248,250,252,0.85)",
-                    borderRadius: 999,
-                    border: `1px solid ${D.panelBorder}`,
-                    width: "fit-content",
-                }}>
-                    <TabButton
-                        T={D}
-                        active={activeRsTab === "sector"}
-                        label="Sector Wise"
-                        onClick={() => { setActiveRsTab("sector"); setIndustry(""); }}
-                        hideCount
-                    />
-                    <TabButton
-                        T={D}
-                        active={activeRsTab === "all"}
-                        label="All"
-                        count={allHighRsStocks.length}
-                        onClick={() => setActiveRsTab("all")}
-                        hideCount={isCompact}
-                    />
-                </div>
-                <RsLoginGate T={D} isLocked={false} onLogin={onLogin}>
-                    {activeRsTab === "all" ? (
-                        <AllRsTable T={D} data={allHighRsStocks} loading={loadingAllRs} onTickerClick={onTickerClick} isCompact={isCompact} />
-                    ) : industry ? (
-                        <RsTable T={D} data={rsIndustryStocks} loading={loadingRs} onTickerClick={onTickerClick} isCompact={isCompact} />
-                    ) : (
-                        <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
-                    )}
-                </RsLoginGate>
-            </SectionCard>
-
+                        <span style={{ flex: 1 }}>{String(error || "")}</span>
+                        <button onClick={() => setError(null)} style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            color: "inherit", fontSize: 16, lineHeight: 1, padding: 0,
+                        }}>x</button>
                     </div>
                 )}
-            </div>
-            <style>{`
+
+                <PremiumDashboardHero
+                    D={D}
+                    isCompact={isCompact}
+                    breadthSnapshot={breadthSnapshot}
+                    gainers={gainers}
+                    losers={losers}
+                    allHighRsStocks={allHighRsStocks}
+                    rsIndustrySummary={rsIndustrySummary}
+                    fiiDiiData={fiiDiiData}
+                    onNavigate={onNavigate}
+                />
+
+                {isCompact && (
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 4,
+                        marginBottom: 12,
+                        padding: 4,
+                        borderRadius: 13,
+                        background: D.isDark ? "rgba(15,23,42,0.72)" : "rgba(248,250,252,0.92)",
+                        border: `1px solid ${D.panelBorder}`,
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 20,
+                        backdropFilter: "blur(16px)",
+                        WebkitBackdropFilter: "blur(16px)",
+                        boxShadow: D.isDark
+                            ? "0 4px 20px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06)"
+                            : "0 4px 16px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.9)",
+                    }}>
+                        {[
+                            { id: "pulse", label: "Market Pulse" },
+                            { id: "movers", label: "Movers" },
+                            { id: "leaders", label: "RS Leaders" },
+                        ].map(tab => {
+                            const active = activeMobilePanel === tab.id;
+                            const accentGrn = D.pos || "#10b981";
+                            return (
+                                <button key={tab.id} onClick={() => setActiveMobilePanel(tab.id)} style={{
+                                    position: "relative",
+                                    minHeight: 38,
+                                    border: "none",
+                                    borderRadius: 9,
+                                    background: active
+                                        ? D.isDark
+                                            ? `linear-gradient(135deg, ${withAlpha(accentGrn, 0.20)} 0%, ${withAlpha(accentGrn, 0.09)} 100%)`
+                                            : `linear-gradient(135deg, ${withAlpha(accentGrn, 0.13)} 0%, ${withAlpha(accentGrn, 0.05)} 100%)`
+                                        : "transparent",
+                                    color: active ? accentGrn : D.muted,
+                                    cursor: "pointer",
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                    fontSize: 11,
+                                    fontWeight: active ? 700 : 500,
+                                    letterSpacing: active ? "0.005em" : "0.01em",
+                                    padding: "8px 6px",
+                                    whiteSpace: "normal",
+                                    lineHeight: 1.2,
+                                    transition: "color 0.18s ease, background 0.18s ease",
+                                    outline: "none",
+                                }}>
+                                    {tab.label}
+                                    {active && (
+                                        <span style={{
+                                            position: "absolute",
+                                            bottom: 2,
+                                            left: "50%",
+                                            transform: "translateX(-50%)",
+                                            width: "35%",
+                                            height: 2,
+                                            borderRadius: "2px 2px 0 0",
+                                            background: `linear-gradient(90deg, ${withAlpha(accentGrn, 0)}, ${accentGrn}, ${withAlpha(accentGrn, 0)})`,
+                                            pointerEvents: "none",
+                                        }} />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* â”€â”€ MARKET OVERVIEW (Index Cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+                {/* ── MARKET PULSE + MOVERS side-by-side on desktop ─── */}
+                <div style={{
+                    display: isCompact ? "block" : "grid",
+                    gridTemplateColumns: isTablet ? "1fr 1fr" : "420px 1fr",
+                    gap: 18,
+                    alignItems: "stretch",
+                    marginBottom: 18,
+                }}>
+                    {/* Market Pulse */}
+                    {(!isCompact || activeMobilePanel === "pulse") && (
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                            <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} isSideBySide={!isCompact} style={{ flex: 1 }} />
+                        </div>
+                    )}
+
+                    {/* Right column: Market Movers + RS Rating stacked */}
+                    {(!isCompact || activeMobilePanel === "movers" || activeMobilePanel === "leaders") && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 18, minHeight: 0 }}>
+
+                            {/* Market Movers */}
+                            {(!isCompact || activeMobilePanel === "movers") && (
+                                <SectionCard T={D} style={{ marginBottom: 0 }}>
+                                    <CardHeader
+                                        T={D}
+                                        title="Market Movers"
+                                        count={currentMoversData.length}
+                                    />
+                                    <TabBar T={D} style={{ marginBottom: 16, flexWrap: "wrap" }}>
+                                        <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
+                                        <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
+                                        <TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />
+                                        <TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />
+                                        <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
+                                    </TabBar>
+                                    {activeMoversTab === "volume_shockers"
+                                        ? <VolumeShockersTable T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} />
+                                        : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
+                                    }
+                                </SectionCard>
+                            )}
+
+                            {/* -- RS RATING CARD -- */}
+                            <SectionCard T={D} style={{ marginBottom: 0, flex: 1 }}>
+                                <div style={{
+                                    display: "flex",
+                                    flexDirection: isCompact ? "column" : "row",
+                                    justifyContent: "space-between",
+                                    alignItems: isCompact ? "flex-start" : "center",
+                                    marginBottom: 16,
+                                    gap: 12
+                                }}>
+                                    <CardHeader
+                                        T={D}
+                                        title={
+                                            activeRsTab === "all"
+                                                ? "All Stocks with RS Rating > 85"
+                                                : industry
+                                                    ? `RS Rating > 85 - ${industry}`
+                                                    : "RS Rating > 85 - All Industries"
+                                        }
+                                        count={
+                                            activeRsTab === "all"
+                                                ? allHighRsStocks.length
+                                                : industry
+                                                    ? rsIndustryStocks.length
+                                                    : searchTerm.trim()
+                                                        ? rsIndustrySummary.reduce((sum, row) => sum + row.count, 0)
+                                                        : rsIndustrySummary.length
+                                        }
+                                        style={{ marginBottom: 0 }}
+                                    />
+
+                                    <div style={{ position: "relative", width: isCompact ? "100%" : 240 }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Search ticker..."
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                            style={{
+                                                width: "100%",
+                                                padding: "8px 12px 8px 32px",
+                                                borderRadius: 8,
+                                                border: `1px solid ${D.panelBorder}`,
+                                                background: D.isDark ? "rgba(255,255,255,0.06)" : "#fff",
+                                                color: D.text,
+                                                fontSize: 12.5,
+                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                outline: "none",
+                                                transition: "border-color 0.15s",
+                                            }}
+                                            onFocus={e => e.target.style.borderColor = `${D.pos || "#10b981"}60`}
+                                            onBlur={e => e.target.style.borderColor = D.panelBorder}
+                                        />
+                                        <svg
+                                            width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                            style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: D.muted }}
+                                        >
+                                            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                        </svg>
+                                        {searchTerm && (
+                                            <button
+                                                onClick={() => setSearchTerm("")}
+                                                style={{
+                                                    position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                                                    background: "none", border: "none", cursor: "pointer", color: D.muted, padding: 4
+                                                }}
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {activeRsTab === "sector" && industry && (
+                                        <button
+                                            onClick={() => setIndustry("")}
+                                            style={{
+                                                padding: isCompact ? "8px 12px" : "10px 14px",
+                                                fontSize: 14,
+                                                fontWeight: 600,
+                                                color: D.text,
+                                                background: D.pillBg,
+                                                border: `1px solid ${D.pillBorder}`,
+                                                borderRadius: 999,
+                                                cursor: "pointer",
+                                                fontFamily: "inherit",
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
+                                            {"← Back"}
+                                        </button>
+                                    )}
+                                </div>
+                                {/* RS sub-tabs */}
+                                <TabBar T={D} style={{ marginBottom: 16 }}>
+                                    <TabButton
+                                        T={D}
+                                        active={activeRsTab === "sector"}
+                                        label="Sector Wise"
+                                        onClick={() => { setActiveRsTab("sector"); setIndustry(""); }}
+                                        hideCount
+                                    />
+                                    <TabButton
+                                        T={D}
+                                        active={activeRsTab === "all"}
+                                        label="All"
+                                        count={allHighRsStocks.length}
+                                        onClick={() => setActiveRsTab("all")}
+                                        hideCount={isCompact}
+                                    />
+                                </TabBar>
+                                <RsLoginGate T={D} isLocked={false} onLogin={onLogin}>
+                                    {activeRsTab === "all" ? (
+                                        <AllRsTable T={D} data={allHighRsStocks} loading={loadingAllRs} onTickerClick={onTickerClick} isCompact={isCompact} />
+                                    ) : industry ? (
+                                        <RsTable T={D} data={rsIndustryStocks} loading={loadingRs} onTickerClick={onTickerClick} isCompact={isCompact} />
+                                    ) : (
+                                        <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
+                                    )}
+                                </RsLoginGate>
+                            </SectionCard>
+
+                        </div>
+                    )}
+                </div>
+                <style>{`
                 .stock-dashboard-shell * {
                     box-sizing: border-box;
                 }
@@ -3524,7 +3616,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     50% { opacity: 0.16; }
                 }
             `}</style>
-        </div>
+            </div>
         </div>
     );
 }
