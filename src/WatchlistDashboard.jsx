@@ -2732,56 +2732,6 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
             <div style={{ flex:1, display:"flex", overflow:"hidden", flexDirection: isMobile ? "column" : "row" }}>
               {/* ── TABLE (flex) ───────────────────────────── */}
               <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minWidth:0, paddingBottom: isMobile ? 8 : 0 }}>
-                {insightCards.length > 0 && (
-                  <div style={{
-                    flexShrink: 0,
-                    padding: isMobile ? "8px 10px 6px" : "16px 18px 12px",
-                    borderBottom: `1px solid ${dark ? "rgba(148,163,184,0.10)" : "rgba(148,163,184,0.12)"}`,
-                    background: isMobile ? T.surface : "transparent",
-                  }}>
-                    <div style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))",
-                      gap: isMobile ? 6 : 10,
-                    }}>
-                      {insightCards.map(card => (
-                        <div
-                          key={card.label}
-                          className="wl-glass-panel wl-insight-card"
-                          style={{
-                            borderRadius: isMobile ? 14 : 18,
-                            padding: isMobile ? "9px 10px 8px" : "14px 14px 13px",
-                            minHeight: isMobile ? 68 : 96,
-                          }}
-                        >
-                          <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.13em", marginBottom: isMobile ? 5 : 8, opacity: 0.8, fontFamily: "'DM Sans', sans-serif" }}>
-                            {card.label}
-                          </div>
-                          <div style={{
-                            fontSize: card.compactList ? (isMobile ? 11 : 12) : (isMobile ? 15 : 24),
-                            lineHeight: card.compactList ? 1.35 : 1,
-                            fontWeight: card.compactList ? 600 : 700,
-                            color: card.tone,
-                            letterSpacing: card.compactList ? "0.01em" : "-0.04em",
-                            fontFamily: card.compactList ? "'DM Mono', monospace" : "'DM Sans', sans-serif",
-                            marginBottom: isMobile ? 4 : 8,
-                            whiteSpace: card.compactList ? "normal" : "nowrap",
-                            overflow: "hidden",
-                            display: "-webkit-box",
-                            WebkitLineClamp: card.compactList ? 3 : 1,
-                            WebkitBoxOrient: "vertical",
-                          }}>
-                            {card.value}
-                          </div>
-                          <div style={{ fontSize: isMobile ? 10 : 11, color: T.subtext, lineHeight: isMobile ? 1.25 : 1.4, fontFamily: "'DM Sans', sans-serif", maxWidth: "90%" }}>
-                            {card.hint}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Rows */}
                 <div
                   ref={stocksScrollRef}
