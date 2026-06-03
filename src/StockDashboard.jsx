@@ -1940,8 +1940,13 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
 
 // --- ALL RS TABLE (Top 50 stocks by RS Rating from indicators) ---
 function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
+    const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
+
+    useEffect(() => {
+        setVisibleCount(MOVERS_INITIAL_ROWS);
+    }, [data]);
 
     const handleSort = key => {
         if (sortKey === key) {
@@ -1963,6 +1968,8 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
             return sortDir === "asc" ? cmp : -cmp;
         });
     }, [data, sortKey, sortDir]);
+    const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
+    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
 
     if (loading) {
         return (
@@ -2018,7 +2025,8 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
     );
 
     return (
-        <PremiumTableShell T={T} minWidth={660} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <>
+        <PremiumTableShell T={T} minWidth={660} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <th style={{ ...thBaseAR, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
@@ -2030,12 +2038,12 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
                 </tr>
             </thead>
             <tbody>
-                {sorted.map((row, i) => (
+                {visibleRows.map((row, i) => (
                     <tr
                         key={row.ticker}
                         onClick={() => onTickerClick?.(row.ticker)}
                         style={{
-                            borderBottom: i < sorted.length - 1
+                            borderBottom: i < visibleRows.length - 1
                                 ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                 : "none",
                             cursor: onTickerClick ? "pointer" : "default",
@@ -2095,6 +2103,8 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
                 ))}
             </tbody>
         </PremiumTableShell>
+        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+        </>
     );
 }
 

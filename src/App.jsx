@@ -96,6 +96,7 @@ const SUB_ROUTE_SEO = {
         fiidii: { title: "FII DII Flow Tracker", description: "Track FII and DII cash, index futures, stock futures, and institutional participation trends." },
         ownership: { title: "Ownership Scans", description: "Review promoter, FII, DII, public shareholder, and pledge changes across Indian companies." },
         announcements: { title: "Company Announcements", description: "Follow exchange filings, corporate announcements, presentations, and disclosure events." },
+        niftyPE: { title: "Nifty 50 PE Heatmap", description: "Visualise Nifty 50 monthly P/E ratio history as a colour-coded heatmap to gauge market valuations over time." },
     },
     technical: {
         breadth: { title: "Market Breadth Dashboard", description: "Read participation, new highs, relative strength, trend alignment, and market internals for Indian equities." },
@@ -119,7 +120,7 @@ const SUB_ROUTE_SEO = {
         contact: { title: "Contact TradeEdge", description: "Contact TradeEdge for support, feedback, suggestions, and platform queries." },
     },
 };
-const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements"]);
+const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements", "niftyPE"]);
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "heatmap", "rotation"]);
 const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "portfolio", "funds", "dividends"]);
 const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact"]);
@@ -8462,34 +8463,55 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
     };
 
     //  Data fetch 
-    const fetchByTicker = async (ticker) => {
+    const fetchByTicker = async (ticker, signal) => {
         const r = await fetch(
             `${SUPABASE_URL}/rest/v1/corporate_announcements` +
             `?symbol=eq.${encodeURIComponent(ticker)}` +
-            `&order=announcement_datetime.desc&limit=500`,
-            { headers: dbH }
+            `&order=announcement_datetime.desc&limit=200`,
+            { headers: dbH, signal }
         );
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
+    };
+
+    // Retry helper: on statement-timeout (transient), retry once after a short delay
+    const fetchWithRetry = async (ticker, signal) => {
+        try {
+            return await fetchByTicker(ticker, signal);
+        } catch (e) {
+            if (signal?.aborted) throw e;
+            // Supabase statement_timeout surfaces as a 500 or an error message; retry once
+            await new Promise(res => setTimeout(res, 600));
+            return await fetchByTicker(ticker, signal);
+        }
     };
 
     const load = async () => {
         if (!sym && !nseCode) return;
         setLoading(true); setError(""); setAnnouncements([]); setPage(0);
         const candidates = [nseCode, sym, bseCode].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+        // Per-fetch timeout of 20 s — long enough for a cold query but short enough to surface errors fast
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 20000);
         try {
-            let rows = [];
-            for (const key of candidates) {
-                const r = await fetchByTicker(key);
-                if (Array.isArray(r) && r.length > 0) { rows = r; break; }
-            }
+            // Fire all candidate queries in parallel; take the first non-empty result
+            const results = await Promise.all(
+                candidates.map(key => fetchWithRetry(key, controller.signal).catch(() => []))
+            );
+            clearTimeout(tid);
+            const rows = results.find(r => Array.isArray(r) && r.length > 0) || [];
             if (rows.length === 0) {
                 setError(`No announcements found for ${candidates[0] || "this company"}.`);
             } else {
                 setAnnouncements(rows);
             }
         } catch (e) {
-            setError(`Failed to load announcements: ${e.message}`);
+            clearTimeout(tid);
+            if (e.name === "AbortError") {
+                setError("Request timed out. Please try again.");
+            } else {
+                setError(`Failed to load announcements: ${e.message}`);
+            }
         } finally {
             setLoading(false);
         }
@@ -8692,7 +8714,17 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
                             <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                         </svg>
-                        <span style={{ fontSize: 12.5, color: D ? "#fca5a5" : "#dc2626" }}>{error}</span>
+                        <div style={{ flex: 1 }}>
+                            <span style={{ fontSize: 12.5, color: D ? "#fca5a5" : "#dc2626" }}>{error}</span>
+                            <button
+                                onClick={() => { prevSym.current = null; load(); }}
+                                style={{
+                                    display: "block", marginTop: 8, fontSize: 12, fontWeight: 600,
+                                    color: accentGrn, background: "none", border: "none",
+                                    cursor: "pointer", fontFamily: "inherit", padding: 0,
+                                }}
+                            >↺ Retry</button>
+                        </div>
                     </div>
                 )}
 
@@ -11707,6 +11739,289 @@ function applyFilters(rows, filters) {
     );
 }
 
+// ============================================================
+//  NiftyPEHeatmap – monthly Nifty 50 P/E ratio heatmap
+// ============================================================
+function NiftyPEHeatmap({ T }) {
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [hovered, setHovered] = useState(null); // { year, mi }
+
+    useEffect(() => {
+        setLoading(true);
+        setError(null);
+        fetch(
+            `${SUPABASE_URL}/rest/v1/nifty50_pe?ticker=eq.%5ENSEI&select=date,pe_ratio,close&order=date.asc`,
+            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+        )
+            .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+            .then(data => { setRows(data || []); setLoading(false); })
+            .catch(e => { setError(String(e)); setLoading(false); });
+    }, []);
+
+    const { grid, years, months, minPE, maxPE } = useMemo(() => {
+        if (!rows.length) return { grid: {}, years: [], months: [], minPE: 0, maxPE: 0 };
+        const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const map = {};
+        rows.forEach(r => {
+            if (r.pe_ratio == null) return;
+            const d = new Date(r.date);
+            const y = d.getFullYear();
+            const m = d.getMonth();
+            if (!map[y]) map[y] = {};
+            map[y][m] = { pe: parseFloat(r.pe_ratio), close: parseFloat(r.close) };
+        });
+        const years = Object.keys(map).map(Number).sort((a, b) => a - b);
+        const peValues = rows.filter(r => r.pe_ratio != null).map(r => parseFloat(r.pe_ratio));
+        const minPE = Math.min(...peValues);
+        const maxPE = Math.max(...peValues);
+        return { grid: map, years, months: MONTHS, minPE, maxPE };
+    }, [rows]);
+
+    const dark = T.bg === "#0f1117" || T.bg?.startsWith("#0") || T.bg?.startsWith("#1");
+
+    function peToColor(pe) {
+        if (pe == null) return "transparent";
+        const t = Math.max(0, Math.min(1, (pe - minPE) / (maxPE - minPE || 1)));
+        const stops = [
+            [0.0, [34, 197, 94]],
+            [0.35, [132, 204, 22]],
+            [0.55, [234, 179, 8]],
+            [0.75, [249, 115, 22]],
+            [1.0, [220, 38, 38]],
+        ];
+        for (let i = 0; i < stops.length - 1; i++) {
+            if (t >= stops[i][0] && t <= stops[i + 1][0]) {
+                const seg = (t - stops[i][0]) / (stops[i + 1][0] - stops[i][0]);
+                const c0 = stops[i][1], c1 = stops[i + 1][1];
+                const r = Math.round(c0[0] + seg * (c1[0] - c0[0]));
+                const g = Math.round(c0[1] + seg * (c1[1] - c0[1]));
+                const b = Math.round(c0[2] + seg * (c1[2] - c0[2]));
+                return `rgb(${r},${g},${b})`;
+            }
+        }
+        return `rgb(${stops[stops.length - 1][1].join(",")})`;
+    }
+
+    const latest = rows[rows.length - 1];
+    const latestPE = latest?.pe_ratio != null ? parseFloat(latest.pe_ratio).toFixed(2) : "—";
+    const latestDate = latest?.date
+        ? new Date(latest.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" })
+        : "";
+
+    const BANDS = [
+        { label: "< 18×", desc: "Historically cheap", color: "#22c55e" },
+        { label: "18–22×", desc: "Fair value", color: "#84cc16" },
+        { label: "22–25×", desc: "Moderately rich", color: "#eab308" },
+        { label: "25–30×", desc: "Elevated", color: "#f97316" },
+        { label: "> 30×", desc: "Expensive", color: "#ef4444" },
+    ];
+
+    // Shared shell
+    const shell = {
+        display: "flex", flexDirection: "column", flex: 1,
+        overflow: "auto", background: T.bg, minHeight: 0,
+    };
+
+    if (loading) return (
+        <div style={{ ...shell, alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 13, color: T.muted, fontWeight: 500, letterSpacing: ".04em" }}>
+                Loading P/E data…
+            </span>
+        </div>
+    );
+    if (error) return (
+        <div style={{ ...shell, alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 13, color: T.red || "#ef4444" }}>Failed to load: {error}</span>
+        </div>
+    );
+    if (!rows.length) return (
+        <div style={{ ...shell, alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 13, color: T.muted }}>No data available.</span>
+        </div>
+    );
+
+    return (
+        <div style={shell}>
+            {/* ── Topbar ── */}
+            <div style={{
+                background: T.surface,
+                borderBottom: `1px solid ${T.border}`,
+                padding: "0 28px",
+                height: 46,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexShrink: 0,
+                gap: 16,
+            }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text, letterSpacing: "-.01em" }}>
+                        Nifty 50 — Monthly P/E
+                    </span>
+                    <span style={{ fontSize: 11, color: T.muted }}>
+                        Each cell is month-end P/E · green = cheap · red = expensive
+                    </span>
+                </div>
+                {latestDate && (
+                    <div style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "3px 10px",
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 4,
+                        background: T.bg,
+                    }}>
+                        <span style={{ fontSize: 11, color: T.muted }}>Latest ({latestDate})</span>
+                        <span style={{
+                            fontFamily: "'IBM Plex Mono', monospace",
+                            fontSize: 13, fontWeight: 700, color: T.text,
+                            fontVariantNumeric: "tabular-nums",
+                        }}>
+                            {latestPE}×
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            {/* ── Content ── */}
+            <div style={{ flex: 1, overflow: "auto", padding: "24px 28px" }}>
+                <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+
+                    {/* Gradient legend */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 11, color: T.muted, fontWeight: 500, whiteSpace: "nowrap" }}>Low PE</span>
+                        <div style={{
+                            flex: "0 0 160px", height: 8, borderRadius: 2,
+                            background: "linear-gradient(to right, #22c55e, #eab308, #ef4444)",
+                        }} />
+                        <span style={{ fontSize: 11, color: T.muted, fontWeight: 500, whiteSpace: "nowrap" }}>High PE</span>
+                        <span style={{ fontSize: 11, color: T.muted, marginLeft: 6 }}>
+                            Range: {minPE.toFixed(1)}× – {maxPE.toFixed(1)}×
+                        </span>
+                    </div>
+
+                    {/* Heatmap table */}
+                    <div style={{ overflowX: "auto" }}>
+                        <table style={{
+                            borderCollapse: "separate",
+                            borderSpacing: "3px 2px",
+                            fontSize: 11,
+                            width: "100%",
+                            minWidth: 780,
+                        }}>
+                            <thead>
+                                <tr>
+                                    <th style={{
+                                        width: 44, textAlign: "left", paddingBottom: 6,
+                                        color: T.muted, fontWeight: 600, fontSize: 10,
+                                        letterSpacing: ".08em", textTransform: "uppercase",
+                                        fontFamily: "'IBM Plex Sans', sans-serif",
+                                    }}>
+                                        Year
+                                    </th>
+                                    {months.map(m => (
+                                        <th key={m} style={{
+                                            textAlign: "center", paddingBottom: 6,
+                                            color: T.muted, fontWeight: 600, fontSize: 10,
+                                            letterSpacing: ".08em", textTransform: "uppercase",
+                                            fontFamily: "'IBM Plex Sans', sans-serif",
+                                        }}>
+                                            {m}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {years.map(y => (
+                                    <tr key={y}>
+                                        <td style={{
+                                            paddingRight: 10, paddingTop: 1, paddingBottom: 1,
+                                            color: T.subtext, fontWeight: 600, fontSize: 11,
+                                            fontFamily: "'IBM Plex Mono', monospace",
+                                            verticalAlign: "middle", whiteSpace: "nowrap",
+                                        }}>
+                                            {y}
+                                        </td>
+                                        {months.map((_, mi) => {
+                                            const cell = grid[y]?.[mi];
+                                            const pe = cell?.pe ?? null;
+                                            const bg = peToColor(pe);
+                                            const isHov = hovered?.year === y && hovered?.mi === mi;
+                                            return (
+                                                <td
+                                                    key={mi}
+                                                    title={pe != null ? `${y} ${months[mi]}: ${pe.toFixed(2)}×` : undefined}
+                                                    onMouseEnter={() => pe != null && setHovered({ year: y, mi })}
+                                                    onMouseLeave={() => setHovered(null)}
+                                                    style={{
+                                                        height: 30,
+                                                        background: pe != null ? bg : (dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)"),
+                                                        borderRadius: 2,
+                                                        textAlign: "center",
+                                                        verticalAlign: "middle",
+                                                        color: pe != null ? "rgba(255,255,255,0.95)" : T.border,
+                                                        fontWeight: 600,
+                                                        fontSize: 11,
+                                                        fontFamily: "'IBM Plex Mono', monospace",
+                                                        fontVariantNumeric: "tabular-nums",
+                                                        cursor: pe != null ? "default" : undefined,
+                                                        transition: "transform .1s, box-shadow .1s",
+                                                        transform: isHov ? "scale(1.12)" : "scale(1)",
+                                                        boxShadow: isHov
+                                                            ? `0 2px 10px rgba(0,0,0,0.22)`
+                                                            : "none",
+                                                        position: "relative",
+                                                        zIndex: isHov ? 2 : 1,
+                                                        border: pe != null
+                                                            ? "none"
+                                                            : `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
+                                                    }}
+                                                >
+                                                    {pe != null ? pe.toFixed(1) : ""}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Band legend */}
+                    <div style={{
+                        display: "flex", flexWrap: "wrap", gap: 6,
+                        paddingTop: 4,
+                    }}>
+                        {BANDS.map(b => (
+                            <div key={b.label} style={{
+                                display: "flex", alignItems: "center", gap: 6,
+                                padding: "4px 10px",
+                                border: `1px solid ${T.border}`,
+                                borderRadius: 4,
+                                background: T.surface,
+                            }}>
+                                <div style={{
+                                    width: 8, height: 8, borderRadius: 1,
+                                    background: b.color, flexShrink: 0,
+                                }} />
+                                <span style={{
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontSize: 11, fontWeight: 700, color: T.text,
+                                    fontVariantNumeric: "tabular-nums",
+                                }}>
+                                    {b.label}
+                                </span>
+                                <span style={{ fontSize: 11, color: T.muted }}>{b.desc}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    );
+}
 //  module-level cache so navigating away & back is instant 
 let _screenerCache = null;
 let _screenerCacheTime = null;
@@ -27127,6 +27442,7 @@ export default function App() {
                 { id: "fiidii", label: "FII / DII Flow", description: "Track institutional cash and derivatives participation." },
                 { id: "ownership", label: "Ownership Scans", description: "Review promoter, fund, and shareholder positioning." },
                 { id: "announcements", label: "Announcements", description: "Track corporate disclosures and regulatory filings in real time." },
+                { id: "niftyPE", label: "Nifty PE", description: "Monthly Nifty 50 P/E ratio heatmap — spot cheap and expensive markets at a glance." },
             ],
         },
         {
@@ -27552,8 +27868,8 @@ export default function App() {
                                         <div
                                             key={sub.id}
                                             className={`top-nav-mobile-sub${item.id === "financial" ? (financialSubPage === sub.id ? " active" : "")
-                                                    : item.id === "technical" ? (technicalSubPage === sub.id ? " active" : "")
-                                                        : page === sub.id ? " active" : ""
+                                                : item.id === "technical" ? (technicalSubPage === sub.id ? " active" : "")
+                                                    : page === sub.id ? " active" : ""
                                                 }`}
                                             onClick={() => {
                                                 clearTickerRoute();
@@ -27798,6 +28114,9 @@ export default function App() {
                                             <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading announcements" />}>
                                                 <AnnouncementsModule T={T} />
                                             </Suspense>
+                                        </div>
+                                        <div style={{ display: financialSubPage === "niftyPE" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", flexDirection: "column" }}>
+                                            <NiftyPEHeatmap T={T} />
                                         </div>
                                     </div>
                                 )}
