@@ -1772,7 +1772,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px 16px 100px" : "32px 32px 80px" }}>
         {/* Page header */}
         <div style={{ marginBottom: isMobile ? 20 : 32 }}>
-          <h1 style={{ fontSize: isMobile ? 28 : 36, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.04em" }}>Investor Community</h1>
+          <h1 style={{ fontSize: isMobile ? 28 : 36, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.04em" }}>Discussion Forum</h1>
           <p style={{ fontSize: 14, color: T.muted, marginTop: 4 }}>High-conviction theses · Professional research · Signal over noise</p>
         </div>
 
