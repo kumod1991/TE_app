@@ -1302,7 +1302,7 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
 
   return (
     <div style={{ flex: 1, overflowY: "auto", background: T.bg, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "16px 16px 80px" : "32px 32px 80px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "16px 16px 140px" : "32px 32px 80px" }}>
         {/* Back + Actions */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>← Back</button>
