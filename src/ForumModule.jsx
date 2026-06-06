@@ -1769,7 +1769,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
 
   return (
     <div style={{ flex: 1, overflowY: "auto", background: T.bg, fontFamily: "'IBM Plex Sans', sans-serif" }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px" : "32px 32px" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px 16px 100px" : "32px 32px 80px" }}>
         {/* Page header */}
         <div style={{ marginBottom: isMobile ? 20 : 32 }}>
           <h1 style={{ fontSize: isMobile ? 28 : 36, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.04em" }}>Investor Community</h1>
