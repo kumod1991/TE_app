@@ -1007,6 +1007,93 @@ const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session,
 });
 
 // ─── Premium Composer ─────────────────────────────────────────────────────────
+// ─── Ticker Autocomplete ──────────────────────────────────────────────────────
+function TickerAutocomplete({ value, onChange, inputStyle, T }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
+  const wrapperRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => { if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const fetchSuggestions = useCallback(async (q) => {
+    if (!q || q.length < 1) { setSuggestions([]); setOpen(false); return; }
+    setLoading(true);
+    try {
+      // Search by ticker prefix OR company name containing the query
+      const url = `bhav_copy?or=(ticker.ilike.${encodeURIComponent(q + "%")},name.ilike.${encodeURIComponent("%" + q + "%")})&select=ticker,name&order=ticker.asc&limit=8`;
+      const data = await sbFetch(url, {});
+      // Deduplicate by ticker
+      const seen = new Set();
+      const unique = (Array.isArray(data) ? data : []).filter(r => { if (seen.has(r.ticker)) return false; seen.add(r.ticker); return true; });
+      setSuggestions(unique);
+      setOpen(unique.length > 0);
+    } catch { setSuggestions([]); setOpen(false); }
+    finally { setLoading(false); }
+  }, []);
+
+  const handleChange = (e) => {
+    const val = e.target.value.toUpperCase();
+    onChange(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(val), 220);
+  };
+
+  const handleSelect = (item) => {
+    onChange(item.ticker);
+    setSuggestions([]);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} style={{ position: "relative" }}>
+      <input
+        value={value}
+        onChange={handleChange}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        placeholder="RELIANCE"
+        autoComplete="off"
+        style={{ ...inputStyle, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 800, letterSpacing: "0.04em" }}
+      />
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: T.surface, border: `1px solid ${withAlpha(T.text, 0.12)}`,
+          borderRadius: 10, boxShadow: `0 8px 28px ${withAlpha(T.text, 0.12)}`,
+          zIndex: 2000, overflow: "hidden",
+        }}>
+          {loading && (
+            <div style={{ padding: "10px 14px", fontSize: 12, color: T.muted }}>Searching…</div>
+          )}
+          {!loading && suggestions.map((item, i) => (
+            <div
+              key={item.ticker + i}
+              onMouseDown={() => handleSelect(item)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 14px", cursor: "pointer",
+                borderBottom: i < suggestions.length - 1 ? `1px solid ${withAlpha(T.text, 0.06)}` : "none",
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = withAlpha(T.accent, 0.07)}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 800, fontSize: 12, color: T.accent, minWidth: 80 }}>{item.ticker}</span>
+              <span style={{ fontSize: 12, color: T.subtext, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ThreadComposer({ session, T, onClose, onPosted }) {
   const { isMobile } = useViewport(); const getToken = useToken();
   const [step, setStep] = useState(1); // 1=basics, 2=thesis, 3=conviction
@@ -1077,7 +1164,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                 <div>
                   <label style={labelStyle}>Ticker</label>
-                  <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} placeholder="RELIANCE" style={{ ...inputStyle, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 800, letterSpacing: "0.04em" }} />
+                  <TickerAutocomplete value={ticker} onChange={setTicker} inputStyle={inputStyle} T={T} />
                 </div>
                 <div>
                   <label style={labelStyle}>Thesis Type</label>
@@ -1543,7 +1630,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                 <div>
                   <label style={labelStyle}>Ticker</label>
-                  <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} placeholder="RELIANCE" style={{ ...inputStyle, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 800, letterSpacing: "0.04em" }} />
+                  <TickerAutocomplete value={ticker} onChange={setTicker} inputStyle={inputStyle} T={T} />
                 </div>
                 <div>
                   <label style={labelStyle}>Thesis Type</label>
