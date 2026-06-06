@@ -1947,7 +1947,12 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function ForumModule({ T, session, getToken: getTokenProp, onTickerClick, onLoginRequired: onLoginRequiredProp }) {
-  const getToken = useCallback(() => getTokenProp ? getTokenProp() : Promise.resolve(session?.access_token ?? null), [getTokenProp, session]);
+  const getToken = useCallback(async () => {
+    if (getTokenProp) return getTokenProp();
+    // Always fetch a live session so Supabase can auto-refresh an expired JWT
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token ?? null;
+  }, [getTokenProp]);
   const [view, setView] = useState("feed");
   const [activeThread, setActiveThread] = useState(null);
   const [showComposer, setShowComposer] = useState(false);
