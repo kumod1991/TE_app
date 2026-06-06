@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
-//import ForumModule from "./ForumModule"
+
+const ForumModule = lazy(() => import("./ForumModule"));
+
 const WatchlistDashboard = lazy(() => import("./WatchlistDashboard"));
 const FiiDiiModule = lazy(() => import("./FiiDiiModule"));
 const OwnershipScansModule = lazy(() => import("./OwnershipScansModule"));
@@ -59,6 +61,7 @@ const APP_ROUTE_MAP = {
     financial: "/fundamentals",
     technical: "/technicals",
     tradevault: "/journal",
+    forum: "/forum", 
     disclaimer: "/legal",
 };
 const SITE_NAME = "TradeEdge";
@@ -83,6 +86,10 @@ const ROUTE_SEO = {
     tradevault: {
         title: "Trade Journal, Portfolio and XIRR Tracker",
         description: "Record trades, track funds, review dividends, estimate capital gains, and analyze portfolio performance in one journal.",
+    },
+    forum: {
+        title: "Stock Community Forum",
+        description: "Discuss Indian stocks, share investment theses, debate risks, and exchange ideas with the TradeEdge community.",
     },
     disclaimer: {
         title: "Legal, Privacy and Contact",
@@ -26939,6 +26946,29 @@ export default function App() {
         setRoute(nextRoute);
     }, []);
 
+    const getForumToken = useCallback(async () => {
+        // Always use the latest React session — avoids stale closure on supabase._session
+        const s = supabase._session || session;
+        if (!s?.access_token) return null;
+        // Refresh if expiring within 60 seconds
+        if (s.expires_at && Date.now() / 1000 > s.expires_at - 60) {
+            const refreshed = await supabase.auth.refreshSession(s.refresh_token);
+            if (refreshed?.access_token) {
+                supabase._session = refreshed;
+                return refreshed.access_token;
+            }
+        }
+        return s.access_token;
+    }, [session]);
+
+    const handleForumTickerClick = useCallback((ticker) => {
+        setTopbarSearch(ticker);
+        topbarResolvedSymRef.current = ticker;
+        navigateToTicker(ticker);
+    }, []);
+
+    const handleForumLoginRequired = useCallback(() => setShowLoginModal(true), []);
+
     const clearTickerRoute = useCallback(() => {
         if (typeof window === "undefined") return;
         if (!window.location.pathname.startsWith("/ticker/")) return;
@@ -27165,6 +27195,12 @@ export default function App() {
             if (sess?.access_token && sess.user?.id) {
                 prefetchOwnershipData();
                 prefetchFiiDiiData();
+                supabase._session = {
+                    access_token: sess.access_token,
+                    refresh_token: sess.refresh_token,
+                    expires_at: sess.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
+                    user: sess.user,
+                };
                 setSession(sess);
                 loadTrades(sess); loadFunds(sess); loadDividends(sess);
             } else {
@@ -27190,6 +27226,13 @@ export default function App() {
         if (!sess?.access_token || !sess.user?.id) return;
         prefetchOwnershipData();
         prefetchFiiDiiData();
+        // Keep supabase._session in sync so getValidToken() can refresh when needed
+        supabase._session = {
+            access_token: sess.access_token,
+            refresh_token: sess.refresh_token,
+            expires_at: sess.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
+            user: sess.user,
+        };
         setSession(sess);
         setIsDemo(false);
 
@@ -27467,6 +27510,15 @@ export default function App() {
                 { id: "funds", label: "Funds & XIRR", description: "Track capital flows, cash, and return efficiency." },
                 { id: "dividends", label: "Dividends", description: "Audit dividend receipts and income history." },
             ]
+        },
+        {
+            id: "forum", label: "Community", section: "Community",
+            icon: (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+            ),
         },
     ];
 
@@ -28125,6 +28177,27 @@ export default function App() {
                                 {productTab === "technical" && (
                                     <TechnicalAnalyticsModule T={T} subPage={technicalSubPage} onTechnoFundaScan={handleTechnoFundaScan} />
                                 )}
+
+                                        {/* COMMUNITY FORUM */}
+                                        {productTab === "forum" && (
+                                            <ModuleErrorBoundary
+                                                T={T}
+                                                moduleName="Community Forum"
+                                                resetKey={`forum-${theme}`}
+                                                onRecover={() => setProductTab(SAFE_PRODUCT_TAB)}
+                                            >
+                                                <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading community" />}>
+                                                    <ForumModule
+                                                        T={T}
+                                                        session={session}
+                                                        getToken={getForumToken}
+                                                        onTickerClick={handleForumTickerClick}
+                                                        onLoginRequired={handleForumLoginRequired}
+                                                    />
+                                                </Suspense>
+
+                                            </ModuleErrorBoundary>
+                                        )}
 
                             </>
                         )}
