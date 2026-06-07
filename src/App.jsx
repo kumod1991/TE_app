@@ -26972,18 +26972,18 @@ export default function App() {
         topbarResolvedSymRef.current = null;
     }, [productTab, page, financialSubPage, technicalSubPage, legalInitialTab]);
 
+    // AFTER
     const navigateToTicker = useCallback((rawSymbol, options = {}) => {
         const symbol = (rawSymbol || "").trim().toUpperCase();
         if (!symbol) return;
-        setProductTab("financial");
-        setFinancialSubPage("search");
+        // Don't set productTab/financialSubPage here — the route.kind === "ticker" effect
+        // handles that reactively, and setting them here causes a spurious history entry
+        // via the URL-sync effect before the ticker route is committed.
         setTechnoFundaFilter(null);
         setTechnoFundaSource(null);
         setOpenDropdown(null);
         setTopbarSearch(symbol);
         topbarResolvedSymRef.current = symbol;
-        // Replace history if already on a ticker page (ticker→ticker nav)
-        // to avoid stacking up ghost ticker entries the back button walks through.
         const alreadyOnTicker =
             typeof window !== "undefined" &&
             window.location.pathname.startsWith("/ticker/");
