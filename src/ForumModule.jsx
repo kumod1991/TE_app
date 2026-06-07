@@ -1794,7 +1794,12 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
         const vmap = {}; votes.forEach(v => vmap[v.target_id] = v.vote); setUserVotes(vmap);
       }
     } catch (err) {
-      if (!backgroundRefresh) setError(err.message);
+        const isJwtExpired = err.message?.includes("JWT expired") || err.message?.includes("PGRST303");
+        if (isJwtExpired) {
+            await supabase.auth.signOut();
+            return; // App's auth listener will handle redirect
+        }
+        if (!backgroundRefresh) setError(err.message);
     } finally {
       if (!backgroundRefresh) setLoading(false);
     }
