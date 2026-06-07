@@ -26947,18 +26947,13 @@ export default function App() {
     }, []);
 
     const getForumToken = useCallback(async () => {
-        // Always use the latest React session — avoids stale closure on supabase._session
-        const s = supabase._session || session;
-        if (!s?.access_token) return null;
-        // Refresh if expiring within 60 seconds
-        if (s.expires_at && Date.now() / 1000 > s.expires_at - 60) {
-            const refreshed = await supabase.auth.refreshSession(s.refresh_token);
-            if (refreshed?.access_token) {
-                supabase._session = refreshed;
-                return refreshed.access_token;
-            }
+        // Delegate entirely to getValidToken() which already handles refresh + _session update
+        const token = await supabase.getValidToken();
+        if (token && supabase._session && supabase._session.access_token !== session?.access_token) {
+            // _session was refreshed internally — sync React state so consumers get the new token
+            setSession({ ...supabase._session });
         }
-        return s.access_token;
+        return token;
     }, [session]);
 
     const handleForumTickerClick = useCallback((ticker) => {
@@ -27215,6 +27210,25 @@ export default function App() {
             setChecking(false);
         });
     }, []);
+
+    useEffect(() => {
+        const handleVisibility = async () => {
+            if (document.visibilityState !== "visible") return;
+            const s = supabase._session;
+            if (!s?.refresh_token) return;
+            // If token is already expired or will expire in 5 min, proactively refresh
+            if (!s.expires_at || Date.now() / 1000 > s.expires_at - 300) {
+                const refreshed = await supabase.auth.refreshSession(s.refresh_token);
+                if (refreshed?.access_token) {
+                    supabase._session = refreshed;
+                    setSession(prev => prev ? { ...prev, ...refreshed } : prev);
+                }
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisibility);
+        return () => document.removeEventListener("visibilitychange", handleVisibility);
+    }, []); // runs once, reads _session via ref pattern
+
 
     useEffect(() => {
         if (checking || fundamentalsWarmStartedRef.current) return;
@@ -28109,6 +28123,7 @@ export default function App() {
                                         <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading watchlist" />}>
                                             <WatchlistDashboard
                                                 T={T}
+                                                getToken={getForumToken} 
                                                 session={session}
                                                 darkMode={theme === "dark"}
                                                 onToggleDark={toggleTheme}

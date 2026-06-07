@@ -120,20 +120,20 @@ function renderMarkdown(md) {
       return `<pre style="background:rgba(0,0,0,.08);padding:12px 16px;border-radius:10px;overflow-x:auto;font-size:13px;font-family:'IBM Plex Mono',monospace;margin:12px 0;line-height:1.5">${inner}</pre>`;
     })
     .replace(/`([^`]+)`/g, "<code style=\"background:rgba(0,0,0,.08);padding:2px 6px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:13px\">$1</code>")
-    .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid rgba(0,0,0,.1);margin:16px 0">')
-    .replace(/^### (.+)$/gm, "<h3 style=\"font-size:15px;font-weight:800;margin:18px 0 6px\">$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2 style=\"font-size:17px;font-weight:800;margin:22px 0 8px\">$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1 style=\"font-size:21px;font-weight:900;margin:26px 0 10px\">$1</h1>")
-    .replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid rgba(96,165,250,0.5);margin:12px 0;padding:6px 16px;opacity:.85;font-style:italic">$1</blockquote>')
+    .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid rgba(0,0,0,.1);margin:10px 0">')
+    .replace(/^### (.+)$/gm, "<h3 style=\"font-size:15px;font-weight:800;margin:12px 0 3px\">$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2 style=\"font-size:17px;font-weight:800;margin:14px 0 4px\">$1</h2>")
+    .replace(/^# (.+)$/gm, "<h1 style=\"font-size:21px;font-weight:900;margin:16px 0 5px\">$1</h1>")
+    .replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid rgba(96,165,250,0.5);margin:8px 0;padding:4px 14px;opacity:.85;font-style:italic">$1</blockquote>')
     .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/^[-*] (.+)$/gm, '<li style="margin:4px 0">$1</li>')
     .replace(/^\d+\. (.+)$/gm, '<li style="margin:4px 0;list-style-type:decimal">$1</li>')
     .replace(/(<li[^>]*>[\s\S]*?<\/li>\n?)+/g, m => `<ul style="padding-left:20px;margin:8px 0">${m}</ul>`)
-    .replace(/\n\n/g, '</p><p style="margin:10px 0">')
+    .replace(/\n\n/g, '</p><p style="margin:5px 0">')
     .replace(/\n/g, "<br/>");
-  return `<p style="margin:10px 0">${html}</p>`;
+  return `<p style="margin:5px 0">${html}</p>`;
 }
 
 // ─── Forum Cache (stale-while-revalidate) ─────────────────────────────────────
@@ -400,9 +400,9 @@ function MediaPreview({ items, T }) {
   return (
     <>
       {imgs.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
           {imgs.map((m, i) => (
-            <img key={i} src={m.url} alt="" onClick={() => setLightbox(m.url)} style={{ width: 120, height: 90, objectFit: "cover", borderRadius: 10, cursor: "zoom-in", border: `1px solid ${withAlpha(T.text, 0.08)}` }} />
+            <img key={i} src={m.url} alt="" onClick={() => setLightbox(m.url)} style={{ flex: "1 1 calc(50% - 3px)", minWidth: 180, maxWidth: imgs.length === 1 ? "100%" : "calc(50% - 3px)", height: "auto", maxHeight: 340, objectFit: "cover", borderRadius: 10, cursor: "zoom-in", border: `1px solid ${withAlpha(T.text, 0.08)}`, display: "block" }} />
           ))}
         </div>
       )}

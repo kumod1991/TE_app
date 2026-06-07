@@ -1552,7 +1552,7 @@ function DetailPanel({ row, sparkData, onClose, T }) {
 // ═══════════════════════════════════════════════════════════════
 //  MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
-export default function WatchlistDashboard({ T, session, darkMode: darkModeProp, onToggleDark, onNavigateToScreen, onTechnoFunda,
+export default function WatchlistDashboard({ T, session, getToken, darkMode: darkModeProp, onToggleDark, onNavigateToScreen, onTechnoFunda,
   fetchAndCachePrice, bestPrice, isPricePending, isMarketLive }) {
   // ── Fallback stubs so the component works standalone (e.g. storybook / tests) ──
   const _isMarketLive   = isMarketLive   ?? (() => false);
@@ -1560,7 +1560,13 @@ export default function WatchlistDashboard({ T, session, darkMode: darkModeProp,
   const _isPricePending = isPricePending ?? (() => false);
   const _fetchAndCache  = fetchAndCachePrice ?? (() => Promise.resolve());
   const token  = session?.access_token || null;
-  const userId = session?.user?.id     || null;
+    const userId = session?.user?.id || null;
+
+    // Add near top of WatchlistDashboard component body:
+    const getFreshToken = useCallback(async () => {
+        if (getToken) return getToken();
+        return session?.access_token || null;
+    }, [getToken, session]);
 
   // ── Mobile detection ─────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
