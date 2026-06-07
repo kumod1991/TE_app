@@ -2741,6 +2741,7 @@ function parseAppRoute(pathname = "/") {
     const [section, sub] = segments;
     if (!section) return { kind: "app", ...DEFAULT_APP_STATE };
     if (section === "dashboard") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "dashboard" };
+    if (section === "forum") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "forum" };
     if (section === "watchlist") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "watchlist" };
     if (section === "fundamentals") {
         return {
