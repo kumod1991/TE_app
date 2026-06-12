@@ -1,5 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
+import { ensureAllowedTickerSet, getAllowedTickerSetSync, isAllowedTicker } from "./marketUniverse";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // ─── TWO-LEVEL CACHE  (memory + sessionStorage)  ────────────────────────────────
@@ -22,6 +24,7 @@ const LS_PREFIX = "sbd-persist:";
 const NAME_MAP_LS_KEY = "sbd-persist:name-map"; // flat { ticker: name } object – survives sessions
 const _memCache = new Map();   // key → { data, ts, ttl }
 const _pending = new Map();   // key → Promise  (dedup concurrent requests)
+let _stockDashboardWarmPromise = null;
 
 // ── sessionStorage helpers ────────────────────────────────────────────────────
 function _ssKey(key) { return SS_PREFIX + key; }
@@ -2767,7 +2770,7 @@ function isETF(r) {
 }
 
 /** Build the four mover lists from raw market_movers + stock_52w rows. */
-function deriveMovers(moversData, stock52wRows) {
+function deriveMovers(moversData, stock52wRows, allowedSet = getAllowedTickerSetSync()) {
     const volMa20Map = new Map((stock52wRows || []).map(r => [r.ticker, Number(r.volume_ma20) || null]));
     const enriched = (moversData || []).map(p => {
         const vol = p.volume != null ? Number(p.volume) : null;
@@ -2793,11 +2796,12 @@ function deriveMovers(moversData, stock52wRows) {
     const validGainer = r => r.change_pct == null || r.change_pct <= 50;
     const validLoser = r => r.change_pct == null || r.change_pct >= -20;
     const validBoth = r => validGainer(r) && validLoser(r);
+    const canKeep = r => isAllowedTicker(r.ticker, allowedSet);
     return {
-        gainers: enriched.filter(r => r.rank_gainer != null && validGainer(r) && !isETF(r)).sort((a, b) => (a.rank_gainer || 9999) - (b.rank_gainer || 9999)).slice(0, 100),
-        losers: enriched.filter(r => r.rank_loser != null && validLoser(r) && !isETF(r)).sort((a, b) => (a.rank_loser || 9999) - (b.rank_loser || 9999)).slice(0, 100),
-        nearHigh: enriched.filter(r => r.near_high === true && validBoth(r) && !isETF(r)).map(r => ({ ...r, dist_pct: r.dist_high })).sort((a, b) => (b.dist_high || -999) - (a.dist_high || -999)).slice(0, 100),
-        nearLow: enriched.filter(r => r.near_low === true && validBoth(r) && !isETF(r)).map(r => ({ ...r, dist_pct: r.dist_low })).sort((a, b) => (a.dist_low || 999) - (b.dist_low || 999)).slice(0, 100),
+        gainers: enriched.filter(r => r.rank_gainer != null && validGainer(r) && !isETF(r) && canKeep(r)).sort((a, b) => (a.rank_gainer || 9999) - (b.rank_gainer || 9999)).slice(0, 100),
+        losers: enriched.filter(r => r.rank_loser != null && validLoser(r) && !isETF(r) && canKeep(r)).sort((a, b) => (a.rank_loser || 9999) - (b.rank_loser || 9999)).slice(0, 100),
+        nearHigh: enriched.filter(r => r.near_high === true && validBoth(r) && !isETF(r) && canKeep(r)).map(r => ({ ...r, dist_pct: r.dist_high })).sort((a, b) => (b.dist_high || -999) - (a.dist_high || -999)).slice(0, 100),
+        nearLow: enriched.filter(r => r.near_low === true && validBoth(r) && !isETF(r) && canKeep(r)).map(r => ({ ...r, dist_pct: r.dist_low })).sort((a, b) => (a.dist_low || 999) - (b.dist_low || 999)).slice(0, 100),
     };
 }
 
@@ -2813,8 +2817,8 @@ function buildReturnsMap(rows) {
 }
 
 /** Merge ticker_industry_rs rows with a returns map into the rsStocks shape. */
-function enrichRsStocks(tirsData, returnsMap) {
-    return (tirsData || []).map(row => {
+function enrichRsStocks(tirsData, returnsMap, allowedSet = getAllowedTickerSetSync()) {
+    return (tirsData || []).filter(row => isAllowedTicker(row.ticker, allowedSet)).map(row => {
         const ret = returnsMap.get(row.ticker);
         return {
             ticker: row.ticker,
@@ -2826,6 +2830,115 @@ function enrichRsStocks(tirsData, returnsMap) {
             ret_12m: ret?.ret_12m ?? null,
         };
     });
+}
+
+async function warmStockDashboardCaches(userToken) {
+    if (_stockDashboardWarmPromise) return _stockDashboardWarmPromise;
+
+    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
+    const STOCK52W_PATH = "stock_52w?select=ticker,volume_ma20";
+    const MOVERS_TTL = 5 * 60 * 1000;
+
+    const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
+    const TIRS_ALL_PATH = "ticker_industry_rs?select=industry&order=industry.asc";
+    const RETURNS_PATH = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
+    const RS_SUMMARY_CACHE_KEY = "dashboard-rs-industry-summary-v1";
+    const ALL_RS_STOCKS_CACHE_KEY = "dashboard-all-rs-stocks-v1";
+    const RS_TTL = 60 * 60 * 1000;
+    const RETURNS_TTL = 10 * 60 * 1000;
+    const ALL_RS_LATEST_DATE_PATH = "indicators?select=date&order=date.desc&limit=1";
+    const ALL_RS_TTL = 10 * 60 * 1000;
+
+    const headers = userToken ? userToken : null;
+
+    _stockDashboardWarmPromise = (async () => {
+        try {
+            const allowedSetPromise = ensureAllowedTickerSet();
+            const moversPromise = sbFetch(MOVERS_PATH, headers, { ttl: MOVERS_TTL }).catch(() => null);
+            const stock52wPromise = sbFetchAll(STOCK52W_PATH, headers, { ttl: RETURNS_TTL }).catch(() => []);
+            const tirsRsPromise = sbFetchAll(TIRS_RS85_PATH, headers, { ttl: RS_TTL }).catch(() => []);
+            const tirsAllPromise = sbFetchAll(TIRS_ALL_PATH, headers, { ttl: RS_TTL }).catch(() => []);
+            const returnsPromise = sbFetchAll(RETURNS_PATH, headers, { ttl: RETURNS_TTL }).catch(() => []);
+            const latestDatePromise = sbFetch(ALL_RS_LATEST_DATE_PATH, headers, { ttl: ALL_RS_TTL }).catch(() => []);
+
+            const [moversData, stock52wRows, tirsRsRows, tirsAllRows, returnsRows, latestDateRows] = await Promise.all([
+                moversPromise,
+                stock52wPromise,
+                tirsRsPromise,
+                tirsAllPromise,
+                returnsPromise,
+                latestDatePromise,
+            ]);
+            const allowedSet = await allowedSetPromise;
+
+            if (Array.isArray(moversData) && moversData.length > 0 && Array.isArray(stock52wRows) && stock52wRows.length > 0) {
+                const derived = deriveMovers(moversData, stock52wRows, allowedSet);
+                cacheSet(MOVERS_PATH, moversData, MOVERS_TTL);
+                cacheSet(STOCK52W_PATH, stock52wRows, RETURNS_TTL);
+                void derived;
+            }
+
+            if (Array.isArray(tirsRsRows) && tirsRsRows.length > 0 && Array.isArray(tirsAllRows) && tirsAllRows.length > 0 && Array.isArray(returnsRows) && returnsRows.length > 0) {
+                const retMap = buildReturnsMap(returnsRows);
+                const rsStocks = enrichRsStocks(tirsRsRows, retMap, allowedSet).filter(r => !isETF(r));
+                const industryTotals = new Map();
+                const uniqueIndustries = new Set();
+                (tirsAllRows || []).forEach(r => {
+                    const key = normalizeIndustryKey(r.industry);
+                    if (key) industryTotals.set(key, (industryTotals.get(key) || 0) + 1);
+                });
+                (tirsRsRows || []).forEach(r => {
+                    const name = normalizeIndustryName(r.industry);
+                    if (name) uniqueIndustries.add(name);
+                });
+                const rsSummary = [...uniqueIndustries].sort().map(industry => {
+                    const key = normalizeIndustryKey(industry);
+                    const count = (tirsRsRows || []).filter(r => normalizeIndustryKey(r.industry) === key).length;
+                    const total = industryTotals.get(key) || count;
+                    return { industry, count, total, pct: total > 0 ? (count / total) * 100 : 0 };
+                }).sort((a, b) => (b.count || 0) - (a.count || 0) || a.industry.localeCompare(b.industry));
+                persistentCacheSet(RS_SUMMARY_CACHE_KEY, rsSummary, RS_TTL);
+                cacheSet(TIRS_RS85_PATH, tirsRsRows, RS_TTL);
+                cacheSet(TIRS_ALL_PATH, tirsAllRows, RS_TTL);
+                cacheSet(RETURNS_PATH, returnsRows, RETURNS_TTL);
+                void rsStocks;
+            }
+
+            const latestDate = latestDateRows?.[0]?.date;
+                if (latestDate) {
+                    const allRsPath = `indicators?select=ticker,rs_rating,rs_score,cap_category&date=eq.${latestDate}&exchange=eq.NSE&rs_rating=gte.85&order=rs_rating.desc.nullslast`;
+                    const [indicatorsHighRS, allReturnsRows] = await Promise.all([
+                        sbFetch(allRsPath, headers, { ttl: ALL_RS_TTL }).catch(() => []),
+                        returnsPromise,
+                    ]);
+                    if (Array.isArray(indicatorsHighRS) && indicatorsHighRS.length > 0 && Array.isArray(allReturnsRows) && allReturnsRows.length > 0) {
+                        const returnsMap = buildReturnsMap(allReturnsRows);
+                        const enriched = (indicatorsHighRS || []).filter(r => isAllowedTicker(r.ticker, allowedSet)).map((r, idx) => {
+                            const ret = returnsMap.get(r.ticker);
+                            return {
+                                ticker: r.ticker,
+                            name: null,
+                            rs_rating: r.rs_rating,
+                            rs_score: r.rs_score,
+                            cap_category: r.cap_category,
+                            rank: idx + 1,
+                            ret_3m: ret?.ret_3m ?? null,
+                            ret_6m: ret?.ret_6m ?? null,
+                            ret_12m: ret?.ret_12m ?? null,
+                        };
+                    });
+                    persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
+                    cacheSet(allRsPath, indicatorsHighRS, ALL_RS_TTL);
+                }
+            }
+        } catch (err) {
+            console.warn("[StockDashboard warmup] failed:", err);
+        } finally {
+            _stockDashboardWarmPromise = null;
+        }
+    })();
+
+    return _stockDashboardWarmPromise;
 }
 
 export default function StockDashboard({ T, userToken, onTickerClick, onLogin, onNavigate }) {
@@ -2877,11 +2990,12 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
         const hit = cacheGet(VS_PATH, 5 * 60 * 1000);
         if (!hit || !Array.isArray(hit.data)) return [];
+        const allowedSet = getAllowedTickerSetSync();
         return applyNamesFromMap(hit.data.map(r => ({
             ...r,
             name: _nameMap.get(r.ticker) || null,
             change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
-        })).filter(r => !isETF(r)));
+        })).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
     });
     const [loadingVolumeShockers, setLoadingVolumeShockers] = useState(() => {
         const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
@@ -2917,7 +3031,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         const retHit = cacheGet(RETURNS_PATH, RETURNS_TTL);
         const retRows = retHit ? retHit.data || [] : (cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || []);
         const retMap = buildReturnsMap(retRows);
-        return enrichRsStocks(_cachedRs, retMap).filter(r => !isETF(r));
+        return enrichRsStocks(_cachedRs, retMap, getAllowedTickerSetSync()).filter(r => !isETF(r));
     });
     const [loadingRs, setLoadingRs] = useState(() => !_cachedRs);
     const [industry, setIndustry] = useState("");
@@ -2928,7 +3042,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         const hit = persistentCacheGet(ALL_RS_STOCKS_CACHE_KEY, ALL_RS_TTL);
         if (!hit?.data?.length) return [];
         // Apply names from global map – instant on any revisit where bhav cache is warm
-        return applyNamesFromMap(hit.data).filter(r => !isETF(r));
+        return applyNamesFromMap(hit.data).filter(r => !isETF(r) && isAllowedTicker(r.ticker, getAllowedTickerSetSync()));
     });
     const [loadingAllRs, setLoadingAllRs] = useState(() => {
         const hit = persistentCacheGet(ALL_RS_STOCKS_CACHE_KEY, ALL_RS_TTL);
@@ -2971,8 +3085,8 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
         // applyMovers: takes raw API rows and updates all mover state slices.
-        function applyMovers(moversData, stock52wRows) {
-            const derived = deriveMovers(moversData, stock52wRows);
+        function applyMovers(moversData, stock52wRows, allowedSet) {
+            const derived = deriveMovers(moversData, stock52wRows, allowedSet);
             // applyNamesFromMap fills names for tickers already in the global map (instant on revisit)
             setGainers(applyNamesFromMap(derived.gainers));
             setLosers(applyNamesFromMap(derived.losers));
@@ -2990,6 +3104,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             // loadingMovers is only true when there was no cache at mount.
             setError(null);
             try {
+                const allowedSet = await ensureAllowedTickerSet();
                 // Both calls respect SWR: they return stale cache immediately
                 // and call onStale when a background refresh completes.
                 let latestMovers = _cachedMovers || null;
@@ -3000,14 +3115,14 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         ttl: MOVERS_TTL,
                         onStale: fresh => {
                             latestMovers = fresh;
-                            applyMovers(latestMovers, latestS52);
+                            applyMovers(latestMovers, latestS52, allowedSet);
                         },
                     }),
                     sbFetchAll(STOCK52W_PATH, userToken, {
                         ttl: RETURNS_TTL,
                         onStale: fresh => {
                             latestS52 = fresh || [];
-                            if (latestMovers) applyMovers(latestMovers, latestS52);
+                            if (latestMovers) applyMovers(latestMovers, latestS52, allowedSet);
                         },
                     }),
                 ]);
@@ -3016,7 +3131,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 // The synchronous return here is used for the initial render.
                 latestMovers = moversData;
                 latestS52 = stock52wData || [];
-                applyMovers(moversData, stock52wData);
+                applyMovers(moversData, stock52wData, allowedSet);
 
                 // ── Enrich mover rows with names (background, non-blocking) ────────
                 // Names already present from _nameMap for cached tickers.
@@ -3028,10 +3143,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
                         // _updateNameMap is called inside batchFetchBhavNames; push update to UI
                         if (nameRows.length) {
-                            setGainers(prev => applyNamesFromMap(prev));
-                            setLosers(prev => applyNamesFromMap(prev));
-                            setNearHigh(prev => applyNamesFromMap(prev));
-                            setNearLow(prev => applyNamesFromMap(prev));
+                            setGainers(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
+                            setLosers(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
+                            setNearHigh(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
+                            setNearLow(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
                         }
                     }
                 } catch (nameErr) {
@@ -3061,12 +3176,13 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     name: _nameMap.get(r.ticker) || r.name || null,
                     change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
                 });
+                const allowedSet = await ensureAllowedTickerSet();
                 const cached = cacheGet(VOLUME_SHOCKERS_PATH, VOLUME_SHOCKERS_TTL);
                 let vsData = null;
                 if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
                     // Paint stale or fresh data immediately — no spinner
                     vsData = cached.data;
-                    setVolumeShockers(vsData.map(mapRow).filter(r => !isETF(r)));
+                    setVolumeShockers(vsData.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                     setLoadingVolumeShockers(false);
                     if (!cached.stale) {
                         // Fresh — background name enrichment only
@@ -3076,12 +3192,12 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                             ttl: VOLUME_SHOCKERS_TTL,
                             noCache: false,
                             onStale: fresh => {
-                                if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r)));
+                                if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                             },
                         }).then(fresh => {
                             if (Array.isArray(fresh)) {
                                 vsData = fresh;
-                                setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r)));
+                                setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                             }
                         }).catch(() => { });
                     }
@@ -3089,10 +3205,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     vsData = await sbFetch(VOLUME_SHOCKERS_PATH, userToken, {
                         ttl: VOLUME_SHOCKERS_TTL,
                         onStale: fresh => {
-                            if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r)));
+                            if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                         },
                     });
-                    setVolumeShockers((vsData || []).map(mapRow).filter(r => !isETF(r)));
+                    setVolumeShockers((vsData || []).map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                 }
 
                 // ── Enrich volume shocker rows with names (missing tickers only) ──
@@ -3102,7 +3218,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     if (missingTickers.length) {
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
                         if (nameRows.length) {
-                            setVolumeShockers(prev => applyNamesFromMap(prev).filter(r => !isETF(r)));
+                            setVolumeShockers(prev => applyNamesFromMap(prev).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                         }
                     }
                 } catch (nameErr) {
@@ -3151,6 +3267,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
     useEffect(() => {
+        let allowedSet = getAllowedTickerSetSync();
         function buildRsSummary(tirsData, allIndustryData) {
             const totalsMap = new Map();
             (allIndustryData || []).forEach(r => {
@@ -3181,6 +3298,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         function applyRsData(tirsData, allIndustryData, allReturnsData = []) {
             const returnsMap = buildReturnsMap(allReturnsData);
             stockReturnsMapRef.current = returnsMap;
+            const filteredTirsData = (tirsData || []).filter(r => isAllowedTicker(r.ticker, allowedSet));
 
             const totalsMap = new Map();
             allIndustryData.forEach(r => {
@@ -3190,14 +3308,14 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             setIndustryTotals(totalsMap);
 
             const uniqueInds = [...new Set(
-                tirsData.map(r => normalizeIndustryName(r.industry)).filter(Boolean)
+                filteredTirsData.map(r => normalizeIndustryName(r.industry)).filter(Boolean)
             )].sort();
             setIndustries(uniqueInds);
             setLoadingIndustries(false);
 
-            setRsStocks(enrichRsStocks(tirsData, returnsMap).filter(r => !isETF(r)));
+            setRsStocks(enrichRsStocks(filteredTirsData, returnsMap, allowedSet).filter(r => !isETF(r)));
 
-            const summary = buildRsSummary(tirsData, allIndustryData);
+            const summary = buildRsSummary(filteredTirsData, allIndustryData);
             setCachedRsIndustrySummary(summary);
             persistentCacheSet(RS_SUMMARY_CACHE_KEY, summary, RS_TTL);
         }
@@ -3206,6 +3324,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             // loadingRs / loadingIndustries are false when cache was available at mount.
             setError(null);
             try {
+                allowedSet = await ensureAllowedTickerSet();
                 let latestTirsData = _cachedRs || [];
                 let latestAllIndustryData = cacheGetAllPages(TIRS_ALL_PATH, RS_TTL) || [];
                 let latestReturnsData = cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || [];
@@ -3276,14 +3395,14 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 const indicatorsHighRS = await sbFetch(ALL_RS_PATH, userToken, {
                     ttl: ALL_RS_TTL,
                     onStale: fresh => {
-                        const enriched = buildAllRsStocks(fresh, latestReturnsData);
+                        const enriched = buildAllRsStocks(fresh, latestReturnsData).filter(r => isAllowedTicker(r.ticker, allowedSet));
                         setAllRsStocks(enriched.filter(r => !isETF(r)));
                         persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
                     },
                 });
 
                 // Build allRsStocks: join indicators with returns
-                const enriched = buildAllRsStocks(indicatorsHighRS, allReturnsData);
+                const enriched = buildAllRsStocks(indicatorsHighRS, allReturnsData).filter(r => isAllowedTicker(r.ticker, allowedSet));
                 setAllRsStocks(enriched.filter(r => !isETF(r)));
                 persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
 
@@ -3295,7 +3414,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
                         if (nameRows.length) {
                             // _updateNameMap already called inside batchFetchBhavNames
-                            setAllRsStocks(prev => applyNamesFromMap(prev).filter(r => !isETF(r)));
+                            setAllRsStocks(prev => applyNamesFromMap(prev).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                         }
                     }
                 } catch (nameErr) {
@@ -3753,6 +3872,8 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         </div>
     );
 }
+
+StockDashboard.warmStockDashboardCaches = warmStockDashboardCaches;
 
 function LoadMoreRowsButton({ T, visibleCount, totalCount, onLoadMore }) {
     if (visibleCount >= totalCount) return null;

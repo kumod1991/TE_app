@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
+import { ensureAllowedTickerSet, filterRowsByAllowedTickers, getAllowedTickerSetSync, preloadAllowedTickerSet } from "./marketUniverse";
 
 const ForumModule = lazy(() => import("./ForumModule"));
 
@@ -13,6 +14,7 @@ const PremiumTickerDashboard = lazy(() => import("./PremiumTickerDashboard"));
 const prefetchFiiDiiData = () => import("./FiiDiiModule").then(m => m.prefetchFiiDiiData?.()).catch(() => null);
 const prefetchOwnershipData = () => import("./OwnershipScansModule").then(m => m.prefetchOwnershipData?.()).catch(() => null);
 const prefetchAnnouncementsData = () => import("./AnnouncementsModule").then(m => m.prefetchAnnouncementsData?.()).catch(() => null);
+const warmStockDashboardCaches = (userToken) => import("./StockDashboard").then(m => m.default?.warmStockDashboardCaches?.(userToken)).catch(() => null);
 
 
 
@@ -12082,6 +12084,7 @@ function _isScreenerCacheFresh() {
 }
 
 async function _fetchScreenerRows() {
+    const allowedSet = await ensureAllowedTickerSet();
     const PAGE = 1000;
     const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "count=exact" };
     const base = `${SUPABASE_URL}/rest/v1/stock_ratios?select=*&order=market_cap_cr.desc.nullslast&limit=${PAGE}`;
@@ -12121,8 +12124,9 @@ async function _fetchScreenerRows() {
         enriched = all;
     }
 
-    _writeScreenerCache(enriched);
-    return enriched;
+    const filtered = filterRowsByAllowedTickers(enriched, "ticker", allowedSet);
+    _writeScreenerCache(filtered);
+    return filtered;
 }
 
 _seedScreenerCache();
@@ -12579,6 +12583,7 @@ function _preloadScreenerCache() {
 
 function _warmFundamentalsCaches() {
     const warm = () => {
+        preloadAllowedTickerSet();
         _preloadScreenerCache();
         prefetchFiiDiiData();
         prefetchOwnershipData();
@@ -12589,6 +12594,19 @@ function _warmFundamentalsCaches() {
     } else {
         setTimeout(warm, 250);
     }
+}
+
+function _warmMarketAndTechnicalCaches(userToken) {
+    const warm = () => {
+        preloadAllowedTickerSet();
+        _prefetchScreensBreakout();
+        _prefetchScreensPivot();
+        _prefetchScreensVolBreak();
+        _prefetchScreensPullback();
+        _prefetchScreensVcp();
+        warmStockDashboardCaches(userToken);
+    };
+    warm();
 }
 
 // ============================================================
@@ -12917,8 +12935,8 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
 
 //  SCREENER MODULE 
 function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onClearTickerFilter, onBack = null }) {
-    const [allRows, setAllRows] = useState(() => _screenerCache || []);
-    const [loading, setLoading] = useState(() => !_screenerCache || _screenerCache.length === 0);
+    const [allRows, setAllRows] = useState(() => filterRowsByAllowedTickers(_screenerCache || []));
+    const [loading, setLoading] = useState(() => !(_screenerCache && _screenerCache.length > 0));
     const [loadErr, setLoadErr] = useState("");
     const [lastRefresh, setLastRefresh] = useState(_screenerCacheTime);
     const [universe, setUniverse] = useState("all");
@@ -12979,14 +12997,15 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
 
     // Data load
     const loadRatios = async (force) => {
+        const allowedSet = await ensureAllowedTickerSet();
         if (!force && _screenerCache && _screenerCache.length > 0) {
             setLoadErr("");
-            setAllRows(_screenerCache);
+            setAllRows(filterRowsByAllowedTickers(_screenerCache, "ticker", allowedSet));
             setLastRefresh(_screenerCacheTime);
             setLoading(false);
             if (!_isScreenerCacheFresh()) _preloadScreenerCache().then(rows => {
                 if (Array.isArray(rows) && rows.length > 0) {
-                    setAllRows(rows);
+                    setAllRows(filterRowsByAllowedTickers(rows, "ticker", allowedSet));
                     setLastRefresh(_screenerCacheTime);
                 }
             }).catch(() => { });
@@ -12996,7 +13015,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         try {
             const rows = await _preloadScreenerCache();
             if (!Array.isArray(rows) || rows.length === 0) throw new Error("No screener rows returned");
-            setAllRows(rows);
+            setAllRows(filterRowsByAllowedTickers(rows, "ticker", allowedSet));
             setLastRefresh(_screenerCacheTime);
         } catch (e) { setLoadErr(e.message || "Failed"); }
         finally { setLoading(false); }
@@ -17179,6 +17198,8 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
 function MarketBreadthModule({ T, onDataReady }) {
     const exchange = "NSE";
     const [range, setRange] = useState("1Y");
+    const allowedTickers = getAllowedTickerSetSync();
+    const filterAllowedRows = rows => filterRowsByAllowedTickers(rows, "ticker", allowedTickers);
     // If the module-level cache was already seeded from localStorage, start non-loading
     // and pre-populate all state so the header renders on the very first paint.
     const _hasSeededCache = !!(
@@ -17188,11 +17209,15 @@ function MarketBreadthModule({ T, onDataReady }) {
         _breadthCache.rsRating && _breadthCache.rsAcceleration
     );
     const [data, setData] = useState(() => _hasSeededCache ? _breadthCache.data : []);
-    const [top52wHigh, setTop52wHigh] = useState(() => _hasSeededCache ? _breadthCache.top52wHigh : []);
-    const [topRS, setTopRS] = useState(() => _hasSeededCache ? _breadthCache.topRS : { rs3m: [], rs6m: [], rs12m: [] });
-    const [trendAligned, setTrendAligned] = useState(() => _hasSeededCache ? _breadthCache.trendAligned : []);
-    const [rsRating, setRsRating] = useState(() => _hasSeededCache ? _breadthCache.rsRating : []);
-    const [rsAcceleration, setRsAcceleration] = useState(() => _hasSeededCache ? _breadthCache.rsAcceleration : []);
+    const [top52wHigh, setTop52wHigh] = useState(() => _hasSeededCache ? filterAllowedRows(_breadthCache.top52wHigh) : []);
+    const [topRS, setTopRS] = useState(() => _hasSeededCache ? {
+        rs3m: filterAllowedRows(_breadthCache.topRS?.rs3m),
+        rs6m: filterAllowedRows(_breadthCache.topRS?.rs6m),
+        rs12m: filterAllowedRows(_breadthCache.topRS?.rs12m),
+    } : { rs3m: [], rs6m: [], rs12m: [] });
+    const [trendAligned, setTrendAligned] = useState(() => _hasSeededCache ? filterAllowedRows(_breadthCache.trendAligned) : []);
+    const [rsRating, setRsRating] = useState(() => _hasSeededCache ? filterAllowedRows(_breadthCache.rsRating) : []);
+    const [rsAcceleration, setRsAcceleration] = useState(() => _hasSeededCache ? filterAllowedRows(_breadthCache.rsAcceleration) : []);
     const [nameMap, setNameMap] = useState(() => _hasSeededCache ? (_breadthCache.nameMap || {}) : {});
     const [industryMap, setIndustryMap] = useState(() => _hasSeededCache ? (_breadthCache.industryMap || {}) : {});
     const [loading, setLoading] = useState(!_hasSeededCache);
@@ -17250,20 +17275,28 @@ function MarketBreadthModule({ T, onDataReady }) {
             //  STEP 1: serve stale instantly  no loading spinner 
             if (hasStale) {
                 setData(_breadthCache.data);
-                setTop52wHigh(_breadthCache.top52wHigh);
-                setTopRS(_breadthCache.topRS);
+                setTop52wHigh(filterAllowedRows(_breadthCache.top52wHigh));
+                setTopRS({
+                    rs3m: filterAllowedRows(_breadthCache.topRS?.rs3m),
+                    rs6m: filterAllowedRows(_breadthCache.topRS?.rs6m),
+                    rs12m: filterAllowedRows(_breadthCache.topRS?.rs12m),
+                });
                 setNameMap(_breadthCache.nameMap);
                 if (_breadthCache.industryMap) setIndustryMap(_breadthCache.industryMap);
-                setTrendAligned(_breadthCache.trendAligned);
-                setRsRating(_breadthCache.rsRating);
-                setRsAcceleration(_breadthCache.rsAcceleration);
+                setTrendAligned(filterAllowedRows(_breadthCache.trendAligned));
+                setRsRating(filterAllowedRows(_breadthCache.rsRating));
+                setRsAcceleration(filterAllowedRows(_breadthCache.rsAcceleration));
                 setLoading(false); setTablesLoading(false);
                 if (onDataReady) onDataReady({
-                    top52wHigh: _breadthCache.top52wHigh,
-                    topRS: _breadthCache.topRS,
-                    trendAligned: _breadthCache.trendAligned,
-                    rsRating: _breadthCache.rsRating,
-                    rsAcceleration: _breadthCache.rsAcceleration,
+                    top52wHigh: filterAllowedRows(_breadthCache.top52wHigh),
+                    topRS: {
+                        rs3m: filterAllowedRows(_breadthCache.topRS?.rs3m),
+                        rs6m: filterAllowedRows(_breadthCache.topRS?.rs6m),
+                        rs12m: filterAllowedRows(_breadthCache.topRS?.rs12m),
+                    },
+                    trendAligned: filterAllowedRows(_breadthCache.trendAligned),
+                    rsRating: filterAllowedRows(_breadthCache.rsRating),
+                    rsAcceleration: filterAllowedRows(_breadthCache.rsAcceleration),
                     nameMap: _breadthCache.nameMap,
                     industryMap: _breadthCache.industryMap || {},
                     tablesLoading: false,
@@ -17293,6 +17326,8 @@ function MarketBreadthModule({ T, onDataReady }) {
                             .then(rows => { _breadthCache.cfRows = rows; _breadthCache.cfRowsTime = Date.now(); return rows; })
                         : Promise.resolve(_breadthCache.cfRows),
                 ]);
+                const allowedSet = await ensureAllowedTickerSet();
+                const allowedFilter = rows => filterRowsByAllowedTickers(rows, "ticker", allowedSet);
                 // Detect Supabase error response (returns {message, code, hint, details} instead of array)
                 const isBreadthError = !Array.isArray(breadthRows) || breadthRows?.code || breadthRows?.message;
                 const cleanData = (!isBreadthError && Array.isArray(breadthRows)) ? breadthRows.filter(r =>
@@ -17371,10 +17406,16 @@ function MarketBreadthModule({ T, onDataReady }) {
                     fetchAllPages(returnsBase),
                     fetchAllPages(`${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.${exchange}&select=ticker,close,high_52w,low_52w,pct_from_high,pct_from_low,sma50,sma200,volume,volume_ma20`),
                 ]);
+                const filteredIndAllRows = allowedFilter(indAllRows);
+                const filteredRsRawRows = allowedFilter(rsRawRows);
+                const filteredTrendRawRows = allowedFilter(trendRawRows);
+                const filteredAllPriceRows = allowedFilter(allPriceRows);
+                const filteredReturnsRows = allowedFilter(returnsRows);
+                const filteredStock52wRows = allowedFilter(stock52wRows);
 
                 const stock52wMap = {};
-                if (Array.isArray(stock52wRows)) {
-                    stock52wRows.forEach(r => {
+                if (Array.isArray(filteredStock52wRows)) {
+                    filteredStock52wRows.forEach(r => {
                         if (r?.ticker) stock52wMap[r.ticker] = {
                             close: r.close != null ? Number(r.close) : null,
                             pct_from_52w_high: r.pct_from_high != null ? -Number(r.pct_from_high) : null,
@@ -17388,11 +17429,11 @@ function MarketBreadthModule({ T, onDataReady }) {
                 }
 
                 const priceMap = {};
-                if (Array.isArray(allPriceRows)) allPriceRows.forEach(p => { if (p?.ticker) priceMap[p.ticker] = p.close; });
+                if (Array.isArray(filteredAllPriceRows)) filteredAllPriceRows.forEach(p => { if (p?.ticker) priceMap[p.ticker] = p.close; });
 
                 const returnsMap = {};
-                if (Array.isArray(returnsRows)) {
-                    returnsRows.forEach(r => {
+                if (Array.isArray(filteredReturnsRows)) {
+                    filteredReturnsRows.forEach(r => {
                         if (r?.ticker) returnsMap[r.ticker] = {
                             ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
                             ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
@@ -17428,8 +17469,8 @@ function MarketBreadthModule({ T, onDataReady }) {
                     return true;
                 };
 
-                const indRows = indAllRows.filter(filterRow);
-                const rsAllFiltered = rsRawRows.filter(filterRow);
+                const indRows = filteredIndAllRows.filter(filterRow);
+                const rsAllFiltered = filteredRsRawRows.filter(filterRow);
 
                 const rs3m = [...rsAllFiltered].sort((a, b) => b.rs_3m - a.rs_3m).map(withReturns);
                 const rs6m = [...rsAllFiltered].sort((a, b) => b.rs_6m - a.rs_6m).map(withReturns);
@@ -17452,7 +17493,7 @@ function MarketBreadthModule({ T, onDataReady }) {
                 setRsAcceleration(rsAccelerationRows);
                 _breadthCache.rsAcceleration = rsAccelerationRows;
 
-                const trendAlignedRows = (Array.isArray(trendRawRows) ? trendRawRows : [])
+                const trendAlignedRows = (Array.isArray(filteredTrendRawRows) ? filteredTrendRawRows : [])
                     .filter(r => {
                         if (!filterRow(r)) return false;
                         const close = priceMap[r.ticker]; if (!close) return false;
@@ -17465,8 +17506,8 @@ function MarketBreadthModule({ T, onDataReady }) {
                 _breadthCache.trendAligned = trendAlignedRows;
 
                 const rsMap = {};
-                if (Array.isArray(rsRawRows)) {
-                    rsRawRows.forEach(r => {
+                if (Array.isArray(filteredRsRawRows)) {
+                    filteredRsRawRows.forEach(r => {
                         if (r?.ticker) rsMap[r.ticker] = {
                             rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
                             rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
@@ -19661,7 +19702,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     //  3. pct_from_low  > 25      momentum from base
     //  4. vol / vol_ma20 >= 1.5   volume expansion
     //  5. rs_rating >= 80         relative strength
-    const [breakoutRawRows, setBreakoutRawRows] = useState(() => _screensBreakoutCache.rows || []);
+    const [breakoutRawRows, setBreakoutRawRows] = useState(() => filterRowsByAllowedTickers(_screensBreakoutCache.rows || []));
     const [breakoutLoading, setBreakoutLoading] = useState(!(_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0));
 
     useEffect(() => {
@@ -19685,17 +19726,20 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
         const load = async () => {
             try {
+                const allowedSet = getAllowedTickerSetSync();
+                const allowedSetPromise = ensureAllowedTickerSet();
                 //  SWR: serve stale cache instantly, skip or background-revalidate 
                 const _bc = _screensBreakoutCache;
                 const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
-                    if (!cancelled) { setBreakoutRawRows(_bc.rows); setBreakoutLoading(false); }
+                    if (!cancelled) { setBreakoutRawRows(filterRowsByAllowedTickers(_bc.rows, "ticker", allowedSet)); setBreakoutLoading(false); }
                     if (_bcAge < _SCREENS_CACHE_TTL_MS) return; // fresh  skip network entirely
                     // stale  continue to revalidate silently (no spinner)
                 } else {
                     setBreakoutLoading(true);
                 }
+                const resolvedAllowedSet = await allowedSetPromise;
 
                 // Step 1: stock_52w rows passing price/volume base conditions
                 const s52Url =
@@ -19781,6 +19825,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
                         };
                     })
+                    .filter(r => isAllowedTicker(r.ticker, resolvedAllowedSet || allowedSet))
                     // closest to / at breakout first
                     .sort((a, b) => Math.abs(Number(a.pct_from_52w_high)) - Math.abs(Number(b.pct_from_52w_high)));
 
@@ -19820,7 +19865,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         { value: "pivot_high_20w", label: "20W" },
     ];
     const [pivotTF, setPivotTF] = useState("pivot_high_10w");
-    const [pivotRawRows, setPivotRawRows] = useState(() => _screensPivotCache.rows || []);
+    const [pivotRawRows, setPivotRawRows] = useState(() => filterRowsByAllowedTickers(_screensPivotCache.rows || []));
     const [pivotLoading, setPivotLoading] = useState(!(_screensPivotCache.rows && _screensPivotCache.rows.length > 0));
     const [pivotLatestDate, setPivotLatestDate] = useState(null);
 
@@ -19844,16 +19889,19 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
         const load = async () => {
             try {
+                const allowedSet = getAllowedTickerSetSync();
+                const allowedSetPromise = ensureAllowedTickerSet();
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensPivotCache;
                 const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
-                    if (!cancelled) { setPivotRawRows(_bc.rows); setPivotLoading(false); }
+                    if (!cancelled) { setPivotRawRows(filterRowsByAllowedTickers(_bc.rows, "ticker", allowedSet)); setPivotLoading(false); }
                     if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setPivotLoading(true);
                 }
+                const resolvedAllowedSet = await allowedSetPromise;
 
                 // Step 1: latest date in indicators that has pivot columns populated
                 const latestRes = await fetch(
@@ -19945,7 +19993,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
                         };
                     })
-                    .filter(Boolean);
+                    .filter(Boolean)
+                    .filter(r => isAllowedTicker(r.ticker, resolvedAllowedSet || allowedSet));
 
                 if (!cancelled) {
                     setPivotRawRows(joined);
@@ -19991,7 +20040,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     //  4. Weekly Pullback     : sma50>sma200, close  [p10w0.95, p10w1.05], rs75
     //  5. Volume Dry-up       : sma50>sma200, close  [sma500.97, sma501.03], closesma50,
     //                           vol<vol_ma20, closehigh_52w0.85, rs70
-    const [pbRawRows, setPbRawRows] = useState(() => _screensPullbackCache.rows || []);
+    const [pbRawRows, setPbRawRows] = useState(() => filterRowsByAllowedTickers(_screensPullbackCache.rows || []));
     const [pbLoading, setPbLoading] = useState(!(_screensPullbackCache.rows && _screensPullbackCache.rows.length > 0));
 
     useEffect(() => {
@@ -20014,16 +20063,19 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
         const load = async () => {
             try {
+                const allowedSet = getAllowedTickerSetSync();
+                const allowedSetPromise = ensureAllowedTickerSet();
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensPullbackCache;
                 const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
-                    if (!cancelled) { setPbRawRows(_bc.rows); setPbLoading(false); }
+                    if (!cancelled) { setPbRawRows(filterRowsByAllowedTickers(_bc.rows, "ticker", allowedSet)); setPbLoading(false); }
                     if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setPbLoading(true);
                 }
+                const resolvedAllowedSet = await allowedSetPromise;
 
                 // Step 1: latest date in indicators
                 const latestRes = await fetch(
@@ -20104,7 +20156,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
                         };
                     })
-                    .filter(Boolean);
+                    .filter(Boolean)
+                    .filter(r => isAllowedTicker(r.ticker, resolvedAllowedSet || allowedSet));
 
                 if (!cancelled) {
                     setPbRawRows(joined);
@@ -20237,7 +20290,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     //  3. pct_from_low > 15            has moved up from a base (not a dead-cat)
     //  4. close > close * 0 (no upper bound on pct_from_high  catches all breakout levels)
     // Sorted by: highest relative volume first
-    const [volBreakoutRawRows, setVolBreakoutRawRows] = useState(() => _screensVolBreakCache.rows || []);
+    const [volBreakoutRawRows, setVolBreakoutRawRows] = useState(() => filterRowsByAllowedTickers(_screensVolBreakCache.rows || []));
     const [volBreakoutLoading, setVolBreakoutLoading] = useState(!(_screensVolBreakCache.rows && _screensVolBreakCache.rows.length > 0));
 
     useEffect(() => {
@@ -20261,16 +20314,19 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
         const load = async () => {
             try {
+                const allowedSet = getAllowedTickerSetSync();
+                const allowedSetPromise = ensureAllowedTickerSet();
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensVolBreakCache;
                 const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
-                    if (!cancelled) { setVolBreakoutRawRows(_bc.rows); setVolBreakoutLoading(false); }
+                    if (!cancelled) { setVolBreakoutRawRows(filterRowsByAllowedTickers(_bc.rows, "ticker", allowedSet)); setVolBreakoutLoading(false); }
                     if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setVolBreakoutLoading(true);
                 }
+                const resolvedAllowedSet = await allowedSetPromise;
 
                 // Step 1: fetch all stock_52w rows with basic price data
                 const s52Rows = await fetchVolBreakoutPages(
@@ -20350,6 +20406,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
                         };
                     })
+                    .filter(r => isAllowedTicker(r.ticker, resolvedAllowedSet || allowedSet))
                     // highest relative volume first
                     .sort((a, b) => Number(b.rel_volume ?? 0) - Number(a.rel_volume ?? 0));
 
@@ -20376,7 +20433,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     );
 
     //  VCP Pattern scan  dedicated fetch from vcp_candidates 
-    const [vcpRawRows, setVcpRawRows] = useState(() => _screensVcpCache.rows || []);
+    const [vcpRawRows, setVcpRawRows] = useState(() => filterRowsByAllowedTickers(_screensVcpCache.rows || []));
     const [vcpLoading, setVcpLoading] = useState(!(_screensVcpCache.rows && _screensVcpCache.rows.length > 0));
     const [vcpReturnMap, setVcpReturnMap] = useState(() => _screensVcpCache.returnMap || {});
 
@@ -20386,16 +20443,19 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
         const load = async () => {
             try {
+                const allowedSet = getAllowedTickerSetSync();
+                const allowedSetPromise = ensureAllowedTickerSet();
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensVcpCache;
                 const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
-                    if (!cancelled) { setVcpRawRows(_bc.rows); setVcpReturnMap(_bc.returnMap || {}); setVcpLoading(false); }
+                    if (!cancelled) { setVcpRawRows(filterRowsByAllowedTickers(_bc.rows, "ticker", allowedSet)); setVcpReturnMap(_bc.returnMap || {}); setVcpLoading(false); }
                     if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setVcpLoading(true);
                 }
+                const resolvedAllowedSet = await allowedSetPromise;
 
                 // Step 1: fetch vcp_candidates (all columns)
                 let all = [], page = 0;
@@ -20464,7 +20524,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null,
                         ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
                     };
-                });
+                }).filter(r => isAllowedTicker(r.ticker, resolvedAllowedSet || allowedSet));
 
                 if (!cancelled) {
                     setVcpRawRows(normalized);
@@ -26937,6 +26997,7 @@ export default function App() {
     const topbarSearchDropdownRef = useRef(null);
     const topbarResolvedSymRef = useRef(null);
     const fundamentalsWarmStartedRef = useRef(false);
+    const marketWarmStartedRef = useRef(false);
 
     const syncRoute = useCallback((path, replace = false) => {
         const nextRoute = parseAppRoute(path);
@@ -27191,6 +27252,8 @@ export default function App() {
             if (sess?.access_token && sess.user?.id) {
                 prefetchOwnershipData();
                 prefetchFiiDiiData();
+                preloadAllowedTickerSet();
+                _warmMarketAndTechnicalCaches(sess.access_token);
                 supabase._session = {
                     access_token: sess.access_token,
                     refresh_token: sess.refresh_token,
@@ -27237,10 +27300,18 @@ export default function App() {
         _warmFundamentalsCaches();
     }, [checking]);
 
+    useEffect(() => {
+        if (checking || marketWarmStartedRef.current) return;
+        marketWarmStartedRef.current = true;
+        _warmMarketAndTechnicalCaches(session?.access_token || null);
+    }, [checking, session?.access_token]);
+
     const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
         prefetchOwnershipData();
         prefetchFiiDiiData();
+        preloadAllowedTickerSet();
+        _warmMarketAndTechnicalCaches(sess.access_token);
         // Keep supabase._session in sync so getValidToken() can refresh when needed
         supabase._session = {
             access_token: sess.access_token,

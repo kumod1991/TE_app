@@ -170,6 +170,37 @@ async function sbFetch(path, opts = {}, token) {
   return null;
 }
 
+async function fetchUserBookmarks(userId, token, threadIds = []) {
+  if (!userId) return [];
+  let qs = `forum_bookmarks?select=thread_id,created_at&user_id=eq.${userId}`;
+  if (Array.isArray(threadIds) && threadIds.length > 0) {
+    qs += `&thread_id=in.(${threadIds.join(",")})`;
+  }
+  const rows = await sbFetch(qs, {}, token).catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function applySavedFlags(threads, bookmarkRows = []) {
+  const bookmarkMap = new Map((bookmarkRows || []).map(row => [row.thread_id, row.created_at || true]));
+  return (threads || []).map(thread => ({
+    ...thread,
+    is_saved: bookmarkMap.has(thread.id),
+    saved_at: bookmarkMap.get(thread.id) || thread.saved_at || null,
+  }));
+}
+
+function sortSavedThreads(threads, sort) {
+  const list = [...(threads || [])];
+  if (sort === "top") {
+    list.sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0) || new Date(b.saved_at || b.created_at) - new Date(a.saved_at || a.created_at));
+  } else if (sort === "discussed") {
+    list.sort((a, b) => (b.reply_count || 0) - (a.reply_count || 0) || new Date(b.saved_at || b.created_at) - new Date(a.saved_at || a.created_at));
+  } else {
+    list.sort((a, b) => new Date(b.saved_at || b.created_at) - new Date(a.saved_at || a.created_at));
+  }
+  return list;
+}
+
 async function uploadToStorage(bucket, path, file, token, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -288,6 +319,32 @@ function VoteButton({ upvotes, downvotes, userVote, onVote, onLoginRequired, T, 
         ▼
       </button>
     </div>
+  );
+}
+
+function BookmarkButton({ isSaved, onToggle, onLoginRequired, T, compact = false }) {
+  const p = compact ? "4px 10px" : "6px 14px";
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onToggle ? onToggle() : onLoginRequired?.(); }}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: p,
+        background: isSaved ? withAlpha(T.accent, 0.12) : T.mutedFill,
+        border: `1px solid ${isSaved ? withAlpha(T.accent, 0.22) : withAlpha(T.text, 0.07)}`,
+        borderRadius: 8,
+        color: isSaved ? T.accent : T.subtext,
+        cursor: "pointer",
+        fontSize: compact ? 11 : 12,
+        fontWeight: 700,
+        transition: "all 0.15s",
+      }}
+    >
+      <span>🔖</span>
+      <span>{isSaved ? "Saved" : "Save"}</span>
+    </button>
   );
 }
 
@@ -612,7 +669,7 @@ function SidePanel({ title, children, T }) {
 }
 
 // ─── Thread Card ──────────────────────────────────────────────────────────────
-const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVotes, onVote, onLoginRequired, onTickerClick, T, isMobile = false }) {
+const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVotes, onVote, onLoginRequired, onTickerClick, onToggleBookmark, T, isMobile = false }) {
   const [hov, setHov] = useState(false);
   const myVote = userVotes?.[thread.id] ?? 0;
   const images = (thread.media_urls || []).filter(m => m.type === "image");
@@ -699,6 +756,9 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div onClick={e => e.stopPropagation()}>
               <VoteButton upvotes={thread.upvotes} downvotes={thread.downvotes} userVote={myVote} onVote={session ? (v) => onVote(thread.id, "thread", v) : null} onLoginRequired={onLoginRequired} T={T} compact />
+            </div>
+            <div onClick={e => e.stopPropagation()}>
+              <BookmarkButton isSaved={!!thread.is_saved} onToggle={session ? () => onToggleBookmark?.(thread.id) : null} onLoginRequired={onLoginRequired} T={T} compact />
             </div>
             <StatPill icon="💬" value={thread.reply_count || 0} T={T} />
             {thread.view_count > 0 && <StatPill icon="👁" value={thread.view_count} T={T} />}
@@ -1387,6 +1447,31 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
     } catch (err) { console.error(err); setDeletingThread(false); setConfirmDeleteThread(false); }
   };
 
+  const handleToggleBookmark = useCallback(async () => {
+    if (!session) return;
+    const prevSaved = !!thread.is_saved;
+    const nextSaved = !prevSaved;
+    setThread(t => ({ ...t, is_saved: nextSaved }));
+    try {
+      const token = await getToken();
+      if (nextSaved) {
+        await sbFetch("forum_bookmarks", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates" },
+          body: JSON.stringify({ user_id: session.user.id, thread_id: thread.id }),
+        }, token);
+        addToast("Saved to bookmarks.");
+      } else {
+        await sbFetch(`forum_bookmarks?user_id=eq.${session.user.id}&thread_id=eq.${thread.id}`, { method: "DELETE" }, token);
+        addToast("Removed from saved.");
+      }
+    } catch (err) {
+      console.error("Bookmark update failed:", err);
+      setThread(t => ({ ...t, is_saved: prevSaved }));
+      addToast("Could not update saved posts.", "error");
+    }
+  }, [session, thread.id, thread.is_saved, getToken, addToast]);
+
   return (
     <div style={{ flex: 1, overflowY: "auto", background: T.bg, fontFamily: "'IBM Plex Sans', sans-serif" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "16px 16px 140px" : "32px 32px 80px" }}>
@@ -1493,6 +1578,7 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 20, paddingTop: 16, borderTop: `1px solid ${withAlpha(T.text, 0.06)}` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <VoteButton upvotes={thread.upvotes} downvotes={thread.downvotes} userVote={myThreadVote} onVote={session ? (v) => handleVote(thread.id, "thread", v) : null} onLoginRequired={onLoginRequired} T={T} />
+                <BookmarkButton isSaved={!!thread.is_saved} onToggle={session ? handleToggleBookmark : null} onLoginRequired={onLoginRequired} T={T} />
                 <StatPill icon="💬" value={thread.reply_count || 0} T={T} />
                 {thread.view_count > 0 && <StatPill icon="👁" value={thread.view_count} T={T} />}
               </div>
@@ -1760,10 +1846,18 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
 
   useEffect(() => { clearTimeout(searchTimer.current); searchTimer.current = setTimeout(() => setSearchDebounced(search), 300); return () => clearTimeout(searchTimer.current); }, [search]);
 
+  useEffect(() => {
+    if (!session && (filter === "mine" || filter === "saved")) {
+      setFilter("all");
+      setPage(1);
+    }
+  }, [session, filter]);
+
   const loadThreads = useCallback(async (backgroundRefresh = false) => {
     const cacheKey = `${FORUM_CACHE_KEY}_${sort}_${filter}_${session?.user?.id || "anon"}`;
+    const canUseCache = filter !== "saved";
     // On first load: show cache immediately, skip spinner
-    if (!backgroundRefresh) {
+    if (!backgroundRefresh && canUseCache) {
       const cached = readForumCache(cacheKey);
       if (cached) {
         setThreads(cached.data);
@@ -1776,21 +1870,42 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
     }
     setError(null);
     try {
+      const token = await getToken();
       const orderMap = { latest: "created_at.desc", top: "upvotes.desc", discussed: "reply_count.desc" };
-      let qs = `forum_threads?select=*&order=is_pinned.desc,${orderMap[sort] || "created_at.desc"}`;
-      if (filter === "mine" && session) qs += `&author_id=eq.${session.user.id}`;
-      if (filter === "trending") qs += `&upvotes=gt.0`;
-      const data = await sbFetch(qs, {}, await getToken());
-      const threads = Array.isArray(data) ? data : [];
+      let threads = [];
+      if (filter === "saved" && session) {
+        const bookmarks = await fetchUserBookmarks(session.user.id, token);
+        const bookmarkedIds = bookmarks.map(b => b.thread_id).filter(Boolean);
+        if (bookmarkedIds.length > 0) {
+          const data = await sbFetch(`forum_threads?select=*&id=in.(${bookmarkedIds.join(",")})`, {}, token);
+          const fetched = Array.isArray(data) ? data : [];
+          const fetchMap = new Map(fetched.map(t => [t.id, t]));
+          const bookmarkMap = new Map(bookmarks.map(b => [b.thread_id, b.created_at]));
+          threads = bookmarkedIds.map(id => fetchMap.get(id)).filter(Boolean).map(t => ({
+            ...t,
+            is_saved: true,
+            saved_at: bookmarkMap.get(t.id) || null,
+          }));
+          threads = sortSavedThreads(threads, sort);
+        }
+      } else {
+        let qs = `forum_threads?select=*&order=is_pinned.desc,${orderMap[sort] || "created_at.desc"}`;
+        if (filter === "mine" && session) qs += `&author_id=eq.${session.user.id}`;
+        if (filter === "trending") qs += `&upvotes=gt.0`;
+        const data = await sbFetch(qs, {}, token);
+        threads = Array.isArray(data) ? data : [];
+      }
+      const bookmarkRows = session && threads.length ? await fetchUserBookmarks(session.user.id, token, threads.map(t => t.id)) : [];
+      const enrichedThreads = session ? applySavedFlags(threads, bookmarkRows) : threads;
       // Only update if data actually changed (avoids needless re-renders)
       setThreads(prev => {
-        const prevIds = prev.map(t => `${t.id}:${t.upvotes}:${t.reply_count}`).join();
-        const nextIds = threads.map(t => `${t.id}:${t.upvotes}:${t.reply_count}`).join();
-        return prevIds === nextIds ? prev : threads;
+        const prevIds = prev.map(t => `${t.id}:${t.upvotes}:${t.reply_count}:${t.is_saved ? 1 : 0}`).join();
+        const nextIds = enrichedThreads.map(t => `${t.id}:${t.upvotes}:${t.reply_count}:${t.is_saved ? 1 : 0}`).join();
+        return prevIds === nextIds ? prev : enrichedThreads;
       });
-      writeForumCache(cacheKey, threads);
-      if (session && threads.length) {
-        const votes = await sbFetch(`forum_votes?user_id=eq.${session.user.id}&target_type=eq.thread&target_id=in.(${threads.map(t => t.id).join(",")})`, {}, await getToken()).catch(() => []);
+      if (filter !== "saved") writeForumCache(cacheKey, enrichedThreads);
+      if (session && enrichedThreads.length) {
+        const votes = await sbFetch(`forum_votes?user_id=eq.${session.user.id}&target_type=eq.thread&target_id=in.(${enrichedThreads.map(t => t.id).join(",")})`, {}, token).catch(() => []);
         const vmap = {}; votes.forEach(v => vmap[v.target_id] = v.vote); setUserVotes(vmap);
       }
     } catch (err) {
@@ -1845,6 +1960,46 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
       setThreads(ts => ts.map(t => t.id !== tid ? t : { ...t, upvotes: Math.max(0, (t.upvotes || 0) - upDelta), downvotes: Math.max(0, (t.downvotes || 0) - downDelta) }));
     }
   }, [session, userVotes, getToken]);
+
+  const handleToggleBookmark = useCallback(async (tid) => {
+    if (!session) return;
+    const current = threads.find(t => t.id === tid);
+    const prevSaved = !!current?.is_saved;
+    const nextSaved = !prevSaved;
+    const cacheKey = `${FORUM_CACHE_KEY}_${sort}_${filter}_${session?.user?.id || "anon"}`;
+    let nextThreads = null;
+    setThreads(ts => {
+      if (filter === "saved" && !nextSaved) return ts.filter(t => t.id !== tid);
+      const updated = ts.map(t => t.id !== tid ? t : { ...t, is_saved: nextSaved, saved_at: nextSaved ? (t.saved_at || new Date().toISOString()) : null });
+      nextThreads = updated;
+      return updated;
+    });
+    try {
+      const token = await getToken();
+      if (nextSaved) {
+        await sbFetch("forum_bookmarks", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates" },
+          body: JSON.stringify({ user_id: session.user.id, thread_id: tid }),
+        }, token);
+        if (filter === "saved") setThreads(ts => sortSavedThreads(ts, sort));
+        addToast("Saved to bookmarks.");
+      } else {
+        await sbFetch(`forum_bookmarks?user_id=eq.${session.user.id}&thread_id=eq.${tid}`, { method: "DELETE" }, token);
+        addToast("Removed from saved.");
+      }
+      if (filter !== "saved" && Array.isArray(nextThreads)) writeForumCache(cacheKey, nextThreads);
+    } catch (err) {
+      console.error("Bookmark update failed:", err);
+      setThreads(ts => {
+        if (filter === "saved" && !prevSaved) return ts;
+        const reverted = ts.map(t => t.id !== tid ? t : { ...t, is_saved: prevSaved, saved_at: prevSaved ? t.saved_at : null });
+        if (filter !== "saved") writeForumCache(cacheKey, reverted);
+        return reverted;
+      });
+      addToast("Could not update saved posts.", "error");
+    }
+  }, [session, threads, filter, sort, getToken, addToast]);
 
   const displayed = useMemo(() => {
     let list = [...threads];
@@ -1914,7 +2069,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
             ) : (
               <>
                 {paged.map(t => (
-                  <ThreadCard key={t.id} thread={t} T={T} session={session} userVotes={userVotes} onVote={handleVote} onLoginRequired={onLoginRequired} onTickerClick={onTickerClick} onClick={() => onViewThread(t)} isMobile={isMobile} />
+                  <ThreadCard key={t.id} thread={t} T={T} session={session} userVotes={userVotes} onVote={handleVote} onLoginRequired={onLoginRequired} onTickerClick={onTickerClick} onToggleBookmark={handleToggleBookmark} onClick={() => onViewThread(t)} isMobile={isMobile} />
                 ))}
                 {hasMore && (
                   <div style={{ textAlign: "center", marginTop: 28, paddingBottom: 48 }}>
@@ -1924,7 +2079,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
                 {displayed.length === 0 && (
                   <div style={{ textAlign: "center", padding: "80px 24px" }}>
                     <div style={{ fontSize: 48, marginBottom: 16 }}>🕯️</div>
-                    <div style={{ fontSize: 15, color: T.muted }}>No discussions found.</div>
+                    <div style={{ fontSize: 15, color: T.muted }}>{filter === "saved" && session ? "No saved posts yet." : "No discussions found."}</div>
                     {session && <button onClick={onNewThread} style={{ marginTop: 16, padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Start a Discussion</button>}
                   </div>
                 )}
