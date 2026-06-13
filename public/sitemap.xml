@@ -10,6 +10,11 @@
   <url><loc>https://tradeedge.in/fundamentals/announcements</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://tradeedge.in/technicals/breadth</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>https://tradeedge.in/technicals/screens</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+<url>
+    <loc>https://www.tradeedge.in/forum</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+</url>
   <url><loc>https://tradeedge.in/technicals/heatmap</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://tradeedge.in/technicals/rotation</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc>https://tradeedge.in/journal/dashboard</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>

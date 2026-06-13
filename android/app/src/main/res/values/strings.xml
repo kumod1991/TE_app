@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TradeEdge</string>
+    <string name="title_activity_main">TradeEdge</string>
+    <string name="package_name">com.tradeedge.app</string>
+    <string name="custom_url_scheme">com.tradeedge.app</string>
+</resources>
