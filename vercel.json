@@ -1,7 +1,23 @@
 {
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/javascript"
+        }
+      ]
+    }
+  ],
   "rewrites": [
-    { "source": "/sw.js", "destination": "/sw.js" },
-    { "source": "/workbox-:hash.js", "destination": "/workbox-:hash.js" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/((?!sw\\.js|workbox-.*\\.js|icon-.*\\.png|site\\.webmanifest|favicon.*|assets/|robots\\.txt).*)",
+      "destination": "/index.html"
+    }
   ]
 }

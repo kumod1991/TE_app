@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',        // ← add this line
       manifest: false,
       includeAssets: ['icon-192.png', 'icon-512.png', 'tradeedge_logo.png'],
       workbox: {
