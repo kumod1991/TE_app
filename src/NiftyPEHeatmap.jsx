@@ -5,6 +5,21 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
+// ─── Responsive hook ──────────────────────────────────────────────────────────
+function useIsMobile(bp = 640) {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < bp : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${bp - 1}px)`);
+    const handler = e => setMobile(e.matches);
+    mq.addEventListener("change", handler);
+    setMobile(mq.matches);
+    return () => mq.removeEventListener("change", handler);
+  }, [bp]);
+  return mobile;
+}
+
 // ─── Raw PE data (2016–2026) ──────────────────────────────────────────────────
 const PE_RAW = [
   { year: 2016, 1:21.2,  2:20.8,  3:21.5,  4:22.1,  5:22.9,  6:23.1,  7:23.7,  8:24.2,  9:23.8,  10:22.4, 11:21.0, 12:21.6 },
@@ -604,8 +619,44 @@ function ValuationGauge({ percentile, currentPE, C }) {
 }
 
 // ─── KPI Card (C passed as prop) ──────────────────────────────────────────────
-function KPICard({ icon, label, value, sub, accent, C }) {
+function KPICard({ icon, label, value, sub, accent, C, compact = false }) {
   const [hov, setHov] = useState(false);
+
+  // ── Compact (mobile) — horizontal pill: icon · label · value ─────────────
+  if (compact) {
+    return (
+      <div
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 12px",
+          borderRadius: 10,
+          background: hov ? C.glassHov : C.glassBg,
+          border: `1px solid ${hov ? C.glassBorder : C.border}`,
+          transition: "all 0.15s ease",
+          cursor: "default",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{
+          width: 22, height: 22, borderRadius: 6,
+          background: `${accent}18`, border: `1px solid ${accent}30`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: accent, flexShrink: 0,
+        }}>{icon}</div>
+        <div style={{display:"flex", flexDirection:"column", gap:1}}>
+          <span style={{fontSize:9, color:C.muted, fontWeight:600,
+            letterSpacing:"0.07em", textTransform:"uppercase", lineHeight:1}}>{label}</span>
+          <span style={{fontSize:14, fontWeight:700, color:C.text,
+            fontFamily:"'IBM Plex Mono',monospace", letterSpacing:"-0.02em",
+            lineHeight:1}}>{value}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Full card (desktop) ───────────────────────────────────────────────────
   return (
     <div
       onMouseEnter={() => setHov(true)}
@@ -734,6 +785,7 @@ export default function NiftyPEHeatmap({ T }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeYears, setActiveYears] = useState(() => PE_RAW.map(r => r.year));
 
+  const isMobile = useIsMobile(640);
   const sans = "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   const mono = "'IBM Plex Mono', monospace";
 
@@ -842,46 +894,74 @@ export default function NiftyPEHeatmap({ T }) {
       transition: "opacity 0.35s ease, transform 0.35s ease",
       ...(isFullscreen ? {height:"100dvh", overflowY:"auto"} : {}),
     }}>
-      <div style={{maxWidth:1400, margin:"0 auto", padding:"28px 24px 48px"}}>
+      <div style={{maxWidth:1400, margin:"0 auto", padding: isMobile ? "16px 14px 40px" : "28px 24px 48px"}}>
 
         {/* ── HEADER ── */}
         <div style={{
           display:"flex", alignItems:"flex-start", justifyContent:"space-between",
-          gap:24, flexWrap:"wrap", marginBottom:32,
+          gap: isMobile ? 12 : 24, flexWrap:"wrap",
+          marginBottom: isMobile ? 16 : 32,
         }}>
-          <div>
-            <div style={{
-              fontSize:11, color:C.muted, fontWeight:700,
-              letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:10,
-            }}>
-              Market Intelligence · Nifty 50
-            </div>
+          <div style={{flex: isMobile ? "1 1 100%" : "0 0 auto"}}>
+            {!isMobile && (
+              <div style={{
+                fontSize:11, color:C.muted, fontWeight:700,
+                letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:10,
+              }}>
+                Market Intelligence · Nifty 50
+              </div>
+            )}
             <h1 style={{
-              margin:0, fontSize:32, fontWeight:700, color:C.text,
+              margin:0,
+              fontSize: isMobile ? 22 : 32,
+              fontWeight:700, color:C.text,
               letterSpacing:"-0.03em", lineHeight:1.1,
             }}>
-              Nifty 50 Valuation History
+              Nifty 50 PE
             </h1>
-            <p style={{margin:"8px 0 0", fontSize:14, color:C.muted}}>
-              Monthly trailing P/E ratio since 2016 · Updated monthly
-            </p>
+            {!isMobile && (
+              <p style={{margin:"8px 0 0", fontSize:14, color:C.muted}}>
+                Monthly trailing P/E ratio
+              </p>
+            )}
           </div>
 
-          {/* KPI cards */}
-          <div style={{display:"flex", gap:12, flexWrap:"wrap", flex:"1 1 auto", justifyContent:"flex-end"}}>
-            <KPICard C={C} accent="#60A5FA" label="Current P/E"
-              value={`${CURRENT_PE}×`} sub={peCategory(CURRENT_PE)}
-              icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}/>
-            <KPICard C={C} accent={VAL.fair} label="Fair Value Zone"
-              value="18× – 22×" sub="Historical consensus"
-              icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}/>
-            <KPICard C={C} accent={VAL.neutral} label="Historical Range"
-              value={`${PE_MIN.toFixed(1)}× – ${PE_MAX.toFixed(1)}×`} sub="Since Jan 2016"
-              icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="8" width="5" height="13"/><rect x="17" y="13" width="5" height="8"/></svg>}/>
-            <KPICard C={C} accent={VAL.neutral} label="Percentile"
-              value={`${CURRENT_PERCENTILE}th`} sub="Of all monthly readings"
-              icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>}/>
-          </div>
+          {/* KPI cards — full cards on desktop, horizontal scroll pills on mobile */}
+          {isMobile ? (
+            <div style={{
+              display:"flex", gap:8, overflowX:"auto", width:"100%",
+              paddingBottom:4, scrollbarWidth:"none",
+              WebkitOverflowScrolling:"touch",
+            }}>
+              <KPICard compact C={C} accent="#60A5FA" label="Current P/E"
+                value={`${CURRENT_PE}×`}
+                icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}/>
+              <KPICard compact C={C} accent={VAL.fair} label="Fair Value"
+                value="18–22×"
+                icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}/>
+              <KPICard compact C={C} accent={VAL.neutral} label="Range"
+                value={`${PE_MIN.toFixed(1)}–${PE_MAX.toFixed(1)}×`}
+                icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="8" width="5" height="13"/><rect x="17" y="13" width="5" height="8"/></svg>}/>
+              <KPICard compact C={C} accent={VAL.neutral} label="Percentile"
+                value={`${CURRENT_PERCENTILE}th`}
+                icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>}/>
+            </div>
+          ) : (
+            <div style={{display:"flex", gap:12, flexWrap:"wrap", flex:"1 1 auto", justifyContent:"flex-end"}}>
+              <KPICard C={C} accent="#60A5FA" label="Current P/E"
+                value={`${CURRENT_PE}×`} sub={peCategory(CURRENT_PE)}
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}/>
+              <KPICard C={C} accent={VAL.fair} label="Fair Value Zone"
+                value="18× – 22×" sub="Historical consensus"
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}/>
+              <KPICard C={C} accent={VAL.neutral} label="Historical Range"
+                value={`${PE_MIN.toFixed(1)}× – ${PE_MAX.toFixed(1)}×`} sub="Since Jan 2016"
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="8" width="5" height="13"/><rect x="17" y="13" width="5" height="8"/></svg>}/>
+              <KPICard C={C} accent={VAL.neutral} label="Percentile"
+                value={`${CURRENT_PERCENTILE}th`} sub="Of all monthly readings"
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>}/>
+            </div>
+          )}
         </div>
 
         {/* ── VALUATION GAUGE ── */}
@@ -899,7 +979,11 @@ export default function NiftyPEHeatmap({ T }) {
 
         {/* ── INSIGHTS STRIP ── */}
         <div style={{
-          display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",
+          display: isMobile ? "flex" : "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          flexDirection: isMobile ? "row" : undefined,
+          overflowX: isMobile ? "auto" : undefined,
+          scrollbarWidth: isMobile ? "none" : undefined,
           gap:10, marginBottom:20,
         }}>
           {[
@@ -910,13 +994,15 @@ export default function NiftyPEHeatmap({ T }) {
             { label:"Median P/E",      value:`${PE_MEDIAN.toFixed(1)}×`,sub:"Since 2016",    accent:VAL.fair },
           ].map(item => (
             <div key={item.label} style={{
-              borderRadius:12, padding:"14px 16px",
+              borderRadius:12, padding: isMobile ? "10px 14px" : "14px 16px",
               background:C.card, border:`1px solid ${C.border}`,
-              display:"flex", flexDirection:"column", gap:8,
+              display:"flex", flexDirection:"column", gap: isMobile ? 5 : 8,
+              flexShrink: isMobile ? 0 : undefined,
+              minWidth: isMobile ? 120 : undefined,
             }}>
               <span style={{fontSize:10, color:C.muted, fontWeight:600,
                 letterSpacing:"0.08em", textTransform:"uppercase"}}>{item.label}</span>
-              <div style={{fontFamily:mono, fontSize:20, fontWeight:700,
+              <div style={{fontFamily:mono, fontSize: isMobile ? 16 : 20, fontWeight:700,
                 color:item.accent, letterSpacing:"-0.02em", lineHeight:1}}>{item.value}</div>
               <div style={{fontSize:11, color:C.muted}}>{item.sub}</div>
             </div>
@@ -1193,6 +1279,7 @@ export default function NiftyPEHeatmap({ T }) {
         `::-webkit-scrollbar-track { background:transparent; }`,
         `::-webkit-scrollbar-thumb { background:${C.scrollThumb}; border-radius:4px; }`,
         `::-webkit-scrollbar-thumb:hover { background:${C.scrollThumbHov}; }`,
+        `.pe-pill-strip::-webkit-scrollbar { display:none; }`,
       ].join("\n")}</style>
     </div>
   );
