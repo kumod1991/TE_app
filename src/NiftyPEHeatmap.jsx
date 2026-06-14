@@ -917,11 +917,11 @@ export default function NiftyPEHeatmap({ T }) {
               fontWeight:700, color:C.text,
               letterSpacing:"-0.03em", lineHeight:1.1,
             }}>
-              Nifty 50 PE
+              Nifty 50 Valuation History
             </h1>
             {!isMobile && (
               <p style={{margin:"8px 0 0", fontSize:14, color:C.muted}}>
-                Monthly trailing P/E ratio
+                Monthly trailing P/E ratio since 2016 · Updated monthly
               </p>
             )}
           </div>
