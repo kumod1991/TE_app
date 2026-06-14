@@ -3,7 +3,7 @@
 // Drop-in replacement for the existing NiftyPEHeatmap component in TradeEdge.
 // Props: { T }  — standard TradeEdge theme object
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 // ─── Responsive hook ──────────────────────────────────────────────────────────
 function useIsMobile(bp = 640) {
@@ -20,20 +20,64 @@ function useIsMobile(bp = 640) {
   return mobile;
 }
 
-// ─── Raw PE data (2016–2026) ──────────────────────────────────────────────────
-const PE_RAW = [
-  { year: 2016, 1:21.2,  2:20.8,  3:21.5,  4:22.1,  5:22.9,  6:23.1,  7:23.7,  8:24.2,  9:23.8,  10:22.4, 11:21.0, 12:21.6 },
-  { year: 2017, 1:22.3,  2:22.7,  3:23.4,  4:23.0,  5:23.8,  6:24.1,  7:25.2,  8:25.8,  9:26.1,  10:26.4, 11:25.9, 12:26.2 },
-  { year: 2018, 1:26.8,  2:25.6,  3:24.8,  4:23.9,  5:24.3,  6:23.7,  7:24.9,  8:25.3,  9:25.8,  10:24.1, 11:23.8, 12:24.5 },
-  { year: 2019, 1:25.2,  2:26.1,  3:28.4,  4:29.1,  5:27.8,  6:27.3,  7:26.9,  8:25.4,  9:26.8,  10:28.3, 11:28.9, 12:29.5 },
-  { year: 2020, 1:28.7,  2:26.3,  3:19.8,  4:22.4,  5:24.6,  6:26.8,  7:30.1,  8:32.4,  9:33.1,  10:35.2, 11:37.8, 12:38.5 },
-  { year: 2021, 1:39.4,  2:41.2,  3:37.8,  4:35.6,  5:33.9,  6:31.2,  7:30.4,  8:29.8,  9:28.9,  10:27.3, 11:26.1, 12:25.8 },
-  { year: 2022, 1:23.9,  2:22.6,  3:21.4,  4:20.8,  5:20.2,  6:19.8,  7:21.3,  8:22.7,  9:22.4,  10:22.9, 11:23.6, 12:24.1 },
-  { year: 2023, 1:22.8,  2:22.1,  3:21.9,  4:22.6,  5:23.4,  6:23.8,  7:24.5,  8:24.9,  9:25.3,  10:24.7, 11:24.2, 12:23.9 },
-  { year: 2024, 1:22.4,  2:21.8,  3:22.7,  4:23.5,  5:22.9,  6:23.1,  7:23.8,  8:24.2,  9:24.6,  10:23.9, 11:22.8, 12:22.3 },
-  { year: 2025, 1:21.9,  2:21.4,  3:20.8,  4:21.2,  5:21.8,  6:22.4,  7:23.1,  8:22.8,  9:22.5,  10:21.9, 11:21.5, 12:null },
-  { year: 2026, 1:20.6,  2:20.1,  3:20.4,  4:20.8,  5:21.2,  6:20.2,  7:null,  8:null,  9:null,  10:null, 11:null, 12:null },
-];
+// ─── Supabase REST config ─────────────────────────────────────────────────────
+const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SB_HEADERS = {
+  "Content-Type": "application/json",
+  apikey:         SUPABASE_ANON_KEY,
+  Authorization:  `Bearer ${SUPABASE_ANON_KEY}`,
+};
+
+// Fetch all rows from nifty50_pe, paginating if needed (PostgREST default limit = 1000)
+async function fetchNiftyPE() {
+  const url = `${SUPABASE_URL}/rest/v1/nifty50_pe?select=date,pe_ratio&order=date.asc&limit=2000`;
+  const res = await fetch(url, { headers: SB_HEADERS });
+  if (!res.ok) throw new Error(`Supabase error ${res.status}: ${await res.text()}`);
+  return res.json(); // [{ date: "2016-01-31", pe_ratio: 21.2 }, ...]
+}
+
+// ─── DB row helpers ───────────────────────────────────────────────────────────
+// Transform flat rows → [{ year, 1..12 }] grid (same shape as old PE_RAW)
+function rowsToGrid(rows) {
+  const map = {};
+  for (const { date, pe_ratio } of rows) {
+    const d = new Date(date);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    if (!map[y]) map[y] = { year: y };
+    map[y][m] = pe_ratio != null ? +pe_ratio : null;
+  }
+  return Object.values(map)
+    .sort((a, b) => a.year - b.year)
+    .map(row => {
+      for (let m = 1; m <= 12; m++) if (!(m in row)) row[m] = null;
+      return row;
+    });
+}
+
+// Derive all statistics from the grid
+function deriveStats(grid) {
+  const all = grid.flatMap(r => Array.from({length:12}, (_,i) => r[i+1])).filter(v => v != null);
+  if (!all.length) return { allPE:[], peMin:0, peMax:0, peMean:0, peMedian:0, currentPE:0, currentPercentile:0 };
+  const sorted = [...all].sort((a,b) => a-b);
+  const currentPE = (() => {
+    for (const row of [...grid].reverse())
+      for (let m = 12; m >= 1; m--)
+        if (row[m] != null) return row[m];
+    return all[all.length - 1];
+  })();
+  const currentPercentile = Math.round((all.filter(v => v <= currentPE).length / all.length) * 100);
+  return {
+    allPE:    all,
+    peMin:    sorted[0],
+    peMax:    sorted[sorted.length - 1],
+    peMean:   all.reduce((a,b) => a+b, 0) / all.length,
+    peMedian: sorted[Math.floor(sorted.length / 2)],
+    currentPE,
+    currentPercentile,
+  };
+}
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -160,18 +204,11 @@ function peCategoryShort(pe) {
   return              "Bubble";
 }
 
-// Static derived stats
-const ALL_PE   = PE_RAW.flatMap(r => MONTHS.map((_,i) => r[i+1])).filter(v => v != null);
-const PE_MIN   = Math.min(...ALL_PE);
-const PE_MAX   = Math.max(...ALL_PE);
-const PE_MEAN  = ALL_PE.reduce((a,b) => a+b,0) / ALL_PE.length;
-const PE_MEDIAN = (() => { const s = [...ALL_PE].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; })();
-const CURRENT_PE = 20.2;
-
-function pePercentile(pe) {
-  return Math.round((ALL_PE.filter(v => v <= pe).length / ALL_PE.length) * 100);
+// pePercentile is computed at render time with the live allPE array
+function pePercentile(pe, allPE) {
+  if (pe == null || !allPE?.length) return 0;
+  return Math.round((allPE.filter(v => v <= pe).length / allPE.length) * 100);
 }
-const CURRENT_PERCENTILE = pePercentile(CURRENT_PE);
 
 // ─── Market cycle data ────────────────────────────────────────────────────────
 // CYCLES is a function so it picks up the current VAL at render time
@@ -256,7 +293,7 @@ function smoothBezier(pts) {
 
 const TC_PAD = { top: 14, right: 16, bottom: 30, left: 52 };
 
-function TrendChart({ points, C, height = 300 }) {
+function TrendChart({ points, C, height = 300, peMean = 0, currentPE = null, allPE = [] }) {
   const wrapRef = useRef(null);
   const svgRef  = useRef(null);
   const W = useTCWidth(wrapRef);
@@ -403,8 +440,8 @@ function TrendChart({ points, C, height = 300 }) {
   };
 
   // Reference lines within visible range
-  const meanInRange = PE_MEAN >= lo && PE_MEAN <= hi;
-  const currentInRange = CURRENT_PE >= lo && CURRENT_PE <= hi;
+  const meanInRange = peMean != null && peMean >= lo && peMean <= hi;
+  const currentInRange = currentPE != null && currentPE >= lo && currentPE <= hi;
 
   const mono = "'IBM Plex Mono', monospace";
   const sans = "'IBM Plex Sans', sans-serif";
@@ -474,11 +511,11 @@ function TrendChart({ points, C, height = 300 }) {
         {meanInRange && (
           <>
             <line x1={TC_PAD.left} x2={TC_PAD.left+cW}
-              y1={py(PE_MEAN)} y2={py(PE_MEAN)}
+              y1={py(peMean)} y2={py(peMean)}
               stroke={VAL.neutral} strokeWidth={1} strokeDasharray="4 4" opacity={0.55}/>
-            <text x={TC_PAD.left+cW-2} y={py(PE_MEAN)-4} textAnchor="end"
+            <text x={TC_PAD.left+cW-2} y={py(peMean)-4} textAnchor="end"
               fontSize={8} fill={VAL.neutral} fontFamily={mono} opacity={0.8}>
-              Mean {PE_MEAN.toFixed(1)}×
+              Mean {peMean.toFixed(1)}×
             </text>
           </>
         )}
@@ -487,11 +524,11 @@ function TrendChart({ points, C, height = 300 }) {
         {currentInRange && (
           <>
             <line x1={TC_PAD.left} x2={TC_PAD.left+cW}
-              y1={py(CURRENT_PE)} y2={py(CURRENT_PE)}
+              y1={py(currentPE)} y2={py(currentPE)}
               stroke={VAL.fair} strokeWidth={1.2} strokeDasharray="5 4" opacity={0.75}/>
-            <text x={TC_PAD.left+cW-2} y={py(CURRENT_PE)-4} textAnchor="end"
+            <text x={TC_PAD.left+cW-2} y={py(currentPE)-4} textAnchor="end"
               fontSize={8} fill={VAL.fair} fontFamily={mono}>
-              Now {CURRENT_PE}×
+              Now {currentPE}×
             </text>
           </>
         )}
@@ -535,7 +572,7 @@ function TrendChart({ points, C, height = 300 }) {
             </div>
             <div style={{fontSize:10, color, marginTop:3}}>{peCategory(hovPt.pe)}</div>
             <div style={{fontSize:10, color:C.muted, marginTop:2}}>
-              {pePercentile(hovPt.pe)}th percentile
+              {pePercentile(hovPt.pe, allPE)}th percentile
             </div>
           </div>
         );
@@ -564,7 +601,7 @@ function TrendChart({ points, C, height = 300 }) {
 
 
 // ─── Valuation gauge (C passed as prop) ──────────────────────────────────────
-function ValuationGauge({ percentile, currentPE, C }) {
+function ValuationGauge({ percentile, currentPE, C, peMin = 0, peMax = 0 }) {
   return (
     <div style={{padding:"20px 0 8px"}}>
       <div style={{position:"relative"}}>
@@ -609,9 +646,9 @@ function ValuationGauge({ percentile, currentPE, C }) {
           {" "}of historical range
         </span>
         <span style={{fontSize:12, color:C.muted}}>
-          Range: <span style={{color:C.sub, fontWeight:600}}>{PE_MIN.toFixed(1)}×</span>
+          Range: <span style={{color:C.sub, fontWeight:600}}>{peMin.toFixed(1)}×</span>
           {" – "}
-          <span style={{color:C.sub, fontWeight:600}}>{PE_MAX.toFixed(1)}×</span>
+          <span style={{color:C.sub, fontWeight:600}}>{peMax.toFixed(1)}×</span>
         </span>
       </div>
     </div>
@@ -690,7 +727,7 @@ function KPICard({ icon, label, value, sub, accent, C, compact = false }) {
 }
 
 // ─── Cell Tooltip (C passed as prop) ──────────────────────────────────────────
-function CellTooltip({ pe, month, year, visible, C }) {
+function CellTooltip({ pe, month, year, visible, C, allPE = [] }) {
   if (!visible || pe == null) return null;
   const color = peColor(pe);
   return (
@@ -719,7 +756,7 @@ function CellTooltip({ pe, month, year, visible, C }) {
         </div>
         <div style={{display:"flex", justifyContent:"space-between", gap:16}}>
           <span style={{fontSize:10, color:C.muted}}>Percentile</span>
-          <span style={{fontSize:10, fontWeight:600, color:C.sub}}>{pePercentile(pe)}th</span>
+          <span style={{fontSize:10, fontWeight:600, color:C.sub}}>{pePercentile(pe, allPE)}th</span>
         </div>
       </div>
     </div>
@@ -727,7 +764,7 @@ function CellTooltip({ pe, month, year, visible, C }) {
 }
 
 // ─── Heat cell (C passed as prop) ─────────────────────────────────────────────
-function HeatCell({ pe, month, year, C }) {
+function HeatCell({ pe, month, year, C, allPE = [] }) {
   const [hov, setHov] = useState(false);
   const color = peColor(pe);
   // isDark: higher fill alpha in dark; in light use stronger fill for visibility
@@ -767,27 +804,83 @@ function HeatCell({ pe, month, year, C }) {
         ) : (
           <span style={{fontSize:10, color:C.emptyDash}}>—</span>
         )}
-        <CellTooltip pe={pe} month={month} year={year} visible={hov} C={C}/>
+        <CellTooltip pe={pe} month={month} year={year} visible={hov} C={C} allPE={allPE}/>
       </div>
     </td>
   );
 }
 
+// ─── Error Boundary ──────────────────────────────────────────────────────────
+// Catches any render error in NiftyPEHeatmap so it cannot crash sibling routes
+class PEErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, message: "" }; }
+  static getDerivedStateFromError(err) { return { hasError: true, message: err?.message ?? "Unknown error" }; }
+  componentDidCatch(err, info) { console.error("[NiftyPEHeatmap]", err, info); }
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div style={{
+        display:"flex", flexDirection:"column", alignItems:"center",
+        justifyContent:"center", minHeight:240, gap:12, padding:32,
+        color:"#94a3b8", fontFamily:"'IBM Plex Sans', sans-serif",
+      }}>
+        <div style={{fontSize:14, fontWeight:600, color:"#ef4444"}}>Failed to render P/E Heatmap</div>
+        <div style={{fontSize:12, color:"#64748b"}}>{this.state.message}</div>
+        <button onClick={() => this.setState({ hasError:false, message:"" })}
+          style={{ padding:"6px 16px", borderRadius:8, border:"1px solid #ef444440",
+            background:"#ef444415", color:"#ef4444", fontSize:12, cursor:"pointer" }}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function NiftyPEHeatmap({ T }) {
+function NiftyPEHeatmapInner({ T }) {
   const C = useMemo(() => buildC(T), [T]);
 
-  const [view, setView] = useState("heatmap");
-  const [range, setRange] = useState("full");
+  // ── Data state ──────────────────────────────────────────────────────────────
+  const [peGrid, setPeGrid]     = useState([]);   // [{ year, 1..12 }]
+  const [stats, setStats]       = useState({      // derived from peGrid
+    allPE:[], peMin:0, peMax:0, peMean:0, peMedian:0, currentPE:0, currentPercentile:0,
+  });
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+
+  // ── UI state ────────────────────────────────────────────────────────────────
+  const [view, setView]         = useState("heatmap");
+  const [range, setRange]       = useState("full");
   const [trendPeriod, setTrendPeriod] = useState("all");
-  const [mounted, setMounted] = useState(false);
-  const containerRef = useRef(null);
+  const [mounted, setMounted]   = useState(false);
+  const containerRef            = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activeYears, setActiveYears] = useState(() => PE_RAW.map(r => r.year));
+  const [activeYears, setActiveYears]   = useState([]);
 
   const isMobile = useIsMobile(640);
   const sans = "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   const mono = "'IBM Plex Mono', monospace";
+
+  // ── Fetch from Supabase ─────────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchNiftyPE()
+      .then(rows => {
+        if (cancelled) return;
+        const grid = rowsToGrid(rows);
+        const s    = deriveStats(grid);
+        setPeGrid(grid);
+        setStats(s);
+        setActiveYears(grid.map(r => r.year));
+      })
+      .catch(err => {
+        if (!cancelled) setError(err.message ?? "Failed to load P/E data");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => { setTimeout(() => setMounted(true), 60); }, []);
   useEffect(() => {
@@ -803,12 +896,15 @@ export default function NiftyPEHeatmap({ T }) {
     else document.exitFullscreen().catch(()=>{});
   }, []);
 
+  // Destructure stats for ergonomic use in render
+  const { allPE, peMin, peMax, peMean, peMedian, currentPE, currentPercentile } = stats;
+
   const visibleData = useMemo(() => {
     const cutoff = range === "5y" ? new Date().getFullYear() - 5
                  : range === "10y" ? new Date().getFullYear() - 10
                  : 2015;
-    return PE_RAW.filter(r => r.year > cutoff);
-  }, [range]);
+    return peGrid.filter(r => r.year > cutoff);
+  }, [range, peGrid]);
 
   // Sync activeYears when range changes
   useEffect(() => {
@@ -825,7 +921,7 @@ export default function NiftyPEHeatmap({ T }) {
       trendPeriod === "3y" ? nowYear - 3 :
       trendPeriod === "5y" ? nowYear - 5 : 2015;
     const pts = [];
-    for (const row of PE_RAW) {
+    for (const row of peGrid) {
       if (row.year <= cutoffYear) continue;
       for (let m = 1; m <= 12; m++) {
         if (row.year === nowYear && m > nowMonth) continue;
@@ -839,11 +935,11 @@ export default function NiftyPEHeatmap({ T }) {
       }
     }
     return pts;
-  }, [trendPeriod]);
+  }, [trendPeriod, peGrid]);
 
   const exportCSV = useCallback(() => {
     const header = ["Year", ...MONTHS].join(",");
-    const rows = PE_RAW.map(r =>
+    const rows = peGrid.map(r =>
       [r.year, ...MONTHS.map((_,i) => r[i+1] != null ? r[i+1] : "")].join(",")
     );
     const blob = new Blob([[header, ...rows].join("\n")], {type:"text/csv"});
@@ -896,6 +992,59 @@ export default function NiftyPEHeatmap({ T }) {
     }}>
       <div style={{maxWidth:1400, margin:"0 auto", padding: isMobile ? "16px 14px 40px" : "28px 24px 48px"}}>
 
+        {/* ── LOADING ── */}
+        {loading && (
+          <div style={{
+            display:"flex", flexDirection:"column", alignItems:"center",
+            justifyContent:"center", minHeight:320, gap:16,
+          }}>
+            <div style={{
+              width:36, height:36, borderRadius:"50%",
+              border:`3px solid ${C.border}`,
+              borderTopColor: VAL.fair,
+              animation:"pe-spin 0.7s linear infinite",
+            }}/>
+            <span style={{fontSize:13, color:C.muted}}>Loading valuation data…</span>
+          </div>
+        )}
+
+        {/* ── ERROR ── */}
+        {!loading && error && (
+          <div style={{
+            margin:"40px auto", maxWidth:420, padding:"24px 28px",
+            borderRadius:14, background:`${VAL.expensive}10`,
+            border:`1px solid ${VAL.expensive}40`,
+            textAlign:"center",
+          }}>
+            <div style={{fontSize:15, fontWeight:600, color:VAL.expensive, marginBottom:8}}>
+              Failed to load P/E data
+            </div>
+            <div style={{fontSize:12, color:C.muted, marginBottom:16}}>{error}</div>
+            <button
+              onClick={() => {
+                setError(null); setLoading(true);
+                fetchNiftyPE()
+                  .then(rows => {
+                    const g = rowsToGrid(rows); const s = deriveStats(g);
+                    setPeGrid(g); setStats(s); setActiveYears(g.map(r => r.year));
+                  })
+                  .catch(e => setError(e.message ?? "Failed to load P/E data"))
+                  .finally(() => setLoading(false));
+              }}
+              style={{
+                padding:"8px 20px", borderRadius:8,
+                border:`1px solid ${VAL.expensive}50`,
+                background:`${VAL.expensive}15`, color:VAL.expensive,
+                fontSize:12, fontWeight:600, cursor:"pointer",
+              }}>
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* ── MAIN CONTENT (only when data is ready) ── */}
+        {!loading && !error && peGrid.length > 0 && (<>
+
         {/* ── HEADER ── */}
         <div style={{
           display:"flex", alignItems:"flex-start", justifyContent:"space-between",
@@ -917,11 +1066,11 @@ export default function NiftyPEHeatmap({ T }) {
               fontWeight:700, color:C.text,
               letterSpacing:"-0.03em", lineHeight:1.1,
             }}>
-              Nifty 50 Valuation History
+              Nifty 50 PE
             </h1>
             {!isMobile && (
               <p style={{margin:"8px 0 0", fontSize:14, color:C.muted}}>
-                Monthly trailing P/E ratio since 2016 · Updated monthly
+                Monthly trailing P/E ratio
               </p>
             )}
           </div>
@@ -934,31 +1083,31 @@ export default function NiftyPEHeatmap({ T }) {
               WebkitOverflowScrolling:"touch",
             }}>
               <KPICard compact C={C} accent="#60A5FA" label="Current P/E"
-                value={`${CURRENT_PE}×`}
+                value={`${currentPE.toFixed(1)}×`}
                 icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}/>
               <KPICard compact C={C} accent={VAL.fair} label="Fair Value"
                 value="18–22×"
                 icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}/>
               <KPICard compact C={C} accent={VAL.neutral} label="Range"
-                value={`${PE_MIN.toFixed(1)}–${PE_MAX.toFixed(1)}×`}
+                value={`${peMin.toFixed(1)}–${peMax.toFixed(1)}×`}
                 icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="8" width="5" height="13"/><rect x="17" y="13" width="5" height="8"/></svg>}/>
               <KPICard compact C={C} accent={VAL.neutral} label="Percentile"
-                value={`${CURRENT_PERCENTILE}th`}
+                value={`${currentPercentile}th`}
                 icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>}/>
             </div>
           ) : (
             <div style={{display:"flex", gap:12, flexWrap:"wrap", flex:"1 1 auto", justifyContent:"flex-end"}}>
               <KPICard C={C} accent="#60A5FA" label="Current P/E"
-                value={`${CURRENT_PE}×`} sub={peCategory(CURRENT_PE)}
+                value={`${currentPE.toFixed(1)}×`} sub={peCategory(currentPE)}
                 icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}/>
               <KPICard C={C} accent={VAL.fair} label="Fair Value Zone"
                 value="18× – 22×" sub="Historical consensus"
                 icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}/>
               <KPICard C={C} accent={VAL.neutral} label="Historical Range"
-                value={`${PE_MIN.toFixed(1)}× – ${PE_MAX.toFixed(1)}×`} sub="Since Jan 2016"
+                value={`${peMin.toFixed(1)}× – ${peMax.toFixed(1)}×`} sub="Since Jan 2016"
                 icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="8" width="5" height="13"/><rect x="17" y="13" width="5" height="8"/></svg>}/>
               <KPICard C={C} accent={VAL.neutral} label="Percentile"
-                value={`${CURRENT_PERCENTILE}th`} sub="Of all monthly readings"
+                value={`${currentPercentile}th`} sub="Of all monthly readings"
                 icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>}/>
             </div>
           )}
@@ -974,7 +1123,7 @@ export default function NiftyPEHeatmap({ T }) {
             letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:12}}>
             Valuation Spectrum
           </div>
-          <ValuationGauge C={C} percentile={CURRENT_PERCENTILE} currentPE={CURRENT_PE}/>
+          <ValuationGauge C={C} percentile={currentPercentile} currentPE={currentPE} peMin={peMin} peMax={peMax}/>
         </div>
 
         {/* ── INSIGHTS STRIP ── */}
@@ -987,11 +1136,11 @@ export default function NiftyPEHeatmap({ T }) {
           gap:10, marginBottom:20,
         }}>
           {[
-            { label:"Current Market",  value:`${CURRENT_PE}×`,          sub:"Fairly Valued", accent:"#60A5FA" },
-            { label:"All-Time High",   value:`${PE_MAX.toFixed(1)}×`,   sub:"Feb 2021",      accent:VAL.expensive },
-            { label:"All-Time Low",    value:`${PE_MIN.toFixed(1)}×`,   sub:"Jun 2020",      accent:VAL.cheap },
-            { label:"Mean P/E",        value:`${PE_MEAN.toFixed(1)}×`,  sub:"Since 2016",    accent:VAL.neutral },
-            { label:"Median P/E",      value:`${PE_MEDIAN.toFixed(1)}×`,sub:"Since 2016",    accent:VAL.fair },
+            { label:"Current Market",  value:`${currentPE.toFixed(1)}×`, sub:peCategory(currentPE), accent:"#60A5FA" },
+            { label:"All-Time High",   value:`${peMax.toFixed(1)}×`,    sub:"Historical High", accent:VAL.expensive },
+            { label:"All-Time Low",    value:`${peMin.toFixed(1)}×`,    sub:"Historical Low",  accent:VAL.cheap },
+            { label:"Mean P/E",        value:`${peMean.toFixed(1)}×`,   sub:"Since 2016",    accent:VAL.neutral },
+            { label:"Median P/E",      value:`${peMedian.toFixed(1)}×`, sub:"Since 2016",    accent:VAL.fair },
           ].map(item => (
             <div key={item.label} style={{
               borderRadius:12, padding: isMobile ? "10px 14px" : "14px 16px",
@@ -1147,7 +1296,7 @@ export default function NiftyPEHeatmap({ T }) {
                             width={80} height={26}/>
                         </td>
                         {vals.map((pe, mi) => (
-                          <HeatCell key={mi} pe={pe} month={MONTHS[mi]} year={row.year} C={C}/>
+                          <HeatCell key={mi} pe={pe} month={MONTHS[mi]} year={row.year} C={C} allPE={allPE}/>
                         ))}
                         <td style={{
                           padding:"6px 14px", borderLeft:`1px solid ${C.border}`,
@@ -1192,7 +1341,7 @@ export default function NiftyPEHeatmap({ T }) {
                 </div>
               </div>
             </div>
-            <TrendChart points={trendPoints} C={C} height={320}/>
+            <TrendChart points={trendPoints} C={C} height={320} peMean={peMean} currentPE={currentPE} allPE={allPE}/>
           </div>
         )}
 
@@ -1272,15 +1421,26 @@ export default function NiftyPEHeatmap({ T }) {
           P/E data is indicative and for research purposes only. Not investment advice.
           Historical valuation does not guarantee future returns.
         </div>
-      </div>
 
-      <style>{[
-        `::-webkit-scrollbar { width:5px; height:5px; }`,
-        `::-webkit-scrollbar-track { background:transparent; }`,
-        `::-webkit-scrollbar-thumb { background:${C.scrollThumb}; border-radius:4px; }`,
-        `::-webkit-scrollbar-thumb:hover { background:${C.scrollThumbHov}; }`,
-        `.pe-pill-strip::-webkit-scrollbar { display:none; }`,
-      ].join("\n")}</style>
+        </>)}
+
+        <style>{[
+          `::-webkit-scrollbar { width:5px; height:5px; }`,
+          `::-webkit-scrollbar-track { background:transparent; }`,
+          `::-webkit-scrollbar-thumb { background:${C.scrollThumb}; border-radius:4px; }`,
+          `::-webkit-scrollbar-thumb:hover { background:${C.scrollThumbHov}; }`,
+          `.pe-pill-strip::-webkit-scrollbar { display:none; }`,
+          `@keyframes pe-spin { to { transform: rotate(360deg); } }`,
+        ].join("\n")}</style>
+      </div>
     </div>
+  );
+}
+
+export default function NiftyPEHeatmap(props) {
+  return (
+    <PEErrorBoundary>
+      <NiftyPEHeatmapInner {...props}/>
+    </PEErrorBoundary>
   );
 }
