@@ -117,7 +117,7 @@ export function prefetchOwnershipData() {
 
 // ─── PAGINATED FETCH (parallel) ───────────────────────────────────────────────
 async function fetchAllPages(path) {
-  const PAGE = 1000;
+  const PAGE = 10000;
 
   let total = null;
   try {

@@ -11,7 +11,7 @@ const SB_H = {
 
 // Paginated fetch — Supabase PostgREST caps responses at 1000 rows by default.
 // We use the HTTP Range header (PostgREST standard) to page through all rows.
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 10000;
 async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

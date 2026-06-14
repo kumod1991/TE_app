@@ -2949,7 +2949,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [lastUpdated, setLastUpdated] = useState(null);
 
     // ── Cache-key constants (same paths used in sbFetch calls below) ──────────
-    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast&limit=5000";
+    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast&limit=10000";
     const STOCK52W_PATH = "stock_52w?select=ticker,volume_ma20";
     const MOVERS_TTL = 5 * 60 * 1000;
 
