@@ -860,10 +860,10 @@ export default function NiftyPEHeatmap({ T }) {
               margin:0, fontSize:32, fontWeight:700, color:C.text,
               letterSpacing:"-0.03em", lineHeight:1.1,
             }}>
-              Nifty 50 Valuation History
+              Nifty 50 PE
             </h1>
             <p style={{margin:"8px 0 0", fontSize:14, color:C.muted}}>
-              Monthly trailing P/E ratio since 2016 · Updated monthly
+              Monthly trailing P/E ratio
             </p>
           </div>
 
