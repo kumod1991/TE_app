@@ -1487,17 +1487,16 @@ a:hover { text-decoration: underline; }
 
 .stat-card {
   position: relative; overflow: hidden;
-  background: ${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01))" : "linear-gradient(180deg, rgba(255,255,255,1), rgba(249,250,251,1))"};
+  background: ${D ? "rgba(255,255,255,.03)" : "#ffffff"};
   border: 1px solid ${D ? "rgba(255,255,255,.06)" : "rgba(15,23,42,.06)"};
   border-radius: 24px; padding: 20px 22px;
-  transition: all .2s ease;
+  transition: transform .2s ease, box-shadow .2s ease;
   animation: slideUp .3s cubic-bezier(.16,1,.3,1);
-  box-shadow: ${D ? "0 14px 40px rgba(0,0,0,.25)" : "0 12px 30px rgba(15,23,42,.04)"};
+  box-shadow: ${D ? "0 8px 30px rgba(0,0,0,.2)" : "0 6px 20px rgba(15,23,42,.03)"};
 }
 .stat-card:hover { 
-  box-shadow: ${D ? "0 22px 50px rgba(0,0,0,.35)" : "0 18px 45px rgba(15,23,42,.08)"}; 
+  box-shadow: ${D ? "0 16px 40px rgba(0,0,0,.3)" : "0 12px 30px rgba(15,23,42,.06)"}; 
   transform: translateY(-2px); 
-  border-color: ${D ? "rgba(255,255,255,.12)" : "rgba(15,23,42,.12)"}; 
 }
 .stat-card.hero { 
   border-color: rgba(16,185,129,.24); 
@@ -1656,11 +1655,16 @@ a:hover { text-decoration: underline; }
 .journal-nav-item.active .journal-nav-icon { opacity: 1; }
 .journal-main {
   flex: 1; overflow-y: auto; padding: 20px 22px 34px;
-  background:
-    ${D
-            ? "radial-gradient(circle at top left, rgba(16,185,129,0.10), transparent 24%), radial-gradient(circle at top right, rgba(59,130,246,0.10), transparent 26%), linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))"
-            : "radial-gradient(circle at top left, rgba(5,150,105,0.08), transparent 24%), radial-gradient(circle at top right, rgba(37,99,235,0.08), transparent 26%), linear-gradient(180deg, rgba(15,23,42,0.02), rgba(15,23,42,0))"},
-    ${T.bg};
+  background: ${T.bg};
+}
+@media (min-width: 1024px) {
+  .journal-main {
+    background:
+      ${D
+            ? "radial-gradient(circle at top left, rgba(16,185,129,0.08), transparent 24%), radial-gradient(circle at top right, rgba(59,130,246,0.08), transparent 26%)"
+            : "radial-gradient(circle at top left, rgba(5,150,105,0.06), transparent 24%), radial-gradient(circle at top right, rgba(37,99,235,0.06), transparent 26%)"},
+      ${T.bg};
+  }
 }
 .journal-main-inner { width: 100%; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
 .journal-hero {
@@ -2044,11 +2048,13 @@ thead th {
 .table-sticky-1 { 
   position: sticky; left: 0; z-index: 20; 
   background: ${T.tableHead}; 
+  will-change: transform;
 }
 tbody .table-sticky-1 { background: ${T.surface}; }
 .table-sticky-2 { 
   position: sticky; left: 42px; z-index: 20; 
   background: ${T.tableHead}; 
+  will-change: transform;
 }
 tbody .table-sticky-2 { background: ${T.surface}; }
 .table-sticky-1::after, .table-sticky-2::after {
@@ -2091,10 +2097,9 @@ td { padding:10px 14px; font-size:12.5px; white-space:nowrap; color:${T.text}; b
   .chart-grid .chart-card { grid-column:1 !important; }
 }
 .chart-card {
-  background:${D ? "rgba(255,255,255,.025)" : "rgba(255,255,255,.72)"};
-  border:1px solid ${D ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.07)"}; border-radius:28px; padding:24px;
-  box-shadow:${D ? "0 14px 40px rgba(0,0,0,.15)" : "0 12px 30px rgba(15,23,42,.04)"};
-  backdrop-filter: blur(10px);
+  background:${D ? "rgba(255,255,255,.025)" : "rgba(255,255,255,.98)"};
+  border: 1px solid ${D ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.07)"}; border-radius: 28px; padding: 24px;
+  box-shadow:${D ? "0 10px 30px rgba(0,0,0,.2)" : "0 8px 24px rgba(15,23,42,.03)"};
 }
 .chart-title { 
   font-size: 13px; font-weight: 700; color: ${T.text}; margin-bottom: 20px; 
@@ -3421,7 +3426,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
 }
 
 //  PAGES 
-function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null, asideTitle = "", asideValue = "", asideBody = "", asideTone = "neutral" }) {
+const JournalHero = memo(({ T, kicker, title, subtitle, metrics = [], actions = null, asideTitle = "", asideValue = "", asideBody = "", asideTone = "neutral" }) => {
     const toneColor = (tone) => tone === "positive" ? T.pos : tone === "negative" ? T.neg : T.text;
     const asideColor = toneColor(asideTone);
 
@@ -3467,7 +3472,7 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
             )}
         </section>
     );
-}
+});
 
 function Dashboard({ trades, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
@@ -3592,6 +3597,27 @@ function Dashboard({ trades, isDemo, T }) {
     );
 }
 
+const TradeRow = memo(({ t, i, T, onEdit, onDelete }) => {
+    return (
+        <tr>
+            <td className="td-mono table-sticky-1" style={{ color: T.muted, width: 42, textAlign: "center", padding: "10px 0" }}>{i + 1}</td>
+            <td style={{ fontWeight: 700 }} className="table-sticky-2">{t.ticker}</td>
+            <td className="td-mono" style={{ color: T.subtext }}>{t.entry_date}</td>
+            <td className="td-mono">{t.buy_qty}</td>
+            <td className="td-mono">{t.buy_price}</td>
+            <td className="td-mono">{t.buyAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+            <td className="td-mono" style={{ color: T.subtext }}>{t.exit_date || ""}</td>
+            <td className="td-mono">{t.sell_qty || ""}</td>
+            <td className="td-mono">{t.sell_price ? `${t.sell_price}` : ""}</td>
+            <td className="td-mono">{t.exit_date ? `${t.sellAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : ""}</td>
+            <td>{t.exit_date ? <span className={t.pnl > 0 ? "pnl-pos" : t.pnl < 0 ? "pnl-neg" : ""}>{t.pnl >= 0 ? "+" : ""}{t.pnl.toFixed(2)}</span> : <span style={{ color: T.muted }}></span>}</td>
+            <td className="td-mono" style={{ color: T.subtext }}>{t.days !== null ? t.days : ""}</td>
+            <td>{!t.exit_date ? <span className="badge badge-open">Open</span> : t.pnl > 0 ? <span className="badge badge-win">Win</span> : t.pnl < 0 ? <span className="badge badge-loss">Loss</span> : <span className="badge" style={{ background: T.pill, color: T.subtext }}>Break</span>}</td>
+            <td><span style={{ display: "flex", gap: 2 }}><button className="action-btn" onClick={() => onEdit(t)} title="Edit trade">✏️</button><button className="action-btn" onClick={() => onDelete(t.id)} title="Delete trade">🗑️</button></span></td>
+        </tr>
+    );
+});
+
 function Trades({ trades, onAdd, onEdit, onDelete, onImportCSV, T }) {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
@@ -3677,22 +3703,7 @@ function Trades({ trades, onAdd, onEdit, onDelete, onImportCSV, T }) {
                         <thead><tr><th className="table-sticky-1" style={{ width: 42, textAlign: "center", padding: "10px 0" }}>#</th><th className="table-sticky-2">Ticker</th><th>Entry</th><th>Buy Qty</th><th>Buy Price</th><th>Buy Amt</th><th>Exit</th><th>Sell Qty</th><th>Sell Price</th><th>Sell Amt</th><th>P&amp;L</th><th>Days</th><th>Status</th><th></th></tr></thead>
                         <tbody>
                             {filtered.map((t, i) => (
-                                <tr key={t.id}>
-                                    <td className="td-mono table-sticky-1" style={{ color: T.muted, width: 42, textAlign: "center", padding: "10px 0" }}>{i + 1}</td>
-                                    <td style={{ fontWeight: 700 }} className="table-sticky-2">{t.ticker}</td>
-                                    <td className="td-mono" style={{ color: T.subtext }}>{t.entry_date}</td>
-                                    <td className="td-mono">{t.buy_qty}</td>
-                                    <td className="td-mono">{t.buy_price}</td>
-                                    <td className="td-mono">{t.buyAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                                    <td className="td-mono" style={{ color: T.subtext }}>{t.exit_date || ""}</td>
-                                    <td className="td-mono">{t.sell_qty || ""}</td>
-                                    <td className="td-mono">{t.sell_price ? `${t.sell_price}` : ""}</td>
-                                    <td className="td-mono">{t.exit_date ? `${t.sellAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : ""}</td>
-                                    <td>{t.exit_date ? <span className={t.pnl > 0 ? "pnl-pos" : t.pnl < 0 ? "pnl-neg" : ""}>{t.pnl >= 0 ? "+" : ""}{t.pnl.toFixed(2)}</span> : <span style={{ color: T.muted }}></span>}</td>
-                                    <td className="td-mono" style={{ color: T.subtext }}>{t.days !== null ? t.days : ""}</td>
-                                    <td>{!t.exit_date ? <span className="badge badge-open">Open</span> : t.pnl > 0 ? <span className="badge badge-win">Win</span> : t.pnl < 0 ? <span className="badge badge-loss">Loss</span> : <span className="badge" style={{ background: T.pill, color: T.subtext }}>Break</span>}</td>
-                                    <td><span style={{ display: "flex", gap: 2 }}><button className="action-btn" onClick={() => onEdit(t)} title="Edit trade">✏️</button><button className="action-btn" onClick={() => onDelete(t.id)} title="Delete trade">🗑️</button></span></td>
-                                </tr>
+                                <TradeRow key={t.id} t={t} i={i} T={T} onEdit={onEdit} onDelete={onDelete} />
                             ))}
                         </tbody>
                     </table>
@@ -4732,6 +4743,65 @@ async function triggerBseFinancials(ticker) {
 }
 
 
+const PortfolioRow = memo(({ r, loading, T, td, Badge, pnlColor, inr, mono }) => {
+    return (
+        <tr>
+            <td style={td({ textAlign: "left" })} className="table-sticky-1">
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontWeight: 700, color: T.greenText, ...mono, fontSize: 12 }}>{r.ticker}</span>
+                    {loading && !r.loaded && <span style={{ fontSize: 9, color: T.muted, background: T.pill, padding: "1px 5px", borderRadius: 4 }}></span>}
+                    {!loading && !r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
+                </div>
+            </td>
+            <td style={td({ textAlign: "left", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, color: T.subtext })}>
+                {r.name}
+            </td>
+            <td style={td({ textAlign: "right", ...mono, fontWeight: 700, color: r.currentPrice ? T.text : T.muted })}>
+                {r.currentPrice ? `${r.currentPrice.toFixed(2)}` : ""}
+            </td>
+            <td style={td({ textAlign: "right", ...mono, color: T.subtext })}>
+                {r.avgBuyPrice.toFixed(2)}
+            </td>
+            <td style={td({ textAlign: "right", ...mono, color: pnlColor(r.dayChg) })}>
+                {r.dayChg != null ? `${r.dayChg >= 0 ? "+" : ""}${r.dayChg.toFixed(2)}` : <span style={{ color: T.muted }}></span>}
+            </td>
+            <td style={td({ textAlign: "right" })}><Badge v={r.dayChgPct} /></td>
+            <td style={td({ textAlign: "right", ...mono })}>{r.openQty.toLocaleString("en-IN")}</td>
+            <td style={td({ textAlign: "right", ...mono, fontWeight: 700 })}>{inr(r.curVal)}</td>
+            <td style={td({ textAlign: "right" })}><Badge v={r.apprc} /></td>
+            <td style={td({ textAlign: "right" })}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                    <div style={{ width: 44, height: 4, background: T.border, borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
+                        <div style={{ width: `${Math.min(r.alloc, 100)}%`, height: "100%", background: T.green, borderRadius: 2 }} />
+                    </div>
+                    <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 34, textAlign: "right" }}>
+                        {r.alloc.toFixed(1)}%
+                    </span>
+                </div>
+            </td>
+            <td style={td({ textAlign: "right" })}>
+                {r.rs == null
+                    ? <span style={{ color: T.muted, fontSize: 11 }}></span>
+                    : (() => {
+                        const pctVal = (r.rs * 100).toFixed(1);
+                        const isPos = r.rs >= 0;
+                        return (
+                            <span style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                padding: "2px 8px", borderRadius: 100, fontSize: 11, fontWeight: 700,
+                                background: isPos ? T.greenGlow : T.redGlow,
+                                color: isPos ? T.pos : T.neg
+                            }}>
+                                {isPos ? "+" : ""}{pctVal}%
+                            </span>
+                        );
+                    })()
+                }
+            </td>
+        </tr>
+    );
+});
+
 function Portfolio({ trades, T }) {
     const openPositions = useMemo(() => {
         // Group trades by ticker
@@ -5033,74 +5103,19 @@ function Portfolio({ trades, T }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {sorted.map((r, i) => {
-                                return (
-                                    <tr key={r.ticker}>
-                                        <td style={td({ textAlign: "left" })} className="table-sticky-1">
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <span style={{ fontWeight: 700, color: T.greenText, ...mono, fontSize: 12 }}>{r.ticker}</span>
-                                                {loading && !r.loaded && <span style={{ fontSize: 9, color: T.muted, background: T.pill, padding: "1px 5px", borderRadius: 4 }}></span>}
-                                                {!loading && !r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
-                                            </div>
-                                        </td>
-                                        {/* Name */}
-                                        <td style={td({ textAlign: "left", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, color: T.subtext })}>
-                                            {r.name}
-                                        </td>
-                                        {/* Current Price */}
-                                        <td style={td({ textAlign: "right", ...mono, fontWeight: 700, color: r.currentPrice ? T.text : T.muted })}>
-                                            {r.currentPrice ? `${r.currentPrice.toFixed(2)}` : ""}
-                                        </td>
-                                        {/* Avg Buy Price */}
-                                        <td style={td({ textAlign: "right", ...mono, color: T.subtext })}>
-                                            {r.avgBuyPrice.toFixed(2)}
-                                        </td>
-                                        {/* Day Change  */}
-                                        <td style={td({ textAlign: "right", ...mono, color: pnlColor(r.dayChg) })}>
-                                            {r.dayChg != null ? `${r.dayChg >= 0 ? "+" : ""}${r.dayChg.toFixed(2)}` : <span style={{ color: T.muted }}></span>}
-                                        </td>
-                                        {/* Day Change % badge */}
-                                        <td style={td({ textAlign: "right" })}><Badge v={r.dayChgPct} /></td>
-                                        {/* Shares */}
-                                        <td style={td({ textAlign: "right", ...mono })}>{r.openQty.toLocaleString("en-IN")}</td>
-                                        {/* Current Value */}
-                                        <td style={td({ textAlign: "right", ...mono, fontWeight: 700 })}>{inr(r.curVal)}</td>
-                                        {/* Appreciation % badge */}
-                                        <td style={td({ textAlign: "right" })}><Badge v={r.apprc} /></td>
-                                        {/* Allocation mini bar */}
-                                        <td style={td({ textAlign: "right" })}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                                                <div style={{ width: 44, height: 4, background: T.border, borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
-                                                    <div style={{ width: `${Math.min(r.alloc, 100)}%`, height: "100%", background: T.green, borderRadius: 2 }} />
-                                                </div>
-                                                <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 34, textAlign: "right" }}>
-                                                    {r.alloc.toFixed(1)}%
-                                                </span>
-                                            </div>
-                                        </td>
-                                        {/* RS-6M vs Nifty 500 */}
-                                        <td style={td({ textAlign: "right" })}>
-                                            {r.rs == null
-                                                ? <span style={{ color: T.muted, fontSize: 11 }}></span>
-                                                : (() => {
-                                                    const pct = (r.rs * 100).toFixed(1);
-                                                    const isPos = r.rs >= 0;
-                                                    return (
-                                                        <span style={{
-                                                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                                            padding: "2px 8px", borderRadius: 100, fontSize: 11, fontWeight: 700,
-                                                            background: isPos ? T.greenGlow : T.redGlow,
-                                                            color: isPos ? T.pos : T.neg
-                                                        }}>
-                                                            {isPos ? "+" : ""}{pct}%
-                                                        </span>
-                                                    );
-                                                })()
-                                            }
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                            {sorted.map((r, i) => (
+                                <PortfolioRow 
+                                    key={r.ticker} 
+                                    r={r} 
+                                    loading={loading} 
+                                    T={T} 
+                                    td={td} 
+                                    Badge={Badge} 
+                                    pnlColor={pnlColor} 
+                                    inr={inr} 
+                                    mono={mono} 
+                                />
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -5218,6 +5233,57 @@ function FundModal({ fund, onClose, onSave, T }) {
         </div>
     );
 }
+
+const FundRow = memo(({ f, i, isDeposit, isChecked, T, toggleSelectOne, inr, mono, onEdit, onDelete }) => {
+    return (
+        <tr style={{ background: isChecked ? T.hover : "inherit" }}>
+            <td className="table-sticky-1" style={{ padding: "10px 12px 10px 16px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
+                <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleSelectOne(f.id)}
+                    style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }}
+                />
+            </td>
+            <td className="td-mono table-sticky-2" style={{ padding: "10px 16px", fontSize: 12.5, color: T.muted, borderBottom: `1px solid ${T.border}`, textAlign: "left" }}>{i + 1}</td>
+            <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, borderBottom: `1px solid ${T.border}`, textAlign: "left" }} className="td-mono">
+                {new Date(f.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            </td>
+            <td style={{ padding: "10px 16px", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 700,
+                    background: isDeposit ? T.greenGlow : T.redGlow,
+                    color: isDeposit ? T.pos : T.neg,
+                    border: `1px solid ${isDeposit ? T.green + "44" : T.red + "33"}`
+                }}>
+                    {isDeposit ? "Deposit" : "Withdrawal"}
+                </span>
+            </td>
+            <td style={{
+                padding: "10px 16px", textAlign: "right", fontSize: 13, fontWeight: 700,
+                color: isDeposit ? T.pos : T.neg, borderBottom: `1px solid ${T.border}`
+            }} className="td-mono">
+                {isDeposit ? "+" : "-"}{inr(f.amount)}
+            </td>
+            <td style={{ padding: "10px 16px", fontSize: 12.5, color: T.text, fontWeight: 500, borderBottom: `1px solid ${T.border}` }}>{f.dp}</td>
+            <td style={{
+                padding: "10px 16px", textAlign: "right", fontSize: 13,
+                color: f.runningBalance >= 0 ? T.text : T.neg, borderBottom: `1px solid ${T.border}`
+            }} className="td-mono">
+                {inr(f.runningBalance)}
+            </td>
+            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>
+                {f.note || <span style={{ color: T.border }}>—</span>}
+            </td>
+            <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ display: "flex", gap: 2 }}>
+                    <button className="action-btn" onClick={() => onEdit(f)} title="Edit">✏️</button>
+                    <button className="action-btn" onClick={() => onDelete(f.id)} title="Delete">🗑️</button>
+                </span>
+            </td>
+        </tr>
+    );
+});
 
 function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, onImportCSV, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
@@ -5698,58 +5764,21 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                                 </tr>
                             </thead>
                             <tbody>
-                                {withBalance.map((f, i) => {
-                                    const isDeposit = f.type === "deposit";
-                                    const isChecked = selectedIds.has(f.id);
-                                    return (
-                                        <tr key={f.id} style={{ background: isChecked ? T.hover : "inherit" }}>
-                                            <td className="table-sticky-1" style={{ padding: "10px 12px 10px 16px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={() => toggleSelectOne(f.id)}
-                                                    style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }}
-                                                />
-                                            </td>
-                                            <td className="td-mono table-sticky-2" style={{ padding: "10px 16px", fontSize: 12.5, color: T.muted, borderBottom: `1px solid ${T.border}`, textAlign: "left" }}>{i + 1}</td>
-                                            <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, borderBottom: `1px solid ${T.border}`, textAlign: "left" }} className="td-mono">
-                                                {new Date(f.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                                            </td>
-                                            <td style={{ padding: "10px 16px", borderBottom: `1px solid ${T.border}` }}>
-                                                <span style={{
-                                                    display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 700,
-                                                    background: isDeposit ? T.greenGlow : T.redGlow,
-                                                    color: isDeposit ? T.pos : T.neg,
-                                                    border: `1px solid ${isDeposit ? T.green + "44" : T.red + "33"}`
-                                                }}>
-                                                    {isDeposit ? "Deposit" : "Withdrawal"}
-                                                </span>
-                                            </td>
-                                            <td style={{
-                                                padding: "10px 16px", textAlign: "right", fontSize: 13, fontWeight: 700,
-                                                color: isDeposit ? T.pos : T.neg, borderBottom: `1px solid ${T.border}`
-                                            }} className="td-mono">
-                                                {isDeposit ? "+" : "-"}{inr(f.amount)}
-                                            </td>
-                                            <td style={{ padding: "10px 16px", fontSize: 12.5, color: T.text, fontWeight: 500, borderBottom: `1px solid ${T.border}` }}>{f.dp}</td>
-                                            <td style={{
-                                                padding: "10px 16px", textAlign: "right", fontSize: 13,
-                                                color: f.runningBalance >= 0 ? T.text : T.neg, borderBottom: `1px solid ${T.border}`
-                                            }} className="td-mono">
-                                                {inr(f.runningBalance)}
-                                            </td>
-                                            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>
-                                                {f.note || <span style={{ color: T.border }}>—</span>}
-                                            </td>
-                                            <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
-                                                <span style={{ display: "flex", gap: 2 }}>
-                                                    <button className="action-btn" onClick={() => handleEdit(f)} title="Edit">✏️</button>
-                                                    <button className="action-btn" onClick={() => onDelete(f.id)} title="Delete">🗑️</button>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                {withBalance.map((f, i) => (
+                                    <FundRow 
+                                        key={f.id} 
+                                        f={f} 
+                                        i={i} 
+                                        isDeposit={f.type === "deposit"} 
+                                        isChecked={selectedIds.has(f.id)} 
+                                        T={T} 
+                                        toggleSelectOne={toggleSelectOne} 
+                                        inr={inr} 
+                                        mono={mono} 
+                                        onEdit={handleEdit} 
+                                        onDelete={onDelete} 
+                                    />
+                                ))}
                             </tbody>
                             {/* Totals footer */}
                             <tfoot>
@@ -5854,6 +5883,33 @@ function DividendModal({ dividend, onClose, onSave, T }) {
 }
 
 //  DIVIDENDS 
+const DividendRow = memo(({ d, i, isChecked, T, toggleOne, inr, getFY, onEdit, onDelete }) => {
+    return (
+        <tr style={{ background: isChecked ? T.hover : "inherit" }}>
+            <td className="table-sticky-1" style={{ padding: "10px 12px 10px 16px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
+                <input type="checkbox" checked={isChecked} onChange={() => toggleOne(d.id)}
+                    style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }} />
+            </td>
+            <td className="td-mono table-sticky-2" style={{ padding: "10px 16px", fontSize: 12.5, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{i + 1}</td>
+            <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, color: T.text, borderBottom: `1px solid ${T.border}` }} className="td-mono">{d.ticker}</td>
+            <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, borderBottom: `1px solid ${T.border}` }} className="td-mono">
+                {new Date(d.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            </td>
+            <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, fontSize: 13, color: Number(d.amount) >= 0 ? T.pos : T.neg, borderBottom: `1px solid ${T.border}` }} className="td-mono">
+                {Number(d.amount) >= 0 ? "+" : ""}{inr(Number(d.amount))}
+            </td>
+            <td style={{ padding: "10px 16px", fontSize: 12.5, color: T.subtext, borderBottom: `1px solid ${T.border}` }} className="td-mono">{getFY(d.date)}</td>
+            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>{d.note || "—"}</td>
+            <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ display: "flex", gap: 2 }}>
+                    <button className="action-btn" onClick={() => onEdit(d)} title="Edit">✏️</button>
+                    <button className="action-btn" onClick={() => onDelete(d.id)} title="Delete">🗑️</button>
+                </span>
+            </td>
+        </tr>
+    );
+});
+
 function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
     const [showModal, setShowModal] = useState(false);
     const [editDiv, setEditDiv] = useState(null);
@@ -6134,39 +6190,20 @@ function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map((d, i) => {
-                                const isChecked = selectedIds.has(d.id);
-                                return (
-                                    <tr key={d.id} style={{ background: isChecked ? T.hover : "inherit" }}>
-                                        <td className="table-sticky-1" style={{ padding: "10px 12px 10px 16px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
-                                            <input type="checkbox" checked={isChecked} onChange={() => toggleOne(d.id)}
-                                                style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }} />
-                                        </td>
-                                        <td className="td-mono table-sticky-2" style={{ padding: "10px 16px", fontSize: 12.5, color: T.muted, borderBottom: `1px solid ${T.border}`, textAlign: "left" }}>{i + 1}</td>
-                                        <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, color: T.text, borderBottom: `1px solid ${T.border}` }} className="td-mono">{d.ticker}</td>
-                                        <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, borderBottom: `1px solid ${T.border}` }} className="td-mono">
-                                            {new Date(d.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                                        </td>
-                                        <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, fontSize: 13, color: Number(d.amount) >= 0 ? T.pos : T.neg, borderBottom: `1px solid ${T.border}` }} className="td-mono">
-                                            {Number(d.amount) >= 0 ? "+" : ""}{inr(Number(d.amount))}
-                                        </td>
-                                        <td style={{ padding: "10px 16px", borderBottom: `1px solid ${T.border}` }}>
-                                            <span style={{ padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 700, background: T.greenGlow, color: T.pos, border: `1px solid ${T.green}33` }}>
-                                                {d.fy || getFY(d.date)}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>
-                                            {d.note || <span style={{ color: T.border }}>—</span>}
-                                        </td>
-                                        <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
-                                            <span style={{ display: "flex", gap: 2 }}>
-                                                <button className="action-btn" onClick={() => { setEditDiv(d); setShowModal(true); }} title="Edit">✏️</button>
-                                                <button className="action-btn" onClick={() => onDelete(d.id)} title="Delete">🗑️</button>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                            {filtered.map((d, i) => (
+                                <DividendRow 
+                                    key={d.id} 
+                                    d={d} 
+                                    i={i} 
+                                    isChecked={selectedIds.has(d.id)} 
+                                    T={T} 
+                                    toggleOne={toggleOne} 
+                                    inr={inr} 
+                                    getFY={getFY} 
+                                    onEdit={(div) => { setEditDiv(div); setShowModal(true); }} 
+                                    onDelete={onDelete} 
+                                />
+                            ))}
                         </tbody>
                         <tfoot>
                             <tr style={{ background: T.greenGlow }}>
