@@ -431,11 +431,15 @@ function applyNamesFromMap(rows) {
 
 
 // â”€â”€â”€ BATCH FETCH (splits large ticker lists to avoid query timeouts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 20;
 
 function toSupabaseInList(values) {
+    // PostgREST `in` filter with string values uses comma-separated, double-quoted values.
+    // Special characters like '&' MUST be encoded for the URL, but the PostgREST
+    // syntax inside the 'in' filter itself needs careful handling.
+    // A safer way is to encode the components properly.
     return `(${values
-        .map(v => `"${String(v).trim()}"`)   // â† wrap each ticker in double-quotes
+        .map(v => `"${encodeURIComponent(String(v).trim())}"`)
         .filter(Boolean)
         .join(",")})`;
 }
