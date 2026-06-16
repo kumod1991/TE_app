@@ -375,12 +375,16 @@ export function prefetchFiiDiiData() {
 const PAD = { top: 10, right: 12, bottom: 30, left: 56 };
 
 function useChartWidth(ref) {
-  const [w, setW] = useState(600);
+  const [w, setW] = useState(() => {
+    if (typeof window !== "undefined") return Math.max(280, window.innerWidth - 56);
+    return 360;
+  });
   useEffect(() => {
     if (!ref.current) return;
-    const ro = new ResizeObserver(es => setW(es[0].contentRect.width || 600));
+    const ro = new ResizeObserver(es => setW(es[0].contentRect.width || 360));
     ro.observe(ref.current);
-    setW(ref.current.clientWidth || 600);
+    const actual = ref.current.clientWidth;
+    if (actual && actual !== w) setW(actual);
     return () => ro.disconnect();
   }, []);
   return w;
@@ -616,8 +620,8 @@ function SvgLineChart({ data, series, height = 240, fill = false, T, isMobile = 
           })}
         </g>
 
-        {/* Hover hit areas */}
-        {visible.map((d, i) => (
+        {/* Hover hit areas — desktop only; touch devices don't use onMouseEnter */}
+        {!isMobile && visible.map((d, i) => (
           <rect key={i}
             x={px(i) - cW / visible.length / 2} y={PAD.top}
             width={cW / visible.length} height={cH}
@@ -647,7 +651,7 @@ function SvgLineChart({ data, series, height = 240, fill = false, T, isMobile = 
 }
 
 // ── BAR CHART ─────────────────────────────────────────────────────────────────
-function SvgBarChart({ data, series, height = 220, mode = "grouped", T }) {
+function SvgBarChart({ data, series, height = 220, mode = "grouped", T, isMobile = false }) {
   const wrapRef = useRef(null);
   const svgRef  = useRef(null);
   const W = useChartWidth(wrapRef);
@@ -691,12 +695,12 @@ function SvgBarChart({ data, series, height = 220, mode = "grouped", T }) {
                 const clr = mode === "colored" ? (v >= 0 ? GREEN : RED) : s.color;
                 return (
                   <rect key={si} x={bx} y={by} width={barW} height={bh} fill={clr} opacity={0.88} rx={2}
-                    onMouseEnter={e => show(svgRef.current, e.clientX, e.clientY,
+                    onMouseEnter={!isMobile ? (e => show(svgRef.current, e.clientX, e.clientY,
                       <>
                         <div style={{ fontWeight: 700, marginBottom: 4, color: T.subtext }}>{fmtDate(d.date)}</div>
                         {series.map(sv => <div key={sv.key} style={{ color: mode === "colored" ? getColor(+d[sv.key]) : sv.color }}>{sv.name}: {fmtCrShort(+d[sv.key] || 0)}</div>)}
                       </>
-                    )}
+                    )) : undefined}
                   />
                 );
               })}
@@ -729,7 +733,7 @@ function SvgBarChart({ data, series, height = 220, mode = "grouped", T }) {
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 const StatCard = ({ label, value, sub, color, T, badge }) => (
-  <div style={{ background: T.isDark ? T.elevated || T.surface : T.card, borderRadius: T.radiusMd || 18, padding: "16px 18px", border: `1px solid ${T.border}`, boxShadow: T.shadowSoft, display: "flex", flexDirection: "column", gap: 6, position: "relative", overflow: "hidden", backdropFilter: "blur(14px)" }}>
+  <div style={{ background: T.isDark ? T.elevated || T.surface : T.card, borderRadius: T.radiusMd || 18, padding: "16px 18px", border: `1px solid ${T.border}`, boxShadow: T.shadowSoft, display: "flex", flexDirection: "column", gap: 6, position: "relative", overflow: "hidden" }}>
     <div style={{ position: "absolute", inset: 0, background: T.isDark ? "linear-gradient(180deg, rgba(255,255,255,0.045), transparent 28%)" : "linear-gradient(180deg, rgba(255,255,255,0.32), transparent 46%)", pointerEvents: "none" }} />
     {badge && (
       <div style={{ position: "absolute", top: 12, right: 12, background: badge === "BUY" ? GREEN + "18" : RED + "18", color: badge === "BUY" ? GREEN : RED, border: `1px solid ${badge === "BUY" ? GREEN + "28" : RED + "28"}`, borderRadius: 999, padding: "4px 8px", fontSize: 9, fontWeight: 800, letterSpacing: 1.1 }}>{badge}</div>
@@ -820,15 +824,9 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return () => window.removeEventListener("resize", h);
   }, []);
 
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (document.getElementById("fiidii-module-fonts")) return;
-    const link = document.createElement("link");
-    link.id = "fiidii-module-fonts";
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap";
-    document.head.appendChild(link);
-  }, []);
+  // NOTE: Google Fonts (IBM Plex Mono + Manrope) must be loaded in index.html <head>
+  // via a <link rel="stylesheet"> tag — NOT injected here. Runtime injection blocks
+  // the browser's font pre-loading pipeline and kills Lighthouse LCP/FCP scores.
 
   useEffect(() => {
     const cached = initialCache;
@@ -1085,7 +1083,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   }, [sectorMemo.latestSnapshot]);
 
   // ── SWIPE ──────────────────────────────────────────────────────────────────
-  const card = { background: T.isDark ? T.surface : T.card, borderRadius: T.radiusLg || 24, padding: isMobile ? 14 : 18, border: `1px solid ${T.border}`, boxShadow: T.shadow, backdropFilter: "blur(16px)" };
+  const card = { background: T.isDark ? T.surface : T.card, borderRadius: T.radiusLg || 24, padding: isMobile ? 14 : 18, border: `1px solid ${T.border}`, boxShadow: T.shadow };
   const sh   = { fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, marginBottom: 16, marginTop: 0, letterSpacing: -0.4 };
   const noData = (msg) => <div style={{ ...card, textAlign: "center", color: T.subtext, padding: 40, fontSize: 13 }}>{msg || "No data"}</div>;
 
@@ -1159,7 +1157,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
           </div>
           {isRolling
             ? <SvgLineChart data={chartData} series={chartSeries} height={isMobile ? 220 : 320} fill={true} T={T} isMobile={isMobile} />
-            : <SvgBarChart  data={chartData} series={chartSeries} height={isMobile ? 220 : 320} mode="grouped" T={T} />
+            : <SvgBarChart  data={chartData} series={chartSeries} height={isMobile ? 220 : 320} mode="grouped" T={T} isMobile={isMobile} />
           }
           {rangeExceedsData && (
             <div style={{ fontSize: 11, color: AMBER, marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
@@ -1471,12 +1469,15 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER — (5) Sticky header + tab bar
   // ══════════════════════════════════════════════════════════════════════════
-  const tabContent = {
-    "Overview":        <OverviewTab />,
-    "Cash Flow":       <CashFlowTab />,
-    "Derivatives":     <DerivativesTab />,
-    "Sector Rotation": <SectorTab />,
-    "Signals":         <SignalsTab />,
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case "Overview":        return <OverviewTab />;
+      case "Cash Flow":       return <CashFlowTab />;
+      case "Derivatives":     return <DerivativesTab />;
+      case "Sector Rotation": return <SectorTab />;
+      case "Signals":         return <SignalsTab />;
+      default:                return null;
+    }
   };
 
   return (
@@ -1538,7 +1539,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
 
       {/* Tab content */}
       <div style={{ padding:isMobile?"16px 14px 28px":"22px 28px 36px", position:"relative" }}>
-        {tabContent[activeTab]}
+        {renderActiveTab()}
       </div>
       </div>
     </div>
