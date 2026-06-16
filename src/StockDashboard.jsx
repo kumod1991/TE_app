@@ -504,8 +504,9 @@ async function batchFetchBhavNames(tickers, userToken) {
         const tickersIn = toSupabaseInList(chunk);
         try {
             // order=ticker.asc,date.desc → for each ticker, latest date row first
+            const path = `bhav_copy?select=ticker,name&ticker=in.${tickersIn}&order=ticker.asc,date.desc`;
             const rows = await sbFetch(
-                `bhav_copy?select=ticker,name&ticker=in.${tickersIn}&order=ticker.asc,date.desc`,
+                path,
                 userToken,
                 { ttl: 60 * 60 * 1000 }
             );
