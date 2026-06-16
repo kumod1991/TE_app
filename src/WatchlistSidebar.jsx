@@ -1,13 +1,14 @@
+﻿import React from 'react';
 // ============================================================
-//  WatchlistSidebar.jsx  — v3 Professional Revamp
-//  ✅ Full T.* token compliance — works in light & dark mode
-//  📱 Mobile: footer always visible, RS green line shown
-//  🎨 Revamped: cleaner layout, better typography, polish
+//  WatchlistSidebar.jsx  â€” v3 Professional Revamp
+//  âœ… Full T.* token compliance â€” works in light & dark mode
+//  ðŸ“± Mobile: footer always visible, RS green line shown
+//  ðŸŽ¨ Revamped: cleaner layout, better typography, polish
 //
 //  WHAT CHANGED vs v2:
-//  - Root height uses CSS-injected 100dvh fallback chain → footer always visible on iOS/Android
+//  - Root height uses CSS-injected 100dvh fallback chain â†’ footer always visible on iOS/Android
 //  - List section has minHeight:0 (critical Safari flex-shrink fix)
-//  - Footer uses position:sticky + bottom:0 + zIndex:2 — never clipped
+//  - Footer uses position:sticky + bottom:0 + zIndex:2 â€” never clipped
 //  - WatchlistItem now shows heat dot + green border accent on BOTH desktop & mobile
 //    (previously the green left-border accent was only triggered on active items;
 //     now non-active high-heat lists get a subtle accent too, matching PC behaviour)
@@ -19,7 +20,7 @@
 
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from "react";
 
-// ─── Style injection ──────────────────────────────────────────
+// â”€â”€â”€ Style injection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function useInjectStyles(T, isMobile) {
   const prevKey = useRef(null);
 
@@ -63,11 +64,11 @@ function useInjectStyles(T, isMobile) {
         z-index: -1;
       }
 
-      /* ── Mobile: full-height fallback chain ─────────────────
+      /* â”€â”€ Mobile: full-height fallback chain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
          Browsers apply the LAST value they understand:
-           100vh                 — universal fallback
-           -webkit-fill-available — iOS Safari <15.4
-           100dvh                — Chrome 108+, Safari 15.4+  */
+           100vh                 â€” universal fallback
+           -webkit-fill-available â€” iOS Safari <15.4
+           100dvh                â€” Chrome 108+, Safari 15.4+  */
       ${isMobile ? `
         .wls-root {
           height: calc(100vh - 60px);
@@ -82,7 +83,7 @@ function useInjectStyles(T, isMobile) {
   }, [T, isMobile]);
 }
 
-// ─── Watchlist meta ───────────────────────────────────────────
+// â”€â”€â”€ Watchlist meta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function useWatchlistMeta(watchlists, activeWl, rows) {
   return useMemo(() => {
     const meta = {};
@@ -109,7 +110,7 @@ function useWatchlistMeta(watchlists, activeWl, rows) {
   }, [watchlists, activeWl, rows]);
 }
 
-// ─── Heat accent ──────────────────────────────────────────────
+// â”€â”€â”€ Heat accent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function heatColor(heat, T) {
   if (heat >= 3) return "#f59e0b";
   if (heat >= 2) return T.pos ?? T.green;
@@ -117,7 +118,7 @@ function heatColor(heat, T) {
   return T.border;
 }
 
-// ─── Icons ────────────────────────────────────────────────────
+// â”€â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const IconPencil = () => (
   <svg width="11" height="11" viewBox="0 0 14 14" fill="none"
     stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -147,7 +148,7 @@ const IconClose = () => (
   </svg>
 );
 
-// ─── Skeleton ────────────────────────────────────────────────
+// â”€â”€â”€ Skeleton â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SkeletonRow({ widthPct, delay, T }) {
   return (
     <div style={{
@@ -163,7 +164,7 @@ function SkeletonRow({ widthPct, delay, T }) {
   );
 }
 
-// ─── Watchlist Item ───────────────────────────────────────────
+// â”€â”€â”€ Watchlist Item â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const WatchlistItem = memo(function WatchlistItem({
   w, isActive, isEditing, renameVal, setRenameVal,
   onSelect, onRename, onRenameCancel, onRenameStart, onDelete,
@@ -173,8 +174,8 @@ const WatchlistItem = memo(function WatchlistItem({
   const m   = meta || {};
   const acc = heatColor(m.heat ?? 0, T);
 
-  // Green left border logic — mirrors what StockRow does for RS ≥ 90.
-  // Active list → green border (same as PC). High-heat list → subtle accent.
+  // Green left border logic â€” mirrors what StockRow does for RS â‰¥ 90.
+  // Active list â†’ green border (same as PC). High-heat list â†’ subtle accent.
   // This is what was missing on mobile in v2.
   const borderLeft = isActive
     ? `2px solid ${T.green}`
@@ -232,7 +233,7 @@ const WatchlistItem = memo(function WatchlistItem({
           minHeight: isMobile ? 46 : "auto",
           gap: 7,
         }}>
-          {/* Heat dot — visible on BOTH mobile and desktop (was missing on mobile) */}
+          {/* Heat dot â€” visible on BOTH mobile and desktop (was missing on mobile) */}
           <span style={{
             width: m.heat >= 3 ? 6 : m.heat >= 2 ? 5 : 4,
             height: m.heat >= 3 ? 6 : m.heat >= 2 ? 5 : 4,
@@ -259,7 +260,7 @@ const WatchlistItem = memo(function WatchlistItem({
             {w.name}
           </span>
 
-          {/* Stock count — compact chip, both mobile and desktop */}
+          {/* Stock count â€” compact chip, both mobile and desktop */}
           {m.total > 0 && (
             <span style={{
               fontSize: 10,
@@ -320,7 +321,7 @@ const WatchlistItem = memo(function WatchlistItem({
   );
 });
 
-// ─── Main Component ───────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function WatchlistSidebar({
   sidebarOpen,
   setSidebarOpen,
@@ -427,7 +428,7 @@ export default function WatchlistSidebar({
       onTouchEnd={handleTouchEnd}
     >
 
-      {/* ══ HEADER ═══════════════════════════════════════════════ */}
+      {/* â•â• HEADER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <div style={{
         flexShrink: 0,
         padding: isMobile ? "14px 13px 0" : "10px 10px 0",
@@ -548,7 +549,7 @@ export default function WatchlistSidebar({
         </div>
       </div>
 
-      {/* ══ LIST ═════════════════════════════════════════════════ */}
+      {/* â•â• LIST â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       {/*
           flex:1 + minHeight:0 is the correct flex-scroll pattern.
           Without minHeight:0, Safari makes this child expand to fit
@@ -609,7 +610,7 @@ export default function WatchlistSidebar({
         )}
       </div>
 
-      {/* ══ FOOTER ═══════════════════════════════════════════════
+      {/* â•â• FOOTER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           position:sticky keeps this pinned to the viewport bottom
           without removing it from flow. zIndex:2 keeps it above
           list items during iOS momentum scroll.
@@ -619,11 +620,11 @@ export default function WatchlistSidebar({
               flexShrink: 0,
               position: "sticky",
               bottom: 0,
-              zIndex: 10,                     // 🔥 stronger layering
+              zIndex: 10,                     // ðŸ”¥ stronger layering
               background: T.surface,
               borderTop: `1px solid ${T.border}`,
 
-              // 👇 IMPORTANT: prevents cut-off on mobile
+              // ðŸ‘‡ IMPORTANT: prevents cut-off on mobile
               padding: isMobile
                   ? "12px 12px calc(14px + env(safe-area-inset-bottom))"
                   : "10px",
@@ -655,7 +656,7 @@ export default function WatchlistSidebar({
             onKeyDown={e => e.key === "Enter" && createWatchlist()}
             onFocus={() => setNewFocus(true)}
             onBlur={() => setNewFocus(false)}
-            placeholder={atWatchlistLimit ? "Limit reached" : "Name…"}
+            placeholder={atWatchlistLimit ? "Limit reached" : "Nameâ€¦"}
             disabled={atWatchlistLimit}
             style={{
               flex: 1,
@@ -712,3 +713,5 @@ export default function WatchlistSidebar({
     </div>
   );
 }
+
+

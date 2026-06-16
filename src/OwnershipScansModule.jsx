@@ -1,13 +1,14 @@
+﻿import React from 'react';
 import { useState, useEffect, useMemo } from "react";
 
-// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ SUPABASE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 function sbH() {
   return { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
 }
 
-// Fetch with a 20-second timeout — prevents infinite hang if office network
+// Fetch with a 20-second timeout â€” prevents infinite hang if office network
 // silently drops requests to the Supabase server.
 async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   const controller = new AbortController();
@@ -23,7 +24,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
-// ─── CACHE (7-day localStorage TTL) ──────────────────────────────────────────
+// â”€â”€â”€ CACHE (7-day localStorage TTL) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CACHE_KEY    = "ownership_processed_v9";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_EXPECTED_UNIVERSE = 500;
@@ -61,7 +62,7 @@ function cacheInvalidate() {
   _prefetchPromise = null;
 }
 
-// ─── BACKGROUND PREFETCH ─────────────────────────────────────────────────────
+// â”€â”€â”€ BACKGROUND PREFETCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _prefetchPromise = null;
 const FRESH_MS = 5 * 60 * 1000;
 
@@ -115,7 +116,7 @@ export function prefetchOwnershipData() {
   return _prefetchPromise;
 }
 
-// ─── PAGINATED FETCH (parallel) ───────────────────────────────────────────────
+// â”€â”€â”€ PAGINATED FETCH (parallel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function fetchAllPages(path) {
   const PAGE = 10000;
 
@@ -160,7 +161,7 @@ async function fetchAllPages(path) {
   return all;
 }
 
-// ─── SHAREHOLDING FETCH WITH FALLBACK ─────────────────────────────────────────
+// â”€â”€â”€ SHAREHOLDING FETCH WITH FALLBACK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // BUG FIX: The `name` column may not exist on company_shareholding in some
 // environments, causing HTTP 500. We try with name first, then fall back to
 // ticker+quarterly only. Names are then enriched from company_financials.
@@ -203,7 +204,7 @@ async function fetchCompanyFinancialsMapping() {
   return [];
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const safeNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 const fmt     = (v, d = 2) => (v >= 0 ? "+" : "") + Number(v).toFixed(d);
 const mono    = { fontFamily: "'IBM Plex Mono', monospace" };
@@ -247,7 +248,7 @@ function getLatestContinuousQuarterly(qs, maxPoints = 4) {
   return streak;
 }
 
-// ─── SCORING & SIGNALS ────────────────────────────────────────────────────────
+// â”€â”€â”€ SCORING & SIGNALS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function classifySignal(tFii, tDii, tProm) {
   if (tFii > 5 && tDii > 5)                             return "Aggressive Accumulation";
   if (tFii > 2 && tDii > 2)                             return "Strong Accumulation";
@@ -306,14 +307,14 @@ function buildOwnershipStory(qs, ownPromoter, ownFii, ownDii, tProm, tFii, tDii)
   const oldDii  = safeNum(qs[0].diis);
   const fiiDominant = Math.abs(tFii) > Math.abs(tDii) * 1.4;
   const diiDominant = Math.abs(tDii) > Math.abs(tFii) * 1.4;
-  if (tFii > 2 && tDii > 2) return `FII and DII have both accumulated significantly since ${startDate} — FII from ${oldFii.toFixed(1)}% to ${ownFii.toFixed(1)}%, DII from ${oldDii.toFixed(1)}% to ${ownDii.toFixed(1)}%. Dual institutional conviction.`;
-  if (fiiDominant && tFii > 1) return `FII stake expanded from ${oldFii.toFixed(1)}% → ${ownFii.toFixed(1)}% since ${startDate} with DII relatively flat — foreign capital driving the ownership shift.`;
-  if (diiDominant && tDii > 1) return `DII stake expanded from ${oldDii.toFixed(1)}% → ${ownDii.toFixed(1)}% since ${startDate} with FII relatively flat — domestic conviction trade.`;
-  if (tFii < -1 && tDii < -1) return `FII reduced from ${oldFii.toFixed(1)}% → ${ownFii.toFixed(1)}% and DII from ${oldDii.toFixed(1)}% → ${ownDii.toFixed(1)}% since ${startDate} — coordinated institutional exit.`;
+  if (tFii > 2 && tDii > 2) return `FII and DII have both accumulated significantly since ${startDate} â€” FII from ${oldFii.toFixed(1)}% to ${ownFii.toFixed(1)}%, DII from ${oldDii.toFixed(1)}% to ${ownDii.toFixed(1)}%. Dual institutional conviction.`;
+  if (fiiDominant && tFii > 1) return `FII stake expanded from ${oldFii.toFixed(1)}% â†’ ${ownFii.toFixed(1)}% since ${startDate} with DII relatively flat â€” foreign capital driving the ownership shift.`;
+  if (diiDominant && tDii > 1) return `DII stake expanded from ${oldDii.toFixed(1)}% â†’ ${ownDii.toFixed(1)}% since ${startDate} with FII relatively flat â€” domestic conviction trade.`;
+  if (tFii < -1 && tDii < -1) return `FII reduced from ${oldFii.toFixed(1)}% â†’ ${ownFii.toFixed(1)}% and DII from ${oldDii.toFixed(1)}% â†’ ${ownDii.toFixed(1)}% since ${startDate} â€” coordinated institutional exit.`;
   return null;
 }
 
-// ─── PROCESS STOCK ────────────────────────────────────────────────────────────
+// â”€â”€â”€ PROCESS STOCK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function processStock(row, sectorMap) {
   let q = [];
   try { q = typeof row.quarterly === "string" ? JSON.parse(row.quarterly) : row.quarterly || []; }
@@ -359,11 +360,11 @@ function processStock(row, sectorMap) {
   const sector     = sectorMap ? (sectorMap[row.ticker] || "") : "";
 
   let insight = "No meaningful institutional trend in the last 4 quarters";
-  if (signal === "Aggressive Accumulation") insight = `FII added ${fmt(tFii)}% and DII added ${fmt(tDii)}% over 4Q — rare dual high-conviction entry`;
-  else if (signal === "Strong Accumulation") insight = `FII ${fmt(tFii)}% and DII ${fmt(tDii)}% over 4Q — strong dual institutional conviction`;
-  else if (signal === "Selective Accumulation") insight = tFii > tDii ? `FII ${fmt(tFii)}% over 4Q while DII neutral — selective foreign interest` : `DII ${fmt(tDii)}% over 4Q while FII neutral — domestic funds accumulating`;
-  else if (signal === "Promoter Led") insight = `Promoter stake ${fmt(tProm)}% over 4Q with institutions flat — insider-driven move`;
-  else if (signal === "Distribution") insight = `FII ${fmt(tFii)}% and DII ${fmt(tDii)}% over 4Q — coordinated institutional exit`;
+  if (signal === "Aggressive Accumulation") insight = `FII added ${fmt(tFii)}% and DII added ${fmt(tDii)}% over 4Q â€” rare dual high-conviction entry`;
+  else if (signal === "Strong Accumulation") insight = `FII ${fmt(tFii)}% and DII ${fmt(tDii)}% over 4Q â€” strong dual institutional conviction`;
+  else if (signal === "Selective Accumulation") insight = tFii > tDii ? `FII ${fmt(tFii)}% over 4Q while DII neutral â€” selective foreign interest` : `DII ${fmt(tDii)}% over 4Q while FII neutral â€” domestic funds accumulating`;
+  else if (signal === "Promoter Led") insight = `Promoter stake ${fmt(tProm)}% over 4Q with institutions flat â€” insider-driven move`;
+  else if (signal === "Distribution") insight = `FII ${fmt(tFii)}% and DII ${fmt(tDii)}% over 4Q â€” coordinated institutional exit`;
 
   return {
     ticker: row.ticker, name: row.name,
@@ -377,24 +378,24 @@ function processStock(row, sectorMap) {
   };
 }
 
-// ─── SIGNAL CONFIG ────────────────────────────────────────────────────────────
+// â”€â”€â”€ SIGNAL CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SIG = {
-  "Aggressive Accumulation": { color: "#059669", bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.18)",   label: "Accum. ↑↑" },
-  "Strong Accumulation":     { color: "#059669", bg: "rgba(5,150,105,0.06)",   border: "rgba(5,150,105,0.15)",   label: "Accum. ↑" },
+  "Aggressive Accumulation": { color: "#059669", bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.18)",   label: "Accum. â†‘â†‘" },
+  "Strong Accumulation":     { color: "#059669", bg: "rgba(5,150,105,0.06)",   border: "rgba(5,150,105,0.15)",   label: "Accum. â†‘" },
   "Selective Accumulation":  { color: "#6b7280", bg: "rgba(107,114,128,0.06)", border: "rgba(107,114,128,0.15)", label: "Selective" },
   "Promoter Led":            { color: "#2563eb", bg: "rgba(37,99,235,0.07)",   border: "rgba(37,99,235,0.18)",   label: "Promoter Led" },
   "Distribution":            { color: "#dc2626", bg: "rgba(220,38,38,0.06)",   border: "rgba(220,38,38,0.18)",   label: "Distribution" },
   "Noise":                   { color: "#94a3b8", bg: "transparent",            border: "rgba(148,163,184,0.14)", label: "Neutral" },
 };
 const PHASE_CFG = {
-  "Accumulation Phase": { color: "#10b981", icon: "↗" },
-  "Early Entry":        { color: "#d97706", icon: "→" },
-  "Distribution Phase": { color: "#dc2626", icon: "↘" },
-  "Consolidation":      { color: "#6b7280", icon: "—" },
+  "Accumulation Phase": { color: "#10b981", icon: "â†—" },
+  "Early Entry":        { color: "#d97706", icon: "â†’" },
+  "Distribution Phase": { color: "#dc2626", icon: "â†˜" },
+  "Consolidation":      { color: "#6b7280", icon: "â€”" },
   "Insufficient Data":  { color: "#6b7280", icon: "?" },
 };
 
-// ─── SIGNAL BADGE ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ SIGNAL BADGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SignalBadge({ signal }) {
   const cfg = SIG[signal] || SIG["Noise"];
   return (
@@ -411,7 +412,7 @@ function SignalBadge({ signal }) {
   );
 }
 
-// ─── MINI SVG LINE ────────────────────────────────────────────────────────────
+// â”€â”€â”€ MINI SVG LINE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MiniLine({ data, color, w = 80, h = 32 }) {
   const n = data.map(safeNum);
   if (n.length < 2) return null;
@@ -424,7 +425,7 @@ function MiniLine({ data, color, w = 80, h = 32 }) {
   );
 }
 
-// ─── TREND SPARKLINES ─────────────────────────────────────────────────────────
+// â”€â”€â”€ TREND SPARKLINES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TrendSparklines({ stock, T }) {
   const [tooltip, setTooltip] = useState(null);
   const W = 28, H = 28, BAR_W = 4, GAP = 2;
@@ -501,7 +502,7 @@ function TrendSparklines({ stock, T }) {
   );
 }
 
-// ─── DRILLDOWN MODAL ──────────────────────────────────────────────────────────
+// â”€â”€â”€ DRILLDOWN MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DrilldownModal({ stock, T, onClose }) {
   const isDark = (T?.bg || "").toLowerCase() === "#060d1a";
   const qs = stock.allQuarterly;
@@ -592,7 +593,7 @@ function DrilldownModal({ stock, T, onClose }) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12, color: T.subtext, ...mono }}>{stock.ticker}</span>
-                {stock.sector && <span style={{ fontSize: 12, color: T.muted }}>· {stock.sector}</span>}
+                {stock.sector && <span style={{ fontSize: 12, color: T.muted }}>Â· {stock.sector}</span>}
                 <SignalBadge signal={stock.signal} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: pCfg.color }}>{pCfg.icon} {stock.phase}</span>
               </div>
@@ -604,7 +605,7 @@ function DrilldownModal({ stock, T, onClose }) {
             border: "none", cursor: "pointer", color: T.subtext,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, lineHeight: 1,
-          }}>×</button>
+          }}>Ã—</button>
         </div>
 
         {/* Scrollable body */}
@@ -614,12 +615,12 @@ function DrilldownModal({ stock, T, onClose }) {
           <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, padding: "14px 16px", marginBottom: 12, background: panelBg }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
               <span style={{ fontSize: 9.5, fontWeight: 700, color: cfg.color, letterSpacing: ".1em", textTransform: "uppercase" }}>
-                Flow Summary · {stock.latestDate}
+                Flow Summary Â· {stock.latestDate}
               </span>
               {stock.anomalies.length > 0 && (
                 <div style={{ display: "flex", gap: 5 }}>
                   {stock.anomalies.map(a => (
-                    <span key={a} style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 4, background: "rgba(220,38,38,0.07)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.18)" }}>⚠ {a}</span>
+                    <span key={a} style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 4, background: "rgba(220,38,38,0.07)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.18)" }}>âš  {a}</span>
                   ))}
                 </div>
               )}
@@ -709,7 +710,7 @@ function DrilldownModal({ stock, T, onClose }) {
                 {inflectIdx > 0 && (
                   <g>
                     <line x1={gX(inflectIdx)} x2={gX(inflectIdx)} y1={8} y2={H - 5} stroke="#d97706" strokeWidth="1" strokeDasharray="4,3" />
-                    <text x={gX(inflectIdx)} y={7} textAnchor="middle" fontSize="8" fill="#d97706">FII↑</text>
+                    <text x={gX(inflectIdx)} y={7} textAnchor="middle" fontSize="8" fill="#d97706">FIIâ†‘</text>
                   </g>
                 )}
                 {qs.map((q, i) => i % Math.max(1, Math.floor(qs.length / 5)) === 0 && (
@@ -760,7 +761,7 @@ function DrilldownModal({ stock, T, onClose }) {
   );
 }
 
-// ─── INSIGHTS STRIP ───────────────────────────────────────────────────────────
+// â”€â”€â”€ INSIGHTS STRIP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function InsightsStrip({ processed, T }) {
   const isDark = (T?.bg || "").toLowerCase() === "#060d1a";
   const stats = useMemo(() => {
@@ -777,7 +778,7 @@ function InsightsStrip({ processed, T }) {
     return [
       accelPositive > 0     && { label: `${accelPositive} stocks`, sub: "with accelerating dual accumulation (FII+DII)", dot: "#d97706" },
       promExitInstEntry > 0 && { label: `${promExitInstEntry} stocks`, sub: "promoter exit absorbed by institutions", dot: "#6366f1" },
-      topSector             && { label: topSector[0], sub: `${topSector[1]} stocks in strong accumulation — top sector`, dot: "#059669" },
+      topSector             && { label: topSector[0], sub: `${topSector[1]} stocks in strong accumulation â€” top sector`, dot: "#059669" },
       fiiPct > 0            && { label: `${fiiPct}%`, sub: "of accumulation cases FII-led", dot: "#3b82f6" },
     ].filter(Boolean).slice(0, 4);
   }, [processed]);
@@ -803,7 +804,7 @@ function InsightsStrip({ processed, T }) {
   );
 }
 
-// ─── LOADING SKELETON ─────────────────────────────────────────────────────────
+// â”€â”€â”€ LOADING SKELETON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LoadingSkeleton({ T }) {
   const pulse = {
     background: `linear-gradient(90deg, ${T.surface} 25%, ${T.tableHead} 50%, ${T.surface} 75%)`,
@@ -854,7 +855,7 @@ function LoadingSkeleton({ T }) {
   );
 }
 
-// ─── DATA BUILDERS ────────────────────────────────────────────────────────────
+// â”€â”€â”€ DATA BUILDERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildSectorMap(mapping) {
   const sMap = {};
   mapping.forEach(({ nse_code, sector, ticker }) => {
@@ -896,7 +897,7 @@ async function buildProcessedAsync(rawData, sectorMap) {
     results.push(...chunk);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
-  // Deduplicate by normalised company name — safety net for when bse_code is
+  // Deduplicate by normalised company name â€” safety net for when bse_code is
   // missing from company_financials (fallback fetch path) and BSE/NSE twins
   // both survive buildRawData's bseDups filter.
   const seenNames = new Set();
@@ -926,7 +927,7 @@ function getInit() {
   return window.__ownershipInit;
 }
 
-// ─── STOCK CARD (mobile / preview) ───────────────────────────────────────────
+// â”€â”€â”€ STOCK CARD (mobile / preview) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
   const chipPalette = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f97316"];
   const chipColor = chipPalette[stock.ticker.charCodeAt(0) % chipPalette.length];
@@ -977,13 +978,13 @@ function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
         </div>
 
         {stock.sector && (
-          <div style={{ fontSize: 13, color: T.subtext, marginBottom: 6 }}>· {stock.sector}</div>
+          <div style={{ fontSize: 13, color: T.subtext, marginBottom: 6 }}>Â· {stock.sector}</div>
         )}
 
         <div style={{ display: "flex", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
           <SignalBadge signal={stock.signal} />
           <span style={{ fontSize: 11, fontWeight: 600, color: T.subtext, padding: "3px 8px", borderRadius: 99, background: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)", border: `1px solid ${T.border}` }}>
-            FII {fmt(stock.fiiTrend)}% · DII {fmt(stock.diiTrend)}%
+            FII {fmt(stock.fiiTrend)}% Â· DII {fmt(stock.diiTrend)}%
           </span>
         </div>
 
@@ -1000,7 +1001,7 @@ function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
   );
 }
 
-// ─── MAIN TABLE ROW ───────────────────────────────────────────────────────────
+// â”€â”€â”€ MAIN TABLE ROW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TableRow({ stock, rowNum, onSelect, T, isDark, TH_BASE, sortKey }) {
   const chipPalette = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f97316"];
   const chipColor = chipPalette[stock.ticker.charCodeAt(0) % chipPalette.length];
@@ -1019,13 +1020,13 @@ function TableRow({ stock, rowNum, onSelect, T, isDark, TH_BASE, sortKey }) {
               <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{stock.name || stock.ticker}</span>
               {stock.timing === "Recent" && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(16,185,129,0.1)", color: "#10b981" }}>RECENT</span>}
               {stock.accel.fii > 0.3 && stock.accel.dii > 0.3 && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(217,119,6,0.08)", color: "#d97706" }}>ACCEL</span>}
-              {stock.anomalies.length > 0 && <span title={stock.anomalies.join(", ")} style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(220,38,38,0.07)", color: "#dc2626", cursor: "help" }}>⚠</span>}
+              {stock.anomalies.length > 0 && <span title={stock.anomalies.join(", ")} style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(220,38,38,0.07)", color: "#dc2626", cursor: "help" }}>âš </span>}
             </div>
             <div style={{ fontSize: 11, color: T.muted, ...mono }}>{stock.ticker}</div>
           </div>
         </div>
       </td>
-      <td style={{ ...td, textAlign: "left", fontSize: 12, color: T.subtext }}>{stock.sector || "—"}</td>
+      <td style={{ ...td, textAlign: "left", fontSize: 12, color: T.subtext }}>{stock.sector || "â€”"}</td>
       <td style={{ ...td, textAlign: "right", ...mono, color: T.muted, fontSize: 13 }}>{stock.ownPromoter.toFixed(1)}</td>
       <td style={{ ...td, textAlign: "right", ...mono, color: T.muted, fontSize: 13 }}>{stock.ownFii.toFixed(1)}</td>
       <td style={{ ...td, textAlign: "right", ...mono, color: T.muted, fontSize: 13 }}>{stock.ownDii.toFixed(1)}</td>
@@ -1043,7 +1044,7 @@ function TableRow({ stock, rowNum, onSelect, T, isDark, TH_BASE, sortKey }) {
   );
 }
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// â”€â”€â”€ MAIN COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function OwnershipScansModule({ T }) {
   const getIsMobile = () => (typeof window !== "undefined" ? window.innerWidth <= 768 : false);
   const isDark = (T?.bg || "").toLowerCase() === "#060d1a";
@@ -1214,7 +1215,7 @@ export default function OwnershipScansModule({ T }) {
     { label: "Smart Money",     value: summary.smartMoney,   sub: "Aligned institutional accumulation",         color: "#059669" },
     { label: "Distribution",    value: summary.distribution, sub: "FII and DII selling pressure dominant",      color: "#dc2626" },
     { label: "Promoter Support",value: summary.promoterUp,   sub: "Promoter stake up over 4 quarters",          color: "#2563eb" },
-    { label: "Universe",        value: processed.length,     sub: summary.label + " — market regime signal",    color: summary.avgInst >= 0 ? "#059669" : "#dc2626" },
+    { label: "Universe",        value: processed.length,     sub: summary.label + " â€” market regime signal",    color: summary.avgInst >= 0 ? "#059669" : "#dc2626" },
   ];
 
   // Tab style matching Announcements module
@@ -1228,7 +1229,7 @@ export default function OwnershipScansModule({ T }) {
     fontFamily: "inherit",
   });
 
-  // ─── FULL SCREEN TABLE VIEW ─────────────────────────────────────────────────
+  // â”€â”€â”€ FULL SCREEN TABLE VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (fullScreen) {
     const TH_BASE = {
       padding: "10px 16px", fontSize: 10, fontWeight: 700, textTransform: "uppercase",
@@ -1245,7 +1246,7 @@ export default function OwnershipScansModule({ T }) {
           borderBottom: `2px solid ${active ? (T.green || "#10b981") : T.border}`,
           paddingBottom: active ? 8 : 9,
         }}>
-          {label}{active ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+          {label}{active ? (sortDir === "asc" ? " â†‘" : " â†“") : ""}
         </th>
       );
     };
@@ -1297,7 +1298,7 @@ export default function OwnershipScansModule({ T }) {
             </div>
             <select value={["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? filter : ""} onChange={e => { if (e.target.value) { setFilter(e.target.value); setFullPage(1); } }}
               style={{ background: T.surface || T.card, border: `1.5px solid ${["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.border}`, color: ["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.subtext, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}>
-              <option value="">More filters ⚙</option>
+              <option value="">More filters âš™</option>
               <option value="aggressive">Aggressive Accum.</option>
               <option value="recent">Recent Entry</option>
               <option value="accel">Accelerating (FII+DII)</option>
@@ -1359,9 +1360,9 @@ export default function OwnershipScansModule({ T }) {
             <span style={{ fontSize: 13, color: T.muted }}>Showing {Math.min(fullPage*fullPageSize, filtered.length)} of {filtered.length} stocks</span>
             {fullPageCount > 1 && (
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button onClick={() => setFullPage(p => Math.max(1,p-1))} disabled={fullPage===1} style={{ background: T.surface||T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, color: T.subtext, padding: "8px 14px", cursor: fullPage===1?"default":"pointer", fontSize: 13, fontFamily: "inherit", opacity: fullPage===1?0.45:1 }}>← Prev</button>
+                <button onClick={() => setFullPage(p => Math.max(1,p-1))} disabled={fullPage===1} style={{ background: T.surface||T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, color: T.subtext, padding: "8px 14px", cursor: fullPage===1?"default":"pointer", fontSize: 13, fontFamily: "inherit", opacity: fullPage===1?0.45:1 }}>â† Prev</button>
                 <span style={{ fontSize: 13, color: T.muted, minWidth: 80, textAlign: "center" }}>Page {fullPage} of {fullPageCount}</span>
-                <button onClick={() => setFullPage(p => Math.min(fullPageCount,p+1))} disabled={fullPage===fullPageCount} style={{ background: T.surface||T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, color: T.subtext, padding: "8px 14px", cursor: fullPage===fullPageCount?"default":"pointer", fontSize: 13, fontFamily: "inherit", opacity: fullPage===fullPageCount?0.45:1 }}>Next →</button>
+                <button onClick={() => setFullPage(p => Math.min(fullPageCount,p+1))} disabled={fullPage===fullPageCount} style={{ background: T.surface||T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, color: T.subtext, padding: "8px 14px", cursor: fullPage===fullPageCount?"default":"pointer", fontSize: 13, fontFamily: "inherit", opacity: fullPage===fullPageCount?0.45:1 }}>Next â†’</button>
               </div>
             )}
           </div>
@@ -1372,14 +1373,14 @@ export default function OwnershipScansModule({ T }) {
     );
   }
 
-  // ─── LOADING ─────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ LOADING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (loading) return <LoadingSkeleton T={T} />;
 
-  // ─── ERROR ───────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ ERROR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (error) return (
     <div style={{ width: "100%", minHeight: "100%", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px", boxSizing: "border-box" }}>
       <div style={{ background: T.surface, border: `1px solid ${darkMode ? "rgba(239,68,68,0.3)" : "#fecaca"}`, borderRadius: 14, padding: "24px 32px", textAlign: "center", maxWidth: 440, width: "100%" }}>
-        <div style={{ fontSize: 20, marginBottom: 10 }}>⚠️</div>
+        <div style={{ fontSize: 20, marginBottom: 10 }}>âš ï¸</div>
         <div style={{ fontSize: 14, color: "#dc2626", marginBottom: 8, fontWeight: 700 }}>Failed to load ownership data</div>
         <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.65, marginBottom: 16 }}>{error}</div>
         <button onClick={handleRefresh} style={{ padding: "10px 20px", borderRadius: 8, border: `1.5px solid #dc2626`, background: "transparent", color: "#dc2626", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
@@ -1389,7 +1390,7 @@ export default function OwnershipScansModule({ T }) {
     </div>
   );
 
-  // ─── MAIN RENDER ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ MAIN RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div style={{ width: "100%", minHeight: "100%", overflowY: "auto", boxSizing: "border-box", fontFamily: "inherit", color: T.text, background: T.bg, padding: isMobile ? "0" : "22px 28px 36px" }}>
       <style>{`
@@ -1405,11 +1406,11 @@ export default function OwnershipScansModule({ T }) {
 
       <div style={{ width: "100%", maxWidth: isMobile ? "100%" : 1400, margin: "0 auto", background: T.shellBg || T.surface, border: isMobile ? "none" : `1px solid ${T.border}`, borderRadius: isMobile ? 0 : 22, boxShadow: T.shadow, overflow: "hidden", padding: isMobile ? "16px" : "28px 32px", boxSizing: "border-box" }}>
 
-        {/* ── HEADER (Announcements style) ── */}
+        {/* â”€â”€ HEADER (Announcements style) â”€â”€ */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ fontSize: 12, color: T.subtext, marginBottom: 8, display: "flex", gap: 6, letterSpacing: "0.02em" }}>
             <span style={{ color: "#5b5bd6", cursor: "pointer" }}>Fundamentals</span>
-            <span>›</span>
+            <span>â€º</span>
             <span>Ownership</span>
           </div>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
@@ -1440,12 +1441,12 @@ export default function OwnershipScansModule({ T }) {
           </div>
         </div>
 
-        {/* ── INTEL STRIP ── */}
+        {/* â”€â”€ INTEL STRIP â”€â”€ */}
         <div style={{ marginBottom: 28 }}>
           <InsightsStrip processed={processed} T={T} />
         </div>
 
-        {/* ── SUMMARY STAT CARDS ── */}
+        {/* â”€â”€ SUMMARY STAT CARDS â”€â”€ */}
         {processed.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: isMobile ? 10 : 14, marginBottom: 28 }}>
             {summaryCards.map(c => (
@@ -1461,7 +1462,7 @@ export default function OwnershipScansModule({ T }) {
           </div>
         )}
 
-        {/* ── FILTER BAR (Announcements style) ── */}
+        {/* â”€â”€ FILTER BAR (Announcements style) â”€â”€ */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.subtext, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.09em" }}>Filters</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "0 0 18px" }}>
@@ -1482,11 +1483,11 @@ export default function OwnershipScansModule({ T }) {
             {filter === "accel"      && <>Showing stocks with <strong>accelerating dual FII+DII flows</strong>.</>}
             {filter === "promoter"   && <>Showing stocks where <strong>promoter stake is increasing</strong> (&gt;1% over 4Q).</>}
             {filter === "promout"    && <>Showing stocks where <strong>promoter exit is absorbed by institutions</strong>.</>}
-            {filter === "aggressive" && <>Showing <strong>aggressive accumulation</strong> — FII &gt;5% and DII &gt;5% over 4Q.</>}
+            {filter === "aggressive" && <>Showing <strong>aggressive accumulation</strong> â€” FII &gt;5% and DII &gt;5% over 4Q.</>}
           </div>
         </div>
 
-        {/* ── SEARCH ── */}
+        {/* â”€â”€ SEARCH â”€â”€ */}
         <div style={{ position: "relative", maxWidth: 480, marginBottom: 28 }}>
           <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", opacity: 0.4, pointerEvents: "none" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -1494,17 +1495,17 @@ export default function OwnershipScansModule({ T }) {
           <input
             value={searchQ}
             onChange={e => { setSearchQ(e.target.value); setPage(1); }}
-            placeholder="Search company or ticker…"
+            placeholder="Search company or tickerâ€¦"
             style={{ width: "100%", padding: "11px 16px 11px 38px", border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.surface, color: T.text, fontSize: 15, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
             onFocus={e => e.target.style.borderColor = "#6366f1"}
             onBlur={e => e.target.style.borderColor = T.border}
           />
         </div>
 
-        {/* ── SORT ROW ── */}
+        {/* â”€â”€ SORT ROW â”€â”€ */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13, color: T.subtext, ...mono }}>
-            {filtered.length} results{searchQ.trim() ? ` for "${searchQ.trim()}"` : ""} — sorted by <strong style={{ color: T.text }}>{activeSort}</strong>
+            {filtered.length} results{searchQ.trim() ? ` for "${searchQ.trim()}"` : ""} â€” sorted by <strong style={{ color: T.text }}>{activeSort}</strong>
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <select value={sortKey} onChange={e => { setSortKey(e.target.value); setSortDir("desc"); setPage(1); }}
@@ -1513,12 +1514,12 @@ export default function OwnershipScansModule({ T }) {
             </select>
             <select value={scoreMin} onChange={e => { setScoreMin(Number(e.target.value)); setPage(1); }}
               style={{ background: T.surface, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
-              {[-10,-5,0,1,2,3,5].map(v => <option key={v} value={v}>Score ≥ {v >= 0 ? "+" : ""}{v}</option>)}
+              {[-10,-5,0,1,2,3,5].map(v => <option key={v} value={v}>Score â‰¥ {v >= 0 ? "+" : ""}{v}</option>)}
             </select>
           </div>
         </div>
 
-        {/* ── CONTENT ── */}
+        {/* â”€â”€ CONTENT â”€â”€ */}
         {filtered.length === 0 ? (
           <div style={{ textAlign: "center", paddingTop: 80, color: T.subtext, fontSize: 15 }}>
             No stocks match the current filter.
@@ -1569,3 +1570,5 @@ export default function OwnershipScansModule({ T }) {
     </div>
   );
 }
+
+

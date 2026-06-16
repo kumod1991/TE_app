@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
+﻿import React, { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
 import { ensureAllowedTickerSet, filterRowsByAllowedTickers, getAllowedTickerSetSync, preloadAllowedTickerSet } from "./marketUniverse";
 
@@ -1376,7 +1376,7 @@ a:hover { text-decoration: underline; }
   /* Prevent zoom on input focus (iOS) */
   input, select, textarea { font-size: 16px !important; }
 
-  /* Hide the persistent footer on mobile — it eats vertical space and
+  /* Hide the persistent footer on mobile â€” it eats vertical space and
      the screener already shows a legal notice inline */
   .persistent-footer { display: none !important; }
 }
@@ -2722,7 +2722,7 @@ async function fetchFinancialAutocompleteSuggestions(rawQ, historyItems = []) {
     // Use company_financials which has: ticker, name, nse_code, bse_code.
     // nse_code = the actual NSE trading symbol (e.g. "PRICOLLTD")
     // bse_code = BSE numeric code (e.g. "540064")
-    // ticker   = can be either NSE symbol or BSE numeric code — not reliable for prefix search
+    // ticker   = can be either NSE symbol or BSE numeric code â€” not reliable for prefix search
     //
     // Fast path: if the module-level cache is already populated, filter in-memory (instant).
     // Slow path: fetch from DB on every keystroke.
@@ -3642,7 +3642,7 @@ const TradeRow = memo(({ t, i, T, onEdit, onDelete }) => {
             <td>{t.exit_date ? <span className={t.pnl > 0 ? "pnl-pos" : t.pnl < 0 ? "pnl-neg" : ""}>{t.pnl >= 0 ? "+" : ""}{t.pnl.toFixed(2)}</span> : <span style={{ color: T.muted }}></span>}</td>
             <td className="td-mono" style={{ color: T.subtext }}>{t.days !== null ? t.days : ""}</td>
             <td>{!t.exit_date ? <span className="badge badge-open">Open</span> : t.pnl > 0 ? <span className="badge badge-win">Win</span> : t.pnl < 0 ? <span className="badge badge-loss">Loss</span> : <span className="badge" style={{ background: T.pill, color: T.subtext }}>Break</span>}</td>
-            <td><span style={{ display: "flex", gap: 2 }}><button className="action-btn" onClick={() => onEdit(t)} title="Edit trade">✏️</button><button className="action-btn" onClick={() => onDelete(t.id)} title="Delete trade">🗑️</button></span></td>
+            <td><span style={{ display: "flex", gap: 2 }}><button className="action-btn" onClick={() => onEdit(t)} title="Edit trade">âœï¸</button><button className="action-btn" onClick={() => onDelete(t.id)} title="Delete trade">ðŸ—‘ï¸</button></span></td>
         </tr>
     );
 });
@@ -5302,12 +5302,12 @@ const FundRow = memo(({ f, i, isDeposit, isChecked, T, toggleSelectOne, inr, mon
                 {inr(f.runningBalance)}
             </td>
             <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>
-                {f.note || <span style={{ color: T.border }}>—</span>}
+                {f.note || <span style={{ color: T.border }}>â€”</span>}
             </td>
             <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
                 <span style={{ display: "flex", gap: 2 }}>
-                    <button className="action-btn" onClick={() => onEdit(f)} title="Edit">✏️</button>
-                    <button className="action-btn" onClick={() => onDelete(f.id)} title="Delete">🗑️</button>
+                    <button className="action-btn" onClick={() => onEdit(f)} title="Edit">âœï¸</button>
+                    <button className="action-btn" onClick={() => onDelete(f.id)} title="Delete">ðŸ—‘ï¸</button>
                 </span>
             </td>
         </tr>
@@ -5928,11 +5928,11 @@ const DividendRow = memo(({ d, i, isChecked, T, toggleOne, inr, getFY, onEdit, o
                 {Number(d.amount) >= 0 ? "+" : ""}{inr(Number(d.amount))}
             </td>
             <td style={{ padding: "10px 16px", fontSize: 12.5, color: T.subtext, borderBottom: `1px solid ${T.border}` }} className="td-mono">{getFY(d.date)}</td>
-            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>{d.note || "—"}</td>
+            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>{d.note || "â€”"}</td>
             <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
                 <span style={{ display: "flex", gap: 2 }}>
-                    <button className="action-btn" onClick={() => onEdit(d)} title="Edit">✏️</button>
-                    <button className="action-btn" onClick={() => onDelete(d.id)} title="Delete">🗑️</button>
+                    <button className="action-btn" onClick={() => onEdit(d)} title="Edit">âœï¸</button>
+                    <button className="action-btn" onClick={() => onDelete(d.id)} title="Delete">ðŸ—‘ï¸</button>
                 </span>
             </td>
         </tr>
@@ -6304,7 +6304,7 @@ function ComingSoonModule({ icon, title, desc, features, pills, T }) {
 let _cachedTickerIndex = null; // loaded from DB at runtime
 let _cachedBseTickerIndex = null; // BSE ticker index loaded from bse_tickers
 
-// Paginated fetch for the ticker index — Supabase caps each response at 1000 rows,
+// Paginated fetch for the ticker index â€” Supabase caps each response at 1000 rows,
 // so a single limit=5000 request silently returns only 1000. We page through all rows.
 async function fetchAllTickerPages() {
     const PAGE = 1000;
@@ -6334,7 +6334,7 @@ async function fetchAllTickerPages() {
             nse_code: (row.nse_code || "").trim().toUpperCase() || null,
             bse_code: (row.bse_code || "").trim().toUpperCase() || null,
         }));
-    } catch { /* silently ignore — autocomplete falls back to per-keystroke fetch */ }
+    } catch { /* silently ignore â€” autocomplete falls back to per-keystroke fetch */ }
 })();
 
 // Format numbers as  Cr
@@ -8603,7 +8603,7 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
         if (!sym && !nseCode) return;
         setLoading(true); setError(""); setAnnouncements([]); setPage(0);
         const candidates = [nseCode, sym, bseCode].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
-        // Per-fetch timeout of 20 s — long enough for a cold query but short enough to surface errors fast
+        // Per-fetch timeout of 20 s â€” long enough for a cold query but short enough to surface errors fast
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 20000);
         try {
@@ -8836,7 +8836,7 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
                                     color: accentGrn, background: "none", border: "none",
                                     cursor: "pointer", fontFamily: "inherit", padding: 0,
                                 }}
-                            >↺ Retry</button>
+                            >â†º Retry</button>
                         </div>
                     </div>
                 )}
@@ -11998,7 +11998,7 @@ const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
 const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
 const _LS_SCR_VCP = "te_scr_vcp_v1";
 
-// In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
+// In-flight promise refs â€” prevent duplicate concurrent fetches during prefetch + mount race
 let _prefetchBreakoutPromise = null;
 let _prefetchPivotPromise = null;
 let _prefetchVolBreakPromise = null;
@@ -12031,11 +12031,11 @@ function _lsWriteScreens(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota */ }
 }
 
-// ─── Background prefetch helpers ─────────────────────────────────────────────
+// â”€â”€â”€ Background prefetch helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Each function mirrors the fetch logic inside the corresponding ScreensModule
 // useEffect, but runs at module level so the cache is warm before the component
 // ever mounts.  The component useEffects call these same functions and reuse
-// the in-flight promise — no duplicate requests even if mount races with prefetch.
+// the in-flight promise â€” no duplicate requests even if mount races with prefetch.
 
 function _prefetchScreensBreakout() {
     if (_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0 &&
@@ -12379,13 +12379,13 @@ async function _loadNifty500() {
         // Supabase returns an error object (not array) when table/column is missing
         if (!Array.isArray(rows) || rows.length === 0) {
             console.warn("[Nifty500] fetch returned non-array or empty:", rows);
-            return new Set(); // don't cache — allow retry on next navigation
+            return new Set(); // don't cache â€” allow retry on next navigation
         }
         _nifty500Cache = new Set(rows.map(r => r.ticker).filter(Boolean));
         console.log(`[Nifty500] loaded ${_nifty500Cache.size} constituents`);
     } catch (e) {
         console.warn("[Nifty500] fetch failed:", e);
-        return new Set(); // don't cache — allow retry
+        return new Set(); // don't cache â€” allow retry
     }
     return _nifty500Cache;
 }
@@ -15835,11 +15835,11 @@ function IntelligenceSignalCard({ label, value, score, T }) {
     );
 }
 
-// ─── TickerPage mini chart helpers ───────────────────────────────────────────
+// â”€â”€â”€ TickerPage mini chart helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TpSparkline({ data, color, fill = true, W = 200, H = 52, fmt }) {
     const [tip, setTip] = useState(null); // { x, y, val }
     const d2 = (data || []).filter(v => v != null && !isNaN(v));
-    if (d2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
+    if (d2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
     const mn = Math.min(...d2), mx = Math.max(...d2), rng = mx - mn || 1;
     const pts = d2.map((v, i) => {
         const x = (i / (d2.length - 1)) * W;
@@ -15880,10 +15880,10 @@ function TpSparkline({ data, color, fill = true, W = 200, H = 52, fmt }) {
 function TpMiniBar({ data, color, W = 280, H = 60, fmt }) {
     const [tip, setTip] = useState(null);
     const d2 = (data || []).filter(v => v != null && !isNaN(v));
-    if (!d2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
+    if (!d2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
     const mx = Math.max(...d2) || 1;
     const bw = W / d2.length - 2;
-    const fmtVal = v => fmt ? fmt(v) : (v >= 1000 ? `₹${(v / 100).toFixed(0)}Cr` : v.toFixed(1));
+    const fmtVal = v => fmt ? fmt(v) : (v >= 1000 ? `â‚¹${(v / 100).toFixed(0)}Cr` : v.toFixed(1));
     const handleMove = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const idx = Math.min(d2.length - 1, Math.max(0, Math.floor((e.clientX - rect.left) / rect.width * d2.length)));
@@ -15914,7 +15914,7 @@ function TpCombo({ bars, line, bc, lc, W = 280, H = 70, fmtBar, fmtLine }) {
     const [tip, setTip] = useState(null);
     const b2 = (bars || []).map(v => v ?? 0);
     const l2 = (line || []).filter(v => v != null);
-    if (!b2.length || !l2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
+    if (!b2.length || !l2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
     const bmx = Math.max(...b2.map(Math.abs)) || 1;
     const lmn = Math.min(...l2), lmx = Math.max(...l2), lrng = lmx - lmn || 1;
     const n = b2.length;
@@ -15947,8 +15947,8 @@ function TpCombo({ bars, line, bc, lc, W = 280, H = 70, fmtBar, fmtLine }) {
                     padding: "4px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
                     whiteSpace: "nowrap", border: `1px solid ${lc}`, zIndex: 10, lineHeight: 1.6,
                 }}>
-                    <span style={{ color: bc }}>■</span> {tip.bar}
-                    {tip.line && <><br /><span style={{ color: lc }}>●</span> {tip.line}</>}
+                    <span style={{ color: bc }}>â– </span> {tip.bar}
+                    {tip.line && <><br /><span style={{ color: lc }}>â—</span> {tip.line}</>}
                 </div>
             )}
         </div>
@@ -15958,7 +15958,7 @@ function TpDual({ s1, s2, c1, c2, W = 280, H = 70, fmt1, fmt2 }) {
     const [tip, setTip] = useState(null);
     const a1 = (s1 || []).filter(v => v != null);
     const a2 = (s2 || []).filter(v => v != null);
-    if (a1.length < 2 || a2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
+    if (a1.length < 2 || a2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
     const all = [...a1, ...a2];
     const mn = Math.min(...all), mx = Math.max(...all), rng = mx - mn || 1;
     const toY = v => H - ((v - mn) / rng) * (H - 8) - 4;
@@ -15989,15 +15989,15 @@ function TpDual({ s1, s2, c1, c2, W = 280, H = 70, fmt1, fmt2 }) {
                     padding: "4px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
                     whiteSpace: "nowrap", border: `1px solid ${c1}`, zIndex: 10, lineHeight: 1.6,
                 }}>
-                    <span style={{ color: c1 }}>●</span> {tip.v1}<br />
-                    <span style={{ color: c2 }}>●</span> {tip.v2}
+                    <span style={{ color: c1 }}>â—</span> {tip.v1}<br />
+                    <span style={{ color: c2 }}>â—</span> {tip.v2}
                 </div>
             )}
         </div>
     );
 }
 
-// ─── Gauge Arc ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Gauge Arc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TpGauge({ value = 7, max = 10, color = "#00e5a0", size = 88 }) {
     const r = 33, cx = size / 2, cy = size / 2;
     const toRad = d => (d * Math.PI) / 180;
@@ -16016,7 +16016,7 @@ function TpGauge({ value = 7, max = 10, color = "#00e5a0", size = 88 }) {
     );
 }
 
-// ─── Sub-score bar card ────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-score bar card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TpSubScore({ label, value, score, color, T }) {
     const D = T === THEMES.dark;
     return (
@@ -16038,7 +16038,7 @@ function TpSubScore({ label, value, score, color, T }) {
     );
 }
 
-// ─── Chart card ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Chart card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TpCard({ title, subtitle, children, T, style = {} }) {
     const D = T === THEMES.dark;
     return (
@@ -16056,7 +16056,7 @@ function TpCard({ title, subtitle, children, T, style = {} }) {
     );
 }
 
-// ─── Valuation row ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Valuation row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TpValRow({ label, value, color, T }) {
     return (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
@@ -16066,7 +16066,7 @@ function TpValRow({ label, value, color, T }) {
     );
 }
 
-// ─── Pill badge ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Pill badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TpPill({ children, color }) {
     return (
         <span style={{
@@ -16144,7 +16144,7 @@ function TpRatioSparkCard({ title, subtitle, value, delta, color, series, T, mod
     );
 }
 
-// ─── Main TickerPage component ────────────────────────────────────────────────
+// â”€â”€â”€ Main TickerPage component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TickerPage({ symbol, T }) {
     const [tickerData, setTickerData] = useState({ raw: null, analytics: null });
     const [finData, setFinData] = useState(null);   // { incAnn, bsAnn, cfAnn }
@@ -16201,14 +16201,14 @@ function TickerPage({ symbol, T }) {
     const raw = tickerData.raw;
     const analytics = tickerData.analytics;
 
-    // ── Derive chart series from annual financial data + TTM scalar ──
+    // â”€â”€ Derive chart series from annual financial data + TTM scalar â”€â”€
     // company_financials stores values in Crores. Margins are computed as ratios (no unit scaling).
     const pct = (num, den) => (num != null && den != null && Number(den) !== 0)
         ? parseFloat((Number(num) / Number(den) * 100).toFixed(2)) : null;
     const safe = v => v != null ? parseFloat(Number(v).toFixed(2)) : null;
     const safeN = (v, dec = 2) => v != null ? parseFloat(Number(v).toFixed(dec)) : null;
 
-    // Sort annual periods oldest→newest
+    // Sort annual periods oldestâ†’newest
     const incAnn = [...(finData?.incAnn || [])].sort((a, b) =>
         (a._period || "").localeCompare(b._period || ""));
     const bsAnn = [...(finData?.bsAnn || [])].sort((a, b) =>
@@ -16228,7 +16228,7 @@ function TickerPage({ symbol, T }) {
         return pts;
     };
 
-    // ── Margin series (annual FY + TTM from stock_ratios) ──
+    // â”€â”€ Margin series (annual FY + TTM from stock_ratios) â”€â”€
     const gp_s = buildSeries(incAnn,
         p => pct(p.GrossProfit, p.Revenue),
         safeN(raw?.gpm, 2));
@@ -16245,10 +16245,10 @@ function TickerPage({ symbol, T }) {
 
     const npm_s = pat_s; // PAT margin = NPM
 
-    // Revenue (Crores) — TTM from stock_ratios doesn't have revenue directly, skip TTM append
+    // Revenue (Crores) â€” TTM from stock_ratios doesn't have revenue directly, skip TTM append
     const sales_s = buildSeries(incAnn, p => safe(p.Revenue));
 
-    // ── Net Block (Crores) ──
+    // â”€â”€ Net Block (Crores) â”€â”€
     const nb_s = (() => {
         const fromBs = buildSeries(bsAnn,
             b => safe(b.NetBlock ?? b.PropertyPlantEquipment ?? b.NetPPE ?? null),
@@ -16260,14 +16260,14 @@ function TickerPage({ symbol, T }) {
             .filter(v => v != null);
     })();
 
-    // ── Asset Turnover = Revenue / TotalAssets (annual) + TTM from stock_ratios ──
+    // â”€â”€ Asset Turnover = Revenue / TotalAssets (annual) + TTM from stock_ratios â”€â”€
     const asset_turn_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         return (bs?.TotalAssets && p.Revenue)
             ? parseFloat((Number(p.Revenue) / Number(bs.TotalAssets)).toFixed(2)) : null;
     }, safeN(raw?.asset_turnover, 2));
 
-    // ── NFA Turnover = Revenue / NetBlock ──
+    // â”€â”€ NFA Turnover = Revenue / NetBlock â”€â”€
     const nfa_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         const netBlock = bs?.NetBlock ?? bs?.PropertyPlantEquipment ?? bs?.NetPPE ?? null;
@@ -16275,7 +16275,7 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((Number(p.Revenue) / Number(netBlock)).toFixed(2)) : null;
     }, safeN(raw?.asset_turnover, 2)); // best scalar proxy for NFA turnover
 
-    // ── Cash Conversion Cycle ──
+    // â”€â”€ Cash Conversion Cycle â”€â”€
     const ccc_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         const rev = Number(p.Revenue);
@@ -16287,7 +16287,7 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((debtorDays + inventDays - payableDays).toFixed(1)) : null;
     });
 
-    // ── Net Debt / Equity ──
+    // â”€â”€ Net Debt / Equity â”€â”€
     const netd_s = buildSeries(bsAnn, b => {
         const equity = b.TotalEquity ?? b.StockholderEquity ?? null;
         const debt = b.TotalDebt ?? ((b.BorrowingsCurrent ?? 0) + (b.LongTermDebt ?? 0));
@@ -16297,21 +16297,21 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((netDebt / Number(equity)).toFixed(2)) : null;
     }, safeN(raw?.debt_eq, 2));
 
-    // ── Interest Coverage Ratio ──
+    // â”€â”€ Interest Coverage Ratio â”€â”€
     const icr_s = buildSeries(incAnn, p => {
         const interest = p.InterestExpense != null ? Math.abs(Number(p.InterestExpense)) : null;
         return (p.EBIT != null && interest != null && interest !== 0)
             ? parseFloat((Number(p.EBIT) / interest).toFixed(2)) : null;
     }, safeN(raw?.icr, 2));
 
-    // ── Financial Leverage = TotalAssets / Equity ──
+    // â”€â”€ Financial Leverage = TotalAssets / Equity â”€â”€
     const finlev_s = buildSeries(bsAnn, b => {
         const equity = b.TotalEquity ?? b.StockholderEquity ?? null;
         return (b.TotalAssets && equity && Number(equity) !== 0)
             ? parseFloat((Number(b.TotalAssets) / Number(equity)).toFixed(2)) : null;
     }, safeN(raw?.fin_leverage, 2));
 
-    // ── DuPont ROE ──
+    // â”€â”€ DuPont ROE â”€â”€
     const dup_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         if (!bs || !p.Revenue || !p.NetIncome) return null;
@@ -16323,12 +16323,12 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((npm * assetT * finLev * 100).toFixed(2)) : null;
     }, safeN(raw?.roe, 2));
 
-    // Valuation series — TTM scalar only (no per-year history in DB)
+    // Valuation series â€” TTM scalar only (no per-year history in DB)
     const ps_s = raw?.ps != null ? [parseFloat(Number(raw.ps).toFixed(2))] : [];
     const ev_s = raw?.ev_ebitda != null ? [parseFloat(Number(raw.ev_ebitda).toFixed(2))] : [];
     const pe_s = raw?.pe != null ? [parseFloat(Number(raw.pe).toFixed(1))] : [];
 
-    // ── Valuation display values ──
+    // â”€â”€ Valuation display values â”€â”€
     const fmtX = (v, dec = 2) => v != null ? `${Number(v).toFixed(dec)}x` : "--";
     const fmtPct = (v, dec = 1) => v != null ? `${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(dec)}%` : "--";
     const peDisp = fmtX(raw?.pe, 1);
@@ -16338,7 +16338,7 @@ function TickerPage({ symbol, T }) {
     const ebitdaYoy = fmtPct(analytics?.momentum?.ebitda);
     const patYoy = fmtPct(analytics?.momentum?.pat);
 
-    // ── Colors ──
+    // â”€â”€ Colors â”€â”€
     const C = {
         green: "#00c58e",
         blue: "#4a9eff",
@@ -16349,7 +16349,7 @@ function TickerPage({ symbol, T }) {
 
     const TABS = ["Overview", "Margins", "Efficiency", "Valuation", "DuPont"];
 
-    // ─── Styles ──────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const navBg = D ? "linear-gradient(180deg,#07111e 0%,#060d17 100%)" : "linear-gradient(180deg,#f8fafc 0%,#f0f4f8 100%)";
     const heroBg = D ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.02)";
 
@@ -16372,10 +16372,10 @@ function TickerPage({ symbol, T }) {
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, height: "100%", overflowY: "auto", background: T.bg }}>
 
-            {/* ── LOADING / ERROR states ── */}
+            {/* â”€â”€ LOADING / ERROR states â”€â”€ */}
             {loading && (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 12, color: T.muted, fontSize: 13 }}>
-                    <div className="fin-spinner" /> Loading intelligence for {symbol}…
+                    <div className="fin-spinner" /> Loading intelligence for {symbol}â€¦
                 </div>
             )}
             {error && !loading && (
@@ -16384,11 +16384,11 @@ function TickerPage({ symbol, T }) {
                 </div>
             )}
 
-            {/* ── DASHBOARD ── */}
+            {/* â”€â”€ DASHBOARD â”€â”€ */}
             {!loading && (raw || analytics) && (
                 <div style={{ display: "flex", flexDirection: "column" }}>
 
-                    {/* ── HERO HEADER ── */}
+                    {/* â”€â”€ HERO HEADER â”€â”€ */}
                     <div style={{
                         background: navBg,
                         borderBottom: `1px solid ${T.border}`,
@@ -16424,7 +16424,7 @@ function TickerPage({ symbol, T }) {
                                     <div key={k.label} style={{ textAlign: "center" }}>
                                         <div style={{ fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>{k.label}</div>
                                         <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 19, fontWeight: 700, color: k.color }}>{k.value}</div>
-                                        <div style={{ fontSize: 9, color: k.color + "80", marginTop: 2 }}>▲ Momentum</div>
+                                        <div style={{ fontSize: 9, color: k.color + "80", marginTop: 2 }}>â–² Momentum</div>
                                     </div>
                                 ))}
                             </div>
@@ -16451,10 +16451,10 @@ function TickerPage({ symbol, T }) {
                         {analytics && (
                             <div style={{ ...grid4, marginBottom: 16 }}>
                                 {[
-                                    { label: "Growth", value: analytics.signals?.growth || "—", score: analytics.subscores?.growth || 0, color: C.green },
-                                    { label: "Profitability", value: analytics.signals?.profitability || "—", score: analytics.subscores?.profitability || 0, color: C.blue },
-                                    { label: "Balance Sheet", value: analytics.signals?.balance || "—", score: analytics.subscores?.balance || 0, color: C.amber },
-                                    { label: "Cash Flow", value: analytics.signals?.cashflow || "—", score: analytics.subscores?.cash || 0, color: C.purple },
+                                    { label: "Growth", value: analytics.signals?.growth || "â€”", score: analytics.subscores?.growth || 0, color: C.green },
+                                    { label: "Profitability", value: analytics.signals?.profitability || "â€”", score: analytics.subscores?.profitability || 0, color: C.blue },
+                                    { label: "Balance Sheet", value: analytics.signals?.balance || "â€”", score: analytics.subscores?.balance || 0, color: C.amber },
+                                    { label: "Cash Flow", value: analytics.signals?.cashflow || "â€”", score: analytics.subscores?.cash || 0, color: C.purple },
                                 ].map(s => <TpSubScore key={s.label} {...s} T={T} />)}
                             </div>
                         )}
@@ -16479,31 +16479,31 @@ function TickerPage({ symbol, T }) {
                         </div>
                     </div>
 
-                    {/* ── GRID PANELS ── */}
+                    {/* â”€â”€ GRID PANELS â”€â”€ */}
                     <div style={{ padding: "16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
 
-                        {/* ── OVERVIEW ── */}
+                        {/* â”€â”€ OVERVIEW â”€â”€ */}
                         {dashTab === "overview" && (<>
                             <div style={{ ...grid4 }}>
                                 <TpCard title="GP Margin %" T={T}>
                                     <TpSparkline data={gp_s} color={C.green} />
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
-                                        <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1) ?? "—"}%` : "—"}</span>
+                                        <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1) ?? "â€”"}%` : "â€”"}</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="EBITDA Margin %" T={T}>
                                     <TpSparkline data={ebitda_s} color={C.blue} />
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
-                                        <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1) ?? "—"}%` : "—"}</span>
+                                        <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1) ?? "â€”"}%` : "â€”"}</span>
                                     </div>
                                 </TpCard>
-                                <TpCard title="Net Block (₹ Cr)" T={T}>
+                                <TpCard title="Net Block (â‚¹ Cr)" T={T}>
                                     <TpSparkline data={nb_s} color={C.amber} />
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
-                                        <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{nb_s.length ? `${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "—"}</span>
+                                        <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{nb_s.length ? `${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "â€”"}</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="NFA Turnover" T={T}>
@@ -16511,25 +16511,25 @@ function TickerPage({ symbol, T }) {
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
                                         <span style={{ fontSize: 12, color: C.purple, fontWeight: 700 }}>
-                                            {nfa_s.length ? `${nfa_s[nfa_s.length - 1]?.toFixed?.(2) ?? "—"}x` : raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "—"}
+                                            {nfa_s.length ? `${nfa_s[nfa_s.length - 1]?.toFixed?.(2) ?? "â€”"}x` : raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "â€”"}
                                         </span>
                                     </div>
                                 </TpCard>
                             </div>
 
                             <div style={{ ...grid2 }}>
-                                <TpCard title="Revenue (₹ Cr)" subtitle="Sales bars · CCC line" T={T}>
+                                <TpCard title="Revenue (â‚¹ Cr)" subtitle="Sales bars Â· CCC line" T={T}>
                                     <TpCombo bars={sales_s} line={ccc_s.length ? ccc_s : icr_s} bc={D ? "#1f4f82" : "#3b82f6"} lc={C.green} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.blue }}>■ Sales</span>
-                                        <span style={{ fontSize: 10, color: C.green }}>● CCC / ICR</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>â–  Sales</span>
+                                        <span style={{ fontSize: 10, color: C.green }}>â— CCC / ICR</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="Interest Coverage & Net Debt/Equity" T={T}>
                                     <TpCombo bars={netd_s} line={icr_s} bc={D ? "#1f4f82" : "#3b82f6"} lc={C.amber} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.blue }}>■ Net D/E</span>
-                                        <span style={{ fontSize: 10, color: C.amber }}>● ICR</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>â–  Net D/E</span>
+                                        <span style={{ fontSize: 10, color: C.amber }}>â— ICR</span>
                                     </div>
                                 </TpCard>
                             </div>
@@ -16538,11 +16538,11 @@ function TickerPage({ symbol, T }) {
                                 <TpCard title="DuPont ROE Decomposition" T={T}>
                                     <TpDual s1={npm_s} s2={dup_s.map(v => v / 10)} c1={C.rose} c2={C.purple} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.rose }}>● NPM</span>
-                                        <span style={{ fontSize: 10, color: C.purple }}>● DuPont ROE</span>
+                                        <span style={{ fontSize: 10, color: C.rose }}>â— NPM</span>
+                                        <span style={{ fontSize: 10, color: C.purple }}>â— DuPont ROE</span>
                                     </div>
                                 </TpCard>
-                                <TpCard title="Valuation — TTM" T={T}>
+                                <TpCard title="Valuation â€” TTM" T={T}>
                                     <TpValRow label="Current P/E" value={peDisp} color={C.amber} T={T} />
                                     <TpValRow label="Current EV/EBITDA" value={evDisp} color={C.blue} T={T} />
                                     <TpValRow label="Current P/S" value={psDisp} color={C.green} T={T} />
@@ -16556,98 +16556,98 @@ function TickerPage({ symbol, T }) {
                             </div>
                         </>)}
 
-                        {/* ── MARGINS ── */}
+                        {/* â”€â”€ MARGINS â”€â”€ */}
                         {dashTab === "margins" && (<>
                             <div style={{ ...grid3 }}>
                                 <TpCard title="GP Margin %" T={T}>
                                     <TpSparkline data={gp_s} color={C.green} H={68} />
-                                    <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1)}% (latest)` : "—"}</span>
+                                    <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1)}% (latest)` : "â€”"}</span>
                                 </TpCard>
                                 <TpCard title="EBITDA Margin %" T={T}>
                                     <TpSparkline data={ebitda_s} color={C.blue} H={68} />
-                                    <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1)}% (latest)` : "—"}</span>
+                                    <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1)}% (latest)` : "â€”"}</span>
                                 </TpCard>
                                 <TpCard title="PAT Margin %" T={T}>
                                     <TpSparkline data={pat_s} color={C.amber} H={68} />
-                                    <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{pat_s.length ? `${pat_s[pat_s.length - 1]?.toFixed?.(1)}% (latest)` : raw?.pat_margin != null ? `${Number(raw.pat_margin).toFixed(1)}%` : "—"}</span>
+                                    <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{pat_s.length ? `${pat_s[pat_s.length - 1]?.toFixed?.(1)}% (latest)` : raw?.pat_margin != null ? `${Number(raw.pat_margin).toFixed(1)}%` : "â€”"}</span>
                                 </TpCard>
                             </div>
                             <div style={{ ...grid2 }}>
-                                <TpCard title="Revenue (₹ Cr) — 10Y" T={T}>
+                                <TpCard title="Revenue (â‚¹ Cr) â€” 10Y" T={T}>
                                     <TpMiniBar data={sales_s} color={D ? "#1f6feb" : "#3b82f6"} H={72} />
                                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>Earliest</span>
                                         <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>
-                                            {sales_s.length ? `₹${Number(sales_s[sales_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "—"}
+                                            {sales_s.length ? `â‚¹${Number(sales_s[sales_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "â€”"}
                                         </span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="GP vs EBITDA Margin" T={T}>
                                     <TpDual s1={gp_s} s2={ebitda_s} c1={C.green} c2={C.blue} H={72} />
                                     <div style={{ display: "flex", gap: 14 }}>
-                                        <span style={{ fontSize: 10, color: C.green }}>● GP Margin</span>
-                                        <span style={{ fontSize: 10, color: C.blue }}>● EBITDA</span>
+                                        <span style={{ fontSize: 10, color: C.green }}>â— GP Margin</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>â— EBITDA</span>
                                     </div>
                                 </TpCard>
                             </div>
                         </>)}
 
-                        {/* ── EFFICIENCY ── */}
+                        {/* â”€â”€ EFFICIENCY â”€â”€ */}
                         {dashTab === "efficiency" && (<>
                             <div style={{ ...grid3 }}>
-                                <TpCard title="Net Block (₹ Cr)" subtitle="Fixed asset base" T={T}>
+                                <TpCard title="Net Block (â‚¹ Cr)" subtitle="Fixed asset base" T={T}>
                                     <TpSparkline data={nb_s} color={C.amber} H={68} />
                                     <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>
-                                        {nb_s.length ? `₹${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "—"}
+                                        {nb_s.length ? `â‚¹${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "â€”"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="NFA Turnover" subtitle="Sales / Net Block" T={T}>
                                     <TpSparkline data={nfa_s} color={C.purple} H={68} />
                                     <span style={{ fontSize: 12, color: C.purple, fontWeight: 700 }}>
-                                        {raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "—"}
+                                        {raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "â€”"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="Cash Conversion Cycle" subtitle="Days" T={T}>
                                     <TpSparkline data={ccc_s} color={C.rose} H={68} />
                                     <span style={{ fontSize: 12, color: C.rose, fontWeight: 700 }}>
-                                        {raw?.ccc != null ? `${Number(raw.ccc).toFixed(1)}d` : ccc_s.length ? `${ccc_s[ccc_s.length - 1]?.toFixed?.(1)}d` : "—"}
+                                        {raw?.ccc != null ? `${Number(raw.ccc).toFixed(1)}d` : ccc_s.length ? `${ccc_s[ccc_s.length - 1]?.toFixed?.(1)}d` : "â€”"}
                                     </span>
                                 </TpCard>
                             </div>
                             <div style={{ ...grid2 }}>
-                                <TpCard title="Key Ratios — Latest" T={T}>
-                                    <TpValRow label="Contingent Liability / NW" value={raw?.contingent_liab_nw != null ? `${Number(raw.contingent_liab_nw).toFixed(2)}%` : "—"} color={C.amber} T={T} />
-                                    <TpValRow label="Goodwill / NW" value={raw?.goodwill_nw != null ? `${Number(raw.goodwill_nw).toFixed(2)}%` : "—"} color={C.blue} T={T} />
-                                    <TpValRow label="CFO/PAT (5Y Avg)" value={raw?.cfo_pat_5y != null ? Number(raw.cfo_pat_5y).toFixed(2) : "—"} color={C.green} T={T} />
-                                    <TpValRow label="CFO/EBITDA (5Y Avg)" value={raw?.cfo_ebitda_5y != null ? Number(raw.cfo_ebitda_5y).toFixed(2) : "—"} color={C.purple} T={T} />
+                                <TpCard title="Key Ratios â€” Latest" T={T}>
+                                    <TpValRow label="Contingent Liability / NW" value={raw?.contingent_liab_nw != null ? `${Number(raw.contingent_liab_nw).toFixed(2)}%` : "â€”"} color={C.amber} T={T} />
+                                    <TpValRow label="Goodwill / NW" value={raw?.goodwill_nw != null ? `${Number(raw.goodwill_nw).toFixed(2)}%` : "â€”"} color={C.blue} T={T} />
+                                    <TpValRow label="CFO/PAT (5Y Avg)" value={raw?.cfo_pat_5y != null ? Number(raw.cfo_pat_5y).toFixed(2) : "â€”"} color={C.green} T={T} />
+                                    <TpValRow label="CFO/EBITDA (5Y Avg)" value={raw?.cfo_ebitda_5y != null ? Number(raw.cfo_ebitda_5y).toFixed(2) : "â€”"} color={C.purple} T={T} />
                                 </TpCard>
                                 <TpCard title="Interest Coverage vs Net D/E" T={T}>
                                     <TpCombo bars={netd_s} line={icr_s} bc={D ? "#1f4f82" : "#3b82f6"} lc={C.amber} H={72} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.blue }}>■ Net D/E</span>
-                                        <span style={{ fontSize: 10, color: C.amber }}>● ICR</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>â–  Net D/E</span>
+                                        <span style={{ fontSize: 10, color: C.amber }}>â— ICR</span>
                                     </div>
                                 </TpCard>
                             </div>
                         </>)}
 
-                        {/* ── VALUATION ── */}
+                        {/* â”€â”€ VALUATION â”€â”€ */}
                         {dashTab === "valuation" && (<>
                             <div style={{ ...grid3 }}>
-                                <TpCard title="P/S Ratio — 10Y" T={T}>
+                                <TpCard title="P/S Ratio â€” 10Y" T={T}>
                                     <TpSparkline data={ps_s} color={C.green} H={68} />
                                     <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>Current: {psDisp}</span>
                                 </TpCard>
-                                <TpCard title="EV/EBITDA — 10Y" T={T}>
+                                <TpCard title="EV/EBITDA â€” 10Y" T={T}>
                                     <TpSparkline data={ev_s} color={C.blue} H={68} />
                                     <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>Current: {evDisp}</span>
                                 </TpCard>
-                                <TpCard title="P/E — 10Y" T={T}>
+                                <TpCard title="P/E â€” 10Y" T={T}>
                                     <TpSparkline data={pe_s} color={C.amber} H={68} />
                                     <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>Current: {peDisp}</span>
                                 </TpCard>
                             </div>
-                            <TpCard title="Valuation Summary — TTM" T={T}>
+                            <TpCard title="Valuation Summary â€” TTM" T={T}>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginTop: 4 }}>
                                     {[
                                         { label: "P/E", value: peDisp, note: raw?.pe != null && Number(raw.pe) > 40 ? "Premium" : "Fair", color: C.amber },
@@ -16669,49 +16669,49 @@ function TickerPage({ symbol, T }) {
                             </TpCard>
                         </>)}
 
-                        {/* ── DUPONT ── */}
+                        {/* â”€â”€ DUPONT â”€â”€ */}
                         {dashTab === "dupont" && (<>
                             <div style={{ ...grid3 }}>
                                 <TpCard title="Net Profit Margin (NPM)" T={T}>
                                     <TpSparkline data={npm_s} color={C.rose} H={68} />
                                     <span style={{ fontSize: 12, color: C.rose, fontWeight: 700 }}>
-                                        {raw?.npm != null ? `${Number(raw.npm).toFixed(2)}%` : npm_s.length ? `${npm_s[npm_s.length - 1]?.toFixed?.(2)}` : "—"}
+                                        {raw?.npm != null ? `${Number(raw.npm).toFixed(2)}%` : npm_s.length ? `${npm_s[npm_s.length - 1]?.toFixed?.(2)}` : "â€”"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="Asset Turnover" T={T}>
                                     <TpSparkline data={asset_turn_s} color={C.green} H={68} />
                                     <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>
-                                        {raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "—"}
+                                        {raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "â€”"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="Financial Leverage" T={T}>
                                     <TpSparkline data={finlev_s} color={C.amber} H={68} />
                                     <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>
-                                        {raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "—"}
+                                        {raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "â€”"}
                                     </span>
                                 </TpCard>
                             </div>
                             <div style={{ ...grid2 }}>
-                                <TpCard title="DuPont ROE — Trend" T={T}>
+                                <TpCard title="DuPont ROE â€” Trend" T={T}>
                                     <TpDual s1={dup_s} s2={npm_s.map(v => v * 10)} c1={C.purple} c2={C.rose} H={80} />
                                     <div style={{ display: "flex", gap: 14 }}>
-                                        <span style={{ fontSize: 10, color: C.purple }}>● DuPont ROE</span>
-                                        <span style={{ fontSize: 10, color: C.rose }}>● NPM ×10</span>
+                                        <span style={{ fontSize: 10, color: C.purple }}>â— DuPont ROE</span>
+                                        <span style={{ fontSize: 10, color: C.rose }}>â— NPM Ã—10</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="DuPont Key Ratios" T={T}>
-                                    <TpValRow label="ROE" value={raw?.roe != null ? `${Number(raw.roe).toFixed(2)}%` : "—"} color={C.purple} T={T} />
-                                    <TpValRow label="ROA" value={raw?.roa != null ? `${Number(raw.roa).toFixed(2)}%` : "—"} color={C.green} T={T} />
-                                    <TpValRow label="ROCE" value={raw?.roce != null ? `${Number(raw.roce).toFixed(2)}%` : "—"} color={C.blue} T={T} />
-                                    <TpValRow label="Asset Turns" value={raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "—"} color={C.amber} T={T} />
-                                    <TpValRow label="Financial Leverage" value={raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "—"} color={C.rose} T={T} />
+                                    <TpValRow label="ROE" value={raw?.roe != null ? `${Number(raw.roe).toFixed(2)}%` : "â€”"} color={C.purple} T={T} />
+                                    <TpValRow label="ROA" value={raw?.roa != null ? `${Number(raw.roa).toFixed(2)}%` : "â€”"} color={C.green} T={T} />
+                                    <TpValRow label="ROCE" value={raw?.roce != null ? `${Number(raw.roce).toFixed(2)}%` : "â€”"} color={C.blue} T={T} />
+                                    <TpValRow label="Asset Turns" value={raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "â€”"} color={C.amber} T={T} />
+                                    <TpValRow label="Financial Leverage" value={raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "â€”"} color={C.rose} T={T} />
                                 </TpCard>
                             </div>
                         </>)}
 
                     </div>
 
-                    {/* ── DEEP DIVE: FinancialAnalyticsModule ── */}
+                    {/* â”€â”€ DEEP DIVE: FinancialAnalyticsModule â”€â”€ */}
                     <div style={{
                         margin: "0 24px 24px",
                         borderRadius: 14,
@@ -18689,7 +18689,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
           }
         }
         .sdv-techno-mobile { display:none; }
-        /* Mobile back bar — hidden on desktop */
+        /* Mobile back bar â€” hidden on desktop */
         .sdv-mobile-back {
           display:none;
         }
@@ -18704,7 +18704,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
 
             <div className="sdv-shell">
 
-                {/* Mobile-only slim back bar — hidden on desktop via CSS */}
+                {/* Mobile-only slim back bar â€” hidden on desktop via CSS */}
                 <div className="sdv-mobile-back">
                     <button onClick={onBack}
                         style={{
@@ -19480,9 +19480,9 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     const filterByUniverse = useCallback(rows => {
         if (universe !== "nifty500") return rows;
-        // Still loading nifty500 constituents — return empty so UI shows loading state
+        // Still loading nifty500 constituents â€” return empty so UI shows loading state
         if (nifty500Loading || !nifty500Set) return [];
-        // Fetch succeeded but returned empty set (table missing/empty) — fall back to all rows
+        // Fetch succeeded but returned empty set (table missing/empty) â€” fall back to all rows
         if (nifty500Set.size === 0) return rows;
         return rows.filter(r => nifty500Set.has(r.ticker));
     }, [universe, nifty500Set, nifty500Loading]);
@@ -21008,7 +21008,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             fontVariantNumeric: "tabular-nums"
                         }}>
                             {(universe === "nifty500" && nifty500Loading) ? (
-                                <span style={{ color: T.muted, fontStyle: "italic" }}>loading…</span>
+                                <span style={{ color: T.muted, fontStyle: "italic" }}>loadingâ€¦</span>
                             ) : (
                                 <><strong style={{ color: T.text, fontWeight: 600 }}>
                                     {totalCount.toLocaleString("en-IN")}
@@ -23085,7 +23085,7 @@ function SectorRotationModule({ T }) {
                                 <span style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: text, letterSpacing: "-0.03em", flexShrink: 0 }}>Opportunity Rankings</span>
                                 {!isMobile && stats?.topOpp?.length > 0 && (
                                     <span style={{ fontSize: 12, color: subtext, opacity: 0.82 }}>
-                                        Leaders: {stats.topOpp.slice(0, 2).map(s => `${s.label} (${(s.opportunity_score ?? 0) > 0 ? "+" : ""}${(s.opportunity_score ?? 0).toFixed(2)})`).join(" · ")}
+                                        Leaders: {stats.topOpp.slice(0, 2).map(s => `${s.label} (${(s.opportunity_score ?? 0) > 0 ? "+" : ""}${(s.opportunity_score ?? 0).toFixed(2)})`).join(" Â· ")}
                                     </span>
                                 )}
                             </div>
@@ -24677,8 +24677,8 @@ function AuthScreen({ onLogin, onDemo, theme, toggleTheme }) {
             if (res.access_token && res.user?.id) {
                 onLogin(res); // Login success
             } else if (mode === "signup" && (res.id || res.user?.id)) {
-                // Signup success — email confirmation required
-                setErr("✅ Account created! Please check your email and click the confirmation link, then log in.");
+                // Signup success â€” email confirmation required
+                setErr("âœ… Account created! Please check your email and click the confirmation link, then log in.");
             } else {
                 setErr(res.error_description || res.msg || "Authentication failed.");
             }
@@ -25866,7 +25866,7 @@ function LoginGate({ T, onLogin, theme, tabLabel, onBack }) {
                         <circle cx="12" cy="8" r="4" />
                         <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
                     </svg>
-                    Login / Sign Up — It&apos;s Free
+                    Login / Sign Up â€” It&apos;s Free
                 </button>
                 <button
                     onClick={() => onBack?.()}
@@ -25879,7 +25879,7 @@ function LoginGate({ T, onLogin, theme, tabLabel, onBack }) {
                     onMouseOver={e => e.currentTarget.style.color = T.text}
                     onMouseOut={e => e.currentTarget.style.color = T.subtext}
                 >
-                    ← Go back to Dashboard
+                    â† Go back to Dashboard
                 </button>
             </div>
         </div>
@@ -25983,8 +25983,8 @@ function LoginModal({ onClose, onLogin, theme }) {
             if (res.access_token && res.user?.id) {
                 onLogin(res); // Login success
             } else if (mode === "signup" && (res.id || res.user?.id)) {
-                // Signup success — email confirmation required
-                setErr("✅ Account created! Please check your email and click the confirmation link, then log in.");
+                // Signup success â€” email confirmation required
+                setErr("âœ… Account created! Please check your email and click the confirmation link, then log in.");
             } else {
                 setErr(res.error_description || res.msg || "Authentication failed.");
             }
@@ -26146,7 +26146,7 @@ function LoginModal({ onClose, onLogin, theme }) {
                                 <label style={{ fontSize: 11, fontWeight: 600, color: R.sub, textTransform: "uppercase", letterSpacing: ".07em" }}>Password</label>
                                 {mode === "login" && <button className="lm-link" style={{ fontSize: 12 }} onClick={e => e.preventDefault()}>Forgot password?</button>}
                             </div>
-                            <input className="lm-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === "Enter" && handle()} />
+                            <input className="lm-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" onKeyDown={e => e.key === "Enter" && handle()} />
                         </div>
                         <div style={{ height: 16 }} />
                         <button className="lm-btn-primary" onClick={handle} disabled={loading || !email.trim() || !password}>
@@ -26221,7 +26221,7 @@ function ContactForm({ T }) {
                 maxWidth: 420,
                 fontWeight: 400,
             }}>
-                For suggestions, improvements, or queries about TradeEdge — write to us directly. Every message is read personally.
+                For suggestions, improvements, or queries about TradeEdge â€” write to us directly. Every message is read personally.
             </p>
 
             {/* Divider */}
@@ -26267,7 +26267,7 @@ function ContactForm({ T }) {
                 fontFamily: "'Helvetica Neue', Arial, sans-serif",
                 letterSpacing: "0.02em",
             }}>
-                We typically respond within 1–2 business days.<br />
+                We typically respond within 1â€“2 business days.<br />
                 Your feedback makes TradeEdge better for everyone.
             </p>
         </div>
@@ -26302,7 +26302,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
     return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg, position: "relative" }}>
 
-            {/* ── Sticky Header ── */}
+            {/* â”€â”€ Sticky Header â”€â”€ */}
             <div style={{
                 position: "sticky", top: 0, zIndex: 10,
                 background: T.surface,
@@ -26310,7 +26310,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                 padding: "16px 24px 0",
                 flexShrink: 0,
             }}>
-                {/* Title row with ✕ */}
+                {/* Title row with âœ• */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                     <h2 style={{ margin: 0, color: T.green, fontSize: 18, fontWeight: 700 }}>Legal Information</h2>
                     <button
@@ -26331,7 +26331,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             e.currentTarget.style.color = T.subtext;
                             e.currentTarget.style.background = "none";
                         }}
-                    >✕</button>
+                    >âœ•</button>
                 </div>
 
                 {/* Tab bar */}
@@ -26354,15 +26354,15 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                 </div>
             </div>
 
-            {/* ── Scrollable Body ── */}
+            {/* â”€â”€ Scrollable Body â”€â”€ */}
             <div style={{ flex: 1, overflowY: "auto", padding: "32px 28px", maxWidth: 820, width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
 
-                {/* ══════════════ DISCLAIMER ══════════════ */}
+                {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• DISCLAIMER â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                 {activeTab === "disclaimer" && (
                     <div>
                         <div style={warningBoxStyle}>
                             <p style={{ ...pStyle, marginBottom: 0, color: "#e6a817", fontWeight: 600 }}>
-                                ⚠ Important Notice: TradeEdge is NOT a SEBI-registered Investment Advisor, Research Analyst, Broker, or Portfolio Management Service (PMS). Nothing on this platform constitutes investment advice.
+                                âš  Important Notice: TradeEdge is NOT a SEBI-registered Investment Advisor, Research Analyst, Broker, or Portfolio Management Service (PMS). Nothing on this platform constitutes investment advice.
                             </p>
                         </div>
 
@@ -26439,11 +26439,11 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             </p>
                         </div>
 
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Governing jurisdiction: Courts of Mumbai, India</p>
+                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 Â· Governing jurisdiction: Courts of Mumbai, India</p>
                     </div>
                 )}
 
-                {/* ══════════════ PRIVACY POLICY ══════════════ */}
+                {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• PRIVACY POLICY â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                 {activeTab === "privacy" && (
                     <div>
                         <div style={sectionStyle}>
@@ -26515,7 +26515,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                                 <li>Encrypted data transmission via HTTPS/TLS 1.2+;</li>
                                 <li>Row-level security policies ensuring users can only access their own data;</li>
                                 <li>Authentication tokens are short-lived and refreshed securely;</li>
-                                <li>No plaintext storage of passwords — authentication is handled via Supabase Auth with bcrypt hashing;</li>
+                                <li>No plaintext storage of passwords â€” authentication is handled via Supabase Auth with bcrypt hashing;</li>
                                 <li>Access to the production database is restricted to authorised administrators only.</li>
                             </ul>
                             <p style={pStyle}>
@@ -26567,7 +26567,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                                 <li><strong style={strongStyle}>Account data:</strong> Retained until account deletion or for up to 3 years from last login, whichever is earlier;</li>
                                 <li><strong style={strongStyle}>Trade journal & portfolio data:</strong> Retained until you delete it or close your account;</li>
                                 <li><strong style={strongStyle}>Usage logs:</strong> Retained for up to 12 months for security and debugging purposes;</li>
-                                <li><strong style={strongStyle}>Legal compliance records:</strong> Retained for the minimum period required under applicable Indian law (typically 5–7 years for financial records, where applicable).</li>
+                                <li><strong style={strongStyle}>Legal compliance records:</strong> Retained for the minimum period required under applicable Indian law (typically 5â€“7 years for financial records, where applicable).</li>
                             </ul>
                         </div>
 
@@ -26585,11 +26585,11 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             </p>
                         </div>
 
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Contact: support@tradeedge.in</p>
+                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 Â· Contact: support@tradeedge.in</p>
                     </div>
                 )}
 
-                {/* ══════════════ TERMS OF SERVICE ══════════════ */}
+                {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• TERMS OF SERVICE â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                 {activeTab === "terms" && (
                     <div>
                         <div style={sectionStyle}>
@@ -26605,7 +26605,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                         <div style={sectionStyle}>
                             <h3 style={h3Style}>2. Nature of Service</h3>
                             <p style={pStyle}>
-                                TradeEdge provides a self-service financial analytics and portfolio tracking platform for informational and personal record-keeping purposes. The Platform is a technology tool only. It does not execute trades, hold securities, manage funds, or provide regulated financial services of any kind. All outputs — including portfolio analytics, capital gains estimates, and performance metrics — are indicative and for personal reference only.
+                                TradeEdge provides a self-service financial analytics and portfolio tracking platform for informational and personal record-keeping purposes. The Platform is a technology tool only. It does not execute trades, hold securities, manage funds, or provide regulated financial services of any kind. All outputs â€” including portfolio analytics, capital gains estimates, and performance metrics â€” are indicative and for personal reference only.
                             </p>
                         </div>
 
@@ -26615,7 +26615,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             <ul style={ulStyle}>
                                 <li>Provide accurate information during account registration and maintain its accuracy;</li>
                                 <li>Use the Platform solely for lawful purposes and in accordance with these Terms;</li>
-                                <li>Ensure that all trade data, quantities, prices, and dates entered by you are accurate — the Platform relies entirely on user-entered data for analytics outputs;</li>
+                                <li>Ensure that all trade data, quantities, prices, and dates entered by you are accurate â€” the Platform relies entirely on user-entered data for analytics outputs;</li>
                                 <li>Independently verify all analytics, estimates, and calculations with your broker statements and a qualified tax professional before relying on them;</li>
                                 <li>Comply with all applicable Indian laws, including SEBI regulations, the Income Tax Act, and the Prevention of Money Laundering Act, as applicable to your investment activities.</li>
                             </ul>
@@ -26741,7 +26741,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             </p>
                         </div>
 
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Governing jurisdiction: Courts of Mumbai, Maharashtra, India</p>
+                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 Â· Governing jurisdiction: Courts of Mumbai, Maharashtra, India</p>
                     </div>
                 )}
 
@@ -26832,7 +26832,7 @@ export default function App() {
         // Delegate entirely to getValidToken() which already handles refresh + _session update
         const token = await supabase.getValidToken();
         if (token && supabase._session && supabase._session.access_token !== session?.access_token) {
-            // _session was refreshed internally — sync React state so consumers get the new token
+            // _session was refreshed internally â€” sync React state so consumers get the new token
             setSession({ ...supabase._session });
         }
         return token;
@@ -26858,7 +26858,7 @@ export default function App() {
     const navigateToTicker = useCallback((rawSymbol, options = {}) => {
         const symbol = (rawSymbol || "").trim().toUpperCase();
         if (!symbol) return;
-        // Don't set productTab/financialSubPage here — the route.kind === "ticker" effect
+        // Don't set productTab/financialSubPage here â€” the route.kind === "ticker" effect
         // handles that reactively, and setting them here causes a spurious history entry
         // via the URL-sync effect before the ticker route is committed.
         setTechnoFundaFilter(null);
@@ -27047,7 +27047,7 @@ export default function App() {
         } catch (e) { console.error(e); }
     };
 
-    // ── Guest data helpers (localStorage) ────────────────────────────────────
+    // â”€â”€ Guest data helpers (localStorage) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const GUEST_LS_KEY = "te_guest_journal";
     const saveGuestData = (t, f, d) => {
         try { localStorage.setItem(GUEST_LS_KEY, JSON.stringify({ trades: t, funds: f, dividends: d })); } catch { }
@@ -27084,7 +27084,7 @@ export default function App() {
                 setSession(sess);
                 loadTrades(sess); loadFunds(sess); loadDividends(sess);
             } else {
-                // No session – load any previously saved guest data
+                // No session â€“ load any previously saved guest data
                 const guest = loadGuestData();
                 if (guest) {
                     if (Array.isArray(guest.trades)) setTrades(guest.trades);
@@ -27392,7 +27392,7 @@ export default function App() {
                 { id: "fiidii", label: "FII / DII Flow", description: "Track institutional cash and derivatives participation." },
                 { id: "ownership", label: "Ownership Scans", description: "Review promoter, fund, and shareholder positioning." },
                 { id: "announcements", label: "Announcements", description: "Track corporate disclosures and regulatory filings in real time." },
-                { id: "niftyPE", label: "Nifty PE", description: "Monthly Nifty 50 P/E ratio heatmap — spot cheap and expensive markets at a glance." },
+                { id: "niftyPE", label: "Nifty PE", description: "Monthly Nifty 50 P/E ratio heatmap â€” spot cheap and expensive markets at a glance." },
             ],
         },
         {
@@ -28156,7 +28156,7 @@ export default function App() {
 
             {modal && <TradeModal trade={modal.mode === "edit" ? modal.trade : null} onClose={() => setModal(null)} onSave={handleSave} T={T} />}
 
-            {/* Login Modal — shown when user clicks Login in the top nav */}
+            {/* Login Modal â€” shown when user clicks Login in the top nav */}
             {showLoginModal && (
                 <LoginModal
                     onClose={() => setShowLoginModal(false)}
@@ -28165,7 +28165,7 @@ export default function App() {
                 />
             )}
 
-            {/* Mobile back button — visible only on small screens when there's history to go back to */}
+            {/* Mobile back button â€” visible only on small screens when there's history to go back to */}
             {navDepth > 0 && createPortal(
                 <button
                     className="mobile-back-btn"
@@ -28181,3 +28181,4 @@ export default function App() {
         </>
     );
 }
+

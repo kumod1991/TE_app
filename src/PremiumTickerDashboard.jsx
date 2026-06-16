@@ -1,10 +1,10 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+// â”€â”€â”€ SUPABASE CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-// ─── DESIGN TOKEN BUILDER (mirrors WatchlistDashboard + StockDashboard T.*) ──
-//  buildDashboardTheme(T) → enhanced T object with panelBg, shellBg, pillBg, etc.
+// â”€â”€â”€ DESIGN TOKEN BUILDER (mirrors WatchlistDashboard + StockDashboard T.*) â”€â”€
+//  buildDashboardTheme(T) â†’ enhanced T object with panelBg, shellBg, pillBg, etc.
 //  Fonts: 'DM Sans' (UI), 'DM Mono' (numbers/tickers), 'IBM Plex Mono' (data)
 function hexToRgb(hex) {
     if (!hex || typeof hex !== "string") return null;
@@ -81,7 +81,7 @@ function buildDashboardTheme(T = {}) {
     };
 }
 
-// ─── SHARED COLOUR PALETTE (mirrors WatchlistDashboard screen pill colours) ──
+// â”€â”€â”€ SHARED COLOUR PALETTE (mirrors WatchlistDashboard screen pill colours) â”€â”€
 function buildColorPalette(isDark) {
     return {
         blue:   isDark ? "#60a5fa" : "#2563eb",
@@ -94,7 +94,7 @@ function buildColorPalette(isDark) {
     };
 }
 
-// ─── MATH HELPERS ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ MATH HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CR = 1e7;
 function n(v) { return v != null && !isNaN(Number(v)) ? Number(v) : null; }
 function ratio(a, b, d = 2) { return n(a) != null && n(b) != null && Number(b) !== 0 ? Number((Number(a) / Number(b)).toFixed(d)) : null; }
@@ -119,7 +119,7 @@ function ebitdaOf(row) {
     return null;
 }
 
-// ─── VIEWPORT HOOK (matches WatchlistDashboard + StockDashboard pattern) ─────
+// â”€â”€â”€ VIEWPORT HOOK (matches WatchlistDashboard + StockDashboard pattern) â”€â”€â”€â”€â”€
 function useViewportFlags() {
     const getWidth = () => (typeof window === "undefined" ? 1440 : window.innerWidth);
     const [width, setWidth] = useState(getWidth);
@@ -132,7 +132,7 @@ function useViewportFlags() {
     return { width, isPhone: width <= 640, isTablet: width > 640 && width <= 1080, isCompact: width < 768 };
 }
 
-// ─── LIGHTWEIGHT CHARTS SPARKLINE ─────────────────────────────────────────────
+// â”€â”€â”€ LIGHTWEIGHT CHARTS SPARKLINE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const LW_CDN = "https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js";
 let lwLoaded = false, lwCallbacks = [];
 function ensureLightweightCharts(cb) {
@@ -219,7 +219,7 @@ function Sparkline({ values, color, height = 70 }) {
         return (
             <div ref={wrapRef} style={{ position: "relative", width: "100%", minWidth: 0, height }}>
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, opacity: 0.35, fontFamily: "'DM Sans', sans-serif" }}>
-                    {!ready ? "Loading…" : "No data"}
+                    {!ready ? "Loadingâ€¦" : "No data"}
                 </div>
             </div>
         );
@@ -240,7 +240,7 @@ function Sparkline({ values, color, height = 70 }) {
     );
 }
 
-// ─── SECTION CARD (matches StockDashboard SectionCard) ────────────────────────
+// â”€â”€â”€ SECTION CARD (matches StockDashboard SectionCard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SectionCard({ D, children, style = {} }) {
     return (
         <div style={{
@@ -269,7 +269,7 @@ function SectionCard({ D, children, style = {} }) {
     );
 }
 
-// ─── CARD HEADER (matches StockDashboard CardHeader) ─────────────────────────
+// â”€â”€â”€ CARD HEADER (matches StockDashboard CardHeader) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function CardHeader({ D, title, subtitle, right, kicker }) {
     return (
         <div style={{ marginBottom: 18 }}>
@@ -295,7 +295,7 @@ function CardHeader({ D, title, subtitle, right, kicker }) {
     );
 }
 
-// ─── METRIC CARD (styled with shared token system) ────────────────────────────
+// â”€â”€â”€ METRIC CARD (styled with shared token system) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MetricCard({ title, subtitle, value, series, color, D }) {
     const [isHovered, setIsHovered] = useState(false);
     const isDark = D.isDark;
@@ -366,7 +366,7 @@ function MetricCard({ title, subtitle, value, series, color, D }) {
     );
 }
 
-// ─── HERO SUMMARY PILL (ticker / sector tags) ─────────────────────────────────
+// â”€â”€â”€ HERO SUMMARY PILL (ticker / sector tags) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function HeroPill({ label, D }) {
     const isDark = D.isDark;
     return (
@@ -383,7 +383,7 @@ function HeroPill({ label, D }) {
     );
 }
 
-// ─── LOADING SKELETON ─────────────────────────────────────────────────────────
+// â”€â”€â”€ LOADING SKELETON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SkeletonCard({ D }) {
     return (
         <div style={{
@@ -401,7 +401,7 @@ function SkeletonCard({ D }) {
     );
 }
 
-// ─── GROUP TAB BAR (matches StockDashboard tab style) ────────────────────────
+// â”€â”€â”€ GROUP TAB BAR (matches StockDashboard tab style) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function GroupTabBar({ groups, activeIdx, onSelect, D, isPhone }) {
     const isDark = D.isDark;
     const [isOpen, setIsOpen] = useState(false);
@@ -609,7 +609,7 @@ function GroupTabBar({ groups, activeIdx, onSelect, D, isPhone }) {
     );
 }
 
-// ─── MARKDOWN-LITE RENDERER (Premium) ────────────────────────────────────────
+// â”€â”€â”€ MARKDOWN-LITE RENDERER (Premium) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MarkdownLite({ text, D, accentColor }) {
     if (!text) return null;
     const acc = accentColor || D.accent;
@@ -731,7 +731,7 @@ function MarkdownLite({ text, D, accentColor }) {
     return <div>{elements}</div>;
 }
 
-// ─── SCORE RING (Premium) ─────────────────────────────────────────────────────
+// â”€â”€â”€ SCORE RING (Premium) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ScoreRing({ score, D, C }) {
     const fraction = Math.min(Math.max(score / 10, 0), 1);
     const r = 40, cx = 52, cy = 52, strokeW = 6;
@@ -769,21 +769,21 @@ function ScoreRing({ score, D, C }) {
     );
 }
 
-// ─── ANALYSIS TABS CONFIG ─────────────────────────────────────────────────────
+// â”€â”€â”€ ANALYSIS TABS CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ANALYSIS_TABS = [
-    { key: "business_overview",  label: "Overview",    shortLabel: "Overview",  icon: "◈", desc: "Company profile & market position" },
-    { key: "financial_analysis", label: "Financials",  shortLabel: "P&L",       icon: "◉", desc: "P&L, balance sheet & cash flows" },
-    { key: "investment_thesis",  label: "Thesis",      shortLabel: "Thesis",    icon: "◎", desc: "Bull & bear case arguments" },
-    { key: "risks_and_outlook",  label: "Risks",       shortLabel: "Risks",     icon: "◐", desc: "Key risks & 12–18M outlook" },
-    { key: "full_report",        label: "Full Report", shortLabel: "Report",    icon: "▣", desc: "Complete institutional deep dive" },
+    { key: "business_overview",  label: "Overview",    shortLabel: "Overview",  icon: "â—ˆ", desc: "Company profile & market position" },
+    { key: "financial_analysis", label: "Financials",  shortLabel: "P&L",       icon: "â—‰", desc: "P&L, balance sheet & cash flows" },
+    { key: "investment_thesis",  label: "Thesis",      shortLabel: "Thesis",    icon: "â—Ž", desc: "Bull & bear case arguments" },
+    { key: "risks_and_outlook",  label: "Risks",       shortLabel: "Risks",     icon: "â—", desc: "Key risks & 12â€“18M outlook" },
+    { key: "full_report",        label: "Full Report", shortLabel: "Report",    icon: "â–£", desc: "Complete institutional deep dive" },
 ];
 
 // Per-tab accent colours for visual differentiation
 const TAB_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
-// ─── TAB ICONS (SVG-based, sharper than glyphs) ───────────────────────────────
+// â”€â”€â”€ TAB ICONS (SVG-based, sharper than glyphs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TAB_ICONS = [
-    // Overview – compass rose
+    // Overview â€“ compass rose
     ({ color, size = 16 }) => (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="6.5" stroke={color} strokeWidth="1.2" opacity="0.4"/>
@@ -792,7 +792,7 @@ const TAB_ICONS = [
             <path d="M5.5 5.5L7.2 7.2M8.8 8.8L10.5 10.5" stroke={color} strokeWidth="1" strokeLinecap="round" opacity="0.6"/>
         </svg>
     ),
-    // Financials – bar chart
+    // Financials â€“ bar chart
     ({ color, size = 16 }) => (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
             <rect x="2" y="9" width="3" height="5" rx="1" fill={color} opacity="0.9"/>
@@ -800,21 +800,21 @@ const TAB_ICONS = [
             <rect x="11" y="2" width="3" height="12" rx="1" fill={color} opacity="0.7"/>
         </svg>
     ),
-    // Thesis – lightbulb
+    // Thesis â€“ lightbulb
     ({ color, size = 16 }) => (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
             <path d="M8 2C5.8 2 4 3.8 4 6c0 1.5.8 2.8 2 3.5V11h4V9.5C11.2 8.8 12 7.5 12 6c0-2.2-1.8-4-4-4z" stroke={color} strokeWidth="1.2" fill="none"/>
             <path d="M6 12h4M6.5 13.5h3" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
         </svg>
     ),
-    // Risks – shield
+    // Risks â€“ shield
     ({ color, size = 16 }) => (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
             <path d="M8 2L3 4.5V8c0 2.8 2 5.2 5 6 3-0.8 5-3.2 5-6V4.5L8 2z" stroke={color} strokeWidth="1.2" fill="none"/>
             <path d="M8 6v3M8 10.5v.5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
         </svg>
     ),
-    // Full Report – document
+    // Full Report â€“ document
     ({ color, size = 16 }) => (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
             <rect x="3" y="1.5" width="10" height="13" rx="1.5" stroke={color} strokeWidth="1.2" fill="none"/>
@@ -823,7 +823,7 @@ const TAB_ICONS = [
     ),
 ];
 
-// ─── BUSINESS ANALYSIS CARD (Premium) ────────────────────────────────────────
+// â”€â”€â”€ BUSINESS ANALYSIS CARD (Premium) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
     const [activeTab, setActiveTab] = useState(0);
     const [animKey, setAnimKey] = useState(0);
@@ -869,7 +869,7 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
             position: "relative",
             marginBottom: 18,
         }}>
-            {/* ── MULTI-LAYER AMBIENT GLOW ────────────────────── */}
+            {/* â”€â”€ MULTI-LAYER AMBIENT GLOW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div style={{
                 position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
                 background: isDark
@@ -878,7 +878,7 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
                 transition: "background 0.6s cubic-bezier(0.4,0,0.2,1)",
             }} />
 
-            {/* ── HEADER ZONE ─────────────────────────────────── */}
+            {/* â”€â”€ HEADER ZONE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div style={{ position: "relative", zIndex: 2, padding: isPhone ? "24px 20px 0" : "32px 36px 0" }}>
 
                 {/* Top meta row: eyebrow + score ring */}
@@ -945,12 +945,12 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
                                     fontSize: 11, color: D.subtext, opacity: 0.6,
                                     fontFamily: "'DM Mono', monospace",
                                     padding: "3px 6px",
-                                }}>· {analyzedDate}</span>
+                                }}>Â· {analyzedDate}</span>
                             )}
                         </div>
                     </div>
 
-                    {/* Score ring — elevated */}
+                    {/* Score ring â€” elevated */}
                     {analysis.score != null && (
                         <div style={{
                             padding: 2,
@@ -965,7 +965,7 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
                     )}
                 </div>
 
-                {/* ── PREMIUM TAB BAR ─────────────────────────── */}
+                {/* â”€â”€ PREMIUM TAB BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                 <div style={{
                     display: "flex",
                     gap: isPhone ? 6 : 8,
@@ -1069,7 +1069,7 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
                 </div>
             </div>
 
-            {/* ── CONTENT ZONE ────────────────────────────────── */}
+            {/* â”€â”€ CONTENT ZONE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div style={{
                 position: "relative", zIndex: 1,
                 background: isDark
@@ -1113,7 +1113,7 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
                             fontSize: 11.5, color: D.subtext, opacity: 0.55,
                             fontFamily: "'DM Sans', sans-serif", fontStyle: "italic",
                         }}>
-                            — {tab.desc}
+                            â€” {tab.desc}
                         </span>
                     </div>
 
@@ -1157,7 +1157,7 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
                 }} />
             </div>
 
-            {/* ── INLINE KEYFRAMES ───────────────────────────── */}
+            {/* â”€â”€ INLINE KEYFRAMES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <style>{`
                 @keyframes baFadeSlide {
                     from { opacity: 0; transform: translateY(10px); }
@@ -1172,7 +1172,7 @@ function BusinessAnalysisCard({ analysis, D, C, isPhone }) {
     );
 }
 
-// ─── TAG CONFIG (announcement categories → display) ───────────────────────────
+// â”€â”€â”€ TAG CONFIG (announcement categories â†’ display) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TAG_CONFIG = {
     "M&A":              { label: "M&A",             color: "#8b5cf6", bg: "rgba(139,92,246,0.10)", border: "rgba(139,92,246,0.22)" },
     "BOARD_MEETING":    { label: "Board Meeting",   color: "#f59e0b", bg: "rgba(245,158,11,0.10)", border: "rgba(245,158,11,0.22)" },
@@ -1225,7 +1225,7 @@ function AnnouncementRow({ ann, D, C, isPhone, idx }) {
 
     const dateStr = dt
         ? dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-        : "—";
+        : "â€”";
     const timeStr = dt
         ? dt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
         : "";
@@ -1304,12 +1304,12 @@ function AnnouncementRow({ ann, D, C, isPhone, idx }) {
                         <span style={{
                             fontSize: 9.5, color: D.subtext, opacity: 0.45,
                             fontFamily: "'DM Mono', monospace",
-                        }}>·</span>
+                        }}>Â·</span>
                         <span style={{
                             fontSize: 10.5, color: D.subtext, opacity: 0.6,
                             fontFamily: "'DM Mono', monospace",
                         }}>
-                            {dateStr}{timeStr ? ` · ${timeStr}` : ""}
+                            {dateStr}{timeStr ? ` Â· ${timeStr}` : ""}
                         </span>
                         {/* Tags */}
                         <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginLeft: "auto" }}>
@@ -1381,7 +1381,7 @@ function AnnouncementRow({ ann, D, C, isPhone, idx }) {
     );
 }
 
-// ─── ANNOUNCEMENTS TAB ────────────────────────────────────────────────────────
+// â”€â”€â”€ ANNOUNCEMENTS TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AnnouncementsTab({ symbol, D, C, isPhone }) {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1456,7 +1456,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
         return (
             <div style={{ padding: isPhone ? "28px 16px" : "32px 0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, color: D.subtext }}>
                 <div style={{ width: 32, height: 32, border: `2.5px solid ${withAlpha(D.subtext, 0.15)}`, borderTopColor: C.blue, borderRadius: "50%", animation: "ptdSpin 0.75s linear infinite" }} />
-                <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>Loading announcements…</span>
+                <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>Loading announcementsâ€¦</span>
             </div>
         );
     }
@@ -1465,7 +1465,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
         return (
             <div style={{ padding: "20px 0" }}>
                 <div style={{ padding: "14px 18px", borderRadius: 14, background: D.negSoft, border: `1px solid ${withAlpha(D.neg, 0.20)}`, color: D.neg, fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
-                    ⚠️ {error}
+                    âš ï¸ {error}
                 </div>
             </div>
         );
@@ -1474,7 +1474,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
     if (!data.length) {
         return (
             <div style={{ padding: "40px 0", textAlign: "center", color: D.subtext, fontFamily: "'DM Sans', sans-serif" }}>
-                <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>📋</div>
+                <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>ðŸ“‹</div>
                 <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>No Announcements</div>
                 <div style={{ fontSize: 12, opacity: 0.6 }}>No exchange filings found for {symbol}</div>
             </div>
@@ -1483,7 +1483,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
 
     return (
         <div style={{ animation: "ptdFadeIn 0.28s cubic-bezier(0.4,0,0.2,1) both" }}>
-            {/* ── Stats strip ── */}
+            {/* â”€â”€ Stats strip â”€â”€ */}
             <div style={{
                 display: "flex", gap: isPhone ? 8 : 14, marginBottom: 18, flexWrap: "wrap",
             }}>
@@ -1504,7 +1504,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
                 ))}
             </div>
 
-            {/* ── Filter pills ── */}
+            {/* â”€â”€ Filter pills â”€â”€ */}
             <div style={{
                 display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16,
                 overflowX: "auto", scrollbarWidth: "none",
@@ -1549,7 +1549,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
                 })}
             </div>
 
-            {/* ── Announcement list ── */}
+            {/* â”€â”€ Announcement list â”€â”€ */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {paginated.map((ann, idx) => (
                     <AnnouncementRow
@@ -1563,7 +1563,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
                 ))}
             </div>
 
-            {/* ── Load more ── */}
+            {/* â”€â”€ Load more â”€â”€ */}
             {hasMore && (
                 <div style={{ textAlign: "center", marginTop: 20 }}>
                     <button
@@ -1579,7 +1579,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
                         onMouseEnter={e => { e.currentTarget.style.background = isDark ? withAlpha(D.accent, 0.18) : withAlpha(D.accent, 0.12); }}
                         onMouseLeave={e => { e.currentTarget.style.background = isDark ? withAlpha(D.accent, 0.12) : withAlpha(D.accent, 0.08); }}
                     >
-                        Load more · {filtered.length - paginated.length} remaining
+                        Load more Â· {filtered.length - paginated.length} remaining
                     </button>
                 </div>
             )}
@@ -1587,7 +1587,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
     );
 }
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// â”€â”€â”€ MAIN COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function PremiumTickerDashboard({ symbol, T }) {
     const [raw, setRaw] = useState(null);
     const [fin, setFin] = useState(null);
@@ -1603,7 +1603,7 @@ export default function PremiumTickerDashboard({ symbol, T }) {
     const isDark = D.isDark;
     const C = useMemo(() => buildColorPalette(isDark), [isDark]);
 
-    // ── Data Fetch ──────────────────────────────────────────────
+    // â”€â”€ Data Fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
         if (!symbol) return;
         let cancelled = false;
@@ -1637,7 +1637,7 @@ export default function PremiumTickerDashboard({ symbol, T }) {
         return () => { cancelled = true; };
     }, [symbol]);
 
-    // ── Derived financials ──────────────────────────────────────
+    // â”€â”€ Derived financials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const incAnn = useMemo(() => [...(fin?.incAnn || [])].sort((a, b) => String(a._period || "").localeCompare(String(b._period || ""))), [fin?.incAnn]);
     const bsAnn  = useMemo(() => [...(fin?.bsAnn  || [])].sort((a, b) => String(a._period || "").localeCompare(String(b._period || ""))), [fin?.bsAnn]);
     const cfAnn  = useMemo(() => [...(fin?.cfAnn  || [])].sort((a, b) => String(a._period || "").localeCompare(String(b._period || ""))), [fin?.cfAnn]);
@@ -1737,7 +1737,7 @@ export default function PremiumTickerDashboard({ symbol, T }) {
     const ttmRecSales = pct(latestReceivables, sharedTtm?.Revenue);
     const ttmInvSales = pct(latestInventory, sharedTtm?.Revenue);
 
-    // ── Metric groups ───────────────────────────────────────────
+    // â”€â”€ Metric groups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const groups = [
         {
             title: "Margin Ratios",
@@ -2027,21 +2027,21 @@ export default function PremiumTickerDashboard({ symbol, T }) {
     ];
     const activeGroup = premiumTabs[activeGroupIdx] || premiumTabs[0];
 
-    // ─── Hero summary cards ─────────────────────────────────────
+    // â”€â”€â”€ Hero summary cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const heroSummary = [
-        { label: "Price", value: raw?.current_price != null ? `₹${Number(raw.current_price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--", color: C.blue, icon: "📈" },
-        { label: "ROE",   value: fmt(raw?.roe, "pct"), color: C.purple, icon: "💎" },
-        { label: "ROCE",  value: fmt(raw?.roce, "pct"), color: C.green, icon: "🎯" },
-        { label: "P/E",   value: fmt(raw?.pe, "x", 1), color: C.amber, icon: "📊" },
+        { label: "Price", value: raw?.current_price != null ? `â‚¹${Number(raw.current_price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--", color: C.blue, icon: "ðŸ“ˆ" },
+        { label: "ROE",   value: fmt(raw?.roe, "pct"), color: C.purple, icon: "ðŸ’Ž" },
+        { label: "ROCE",  value: fmt(raw?.roce, "pct"), color: C.green, icon: "ðŸŽ¯" },
+        { label: "P/E",   value: fmt(raw?.pe, "x", 1), color: C.amber, icon: "ðŸ“Š" },
     ];
 
-    // ── Computed backgrounds (matching StockDashboard shellBg pattern) ──────
+    // â”€â”€ Computed backgrounds (matching StockDashboard shellBg pattern) â”€â”€â”€â”€â”€â”€
     const shellBg = D.shellBg;
     const panelBg = isDark
         ? `radial-gradient(ellipse at top left, ${withAlpha(C.blue, 0.12)} 0%, transparent 50%), radial-gradient(ellipse at top right, ${withAlpha(C.purple, 0.10)} 0%, transparent 50%), ${D.panelBg}`
         : `radial-gradient(ellipse at top left, ${withAlpha(C.blue, 0.07)} 0%, transparent 45%), radial-gradient(ellipse at 85% 15%, ${withAlpha(C.green, 0.05)} 0%, transparent 40%), ${D.panelBg}`;
 
-    // ─── LOADING STATE ──────────────────────────────────────────
+    // â”€â”€â”€ LOADING STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (loading) {
         return (
             <div style={{ flex: 1, minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, color: D.subtext, fontSize: 13, background: shellBg, fontFamily: "'DM Sans', sans-serif" }}>
@@ -2051,13 +2051,13 @@ export default function PremiumTickerDashboard({ symbol, T }) {
         );
     }
 
-    // ─── ERROR STATE ────────────────────────────────────────────
+    // â”€â”€â”€ ERROR STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (error && !raw) {
         return (
             <div style={{ margin: 24 }}>
                 <SectionCard D={D}>
                     <div style={{ padding: "12px 16px", borderRadius: 14, border: `1px solid ${withAlpha(D.neg, 0.25)}`, background: D.negSoft, color: D.neg, fontWeight: 600, textAlign: "center", fontFamily: "'DM Sans', sans-serif" }}>
-                        <div style={{ fontSize: 16, marginBottom: 6 }}>⚠️ Error Loading Data</div>
+                        <div style={{ fontSize: 16, marginBottom: 6 }}>âš ï¸ Error Loading Data</div>
                         <div style={{ fontSize: 13, opacity: 0.8 }}>{error}</div>
                     </div>
                 </SectionCard>
@@ -2068,7 +2068,7 @@ export default function PremiumTickerDashboard({ symbol, T }) {
     return (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: shellBg, fontFamily: "'DM Sans', sans-serif" }}>
 
-            {/* ── HERO ──────────────────────────────────────────── */}
+            {/* â”€â”€ HERO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div style={{
                 background: panelBg,
                 borderBottom: `1px solid ${D.panelBorder}`,
@@ -2133,7 +2133,7 @@ export default function PremiumTickerDashboard({ symbol, T }) {
                 </div>
             </div>
 
-            {/* ── MAIN CONTENT ──────────────────────────────────── */}
+            {/* â”€â”€ MAIN CONTENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <div style={{ padding: isPhone ? "16px 12px 32px" : "24px 24px 48px", maxWidth: 1400, margin: "0 auto" }}>
 
                 {/* Partial data notice */}
@@ -2145,7 +2145,7 @@ export default function PremiumTickerDashboard({ symbol, T }) {
                         fontSize: 12, fontFamily: "'DM Sans', sans-serif",
                         display: "flex", alignItems: "center", gap: 8,
                     }}>
-                        <span>⚠️</span>
+                        <span>âš ï¸</span>
                         <span>Partial data: {error}</span>
                     </div>
                 )}
@@ -2179,11 +2179,11 @@ export default function PremiumTickerDashboard({ symbol, T }) {
                 </SectionCard>
                 )}
 
-                {/* ── BUSINESS ANALYSIS CARD ────────────────────── */}
+                {/* â”€â”€ BUSINESS ANALYSIS CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                 <BusinessAnalysisCard analysis={analysis} D={D} C={C} isPhone={isPhone} />
             </div>
 
-            {/* ── GLOBAL STYLES ─────────────────────────────────── */}
+            {/* â”€â”€ GLOBAL STYLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&family=DM+Mono:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
@@ -2212,3 +2212,4 @@ export default function PremiumTickerDashboard({ symbol, T }) {
         </div>
     );
 }
+
