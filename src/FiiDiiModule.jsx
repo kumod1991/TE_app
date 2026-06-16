@@ -819,9 +819,10 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   const [cashFreq,        setCashFreq]        = useState("Daily");
 
   useEffect(() => {
-    const h = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", h);
-    return () => window.removeEventListener("resize", h);
+    let t;
+    const h = () => { clearTimeout(t); t = setTimeout(() => setIsMobile(window.innerWidth < 768), 150); };
+    window.addEventListener("resize", h, { passive: true });
+    return () => { window.removeEventListener("resize", h); clearTimeout(t); };
   }, []);
 
   // NOTE: Google Fonts (IBM Plex Mono + Manrope) must be loaded in index.html <head>
@@ -864,7 +865,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return () => { cancelled = true; };
   }, [initialCache]);
 
-  // ── CASH MEMO ──────────────────────────────────────────────────────────────
+  // ── CASH MEMO (scalars only — runs synchronously, needed for first paint) ──
   const cashMemo = useMemo(() => {
     if (!cashData.length) return {};
     const latest = cashData[cashData.length - 1];
@@ -874,16 +875,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const fii5  = S(last(5),  "fii_net"), dii5  = S(last(5),  "dii_net");
     const fii20 = S(last(20), "fii_net"), dii20 = S(last(20), "dii_net");
     const z     = zScore(fii1, last(20).map(d => +d.fii_net || 0));
-
-    // Full-history daily + rolling arrays (ASC order, date field preserved)
-    const daily = cashData.map(d => ({
-      date: d.date, label: fmtDateShort(d.date),
-      fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
-    }));
-    const rolling = cashData.map((d, i) => {
-      const slice = cashData.slice(Math.max(0, i - 19), i + 1);
-      return { date: d.date, label: fmtDateShort(d.date), fiiRoll: S(slice, "fii_net"), diiRoll: S(slice, "dii_net") };
-    });
 
     const participation = (fii1 === 0 && dii1 === 0) ? 0.5 : Math.abs(fii1) / (Math.abs(fii1) + Math.abs(dii1));
     let absorption = "Mixed";
@@ -898,7 +889,50 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
       return s;
     })();
 
-    return { latest, fii1, dii1, fii5, dii5, fii20, dii20, z, daily, rolling, participation, absorption, sellStreak, totalInst1: fii1 + dii1 };
+    // daily/rolling arrays are heavy — built in cashChartMemo below, deferred via useEffect
+    return { latest, fii1, dii1, fii5, dii5, fii20, dii20, z, daily: null, rolling: null, participation, absorption, sellStreak, totalInst1: fii1 + dii1 };
+  }, [cashData]);
+
+  // ── CASH CHART MEMO (heavy arrays — deferred, only needed when chart renders) ─
+  // Building daily (n objects) and rolling (O(n) summing) is the biggest TBT culprit.
+  // We defer this into a separate state updated after the first paint via useEffect.
+  const [cashChartArrays, setCashChartArrays] = useState({ daily: [], rolling: [] });
+  useEffect(() => {
+    if (!cashData.length) return;
+    // Yield to browser paint first, then do the heavy work
+    const id = requestIdleCallback
+      ? requestIdleCallback(() => {
+          const S = (arr, k) => sum(arr.map(d => +d[k] || 0));
+          const daily = cashData.map(d => ({
+            date: d.date, label: fmtDateShort(d.date),
+            fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
+          }));
+          // Rolling 20D sum — O(n) with sliding window instead of O(n²) slices
+          let fiiAcc = 0, diiAcc = 0;
+          const rolling = cashData.map((d, i) => {
+            fiiAcc += +d.fii_net || 0;
+            diiAcc += +d.dii_net || 0;
+            if (i >= 20) { fiiAcc -= +cashData[i - 20].fii_net || 0; diiAcc -= +cashData[i - 20].dii_net || 0; }
+            return { date: d.date, label: fmtDateShort(d.date), fiiRoll: fiiAcc, diiRoll: diiAcc };
+          });
+          startTransition(() => setCashChartArrays({ daily, rolling }));
+        }, { timeout: 300 })
+      : setTimeout(() => {
+          const S = (arr, k) => sum(arr.map(d => +d[k] || 0));
+          const daily = cashData.map(d => ({
+            date: d.date, label: fmtDateShort(d.date),
+            fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
+          }));
+          let fiiAcc = 0, diiAcc = 0;
+          const rolling = cashData.map((d, i) => {
+            fiiAcc += +d.fii_net || 0;
+            diiAcc += +d.dii_net || 0;
+            if (i >= 20) { fiiAcc -= +cashData[i - 20].fii_net || 0; diiAcc -= +cashData[i - 20].dii_net || 0; }
+            return { date: d.date, label: fmtDateShort(d.date), fiiRoll: fiiAcc, diiRoll: diiAcc };
+          });
+          startTransition(() => setCashChartArrays({ daily, rolling }));
+        }, 0);
+    return () => { requestIdleCallback ? cancelIdleCallback(id) : clearTimeout(id); };
   }, [cashData]);
 
   // ── DERIV MEMO ─────────────────────────────────────────────────────────────
@@ -928,12 +962,14 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   // ── SECTOR MEMO ────────────────────────────────────────────────────────────
   const sectorMemo = useMemo(() => {
     if (!sectorData.length) return {};
+    // Leaders/laggards needed for Signals tab regime pill — always compute these
     const allSectors = [...new Set(sectorData.map(d => d.sector))].sort();
     const latestDate = sectorData[0]?.date;
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
     const parseNI = (d) => d.net_investment != null
       ? parseFloat(String(d.net_investment).replace(/,/g, "")) || 0 : 0;
 
+    // Always compute ranking (needed for Signals insights too)
     const ranking = allSectors.map(sector => {
       const rows = sectorData.filter(d => d.sector === sector);
       const total    = sum(rows.filter(d => new Date(d.date) >= cutoff).map(d => parseNI(d)));
@@ -941,29 +977,29 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
       return { sector, total, momentum };
     }).sort((a, b) => b.total - a.total);
 
-    const sectorHistory = selectedSector === "__ALL__" ? [] :
-      sectorData.filter(d => d.sector === selectedSector)
-        .sort((a, b) => new Date(a.date) - new Date(b.date))
-        .map(d => {
-          // FIX: Robust parsing — strip commas, handle string "1,560" → 1560
-          const raw = d.net_investment;
-          const val = raw != null ? parseFloat(String(raw).replace(/,/g, "")) || 0 : 0;
-          return { date: d.date, label: fmtDateShort(d.date), value: val };
-        });
+    // Heavy per-sector history + snapshot — only needed when on the Sector Rotation tab
+    const onSectorTab = activeTab === "Sector Rotation";
+
+    const sectorHistory = (onSectorTab && selectedSector !== "__ALL__")
+      ? sectorData.filter(d => d.sector === selectedSector)
+          .sort((a, b) => new Date(a.date) - new Date(b.date))
+          .map(d => {
+            const raw = d.net_investment;
+            const val = raw != null ? parseFloat(String(raw).replace(/,/g, "")) || 0 : 0;
+            return { date: d.date, label: fmtDateShort(d.date), value: val };
+          })
+      : [];
 
     const multiSectorData = (() => {
-      if (!selectedSectors.length) return [];
-      // FIX: Normalise all dates to YYYY-MM-DD strings once for O(1) lookup
+      if (!onSectorTab || !selectedSectors.length) return [];
       const normDate = (d) => {
         if (!d) return "";
         if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
         return new Date(d).toISOString().slice(0, 10);
       };
-      // Build a fast lookup map: "YYYY-MM-DD|SectorName" → parsed value
       const lookup = new Map();
       sectorData.forEach(d => {
         const key = `${normDate(d.date)}|${(d.sector || "").trim().toLowerCase()}`;
-        // FIX: strip commas from values like "1,560"
         const val = d.net_investment != null
           ? parseFloat(String(d.net_investment).replace(/,/g, "")) || 0
           : 0;
@@ -980,19 +1016,20 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
       });
     })();
 
-    const latestSnapshot = sectorData
-      .filter(d => d.date === latestDate)
-      .map(d => ({
-        ...d,
-        // FIX: parse robustly here too
-        net_investment: d.net_investment != null
-          ? parseFloat(String(d.net_investment).replace(/,/g, "")) || 0
-          : 0,
-      }))
-      .sort((a, b) => Math.abs(+b.net_investment||0) - Math.abs(+a.net_investment||0));
+    const latestSnapshot = onSectorTab
+      ? sectorData
+          .filter(d => d.date === latestDate)
+          .map(d => ({
+            ...d,
+            net_investment: d.net_investment != null
+              ? parseFloat(String(d.net_investment).replace(/,/g, "")) || 0
+              : 0,
+          }))
+          .sort((a, b) => Math.abs(+b.net_investment||0) - Math.abs(+a.net_investment||0))
+      : sectorData.filter(d => d.date === latestDate).map(d => ({ ...d, net_investment: parseNI(d) })); // lightweight for Signals breadth
 
     return { allSectors, latestDate, ranking, leaders: ranking.slice(0, 3), laggards: ranking.slice(-3).reverse(), sectorHistory, latestSnapshot, multiSectorData };
-  }, [sectorData, selectedSector, selectedSectors]);
+  }, [sectorData, selectedSector, selectedSectors, activeTab]);
 
   // ── SIGNALS MEMO ───────────────────────────────────────────────────────────
   const signals = useMemo(() => {
@@ -1025,8 +1062,8 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   }, [cashMemo, derivMemo, sectorMemo]);
 
   const overviewTabData = useMemo(() => {
-    const daily = cashMemo.daily || [];
-    const rolling = cashMemo.rolling || [];
+    const daily = cashChartArrays.daily || [];
+    const rolling = cashChartArrays.rolling || [];
     const isRolling = flowView === "20D Rolling";
     const source = isRolling ? rolling : daily;
     const spanYears = dataYearSpan(source);
@@ -1037,9 +1074,11 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const selectedRangeYears = overviewRange === "1Y" ? 1 : overviewRange === "3Y" ? 3 : overviewRange === "5Y" ? 5 : overviewRange === "10Y" ? 10 : null;
     const rangeExceedsData = selectedRangeYears != null && selectedRangeYears > spanYears;
     return { isRolling, spanYears, chartData, chartSeries, rangeExceedsData };
-  }, [cashMemo.daily, cashMemo.rolling, flowView, overviewRange]);
+  }, [cashChartArrays, flowView, overviewRange]);
 
   const cashFlowTableRows = useMemo(() => {
+    // Only compute when the Cash Flow tab is active — this is not needed for first paint
+    if (activeTab !== "Cash Flow" || !cashData.length) return [];
     const rawReverse = [...cashData].reverse();
     const aggRows = aggregateCashRows(rawReverse, cashFreq);
     const allFii = cashData.map(d => +d.fii_net || 0);
@@ -1064,9 +1103,10 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         label: fmtPeriodLabel(row.endDate || row.date, cashFreq),
       };
     });
-  }, [cashData, cashFreq]);
+  }, [cashData, cashFreq, activeTab]);
 
   const derivativesTabData = useMemo(() => {
+    if (activeTab !== "Derivatives") return { derivSpanYears: 0, filteredRows: [], filteredLsTrend: [], derivRangeExceedsData: false };
     const rows = derivMemo.rows || [];
     const lsTrend = derivMemo.lsTrend || [];
     const derivSpanYears = dataYearSpan(rows);
@@ -1075,12 +1115,13 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const derivSelectedRangeYears = derivRange === "1Y" ? 1 : derivRange === "3Y" ? 3 : derivRange === "5Y" ? 5 : derivRange === "10Y" ? 10 : null;
     const derivRangeExceedsData = derivSelectedRangeYears != null && derivSelectedRangeYears > derivSpanYears;
     return { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData };
-  }, [derivMemo.rows, derivMemo.lsTrend, derivRange]);
+  }, [derivMemo.rows, derivMemo.lsTrend, derivRange, activeTab]);
 
   const sectorSnapshotMaxAbs = useMemo(() => {
+    if (activeTab !== "Sector Rotation") return 0;
     const snapshot = sectorMemo.latestSnapshot || [];
     return snapshot.reduce((max, item) => Math.max(max, Math.abs(+item.net_investment || 0)), 0);
-  }, [sectorMemo.latestSnapshot]);
+  }, [sectorMemo.latestSnapshot, activeTab]);
 
   // ── SWIPE ──────────────────────────────────────────────────────────────────
   const card = { background: T.isDark ? T.surface : T.card, borderRadius: T.radiusLg || 24, padding: isMobile ? 14 : 18, border: `1px solid ${T.border}`, boxShadow: T.shadow };
