@@ -320,9 +320,13 @@ async function fetchLatestCashDate() {
 async function refreshModuleData() {
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
+    const twoYearsAgo = new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+    const dateFilter = `gte.${twoYearsAgo.toISOString().slice(0, 10)}`;
+
     const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
-      sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc" }),
-      sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc" }),
+      sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc", date: dateFilter }),
+      sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc", date: dateFilter }),
       sbFetchAll("fii_sector_flows", { select: "*", order: "date.desc" }),
     ]);
     if (cashResult.status !== "fulfilled") throw cashResult.reason;
