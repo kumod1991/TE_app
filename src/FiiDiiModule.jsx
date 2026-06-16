@@ -436,8 +436,15 @@ function SvgTooltip({ tip, T, svgWidth = 1000 }) {
   );
 }
 
+// Downsample data for mobile to reduce SVG node count
+function thinData(data, maxPts = 100) {
+  if (data.length <= maxPts) return data;
+  const step = Math.floor(data.length / maxPts);
+  return data.filter((_, i) => i % step === 0);
+}
+
 // ── TRADINGVIEW-STYLE PANNABLE/ZOOMABLE LINE CHART ───────────────────────────
-function SvgLineChart({ data, series, height = 240, fill = false, T }) {
+function SvgLineChart({ data, series, height = 240, fill = false, T, isMobile = false }) {
   const wrapRef  = useRef(null);
   const svgRef   = useRef(null);
   const W = useChartWidth(wrapRef);
@@ -454,10 +461,13 @@ function SvgLineChart({ data, series, height = 240, fill = false, T }) {
 
   if (!data?.length) return <div ref={wrapRef} style={{ height }} />;
 
-  const totalPts = data.length;
+  // Apply thinning on mobile
+  const processedData = isMobile ? thinData(data) : data;
+  const totalPts = processedData.length;
   const vpEnd    = viewport.end ?? totalPts - 1;
   const vpStart  = Math.max(0, Math.min(viewport.start, vpEnd - 1));
-  const visible  = data.slice(vpStart, vpEnd + 1);
+  const visible  = processedData.slice(vpStart, vpEnd + 1);
+
 
   const cW = W - PAD.left - PAD.right;
   const cH = height - PAD.top - PAD.bottom;
@@ -1148,7 +1158,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             </div>
           </div>
           {isRolling
-            ? <SvgLineChart data={chartData} series={chartSeries} height={isMobile ? 220 : 320} fill={true} T={T} />
+            ? <SvgLineChart data={chartData} series={chartSeries} height={isMobile ? 220 : 320} fill={true} T={T} isMobile={isMobile} />
             : <SvgBarChart  data={chartData} series={chartSeries} height={isMobile ? 220 : 320} mode="grouped" T={T} />
           }
           {rangeExceedsData && (
@@ -1268,7 +1278,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             </div>
             <ViewToggle options={["1Y", "3Y", "5Y", "10Y"]} value={derivRange} onChange={setDerivRange} T={T} dataSpanYears={derivSpanYears} />
           </div>
-          <SvgLineChart data={filteredRows} series={[{ key:"fiiFutLong", color:GREEN, name:"FII Long" }, { key:"fiiFutShort", color:RED, name:"FII Short" }]} height={isMobile?220:300} fill={false} T={T} />
+          <SvgLineChart data={filteredRows} series={[{ key:"fiiFutLong", color:GREEN, name:"FII Long" }, { key:"fiiFutShort", color:RED, name:"FII Short" }]} height={isMobile?220:300} fill={false} T={T} isMobile={isMobile} />
           {derivRangeExceedsData && (
             <div style={{ fontSize: 11, color: AMBER, marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
               <span>★</span>
@@ -1281,7 +1291,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         <div style={card}>
           <h3 style={{ ...sh, marginBottom: 4 }}>FII Long/Short Ratio Trend</h3>
           <div style={{ fontSize: 12, color: T.subtext, marginBottom: 12 }}>Index futures only · Ratio &gt; 1 = net long (bullish), &lt; 1 = net short (bearish)</div>
-          <SvgLineChart data={filteredLsTrend} series={[{ key:"lsRatio", color:PURPLE, name:"FII L/S Ratio" }]} height={isMobile?180:240} fill={true} T={T} />
+          <SvgLineChart data={filteredLsTrend} series={[{ key:"lsRatio", color:PURPLE, name:"FII L/S Ratio" }]} height={isMobile?180:240} fill={true} T={T} isMobile={isMobile} />
         </div>
 
       </div>
@@ -1324,7 +1334,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             {sectorHistory.length > 0 && <button onClick={() => setFullscreen(true)} style={{ background:T.card, border:`1px solid ${T.border}`, color:T.text, borderRadius:6, padding:"5px 12px", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>⛶ Fullscreen</button>}
           </div>
           {sectorHistory.length > 0
-            ? <SvgLineChart data={sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={isMobile?200:280} fill={true} T={T} />
+            ? <SvgLineChart data={sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={isMobile?200:280} fill={true} T={T} isMobile={isMobile} />
             : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:24 }}>Select a sector above to view full historical flow</div>
           }
         </div>
@@ -1342,7 +1352,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             })}
           </div>
           {selectedSectors.length > 0 && multiSectorData.length > 0
-            ? <SvgLineChart data={multiSectorData} series={selectedSectors.map((sec, i) => ({ key:sec, color:SECTOR_COLORS[i%SECTOR_COLORS.length], name:sec }))} height={isMobile?220:300} T={T} />
+            ? <SvgLineChart data={multiSectorData} series={selectedSectors.map((sec, i) => ({ key:sec, color:SECTOR_COLORS[i%SECTOR_COLORS.length], name:sec }))} height={isMobile?220:300} T={T} isMobile={isMobile} />
             : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:20 }}>{selectedSectors.length===0?"Click sectors above to compare them":"Loading…"}</div>
           }
         </div>
@@ -1485,7 +1495,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             <button onClick={() => setFullscreen(false)} style={{ background:T.card, border:`1px solid ${T.border}`, color:T.text, borderRadius:999, padding:"8px 16px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", boxShadow:T.shadowSoft }}>✕ Close</button>
           </div>
           <div style={{ flex:1, padding:16, overflowY:"auto" }}>
-            <SvgLineChart data={sectorMemo.sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={window.innerHeight-100} fill={true} T={T} />
+            <SvgLineChart data={sectorMemo.sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={window.innerHeight-100} fill={true} T={T} isMobile={isMobile} />
           </div>
         </div>
       )}
