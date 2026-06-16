@@ -448,9 +448,11 @@ function thinData(data, maxPts = 100) {
 }
 
 // ── TRADINGVIEW-STYLE PANNABLE/ZOOMABLE LINE CHART ───────────────────────────
+let _chartIdCounter = 0;
 function SvgLineChart({ data, series, height = 240, fill = false, T, isMobile = false }) {
   const wrapRef  = useRef(null);
   const svgRef   = useRef(null);
+  const clipId   = useRef(`chartClip-${++_chartIdCounter}`).current;
   const W = useChartWidth(wrapRef);
   const { tip, show, hide } = useTooltip();
 
@@ -574,7 +576,7 @@ function SvgLineChart({ data, series, height = 240, fill = false, T, isMobile = 
   };
 
   return (
-    <div ref={wrapRef} style={{ width: "100%", userSelect: "none" }}>
+    <div ref={wrapRef} style={{ width: "100%", userSelect: "none", minHeight: height }}>
       <svg ref={svgRef} width={W} height={height}
         style={{ display: "block", overflow: "visible", cursor: isPanning.current ? "grabbing" : "crosshair" }}
         onMouseLeave={() => { hide(); }}
@@ -585,7 +587,7 @@ function SvgLineChart({ data, series, height = 240, fill = false, T, isMobile = 
       >
         {/* Clip path to keep lines inside chart area */}
         <defs>
-          <clipPath id="chartClip">
+          <clipPath id={clipId}>
             <rect x={PAD.left} y={PAD.top} width={cW} height={cH} />
           </clipPath>
         </defs>
@@ -602,7 +604,7 @@ function SvgLineChart({ data, series, height = 240, fill = false, T, isMobile = 
           <text key={i} x={px(i)} y={height - 4} textAnchor="middle" fontSize={9} fill={T.subtext}>{d.label}</text>
         ))}
 
-        <g clipPath="url(#chartClip)">
+        <g clipPath={`url(#${clipId})`}>
           {series.map(s => {
             const pts   = visible.map((d, i) => [px(i), py(+d[s.key] || 0)]);
             const pathD = smoothPath(pts);
@@ -672,7 +674,7 @@ function SvgBarChart({ data, series, height = 220, mode = "grouped", T, isMobile
   const zeroY = py(0);
 
   return (
-    <div ref={wrapRef} style={{ width: "100%" }}>
+    <div ref={wrapRef} style={{ width: "100%", minHeight: height }}>
       <svg ref={svgRef} width={W} height={height} style={{ display: "block", overflow: "visible" }} onMouseLeave={hide}>
         {ticks.map(t => (
           <g key={t}>
@@ -733,7 +735,7 @@ function SvgBarChart({ data, series, height = 220, mode = "grouped", T, isMobile
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 const StatCard = ({ label, value, sub, color, T, badge }) => (
-  <div style={{ background: T.isDark ? T.elevated || T.surface : T.card, borderRadius: T.radiusMd || 18, padding: "16px 18px", border: `1px solid ${T.border}`, boxShadow: T.shadowSoft, display: "flex", flexDirection: "column", gap: 6, position: "relative", overflow: "hidden" }}>
+  <div style={{ background: T.isDark ? T.elevated || T.surface : T.card, borderRadius: T.radiusMd || 18, padding: "16px 18px", border: `1px solid ${T.border}`, boxShadow: T.shadowSoft, display: "flex", flexDirection: "column", gap: 6, position: "relative", overflow: "hidden", minHeight: 80 }}>
     <div style={{ position: "absolute", inset: 0, background: T.isDark ? "linear-gradient(180deg, rgba(255,255,255,0.045), transparent 28%)" : "linear-gradient(180deg, rgba(255,255,255,0.32), transparent 46%)", pointerEvents: "none" }} />
     {badge && (
       <div style={{ position: "absolute", top: 12, right: 12, background: badge === "BUY" ? GREEN + "18" : RED + "18", color: badge === "BUY" ? GREEN : RED, border: `1px solid ${badge === "BUY" ? GREEN + "28" : RED + "28"}`, borderRadius: 999, padding: "4px 8px", fontSize: 9, fontWeight: 800, letterSpacing: 1.1 }}>{badge}</div>
@@ -1128,13 +1130,58 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   const sh   = { fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, marginBottom: 16, marginTop: 0, letterSpacing: -0.4 };
   const noData = (msg) => <div style={{ ...card, textAlign: "center", color: T.subtext, padding: 40, fontSize: 13 }}>{msg || "No data"}</div>;
 
-  if (loading) return (
-    <div style={{ padding: 60, textAlign: "center", color: T.subtext, fontFamily: T.fontSans }}>
-      <div style={{ fontSize: 28 }}>📊</div>
-      <div style={{ fontSize: 14, marginTop: 8 }}>Loading institutional flow data…</div>
+  if (error) return <div style={{ padding: 40, textAlign: "center", color: RED, fontSize: 14, fontFamily: T.fontSans }}>Error: {error}</div>;
+
+  // ── SKELETON (shown while loading, keeps DOM structure stable to prevent CLS) ─
+  const SkeletonPulse = ({ w = "100%", h = 16, radius = 8, style = {} }) => (
+    <div style={{
+      width: w, height: h, borderRadius: radius,
+      background: T.isDark
+        ? "linear-gradient(90deg, #1a2a3a 25%, #223040 50%, #1a2a3a 75%)"
+        : "linear-gradient(90deg, #e8edf2 25%, #f2f5f8 50%, #e8edf2 75%)",
+      backgroundSize: "200% 100%",
+      animation: "fiidii-shimmer 1.4s ease-in-out infinite",
+      ...style,
+    }} />
+  );
+
+  // Inject shimmer keyframes once
+  if (typeof document !== "undefined" && !document.getElementById("fiidii-shimmer-css")) {
+    const s = document.createElement("style");
+    s.id = "fiidii-shimmer-css";
+    s.textContent = "@keyframes fiidii-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}";
+    document.head.appendChild(s);
+  }
+
+  const SkeletonCard = ({ h = 80 }) => (
+    <div style={{ ...card, padding: "16px 18px", minHeight: h }}>
+      <SkeletonPulse w="55%" h={10} style={{ marginBottom: 10 }} />
+      <SkeletonPulse w="70%" h={22} />
     </div>
   );
-  if (error) return <div style={{ padding: 40, textAlign: "center", color: RED, fontSize: 14, fontFamily: T.fontSans }}>Error: {error}</div>;
+
+  const OverviewSkeleton = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Regime card */}
+      <div style={{ ...card, minHeight: 64 }}><SkeletonPulse w="40%" h={14} /></div>
+      {/* 6 stat cards */}
+      <div>
+        <SkeletonPulse w="160px" h={18} style={{ marginBottom: 12 }} />
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(6, 1fr)", gap: 10 }}>
+          {Array(6).fill(0).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      </div>
+      {/* 4 metric cards */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
+        {Array(4).fill(0).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+      {/* Chart card */}
+      <div style={{ ...card }}>
+        <SkeletonPulse w="220px" h={16} style={{ marginBottom: 8 }} />
+        <SkeletonPulse w="100%" h={isMobile ? 220 : 320} radius={12} style={{ marginTop: 12 }} />
+      </div>
+    </div>
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // OVERVIEW TAB
@@ -1511,6 +1558,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   // RENDER — (5) Sticky header + tab bar
   // ══════════════════════════════════════════════════════════════════════════
   const renderActiveTab = () => {
+    if (loading) return <OverviewSkeleton />;
     switch (activeTab) {
       case "Overview":        return <OverviewTab />;
       case "Cash Flow":       return <CashFlowTab />;
