@@ -330,7 +330,7 @@ async function refreshPrimaryData() {
     const dateFilter = `gte.${twoYearsAgo.toISOString().slice(0, 10)}`;
 
     const cash = await sbFetchAll("fii_dii_activity", {
-      select: "date,fii_buy,fii_sell,fii_net,dii_buy,dii_sell,dii_net",
+      select: "*",
       order: "date.asc",
       date: dateFilter,
     });
@@ -358,12 +358,12 @@ async function refreshSecondaryData() {
 
     const [derivResult, sectorResult] = await Promise.allSettled([
       sbFetchAll("fii_dii_fo", {
-        select: "date,client_type,index_fut_long,index_fut_short,index_call_long,index_call_short,index_put_long,index_put_short",
+        select: "*",
         order: "date.asc",
         date: dateFilter,
       }),
       sbFetchAll("fii_sector_flows", {
-        select: "date,sector,net_investment",
+        select: "*",
         order: "date.desc",
         date: dateFilter,
       }),
