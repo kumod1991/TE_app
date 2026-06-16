@@ -7,6 +7,8 @@ const SB_H = {
   "Content-Type": "application/json",
   apikey: SUPABASE_ANON_KEY,
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  "Accept-Encoding": "gzip, deflate, br",
+  "Accept": "application/json",
 };
 
 // Paginated fetch — Supabase PostgREST caps responses at 1000 rows by default.
@@ -325,9 +327,21 @@ async function refreshModuleData() {
     const dateFilter = `gte.${twoYearsAgo.toISOString().slice(0, 10)}`;
 
     const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
-      sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc", date: dateFilter }),
-      sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc", date: dateFilter }),
-      sbFetchAll("fii_sector_flows", { select: "*", order: "date.desc" }),
+      sbFetchAll("fii_dii_activity", {
+        select: "date,fii_buy,fii_sell,fii_net,dii_buy,dii_sell,dii_net",
+        order: "date.asc",
+        date: dateFilter,
+      }),
+      sbFetchAll("fii_dii_fo", {
+        select: "date,client_type,index_fut_long,index_fut_short,index_call_long,index_call_short,index_put_long,index_put_short",
+        order: "date.asc",
+        date: dateFilter,
+      }),
+      sbFetchAll("fii_sector_flows", {
+        select: "date,sector,net_investment",
+        order: "date.desc",
+        date: dateFilter,  // limit sector data to same 2-year window
+      }),
     ]);
     if (cashResult.status !== "fulfilled") throw cashResult.reason;
     if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", derivResult.reason);
@@ -381,11 +395,16 @@ function useChartWidth(ref) {
   });
   useEffect(() => {
     if (!ref.current) return;
-    const ro = new ResizeObserver(es => setW(es[0].contentRect.width || 360));
+    // Read clientWidth after layout via rAF to avoid forced synchronous reflow
+    let raf = requestAnimationFrame(() => {
+      if (ref.current) setW(ref.current.clientWidth || w);
+    });
+    const ro = new ResizeObserver(es => {
+      const newW = es[0].contentRect.width;
+      if (newW) setW(newW);
+    });
     ro.observe(ref.current);
-    const actual = ref.current.clientWidth;
-    if (actual && actual !== w) setW(actual);
-    return () => ro.disconnect();
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, []);
   return w;
 }
@@ -1607,10 +1626,13 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             <div style={{ fontSize:10, fontWeight:800, letterSpacing:1.6, textTransform:"uppercase", color:T.accent, marginBottom:6, opacity:T.isDark ? 0.9 : 1 }}>Institutional Flow Dashboard</div>
             <h1 style={{ fontSize:isMobile?22:30, fontWeight:800, color:T.text, margin:0, letterSpacing:-1 }}>FII · DII Analytics</h1>
             <p style={{ fontSize:isMobile?12:13, color:T.subtext, margin:"6px 0 0", lineHeight:1.6, maxWidth:900 }}>
-              Institutional flow intelligence for cash, derivatives, sector rotation, and regime tracking as of {fmtDate(cashData[cashData.length-1]?.date)}.
+              Institutional flow intelligence for cash, derivatives, sector rotation, and regime tracking{cashData.length ? ` as of ${fmtDate(cashData[cashData.length-1]?.date)}` : ""}.
             </p>
           </div>
-          {signals.regime && <SignalPill signal={signals.regime} T={T} />}
+          {/* Reserve pill space always to prevent CLS when regime loads */}
+          <div style={{ minWidth: 120, minHeight: 34 }}>
+            {signals.regime && <SignalPill signal={signals.regime} T={T} />}
+          </div>
         </div>
 
         {/* Tab row */}
