@@ -4130,6 +4130,7 @@ async function fetchPriceAtDate(sym, daysAgo) {
     const proxies = [
         `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
         `https://api.allorigins.win/get?url=${encodeURIComponent(url.replace("query1", "query2"))}`,
+        `https://cors.bridged.cc/${url}`,
         `https://corsproxy.io/?${encodeURIComponent(url)}`,
     ];
     for (const proxy of proxies) {
