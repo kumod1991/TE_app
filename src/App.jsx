@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
 import { ensureAllowedTickerSet, filterRowsByAllowedTickers, getAllowedTickerSetSync, preloadAllowedTickerSet } from "./marketUniverse";
 
