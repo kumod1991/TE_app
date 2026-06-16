@@ -658,12 +658,12 @@ export default function AnnouncementsModule({ T }) {
                             <button
                                 title="Edit"
                                 onClick={(e) => { e.stopPropagation(); setEditingFilter(i); setShowFilterModal(true); }}
-                                style={{ marginLeft: -1, padding: "0 5px", border: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderLeft: "none", borderRadius: "0 7px 7px 0", background: "transparent", cursor: "pointer", color: T.subtext, fontSize: 12, transition: "background .12s" }}
+                                style={{ marginLeft: -1, padding: "0 5px", borderTop: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderRight: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderBottom: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderLeft: "none", borderRadius: "0 7px 7px 0", background: "transparent", cursor: "pointer", color: T.subtext, fontSize: 12, transition: "background .12s" }}
                             >✎</button>
                             <button
                                 title="Remove"
                                 onClick={(e) => { e.stopPropagation(); removeFilter(i); }}
-                                style={{ padding: "0 5px", border: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderLeft: "none", borderRadius: "0 7px 7px 0", marginLeft: -1, background: "transparent", cursor: "pointer", color: "#ef4444", fontSize: 12, transition: "background .12s" }}
+                                style={{ padding: "0 5px", borderTop: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderRight: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderBottom: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderLeft: "none", borderRadius: "0 7px 7px 0", marginLeft: -1, background: "transparent", cursor: "pointer", color: "#ef4444", fontSize: 12, transition: "background .12s" }}
                             >×</button>
                         </div>
                     ))}

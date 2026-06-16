@@ -378,7 +378,7 @@ async function prefetchGlobalNameMap(userToken) {
         // Paginate through all company_financials rows (ticker + name only).
         // Each page is 1000 rows; typical NSE universe is ~2000–5000 rows so
         // this is usually 2–5 fast requests, run in parallel after the first page.
-        const PAGE = 1000;
+        const PAGE = 500;
         const firstPage = await sbFetch(
             `company_financials?select=ticker,name&order=ticker.asc&limit=${PAGE}&offset=0`,
             userToken,
@@ -423,10 +423,16 @@ function applyNamesFromMap(rows) {
 const BATCH_SIZE = 50;
 
 function toSupabaseInList(values) {
-    return `(${values
-        .map(v => `"${String(v).trim()}"`)   // â† wrap each ticker in double-quotes
+    if (!Array.isArray(values)) return "()";
+    const encoded = values
+        .map(v => {
+            const s = String(v || "").trim();
+            if (!s) return null;
+            return `"${encodeURIComponent(s)}"`;
+        })
         .filter(Boolean)
-        .join(",")})`;
+        .join(",");
+    return `(${encoded})`;
 }
 
 async function batchFetchIndicators(tickers, userToken, extraFilter = "") {

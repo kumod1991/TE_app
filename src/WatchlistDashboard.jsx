@@ -318,7 +318,7 @@ async function fetchAnnouncements(symbols, token) {
     }
   } catch {}
   try {
-    const symIn = `(${symbols.join(",")})`;
+    const symIn = `(${symbols.map(s => `"${encodeURIComponent(s)}"`).join(",")})`;
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/corporate_announcements?symbol=in.${symIn}&select=symbol,announcement_datetime,category,announcement_text,tags,priority,seq_id,attachment_url&order=announcement_datetime.desc`,
       { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" } }
@@ -455,7 +455,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
   const items = await GET(`watchlist_items?watchlist_id=eq.${watchlistId}&select=ticker&order=added_at.asc`, token);
   if (!items || items.length === 0) return { rows:[], total:0 };
   const allTickers = items.map(i => i.ticker);
-  const tickerIn   = `(${allTickers.join(",")})`;
+  const tickerIn   = `(${allTickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
   async function GETMany(path) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers:{...hdrs(token), "Range-Unit":"items", Range:"0-9999"} });
     if (!r.ok) throw new Error(await r.text());
@@ -485,7 +485,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
   const missingInd = allTickers.filter(t => !latestIndicators[t]);
   if (missingInd.length > 0) {
     try {
-      const missingIn = `(${missingInd.join(",")})`;
+      const missingIn = `(${missingInd.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
       const fallbackRows = await GETMany(
         `indicators?ticker=in.${missingIn}&select=ticker,rs_rating,rs_score,sma50,sma150,sma200,pivot_high_20w,date&order=ticker.asc,date.desc`
       ).catch(() => []);
@@ -736,7 +736,7 @@ async function fetchPrices(tickers, token) {
   const missing = tickers.filter(t=>!priceCache[t]);
   if (missing.length) {
     try {
-      const tickerIn=`(${missing.join(",")})`;
+      const tickerIn=`(${missing.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
       const r = await fetch(`${SUPABASE_URL}/rest/v1/stock_52w?ticker=in.${tickerIn}&select=ticker,close,pct_from_high`,{headers:{...hdrs(token),"Range-Unit":"items",Range:"0-9999"}});
       for(const row of(r.ok?await r.json():[])){ priceCache[row.ticker]={price:row.close??null,change:row.pct_from_high??null}; }
     } catch {}
@@ -751,7 +751,7 @@ async function fetchEarningsDates(tickers, token) {
   if (!tickers || tickers.length === 0) return {};
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const tickerIn = `(${tickers.join(",")})`;
+    const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/earnings_calendar?ticker=in.${tickerIn}&result_date=gte.${today}&select=ticker,result_date&order=result_date.asc`,
       { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-999" } }
@@ -1854,7 +1854,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
           ).then(r=>r.ok?r.json():[]);
           const syms=(items||[]).map(x=>x.ticker);
           if(!syms.length)return;
-          const symIn=`(${syms.join(",")})`;
+          const symIn=`(${syms.map(s => `"${encodeURIComponent(s)}"`).join(",")})`;
           const data=await fetch(
             `${SUPABASE_URL}/rest/v1/corporate_announcements?symbol=in.${symIn}&select=symbol,announcement_datetime,category,announcement_text,attachment_url,seq_id,priority&order=announcement_datetime.desc`,
             {headers:{...hdrs(token),"Range-Unit":"items",Range:"0-999"}}
@@ -1942,7 +1942,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         if(!cancelled){setFeedAnnouncements([]);setFeedLoading(false);}
         return;
       }
-      const symIn=`(${symbols.join(",")})`;
+      const symIn=`(${symbols.map(s => `"${encodeURIComponent(s)}"`).join(",")})`;
       fetch(
         `${SUPABASE_URL}/rest/v1/corporate_announcements?symbol=in.${symIn}&select=symbol,announcement_datetime,category,announcement_text,attachment_url,seq_id,priority&order=announcement_datetime.desc`,
         { headers:{...hdrs(token),"Range-Unit":"items",Range:"0-999"} }

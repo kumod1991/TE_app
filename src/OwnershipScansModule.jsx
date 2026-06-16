@@ -117,38 +117,11 @@ export function prefetchOwnershipData() {
 
 // ─── PAGINATED FETCH (parallel) ───────────────────────────────────────────────
 async function fetchAllPages(path) {
-  const PAGE = 1000;
-
-  let total = null;
-  try {
-    const head = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`, {
-      method: "HEAD",
-      headers: { ...sbH(), "Range-Unit": "items", Prefer: "count=exact" },
-    });
-    const cr = head.headers.get("content-range");
-    if (cr) total = parseInt(cr.split("/")[1], 10);
-  } catch {}
-
-  if (total && total > 0) {
-    const offsets = [];
-    for (let o = 0; o < total; o += PAGE) offsets.push(o);
-    const pages = await Promise.all(
-      offsets.map(offset =>
-        fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`, {
-          headers: { ...sbH(), Range: `${offset}-${offset + PAGE - 1}`, "Range-Unit": "items" },
-        }).then(r => {
-          if (!r.ok) throw new Error(`HTTP ${r.status} on ${path}`);
-          return r.json();
-        })
-      )
-    );
-    return pages.flat();
-  }
-
+  const PAGE = 250;
   let offset = 0, all = [];
   while (true) {
     const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: { ...sbH(), Range: `${offset}-${offset + PAGE - 1}`, "Range-Unit": "items", Prefer: "count=exact" },
+      headers: { ...sbH(), Range: `${offset}-${offset + PAGE - 1}`, "Range-Unit": "items" },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} on ${path}`);
     const page = await res.json();

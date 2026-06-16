@@ -6205,7 +6205,7 @@ let _cachedBseTickerIndex = null; // BSE ticker index loaded from bse_tickers
 // Paginated fetch for the ticker index — Supabase caps each response at 1000 rows,
 // so a single limit=5000 request silently returns only 1000. We page through all rows.
 async function fetchAllTickerPages() {
-    const PAGE = 1000;
+    const PAGE = 500;
     const base = `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,name,nse_code,bse_code&order=nse_code.asc.nullslast`;
     const headers = { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` };
     let all = [];
@@ -7574,7 +7574,7 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
                 const iso = dt.toISOString().slice(0, 10);
                 try {
                     const bRes = await fetch(
-                        `${SUPABASE_URL}/rest/v1/bhav_copy?date=eq.${iso}&ticker=in.(${tickers.map(t => encodeURIComponent(t)).join(",")})&exchange=eq.NSE&select=ticker,close&limit=200`,
+                        `${SUPABASE_URL}/rest/v1/bhav_copy?date=eq.${iso}&ticker=in.(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})&exchange=eq.NSE&select=ticker,close&limit=200`,
                         { headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }, signal: AbortSignal.timeout(8000) }
                     );
                     if (bRes.ok) { const br = await bRes.json(); if (Array.isArray(br)) br.forEach(b => { if (!bhavMap[b.ticker]) bhavMap[b.ticker] = Number(b.close); }); }
@@ -7584,7 +7584,7 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
             const shMap = {};
             try {
                 const shRes = await fetch(
-                    `${SUPABASE_URL}/rest/v1/shareholding_pattern?ticker=in.(${tickers.map(t => encodeURIComponent(t)).join(",")})&select=ticker,promoter,fii,dii,period&order=ticker.asc,period.desc`,
+                    `${SUPABASE_URL}/rest/v1/shareholding_pattern?ticker=in.(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})&select=ticker,promoter,fii,dii,period&order=ticker.asc,period.desc`,
                     { headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }, signal: AbortSignal.timeout(8000) }
                 );
                 if (shRes.ok) { const sr = await shRes.json(); if (Array.isArray(sr)) sr.forEach(s => { if (!shMap[s.ticker]) shMap[s.ticker] = s; }); }
@@ -8108,6 +8108,7 @@ function ShareholdingTab({ sym, T }) {
                     }
                 }
 
+                /* 
                 //  Step 2: Fallback  Edge function (IndianAPI  caches into shareholding_pattern) 
                 const r = await fetch(`${SUPABASE_URL}/functions/v1/fetch-shareholding`, {
                     method: "POST",
@@ -8120,6 +8121,8 @@ function ShareholdingTab({ sym, T }) {
                 const rows = (j.rows || []).sort((a, b) => String(a.period).localeCompare(String(b.period)));
                 setShData(rows);
                 if (j.age_days != null) setShAge(j.age_days);
+                */
+                setShError("Shareholding data not available in database.");
             } catch (e) {
                 setShData(prev => { if (!prev) setShError(e.message || "Failed to load"); return prev; });
             }
@@ -11802,7 +11805,7 @@ function _isScreenerCacheFresh() {
 
 async function _fetchScreenerRows() {
     const allowedSet = await ensureAllowedTickerSet();
-    const PAGE = 1000;
+    const PAGE = 500;
     const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "count=exact" };
     const base = `${SUPABASE_URL}/rest/v1/stock_ratios?select=*&order=market_cap_cr.desc.nullslast&limit=${PAGE}`;
     const firstRes = await fetch(`${base}&offset=0`, { headers });
@@ -11821,7 +11824,7 @@ async function _fetchScreenerRows() {
     let enriched = all;
     try {
         const cfHeaders = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-        const cfBase = `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,nse_code&limit=10000`;
+        const cfBase = `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,nse_code&limit=2000`;
         const cfRes = await fetch(cfBase, { headers: cfHeaders });
         if (cfRes.ok) {
             const cfRows = await cfRes.json();
@@ -12225,10 +12228,10 @@ function _prefetchScreensVcp() {
         try {
             let all = [], page = 0;
             while (true) {
-                const r = await fetch(`${SUPABASE_URL}/rest/v1/vcp_candidates?select=*&order=vcp_score.desc&limit=1000&offset=${page * 1000}`, { headers: H });
+                const r = await fetch(`${SUPABASE_URL}/rest/v1/vcp_candidates?select=*&order=vcp_score.desc&limit=500&offset=${page * 500}`, { headers: H });
                 const rows = await r.json();
                 if (!Array.isArray(rows) || rows.length === 0) break;
-                all = all.concat(rows); if (rows.length < 1000) break; page++;
+                all = all.concat(rows); if (rows.length < 500) break; page++;
             }
             const [retR, s52R] = await Promise.all([
                 fetch(`${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.NSE&select=ticker,ret_3m,ret_6m,ret_12m`, { headers: H }),
@@ -13723,7 +13726,7 @@ function StockPriceChart({ sym, nseCode, T }) {
         from.setMonth(from.getMonth() - months);
         from.setDate(from.getDate() - 14);          // 2-week buffer
         const fromStr = from.toISOString().slice(0, 10);
-        const PAGE = 1000;                        // Supabase default max per request
+        const PAGE = 500;                        // Supabase default max per request
 
         const hdr = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
 
@@ -17086,7 +17089,7 @@ function MarketBreadthModule({ T, onDataReady }) {
                 try {
                     const bhavLatestDate = latestRows?.[0]?.date || latestRsRows?.[0]?.date;
                     if (bhavLatestDate) {
-                        const bhavNameUrl = `${SUPABASE_URL}/rest/v1/bhav_copy?select=ticker,name&date=eq.${bhavLatestDate}&exchange=eq.NSE&limit=5000`;
+                        const bhavNameUrl = `${SUPABASE_URL}/rest/v1/bhav_copy?select=ticker,name&date=eq.${bhavLatestDate}&exchange=eq.NSE&limit=1000`;
                         const bhavNameRows = await fetch(bhavNameUrl, { headers: H, signal: sig }).then(r => r.ok ? r.json() : []).catch(() => []);
                         if (Array.isArray(bhavNameRows)) {
                             bhavNameRows.forEach(r => {
@@ -20178,13 +20181,13 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 let all = [], page = 0;
                 while (true) {
                     const r = await fetch(
-                        `${SUPABASE_URL}/rest/v1/vcp_candidates?select=*&order=vcp_score.desc&limit=1000&offset=${page * 1000}`,
+                        `${SUPABASE_URL}/rest/v1/vcp_candidates?select=*&order=vcp_score.desc&limit=500&offset=${page * 500}`,
                         { headers: H }
                     );
                     const rows = await r.json();
                     if (!Array.isArray(rows) || rows.length === 0) break;
                     all = all.concat(rows);
-                    if (rows.length < 1000) break;
+                    if (rows.length < 500) break;
                     page++;
                 }
                 if (cancelled) return;
@@ -25434,7 +25437,8 @@ function LegalCenter({ T, onNavigate, initialTab }) {
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
                             padding: "8px 14px", fontSize: 12, fontWeight: activeTab === tab.id ? 600 : 400,
                             color: activeTab === tab.id ? T.green : T.subtext,
-                            background: "none", border: "none", borderBottom: activeTab === tab.id ? `2px solid ${T.green}` : "2px solid transparent",
+                            background: "none", borderTop: "none", borderLeft: "none", borderRight: "none",
+                            borderBottom: activeTab === tab.id ? `2px solid ${T.green}` : "2px solid transparent",
                             cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
                             transition: ".15s", marginBottom: -1,
                         }}>{tab.label}</button>
@@ -26860,39 +26864,7 @@ export default function App() {
                 // Fires sequentially with 1s gap to avoid hammering IndianAPI rate limits.
                 const tickers = [...new Set(data.map(t => t.ticker).filter(Boolean))];
                 if (tickers.length > 0) {
-                    (async () => {
-                        // Check which tickers have stale/missing shareholding data
-                        try {
-                            const cutoff = new Date(Date.now() - 7 * 86400000).toISOString();
-                            const staleRes = await fetch(
-                                `${SUPABASE_URL}/rest/v1/shareholding_pattern` +
-                                `?ticker=in.(${tickers.map(t => `"${t}"`).join(",")})` +
-                                `&select=ticker,fetched_at&order=ticker.asc,fetched_at.desc`,
-                                { headers: supabase._h(sess.access_token) }
-                            );
-                            const existing = staleRes.ok ? await staleRes.json() : [];
-                            // Keep only the most recent row per ticker
-                            const latestByTicker = {};
-                            for (const row of (Array.isArray(existing) ? existing : [])) {
-                                if (!latestByTicker[row.ticker] || row.fetched_at > latestByTicker[row.ticker])
-                                    latestByTicker[row.ticker] = row.fetched_at;
-                            }
-                            const stale = tickers.filter(t => !latestByTicker[t] || latestByTicker[t] < cutoff);
-                            console.log(`[SHP] ${stale.length}/${tickers.length} tickers need refresh:`, stale);
-                            for (const ticker of stale) {
-                                try {
-                                    await fetch(`${SUPABASE_URL}/functions/v1/fetch-shareholding`, {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-                                        body: JSON.stringify({ ticker }),
-                                        signal: AbortSignal.timeout(30000),
-                                    });
-                                } catch (e) { console.warn(`[SHP] ${ticker} failed:`, e.message); }
-                                await new Promise(r => setTimeout(r, 1000));
-                            }
-                            console.log("[SHP] Background refresh complete");
-                        } catch (e) { console.warn("[SHP] Background refresh error:", e.message); }
-                    })();
+                    // Background refresh removed as fetch-shareholding edge function is unavailable
                 }
             }
         } catch (e) { console.error(e); }
@@ -26901,7 +26873,7 @@ export default function App() {
         // Preload breadth data (company_financials) in background  most expensive part
         if (!_breadthCache.cfRows) {
             const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-            const fetchAllPages = async (baseUrl, pageSize = 5000) => {
+            const fetchAllPages = async (baseUrl, pageSize = 500) => {
                 const firstRes = await fetch(`${baseUrl}&limit=${pageSize}&offset=0`, { headers: { ...H, "Range-Unit": "items" } });
                 const first = await firstRes.json();
                 if (!Array.isArray(first) || first.length < pageSize) return Array.isArray(first) ? first : [];

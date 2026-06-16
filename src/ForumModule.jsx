@@ -1209,7 +1209,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
         {/* Step tabs */}
         <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${withAlpha(T.text, 0.08)}`, padding: "0 24px" }}>
           {[{ n: 1, label: "Basics" }, { n: 2, label: "Thesis" }, { n: 3, label: "Conviction" }].map(s => (
-            <button key={s.n} onClick={() => setStep(s.n)} style={{ padding: "10px 20px", border: "none", background: "transparent", color: step === s.n ? T.accent : T.muted, fontSize: 13, fontWeight: step === s.n ? 800 : 500, cursor: "pointer", borderBottom: step === s.n ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1 }}>
+            <button key={s.n} onClick={() => setStep(s.n)} style={{ padding: "10px 20px", borderTop: "none", borderLeft: "none", borderRight: "none", background: "transparent", color: step === s.n ? T.accent : T.muted, fontSize: 13, fontWeight: step === s.n ? 800 : 500, cursor: "pointer", borderBottom: step === s.n ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1 }}>
               {s.n}. {s.label}
             </button>
           ))}
@@ -1701,7 +1701,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
         {/* Step tabs — identical to ThreadComposer */}
         <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${withAlpha(T.text, 0.08)}`, padding: "0 24px" }}>
           {[{ n: 1, label: "Basics" }, { n: 2, label: "Thesis" }, { n: 3, label: "Conviction" }].map(s => (
-            <button key={s.n} onClick={() => setStep(s.n)} style={{ padding: "10px 20px", border: "none", background: "transparent", color: step === s.n ? T.accent : T.muted, fontSize: 13, fontWeight: step === s.n ? 800 : 500, cursor: "pointer", borderBottom: step === s.n ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1 }}>
+            <button key={s.n} onClick={() => setStep(s.n)} style={{ padding: "10px 20px", borderTop: "none", borderLeft: "none", borderRight: "none", background: "transparent", color: step === s.n ? T.accent : T.muted, fontSize: 13, fontWeight: step === s.n ? 800 : 500, cursor: "pointer", borderBottom: step === s.n ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1 }}>
               {s.n}. {s.label}
             </button>
           ))}
