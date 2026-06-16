@@ -16,6 +16,8 @@ const prefetchFiiDiiData = () => import("./FiiDiiModule").then(m => m.prefetchFi
 const prefetchOwnershipData = () => import("./OwnershipScansModule").then(m => m.prefetchOwnershipData?.()).catch(() => null);
 const prefetchAnnouncementsData = () => import("./AnnouncementsModule").then(m => m.prefetchAnnouncementsData?.()).catch(() => null);
 const warmStockDashboardCaches = (userToken) => import("./StockDashboard").then(m => m.default?.warmStockDashboardCaches?.(userToken)).catch(() => null);
+const prefetchGlobalNameMap = (userToken) => import("./StockDashboard").then(m => m.default?.prefetchGlobalNameMap?.(userToken)).catch(() => null);
+
 
 
 
@@ -12395,6 +12397,7 @@ function _warmMarketAndTechnicalCaches(userToken) {
         _prefetchScreensPullback();
         _prefetchScreensVcp();
         warmStockDashboardCaches(userToken);
+        prefetchGlobalNameMap(userToken);
     };
     warm();
 }
