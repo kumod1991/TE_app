@@ -1518,7 +1518,7 @@ function AnnouncementsTab({ symbol, D, C, isPhone }) {
                             key={opt.id}
                             onClick={() => handleFilterChange(opt.id)}
                             style={{
-                                padding: "6px 12px", borderRadius: 999, border: "none",
+                                padding: "6px 12px", borderRadius: 999,
                                 cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
                                 fontSize: 11.5, fontWeight: active ? 700 : 500,
                                 whiteSpace: "nowrap",

@@ -971,7 +971,7 @@ function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
           {stock.accel.fii > 0.3 && stock.accel.dii > 0.3 && (
             <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(217,119,6,0.1)", color: "#d97706" }}>ACCEL</span>
           )}
-          <span style={{ fontSize: 13, color: T.subtext, marginLeft: "auto", whiteSpace: "nowrap", ...mono, fontWeight: 700, color: scoreColor }}>
+          <span style={{ fontSize: 13, marginLeft: "auto", whiteSpace: "nowrap", ...mono, fontWeight: 700, color: scoreColor }}>
             {fmt(stock.score)}
           </span>
         </div>
