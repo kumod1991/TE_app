@@ -365,7 +365,6 @@ async function refreshSecondaryData() {
       sbFetchAll("fii_sector_flows", {
         select: "*",
         order: "date.desc",
-        date: dateFilter,
       }),
     ]);
     if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable.", derivResult.reason);
