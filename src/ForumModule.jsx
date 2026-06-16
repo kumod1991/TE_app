@@ -1,7 +1,6 @@
-﻿import React from 'react';
 /*
 ===============================================================
-  ForumModule.jsx â€” TradeEdge Investor Community (v2)
+  ForumModule.jsx — TradeEdge Investor Community (v2)
   Premium redesign: conviction system, sidebars, sentiment,
   structured thesis format, author credibility, gamification.
   All sub-components inline. Supabase realtime enabled.
@@ -14,17 +13,17 @@ import {
 import { createClient } from "@supabase/supabase-js";
 import { QuoteContext } from "./App";
 
-// â”€â”€â”€ Supabase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Supabase ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase env vars missing");
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// â”€â”€â”€ Contexts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Contexts ────────────────────────────────────────────────────────────────
 const TokenContext = createContext(() => Promise.resolve(null));
 const useToken = () => useContext(TokenContext);
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Constants ───────────────────────────────────────────────────────────────
 const PAGE_SIZE = 20;
 const REPLY_PAGE_SIZE = 30;
 
@@ -37,12 +36,12 @@ const CONVICTION_META = {
 const THESIS_TYPES = ["Bullish", "Bearish", "Neutral", "Technical", "Macro", "Risk"];
 
 const LEVEL_META = {
-  Beginner:    { color: "#64748b", badge: "âšª" },
-  Contributor: { color: "#3b82f6", badge: "ðŸ”µ" },
-  Analyst:     { color: "#8b5cf6", badge: "ðŸŸ£" },
-  Researcher:  { color: "#f59e0b", badge: "ðŸŸ¡" },
-  Veteran:     { color: "#ef4444", badge: "ðŸ”´" },
-  "Top 1%":    { color: "#10b981", badge: "ðŸŸ¢" },
+  Beginner:    { color: "#64748b", badge: "⚪" },
+  Contributor: { color: "#3b82f6", badge: "🔵" },
+  Analyst:     { color: "#8b5cf6", badge: "🟣" },
+  Researcher:  { color: "#f59e0b", badge: "🟡" },
+  Veteran:     { color: "#ef4444", badge: "🔴" },
+  "Top 1%":    { color: "#10b981", badge: "🟢" },
 };
 
 const TAG_META = {
@@ -58,7 +57,7 @@ const TAG_META = {
   Idea:        { color: "#2563eb", bg: "rgba(96,165,250,0.08)" },
 };
 
-// â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Utilities ───────────────────────────────────────────────────────────────
 function withAlpha(color, alpha) {
   if (!color || typeof color !== "string") return `rgba(15,23,42,${alpha})`;
   if (color.startsWith("rgba")) return color.replace(/rgba\(([^,]+),([^,]+),([^,]+),[^)]+\)/, `rgba($1,$2,$3,${alpha})`);
@@ -137,9 +136,9 @@ function renderMarkdown(md) {
   return `<p style="margin:5px 0">${html}</p>`;
 }
 
-// â”€â”€â”€ Forum Cache (stale-while-revalidate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Forum Cache (stale-while-revalidate) ─────────────────────────────────────
 const FORUM_CACHE_KEY = "te_forum_threads_v1";
-const FORUM_CACHE_TTL = 5 * 60 * 1000; // 5 minutes â€” show stale, revalidate in background
+const FORUM_CACHE_TTL = 5 * 60 * 1000; // 5 minutes — show stale, revalidate in background
 
 function readForumCache(cacheKey) {
   try {
@@ -216,7 +215,7 @@ async function uploadToStorage(bucket, path, file, token, onProgress) {
   });
 }
 
-// â”€â”€â”€ Base UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Base UI ──────────────────────────────────────────────────────────────────
 function Avatar({ name, size = 32, T, url }) {
   const initials = (name || "?").split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   const palette = ["#2563eb", "#059669", "#7c3aed", "#db2777", "#d97706", "#0891b2", "#dc2626", "#0d9488"];
@@ -292,11 +291,11 @@ function SentimentBar({ bullish = 0, bearish = 0, T }) {
   const bearPct = 100 - bullPct;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 11, fontWeight: 800, color: T.green, fontFamily: "'IBM Plex Mono', monospace" }}>ðŸŸ¢ {bullPct}%</span>
+      <span style={{ fontSize: 11, fontWeight: 800, color: T.green, fontFamily: "'IBM Plex Mono', monospace" }}>🟢 {bullPct}%</span>
       <div style={{ flex: 1, height: 4, borderRadius: 4, overflow: "hidden", background: withAlpha(T.red, 0.2), minWidth: 60 }}>
         <div style={{ width: `${bullPct}%`, height: "100%", background: `linear-gradient(90deg, ${T.green}, ${withAlpha(T.green, 0.7)})`, borderRadius: 4, transition: "width 0.4s ease" }} />
       </div>
-      <span style={{ fontSize: 11, fontWeight: 800, color: T.red, fontFamily: "'IBM Plex Mono', monospace" }}>ðŸ”´ {bearPct}%</span>
+      <span style={{ fontSize: 11, fontWeight: 800, color: T.red, fontFamily: "'IBM Plex Mono', monospace" }}>🔴 {bearPct}%</span>
     </div>
   );
 }
@@ -310,14 +309,14 @@ function VoteButton({ upvotes, downvotes, userVote, onVote, onLoginRequired, T, 
         onClick={(e) => { e.stopPropagation(); onVote ? onVote(1) : onLoginRequired?.(); }}
         style={{ display: "flex", alignItems: "center", gap: 4, border: "none", background: userVote === 1 ? withAlpha(T.green, 0.15) : "transparent", color: userVote === 1 ? T.green : T.subtext, padding: p, cursor: "pointer", fontSize: compact ? 11 : 12, fontWeight: 700, transition: "all 0.15s" }}
       >
-        â–² <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{upvotes || 0}</span>
+        ▲ <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{upvotes || 0}</span>
       </button>
       <div style={{ width: 1, background: withAlpha(T.text, 0.08), alignSelf: "stretch" }} />
       <button
         onClick={(e) => { e.stopPropagation(); onVote ? onVote(-1) : onLoginRequired?.(); }}
         style={{ display: "flex", alignItems: "center", gap: 4, border: "none", background: userVote === -1 ? withAlpha(T.red, 0.12) : "transparent", color: userVote === -1 ? T.red : T.subtext, padding: p, cursor: "pointer", fontSize: compact ? 11 : 12, fontWeight: 700, transition: "all 0.15s" }}
       >
-        â–¼
+        ▼
       </button>
     </div>
   );
@@ -343,7 +342,7 @@ function BookmarkButton({ isSaved, onToggle, onLoginRequired, T, compact = false
         transition: "all 0.15s",
       }}
     >
-      <span>ðŸ”–</span>
+      <span>🔖</span>
       <span>{isSaved ? "Saved" : "Save"}</span>
     </button>
   );
@@ -387,7 +386,7 @@ function ToastContainer({ toasts, T }) {
   );
 }
 
-// â”€â”€â”€ Media Components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Media Components ─────────────────────────────────────────────────────────
 function MediaUploader({ onFilesAdded, maxFiles = 8, userId, token, T, isMobile = false, pasteHandlerRef }) {
   const [dragging, setDragging] = useState(false);
   const [queue, setQueue] = useState([]);
@@ -426,22 +425,22 @@ function MediaUploader({ onFilesAdded, maxFiles = 8, userId, token, T, isMobile 
         onClick={() => inputRef.current?.click()}
         style={{ border: `1.5px dashed ${dragging ? T.accent : withAlpha(T.text, 0.12)}`, borderRadius: 12, padding: "20px", textAlign: "center", cursor: "pointer", background: dragging ? withAlpha(T.accent, 0.06) : T.mutedFill, transition: "all .15s" }}
       >
-        <div style={{ fontSize: 20, marginBottom: 4 }}>ðŸ“Ž</div>
-        <div style={{ fontSize: 13, color: T.subtext, fontWeight: 600 }}>{dragging ? "Drop to upload" : "Attach files Â· Drag or paste"}</div>
+        <div style={{ fontSize: 20, marginBottom: 4 }}>📎</div>
+        <div style={{ fontSize: 13, color: T.subtext, fontWeight: 600 }}>{dragging ? "Drop to upload" : "Attach files · Drag or paste"}</div>
       </div>
       <input ref={inputRef} type="file" multiple hidden onChange={(e) => processFiles(e.target.files)} />
       {queue.length > 0 && (
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
           {queue.map(item => (
             <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: T.surface, border: `1px solid ${item.status === "error" ? T.red : withAlpha(T.text, 0.08)}`, borderRadius: 10 }}>
-              {item.type === "image" && item.localUrl ? <img src={item.localUrl} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0, opacity: item.status === "uploading" ? 0.6 : 1 }} /> : <span style={{ fontSize: 16 }}>{item.type === "image" ? "ðŸ–¼" : item.type === "video" ? "ðŸŽ¬" : "ðŸ“„"}</span>}
+              {item.type === "image" && item.localUrl ? <img src={item.localUrl} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0, opacity: item.status === "uploading" ? 0.6 : 1 }} /> : <span style={{ fontSize: 16 }}>{item.type === "image" ? "🖼" : item.type === "video" ? "🎬" : "📄"}</span>}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: item.status === "error" ? T.red : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</div>
                 {item.status === "uploading" && <div style={{ width: "100%", height: 3, background: T.mutedFill, borderRadius: 2, marginTop: 4 }}><div style={{ width: `${item.progress}%`, height: "100%", background: T.accent, borderRadius: 2, transition: "width .2s" }} /></div>}
                 {item.status === "error" && <div style={{ fontSize: 11, color: T.red, marginTop: 2 }}>Upload failed</div>}
               </div>
-              {item.status === "done" && <span style={{ color: T.green, fontSize: 14 }}>âœ“</span>}
-              <button onClick={() => { if (item.localUrl) URL.revokeObjectURL(item.localUrl); setQueue(q => q.filter(x => x.id !== item.id)); }} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 14 }}>âœ•</button>
+              {item.status === "done" && <span style={{ color: T.green, fontSize: 14 }}>✓</span>}
+              <button onClick={() => { if (item.localUrl) URL.revokeObjectURL(item.localUrl); setQueue(q => q.filter(x => x.id !== item.id)); }} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 14 }}>✕</button>
             </div>
           ))}
         </div>
@@ -467,7 +466,7 @@ function MediaPreview({ items, T }) {
       {docs.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
           {docs.map((m, i) => (
-            <a key={i} href={m.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: T.mutedFill, borderRadius: 8, border: `1px solid ${withAlpha(T.text, 0.08)}`, textDecoration: "none", color: T.subtext, fontSize: 12, fontWeight: 600 }}>ðŸ“„ {m.name || "Document"}</a>
+            <a key={i} href={m.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: T.mutedFill, borderRadius: 8, border: `1px solid ${withAlpha(T.text, 0.08)}`, textDecoration: "none", color: T.subtext, fontSize: 12, fontWeight: 600 }}>📄 {m.name || "Document"}</a>
           ))}
         </div>
       )}
@@ -483,7 +482,7 @@ function MarkdownToolbar({ textareaRef, value, onChange, T }) {
     const next = value.slice(0, s) + b + (value.slice(s, e) || "text") + a + value.slice(e);
     onChange(next); setTimeout(() => { el.focus(); el.setSelectionRange(s + b.length, s + b.length + (value.slice(s, e) || "text").length); }, 0);
   };
-  const tools = [{ l: "B", fn: () => wrap("**") }, { l: "I", fn: () => wrap("*") }, { l: "H2", fn: () => wrap("## ", "") }, { l: "â€¢", fn: () => wrap("- ", "") }, { l: "â", fn: () => wrap("> ", "") }];
+  const tools = [{ l: "B", fn: () => wrap("**") }, { l: "I", fn: () => wrap("*") }, { l: "H2", fn: () => wrap("## ", "") }, { l: "•", fn: () => wrap("- ", "") }, { l: "❝", fn: () => wrap("> ", "") }];
   return (
     <div style={{ display: "flex", gap: 2, padding: "6px 10px", background: T.mutedFill, borderBottom: `1px solid ${withAlpha(T.text, 0.07)}`, borderRadius: "10px 10px 0 0" }}>
       {tools.map(t => <button key={t.l} onClick={t.fn} type="button" style={{ padding: "4px 10px", border: "none", background: "transparent", color: T.subtext, cursor: "pointer", borderRadius: 6, fontSize: 12, fontWeight: 800 }}>{t.l}</button>)}
@@ -491,14 +490,14 @@ function MarkdownToolbar({ textareaRef, value, onChange, T }) {
   );
 }
 
-// â”€â”€â”€ Left Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Left Sidebar ─────────────────────────────────────────────────────────────
 function LeftSidebar({ session, filter, onFilterChange, onNewThread, onLoginRequired, T }) {
   const navItems = [
-    { id: "all", icon: "ðŸ”­", label: "Discovery" },
-    { id: "trending", icon: "ðŸ”¥", label: "Trending" },
-    { id: "new", icon: "âš¡", label: "Latest" },
-    ...(session ? [{ id: "mine", icon: "ðŸ“", label: "My Posts" }] : []),
-    ...(session ? [{ id: "saved", icon: "ðŸ”–", label: "Saved" }] : []),
+    { id: "all", icon: "🔭", label: "Discovery" },
+    { id: "trending", icon: "🔥", label: "Trending" },
+    { id: "new", icon: "⚡", label: "Latest" },
+    ...(session ? [{ id: "mine", icon: "📁", label: "My Posts" }] : []),
+    ...(session ? [{ id: "saved", icon: "🔖", label: "Saved" }] : []),
   ];
   return (
     <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 0, paddingRight: 8 }}>
@@ -509,7 +508,7 @@ function LeftSidebar({ session, filter, onFilterChange, onNewThread, onLoginRequ
         onMouseEnter={e => e.currentTarget.style.boxShadow = `0 6px 24px ${withAlpha(T.accent, 0.4)}`}
         onMouseLeave={e => e.currentTarget.style.boxShadow = `0 4px 16px ${withAlpha(T.accent, 0.3)}`}
       >
-        <span style={{ fontSize: 16 }}>âœï¸</span> New Thesis
+        <span style={{ fontSize: 16 }}>✍️</span> New Thesis
       </button>
 
       {/* Nav */}
@@ -564,7 +563,7 @@ function WatchlistSidebarTickers({ T }) {
   );
 }
 
-// â”€â”€â”€ Right Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Right Sidebar ─────────────────────────────────────────────────────────────
 function RightSidebar({ threads, T, onTickerClick }) {
   const sentimentMap = useMemo(() => {
     const map = {};
@@ -612,8 +611,8 @@ function RightSidebar({ threads, T, onTickerClick }) {
                     <div style={{ width: `${bullPct}%`, background: T.green, borderRadius: 3, transition: "width 0.3s" }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 10, color: T.green, fontWeight: 700 }}>ðŸŸ¢ {bullPct}%</span>
-                    <span style={{ fontSize: 10, color: T.red, fontWeight: 700 }}>ðŸ”´ {100 - bullPct}%</span>
+                    <span style={{ fontSize: 10, color: T.green, fontWeight: 700 }}>🟢 {bullPct}%</span>
+                    <span style={{ fontSize: 10, color: T.red, fontWeight: 700 }}>🔴 {100 - bullPct}%</span>
                   </div>
                 </div>
               );
@@ -625,7 +624,7 @@ function RightSidebar({ threads, T, onTickerClick }) {
       {/* Top Contributors */}
       <SidePanel title="Top Contributors" T={T}>
         {topAuthors.length === 0 ? (
-          <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "12px 0" }}>â€”</div>
+          <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "12px 0" }}>—</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {topAuthors.map((author, i) => (
@@ -634,7 +633,7 @@ function RightSidebar({ threads, T, onTickerClick }) {
                 <Avatar name={author.name} size={24} T={T} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{author.name}</div>
-                  <div style={{ fontSize: 10, color: T.muted }}>â–² {author.votes} Â· {author.posts} posts</div>
+                  <div style={{ fontSize: 10, color: T.muted }}>▲ {author.votes} · {author.posts} posts</div>
                 </div>
               </div>
             ))}
@@ -650,10 +649,10 @@ function RightSidebar({ threads, T, onTickerClick }) {
               <button onClick={() => onTickerClick?.(t.ticker)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 <span style={{ fontSize: 11, fontWeight: 800, color: T.green, fontFamily: "'IBM Plex Mono', monospace" }}>{t.ticker}</span>
               </button>
-              <span style={{ fontSize: 10, color: T.muted }}>â–² {t.upvotes || 0}</span>
+              <span style={{ fontSize: 10, color: T.muted }}>▲ {t.upvotes || 0}</span>
             </div>
           ))}
-          {threads.filter(t => t.thesis_type === "Bullish" && t.ticker).length === 0 && <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "8px 0" }}>â€”</div>}
+          {threads.filter(t => t.thesis_type === "Bullish" && t.ticker).length === 0 && <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "8px 0" }}>—</div>}
         </div>
       </SidePanel>
     </div>
@@ -669,12 +668,12 @@ function SidePanel({ title, children, T }) {
   );
 }
 
-// â”€â”€â”€ Thread Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Thread Card ──────────────────────────────────────────────────────────────
 const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVotes, onVote, onLoginRequired, onTickerClick, onToggleBookmark, T, isMobile = false }) {
   const [hov, setHov] = useState(false);
   const myVote = userVotes?.[thread.id] ?? 0;
   const images = (thread.media_urls || []).filter(m => m.type === "image");
-  const bodyPreview = stripMarkdown(thread.body).slice(0, isMobile ? 90 : 150) + (thread.body?.length > (isMobile ? 90 : 150) ? "â€¦" : "");
+  const bodyPreview = stripMarkdown(thread.body).slice(0, isMobile ? 90 : 150) + (thread.body?.length > (isMobile ? 90 : 150) ? "…" : "");
   const convMeta = CONVICTION_META[thread.conviction_score >= 80 ? "high" : thread.conviction_score >= 50 ? "medium" : "low"] || CONVICTION_META.low;
 
   return (
@@ -696,7 +695,7 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: hov ? T.accent : "transparent", borderRadius: "16px 0 0 16px", transition: "background 0.18s" }} />
 
       {thread.is_pinned && (
-        <div style={{ position: "absolute", top: 12, right: 14, background: T.amber, color: "#fff", fontSize: 8, fontWeight: 900, padding: "2px 6px", borderRadius: 4, letterSpacing: "0.06em", textTransform: "uppercase" }}>ðŸ“Œ Pinned</div>
+        <div style={{ position: "absolute", top: 12, right: 14, background: T.amber, color: "#fff", fontSize: 8, fontWeight: 900, padding: "2px 6px", borderRadius: 4, letterSpacing: "0.06em", textTransform: "uppercase" }}>📌 Pinned</div>
       )}
 
       <div style={{ padding: isMobile ? "14px 16px" : "18px 24px" }}>
@@ -725,8 +724,8 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
             {/* Structured preview: Bull/Bear case if available */}
             {thread.bull_case ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-                {thread.bull_case && <div style={{ fontSize: 12, color: T.green, display: "flex", gap: 6 }}><span>ðŸŸ¢</span><span style={{ color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bull_case).slice(0, 80)}â€¦</span></div>}
-                {thread.bear_case && <div style={{ fontSize: 12, color: T.red, display: "flex", gap: 6 }}><span>ðŸ”´</span><span style={{ color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bear_case).slice(0, 80)}â€¦</span></div>}
+                {thread.bull_case && <div style={{ fontSize: 12, color: T.green, display: "flex", gap: 6 }}><span>🟢</span><span style={{ color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bull_case).slice(0, 80)}…</span></div>}
+                {thread.bear_case && <div style={{ fontSize: 12, color: T.red, display: "flex", gap: 6 }}><span>🔴</span><span style={{ color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bear_case).slice(0, 80)}…</span></div>}
               </div>
             ) : (
               <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55, opacity: 0.85 }}>{bodyPreview}</div>
@@ -735,8 +734,8 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
             {/* Target price / horizon */}
             {(thread.target_price || thread.time_horizon || thread.expected_cagr) && (
               <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-                {thread.target_price && <span style={{ fontSize: 10, color: T.subtext, background: T.mutedFill, padding: "2px 8px", borderRadius: 5, fontFamily: "'IBM Plex Mono', monospace" }}>ðŸŽ¯ â‚¹{Number(thread.target_price).toLocaleString("en-IN")}</span>}
-                {thread.time_horizon && <span style={{ fontSize: 10, color: T.subtext, background: T.mutedFill, padding: "2px 8px", borderRadius: 5 }}>â³ {thread.time_horizon}</span>}
+                {thread.target_price && <span style={{ fontSize: 10, color: T.subtext, background: T.mutedFill, padding: "2px 8px", borderRadius: 5, fontFamily: "'IBM Plex Mono', monospace" }}>🎯 ₹{Number(thread.target_price).toLocaleString("en-IN")}</span>}
+                {thread.time_horizon && <span style={{ fontSize: 10, color: T.subtext, background: T.mutedFill, padding: "2px 8px", borderRadius: 5 }}>⏳ {thread.time_horizon}</span>}
                 {thread.expected_cagr && <span style={{ fontSize: 10, color: T.green, background: T.posFill, padding: "2px 8px", borderRadius: 5, fontFamily: "'IBM Plex Mono', monospace" }}>~{thread.expected_cagr}% CAGR</span>}
               </div>
             )}
@@ -752,7 +751,7 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Avatar name={thread.author_display_name} size={22} T={T} />
             <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{thread.author_display_name || "Anon"}</span>
-            <span style={{ fontSize: 11, color: T.muted }}>Â· {timeAgo(thread.created_at)}</span>
+            <span style={{ fontSize: 11, color: T.muted }}>· {timeAgo(thread.created_at)}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div onClick={e => e.stopPropagation()}>
@@ -761,8 +760,8 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
             <div onClick={e => e.stopPropagation()}>
               <BookmarkButton isSaved={!!thread.is_saved} onToggle={session ? () => onToggleBookmark?.(thread.id) : null} onLoginRequired={onLoginRequired} T={T} compact />
             </div>
-            <StatPill icon="ðŸ’¬" value={thread.reply_count || 0} T={T} />
-            {thread.view_count > 0 && <StatPill icon="ðŸ‘" value={thread.view_count} T={T} />}
+            <StatPill icon="💬" value={thread.reply_count || 0} T={T} />
+            {thread.view_count > 0 && <StatPill icon="👁" value={thread.view_count} T={T} />}
           </div>
         </div>
       </div>
@@ -770,7 +769,7 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
   );
 });
 
-// â”€â”€â”€ Reply Composer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Reply Composer ───────────────────────────────────────────────────────────
 function ReplyComposer({ threadId, parentReplyId, parentAuthor, session, onSubmitted, onCancel, T, isMobile = false }) {
   const getToken = useToken();
   const [body, setBody] = useState(parentAuthor ? `@${parentAuthor} ` : "");
@@ -883,7 +882,7 @@ function ReplyComposer({ threadId, parentReplyId, parentAuthor, session, onSubmi
           </div>
         </div>
         {previewMode
-          ? <div style={{ padding: "12px 16px", minHeight: 100, fontSize: 14, lineHeight: 1.7, color: T.text }} dangerouslySetInnerHTML={{ __html: renderMarkdown(body) || "<span style='opacity:0.4'>Nothing yetâ€¦</span>" }} />
+          ? <div style={{ padding: "12px 16px", minHeight: 100, fontSize: 14, lineHeight: 1.7, color: T.text }} dangerouslySetInnerHTML={{ __html: renderMarkdown(body) || "<span style='opacity:0.4'>Nothing yet…</span>" }} />
           : (
             <div style={{ position: "relative" }}>
               <textarea
@@ -892,7 +891,7 @@ function ReplyComposer({ threadId, parentReplyId, parentAuthor, session, onSubmi
                 onChange={handleBodyChange}
                 onKeyDown={handleKeyDown}
                 onPaste={e => { if (pasteRef.current) pasteRef.current(e); }}
-                placeholder={parentAuthor ? `Reply to @${parentAuthor}â€¦` : "Share your perspectiveâ€¦"}
+                placeholder={parentAuthor ? `Reply to @${parentAuthor}…` : "Share your perspective…"}
                 style={{ width: "100%", minHeight: 110, border: "none", outline: "none", padding: "12px 16px", fontSize: 14, color: T.text, background: "transparent", resize: "vertical", fontFamily: "inherit", lineHeight: 1.7, boxSizing: "border-box" }}
               />
               {/* @mention dropdown */}
@@ -921,21 +920,21 @@ function ReplyComposer({ threadId, parentReplyId, parentAuthor, session, onSubmi
       <MediaPreview items={mediaItems} T={T} />
       {participants.length > 0 && !mentionOpen && !previewMode && (
         <div style={{ marginTop: 6, fontSize: 11, color: T.muted }}>
-          ðŸ’¡ Type <span style={{ fontWeight: 700, color: T.accent }}>@</span> to mention a participant
+          💡 Type <span style={{ fontWeight: 700, color: T.accent }}>@</span> to mention a participant
         </div>
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "flex-end", alignItems: "center" }}>
-        {error && <span style={{ fontSize: 12, color: T.red, flex: 1 }}>âš  {error}</span>}
+        {error && <span style={{ fontSize: 12, color: T.red, flex: 1 }}>⚠ {error}</span>}
         {onCancel && <button onClick={onCancel} type="button" style={{ padding: "8px 16px", background: "none", border: `1px solid ${withAlpha(T.text, 0.12)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>}
         <button onClick={submit} disabled={submitting || !body.trim()} type="button" style={{ padding: "9px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, cursor: submitting || !body.trim() ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 800, opacity: submitting || !body.trim() ? 0.5 : 1 }}>
-          {submitting ? "Postingâ€¦" : "Post Reply"}
+          {submitting ? "Posting…" : "Post Reply"}
         </button>
       </div>
     </div>
   );
 }
 
-// â”€â”€â”€ Reply Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Reply Card ───────────────────────────────────────────────────────────────
 const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session, userVotes, onVote, onLoginRequired, onReplyPosted, onReplyDeleted, onReplyUpdated, T, isMobile = false, postIndex, totalPosts, refCallback }) {
   const getToken = useToken();
   const [showComposer, setShowComposer] = useState(false);
@@ -985,14 +984,14 @@ const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session,
             <Avatar name={reply.author_display_name} size={isMobile ? 28 : 32} T={T} />
             <div>
               <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: T.text }}>{reply.author_display_name || "Anon"}</div>
-              <div style={{ fontSize: 11, color: T.muted }}>{timeAgo(reply.created_at)}{postIndex != null ? ` Â· #${postIndex}/${totalPosts}` : ""}</div>
+              <div style={{ fontSize: 11, color: T.muted }}>{timeAgo(reply.created_at)}{postIndex != null ? ` · #${postIndex}/${totalPosts}` : ""}</div>
             </div>
           </div>
           {isOwner && !editing && (
             confirmDelete
               ? <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <span style={{ fontSize: 11, color: T.muted }}>Delete this reply?</span>
-                  <button onClick={handleDelete} disabled={deleting} style={{ padding: "5px 12px", background: T.red, color: "#fff", border: "none", borderRadius: 7, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{deleting ? "â€¦" : "Delete"}</button>
+                  <button onClick={handleDelete} disabled={deleting} style={{ padding: "5px 12px", background: T.red, color: "#fff", border: "none", borderRadius: 7, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{deleting ? "…" : "Delete"}</button>
                   <button onClick={() => setConfirmDelete(false)} style={{ padding: "5px 10px", background: "none", border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 7, fontSize: 12, color: T.subtext, cursor: "pointer" }}>Cancel</button>
                 </div>
               : <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1000,13 +999,13 @@ const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session,
                     onClick={() => { setEditing(true); setEditBody(reply.body); }}
                     style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px", background: T.mutedFill, border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 7, cursor: "pointer", color: T.subtext, fontSize: 12, fontWeight: 600 }}
                   >
-                    âœï¸ Edit
+                    ✏️ Edit
                   </button>
                   <button
                     onClick={() => setConfirmDelete(true)}
                     style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px", background: withAlpha(T.red, 0.07), border: `1px solid ${withAlpha(T.red, 0.18)}`, borderRadius: 7, cursor: "pointer", color: T.red, fontSize: 12, fontWeight: 600 }}
                   >
-                    ðŸ—‘ Delete
+                    🗑 Delete
                   </button>
                 </div>
           )}
@@ -1021,10 +1020,10 @@ const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session,
               onChange={e => setEditBody(e.target.value)}
               style={{ width: "100%", minHeight: 100, border: `1px solid ${withAlpha(T.accent, 0.3)}`, borderRadius: 10, padding: "10px 14px", fontSize: 14, color: T.text, background: T.mutedFill, resize: "vertical", fontFamily: "inherit", lineHeight: 1.7, outline: "none", boxSizing: "border-box" }}
             />
-            {editError && <div style={{ fontSize: 12, color: T.red, marginTop: 4 }}>âš  {editError}</div>}
+            {editError && <div style={{ fontSize: 12, color: T.red, marginTop: 4 }}>⚠ {editError}</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
               <button onClick={() => { setEditing(false); setEditError(""); }} style={{ padding: "7px 14px", background: "none", border: `1px solid ${withAlpha(T.text, 0.12)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
-              <button onClick={handleEditSave} disabled={editSaving || !editBody.trim()} style={{ padding: "7px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, cursor: editSaving ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 800, opacity: editSaving ? 0.6 : 1 }}>{editSaving ? "Savingâ€¦" : "Save"}</button>
+              <button onClick={handleEditSave} disabled={editSaving || !editBody.trim()} style={{ padding: "7px 18px", background: T.accent, color: "#fff", border: "none", borderRadius: 8, cursor: editSaving ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 800, opacity: editSaving ? 0.6 : 1 }}>{editSaving ? "Saving…" : "Save"}</button>
             </div>
           </div>
         ) : (
@@ -1040,7 +1039,7 @@ const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session,
             <VoteButton upvotes={reply.upvotes} downvotes={reply.downvotes} userVote={myVote} onVote={session ? (v) => onVote(reply.id, "reply", v) : null} onLoginRequired={onLoginRequired} T={T} compact />
             {depth < 4 && session && (
               <button onClick={() => setShowComposer(!showComposer)} style={{ background: "none", border: "none", color: showComposer ? T.accent : T.subtext, cursor: "pointer", fontSize: 12, fontWeight: 700, padding: "4px 8px", borderRadius: 6, display: "flex", alignItems: "center", gap: 5 }}>
-                â†© Reply
+                ↩ Reply
               </button>
             )}
           </div>
@@ -1067,8 +1066,8 @@ const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session,
   );
 });
 
-// â”€â”€â”€ Premium Composer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// â”€â”€â”€ Ticker Autocomplete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Premium Composer ─────────────────────────────────────────────────────────
+// ─── Ticker Autocomplete ──────────────────────────────────────────────────────
 function TickerAutocomplete({ value, onChange, inputStyle, T }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -1130,7 +1129,7 @@ function TickerAutocomplete({ value, onChange, inputStyle, T }) {
           zIndex: 2000, overflow: "hidden",
         }}>
           {loading && (
-            <div style={{ padding: "10px 14px", fontSize: 12, color: T.muted }}>Searchingâ€¦</div>
+            <div style={{ padding: "10px 14px", fontSize: 12, color: T.muted }}>Searching…</div>
           )}
           {!loading && suggestions.map((item, i) => (
             <div
@@ -1204,7 +1203,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
             <h2 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.02em" }}>Publish Investment Thesis</h2>
             <p style={{ fontSize: 12, color: T.muted, margin: "2px 0 0" }}>Structure your thesis like professional research.</p>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>âœ•</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>✕</button>
         </div>
 
         {/* Step tabs */}
@@ -1218,7 +1217,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "20px 16px" : "28px 32px" }}>
-          {error && <div style={{ marginBottom: 16, padding: "10px 14px", background: withAlpha(T.red, 0.1), borderRadius: 8, color: T.red, fontSize: 13 }}>âš  {error}</div>}
+          {error && <div style={{ marginBottom: 16, padding: "10px 14px", background: withAlpha(T.red, 0.1), borderRadius: 8, color: T.red, fontSize: 13 }}>⚠ {error}</div>}
 
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1244,7 +1243,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
 
               <div>
                 <label style={labelStyle}>Headline</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="A compelling one-line investment caseâ€¦" style={{ ...inputStyle, fontSize: isMobile ? 16 : 18, fontWeight: 800, letterSpacing: "-0.01em" }} />
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="A compelling one-line investment case…" style={{ ...inputStyle, fontSize: isMobile ? 16 : 18, fontWeight: 800, letterSpacing: "-0.01em" }} />
               </div>
 
               <div>
@@ -1270,7 +1269,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
                   <MarkdownToolbar textareaRef={textRef} value={body} onChange={setBody} T={T} />
                   {previewMode
                     ? <div style={{ padding: "14px 16px", minHeight: 180, fontSize: 14, lineHeight: 1.7, color: T.text }} dangerouslySetInnerHTML={{ __html: renderMarkdown(body) || "<span style='opacity:0.4'>Empty</span>" }} />
-                    : <textarea ref={textRef} value={body} onChange={e => setBody(e.target.value)} placeholder="Your detailed investment analysis, supported by data and reasoningâ€¦" style={{ width: "100%", minHeight: 200, border: "none", outline: "none", padding: "14px 16px", fontSize: 14, color: T.text, background: "transparent", resize: "vertical", fontFamily: "inherit", lineHeight: 1.7, boxSizing: "border-box" }} />
+                    : <textarea ref={textRef} value={body} onChange={e => setBody(e.target.value)} placeholder="Your detailed investment analysis, supported by data and reasoning…" style={{ width: "100%", minHeight: 200, border: "none", outline: "none", padding: "14px 16px", fontSize: 14, color: T.text, background: "transparent", resize: "vertical", fontFamily: "inherit", lineHeight: 1.7, boxSizing: "border-box" }} />
                   }
                 </div>
               </div>
@@ -1283,11 +1282,11 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
           {step === 2 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.07)}`, borderRadius: 12, padding: 16 }}>
-                <p style={{ fontSize: 12, color: T.muted, margin: "0 0 16px", lineHeight: 1.6 }}>Structure your thesis like a professional research note. Fill as many sections as relevant â€” this dramatically increases post quality and discoverability.</p>
+                <p style={{ fontSize: 12, color: T.muted, margin: "0 0 16px", lineHeight: 1.6 }}>Structure your thesis like a professional research note. Fill as many sections as relevant — this dramatically increases post quality and discoverability.</p>
                 {[
-                  { label: "Bull Case", val: bullCase, set: setBullCase, placeholder: "Key reasons why this investment should workâ€¦", color: T.green },
-                  { label: "Bear Case", val: bearCase, set: setBearCase, placeholder: "Key risks or reasons this may not workâ€¦", color: T.red },
-                  { label: "Key Risks", val: risks, set: setRisks, placeholder: "Regulatory, competitive, macro, execution risksâ€¦", color: T.amber },
+                  { label: "Bull Case", val: bullCase, set: setBullCase, placeholder: "Key reasons why this investment should work…", color: T.green },
+                  { label: "Bear Case", val: bearCase, set: setBearCase, placeholder: "Key risks or reasons this may not work…", color: T.red },
+                  { label: "Key Risks", val: risks, set: setRisks, placeholder: "Regulatory, competitive, macro, execution risks…", color: T.amber },
                 ].map(({ label, val, set, placeholder, color }) => (
                   <div key={label} style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, color }}>{label}</label>
@@ -1318,12 +1317,12 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
               {/* Price targets */}
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 14 }}>
                 <div>
-                  <label style={labelStyle}>Target Price (â‚¹)</label>
+                  <label style={labelStyle}>Target Price (₹)</label>
                   <input value={targetPrice} onChange={e => setTargetPrice(e.target.value)} placeholder="e.g. 3200" type="number" style={{ ...inputStyle, fontFamily: "'IBM Plex Mono', monospace" }} />
                 </div>
                 <div>
                   <label style={labelStyle}>Time Horizon</label>
-                  <input value={timeHorizon} onChange={e => setTimeHorizon(e.target.value)} placeholder="e.g. 12â€“18 months" style={inputStyle} />
+                  <input value={timeHorizon} onChange={e => setTimeHorizon(e.target.value)} placeholder="e.g. 12–18 months" style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Expected CAGR (%)</label>
@@ -1340,8 +1339,8 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
                     <ThesisTypeBadge type={thesisType} T={T} />
                     <ConvictionBadge conviction={conviction} T={T} />
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 6 }}>{title || "Your headlineâ€¦"}</div>
-                  <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55 }}>{stripMarkdown(body).slice(0, 120) || "Your analysis previewâ€¦"}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 6 }}>{title || "Your headline…"}</div>
+                  <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55 }}>{stripMarkdown(body).slice(0, 120) || "Your analysis preview…"}</div>
                 </div>
               )}
             </div>
@@ -1351,12 +1350,12 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
         {/* Footer */}
         <div style={{ padding: isMobile ? "14px 20px" : "18px 32px", borderTop: `1px solid ${withAlpha(T.text, 0.08)}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: T.surface }}>
           <div style={{ display: "flex", gap: 8 }}>
-            {step > 1 && <button onClick={() => setStep(s => s - 1)} type="button" style={{ padding: "10px 20px", background: "none", border: `1px solid ${withAlpha(T.text, 0.12)}`, borderRadius: 10, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>â† Back</button>}
+            {step > 1 && <button onClick={() => setStep(s => s - 1)} type="button" style={{ padding: "10px 20px", background: "none", border: `1px solid ${withAlpha(T.text, 0.12)}`, borderRadius: 10, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>← Back</button>}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             {step < 3
-              ? <button onClick={() => setStep(s => s + 1)} type="button" style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Continue â†’</button>
-              : <button onClick={submit} disabled={submitting} type="button" style={{ padding: "12px 32px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: `0 6px 20px ${withAlpha(T.accent, 0.3)}`, opacity: submitting ? 0.6 : 1 }}>{submitting ? "Publishingâ€¦" : "ðŸš€ Publish Thesis"}</button>
+              ? <button onClick={() => setStep(s => s + 1)} type="button" style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Continue →</button>
+              : <button onClick={submit} disabled={submitting} type="button" style={{ padding: "12px 32px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: `0 6px 20px ${withAlpha(T.accent, 0.3)}`, opacity: submitting ? 0.6 : 1 }}>{submitting ? "Publishing…" : "🚀 Publish Thesis"}</button>
             }
           </div>
         </div>
@@ -1365,7 +1364,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
   );
 }
 
-// â”€â”€â”€ Thread View â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Thread View ──────────────────────────────────────────────────────────────
 function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, onTickerClick, addToast, T }) {
   const { isMobile } = useViewport(); const getToken = useToken();
   const [thread, setThread] = useState(initialThread);
@@ -1478,13 +1477,13 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "16px 16px 140px" : "32px 32px 80px" }}>
         {/* Back + Actions */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>â† Back</button>
+          <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>← Back</button>
           {isAuthor && (
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setShowEditComposer(true)} style={{ padding: "8px 14px", background: T.mutedFill, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Edit</button>
               {confirmDeleteThread
                 ? <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <button onClick={handleDeleteThread} disabled={deletingThread} style={{ padding: "8px 14px", background: T.red, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 800 }}>{deletingThread ? "â€¦" : "Delete"}</button>
+                    <button onClick={handleDeleteThread} disabled={deletingThread} style={{ padding: "8px 14px", background: T.red, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 800 }}>{deletingThread ? "…" : "Delete"}</button>
                     <button onClick={() => setConfirmDeleteThread(false)} style={{ padding: "8px 12px", background: "none", border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13 }}>Cancel</button>
                   </div>
                 : <button onClick={() => setConfirmDeleteThread(true)} style={{ padding: "8px 14px", background: withAlpha(T.red, 0.1), border: `1px solid ${withAlpha(T.red, 0.2)}`, borderRadius: 8, color: T.red, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Delete</button>
@@ -1527,19 +1526,19 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (thread.bull_case && thread.bear_case ? "1fr 1fr" : "1fr"), gap: 12, marginBottom: 20 }}>
                 {thread.bull_case && (
                   <div style={{ background: withAlpha(T.green, 0.06), border: `1px solid ${withAlpha(T.green, 0.15)}`, borderRadius: 12, padding: "14px 16px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: T.green, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>ðŸŸ¢ Bull Case</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.green, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>🟢 Bull Case</div>
                     <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.bull_case) }} />
                   </div>
                 )}
                 {thread.bear_case && (
                   <div style={{ background: withAlpha(T.red, 0.05), border: `1px solid ${withAlpha(T.red, 0.15)}`, borderRadius: 12, padding: "14px 16px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: T.red, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>ðŸ”´ Bear Case</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.red, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>🔴 Bear Case</div>
                     <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.bear_case) }} />
                   </div>
                 )}
                 {thread.risks && (
                   <div style={{ background: withAlpha(T.amber, 0.06), border: `1px solid ${withAlpha(T.amber, 0.15)}`, borderRadius: 12, padding: "14px 16px", gridColumn: isMobile ? "1" : "1 / -1" }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: T.amber, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>âš ï¸ Key Risks</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: T.amber, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>⚠️ Key Risks</div>
                     <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.risks) }} />
                   </div>
                 )}
@@ -1557,7 +1556,7 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
                 {thread.target_price && (
                   <div style={{ background: T.mutedFill, borderRadius: 10, padding: "10px 14px" }}>
                     <div style={{ fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Target Price</div>
-                    <div style={{ fontSize: 16, fontWeight: 900, color: T.accent, fontFamily: "'IBM Plex Mono', monospace" }}>â‚¹{Number(thread.target_price).toLocaleString("en-IN")}</div>
+                    <div style={{ fontSize: 16, fontWeight: 900, color: T.accent, fontFamily: "'IBM Plex Mono', monospace" }}>₹{Number(thread.target_price).toLocaleString("en-IN")}</div>
                   </div>
                 )}
                 {thread.time_horizon && (
@@ -1580,8 +1579,8 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <VoteButton upvotes={thread.upvotes} downvotes={thread.downvotes} userVote={myThreadVote} onVote={session ? (v) => handleVote(thread.id, "thread", v) : null} onLoginRequired={onLoginRequired} T={T} />
                 <BookmarkButton isSaved={!!thread.is_saved} onToggle={session ? handleToggleBookmark : null} onLoginRequired={onLoginRequired} T={T} />
-                <StatPill icon="ðŸ’¬" value={thread.reply_count || 0} T={T} />
-                {thread.view_count > 0 && <StatPill icon="ðŸ‘" value={thread.view_count} T={T} />}
+                <StatPill icon="💬" value={thread.reply_count || 0} T={T} />
+                {thread.view_count > 0 && <StatPill icon="👁" value={thread.view_count} T={T} />}
               </div>
             </div>
           </div>
@@ -1591,7 +1590,7 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
         {session && (
           <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 14, padding: isMobile ? "16px" : "20px 24px", marginBottom: 20 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Add to Discussion</div>
-            <ReplyComposer threadId={thread.id} session={session} T={T} isMobile={isMobile} onSubmitted={() => { loadReplies(); addToast("Reply posted! âœ“"); }} />
+            <ReplyComposer threadId={thread.id} session={session} T={T} isMobile={isMobile} onSubmitted={() => { loadReplies(); addToast("Reply posted! ✓"); }} />
           </div>
         )}
 
@@ -1633,13 +1632,13 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
       </div>
 
       {showEditComposer && (
-        <EditThreadComposer thread={thread} session={session} T={T} onClose={() => setShowEditComposer(false)} onSaved={(updated) => { setThread(t => ({ ...t, ...updated })); addToast("Updated âœ“"); }} />
+        <EditThreadComposer thread={thread} session={session} T={T} onClose={() => setShowEditComposer(false)} onSaved={(updated) => { setThread(t => ({ ...t, ...updated })); addToast("Updated ✓"); }} />
       )}
     </div>
   );
 }
 
-// â”€â”€â”€ Edit Composer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Edit Composer ────────────────────────────────────────────────────────────
 function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
   const { isMobile } = useViewport(); const getToken = useToken();
   const [step, setStep] = useState(1);
@@ -1694,12 +1693,12 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
         <div style={{ padding: "18px 24px", borderBottom: `1px solid ${withAlpha(T.text, 0.08)}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <h2 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.02em" }}>Edit Investment Thesis</h2>
-            <p style={{ fontSize: 12, color: T.muted, margin: "2px 0 0" }}>All fields are editable â€” update any part of your thesis.</p>
+            <p style={{ fontSize: 12, color: T.muted, margin: "2px 0 0" }}>All fields are editable — update any part of your thesis.</p>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>âœ•</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>✕</button>
         </div>
 
-        {/* Step tabs â€” identical to ThreadComposer */}
+        {/* Step tabs — identical to ThreadComposer */}
         <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${withAlpha(T.text, 0.08)}`, padding: "0 24px" }}>
           {[{ n: 1, label: "Basics" }, { n: 2, label: "Thesis" }, { n: 3, label: "Conviction" }].map(s => (
             <button key={s.n} onClick={() => setStep(s.n)} style={{ padding: "10px 20px", border: "none", background: "transparent", color: step === s.n ? T.accent : T.muted, fontSize: 13, fontWeight: step === s.n ? 800 : 500, cursor: "pointer", borderBottom: step === s.n ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1 }}>
@@ -1710,7 +1709,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "20px 16px" : "28px 32px" }}>
-          {error && <div style={{ marginBottom: 16, padding: "10px 14px", background: withAlpha(T.red, 0.1), borderRadius: 8, color: T.red, fontSize: 13 }}>âš  {error}</div>}
+          {error && <div style={{ marginBottom: 16, padding: "10px 14px", background: withAlpha(T.red, 0.1), borderRadius: 8, color: T.red, fontSize: 13 }}>⚠ {error}</div>}
 
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1736,7 +1735,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
 
               <div>
                 <label style={labelStyle}>Headline</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="A compelling one-line investment caseâ€¦" style={{ ...inputStyle, fontSize: isMobile ? 16 : 18, fontWeight: 800, letterSpacing: "-0.01em" }} />
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="A compelling one-line investment case…" style={{ ...inputStyle, fontSize: isMobile ? 16 : 18, fontWeight: 800, letterSpacing: "-0.01em" }} />
               </div>
 
               <div>
@@ -1762,7 +1761,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
                   <MarkdownToolbar textareaRef={textRef} value={body} onChange={setBody} T={T} />
                   {previewMode
                     ? <div style={{ padding: "14px 16px", minHeight: 180, fontSize: 14, lineHeight: 1.7, color: T.text }} dangerouslySetInnerHTML={{ __html: renderMarkdown(body) || "<span style='opacity:0.4'>Empty</span>" }} />
-                    : <textarea ref={textRef} value={body} onChange={e => setBody(e.target.value)} placeholder="Your detailed investment analysisâ€¦" style={{ width: "100%", minHeight: 200, border: "none", outline: "none", padding: "14px 16px", fontSize: 14, color: T.text, background: "transparent", resize: "vertical", fontFamily: "inherit", lineHeight: 1.7, boxSizing: "border-box" }} />
+                    : <textarea ref={textRef} value={body} onChange={e => setBody(e.target.value)} placeholder="Your detailed investment analysis…" style={{ width: "100%", minHeight: 200, border: "none", outline: "none", padding: "14px 16px", fontSize: 14, color: T.text, background: "transparent", resize: "vertical", fontFamily: "inherit", lineHeight: 1.7, boxSizing: "border-box" }} />
                   }
                 </div>
               </div>
@@ -1774,9 +1773,9 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
               <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.07)}`, borderRadius: 12, padding: 16 }}>
                 <p style={{ fontSize: 12, color: T.muted, margin: "0 0 16px", lineHeight: 1.6 }}>Structure your thesis like a professional research note. Fill as many sections as relevant.</p>
                 {[
-                  { label: "Bull Case", val: bullCase, set: setBullCase, placeholder: "Key reasons why this investment should workâ€¦", color: T.green },
-                  { label: "Bear Case", val: bearCase, set: setBearCase, placeholder: "Key risks or reasons this may not workâ€¦", color: T.red },
-                  { label: "Key Risks", val: risks, set: setRisks, placeholder: "Regulatory, competitive, macro, execution risksâ€¦", color: T.amber },
+                  { label: "Bull Case", val: bullCase, set: setBullCase, placeholder: "Key reasons why this investment should work…", color: T.green },
+                  { label: "Bear Case", val: bearCase, set: setBearCase, placeholder: "Key risks or reasons this may not work…", color: T.red },
+                  { label: "Key Risks", val: risks, set: setRisks, placeholder: "Regulatory, competitive, macro, execution risks…", color: T.amber },
                 ].map(({ label, val, set, placeholder, color }) => (
                   <div key={label} style={{ marginBottom: 16 }}>
                     <label style={{ ...labelStyle, color }}>{label}</label>
@@ -1803,12 +1802,12 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 14 }}>
                 <div>
-                  <label style={labelStyle}>Target Price (â‚¹)</label>
+                  <label style={labelStyle}>Target Price (₹)</label>
                   <input type="number" value={targetPrice} onChange={e => setTargetPrice(e.target.value)} placeholder="e.g. 2500" style={{ ...inputStyle, fontFamily: "'IBM Plex Mono', monospace" }} />
                 </div>
                 <div>
                   <label style={labelStyle}>Time Horizon</label>
-                  <input value={timeHorizon} onChange={e => setTimeHorizon(e.target.value)} placeholder="e.g. 12â€“18 months" style={inputStyle} />
+                  <input value={timeHorizon} onChange={e => setTimeHorizon(e.target.value)} placeholder="e.g. 12–18 months" style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Expected CAGR (%)</label>
@@ -1822,12 +1821,12 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
         {/* Footer */}
         <div style={{ padding: "14px 24px", borderTop: `1px solid ${withAlpha(T.text, 0.08)}`, background: T.surface, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div style={{ display: "flex", gap: 8 }}>
-            {step > 1 && <button onClick={() => setStep(s => s - 1)} type="button" style={{ padding: "10px 20px", background: T.mutedFill, border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 10, color: T.subtext, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>â† Back</button>}
+            {step > 1 && <button onClick={() => setStep(s => s - 1)} type="button" style={{ padding: "10px 20px", background: T.mutedFill, border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 10, color: T.subtext, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>← Back</button>}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             {step < 3
-              ? <button onClick={() => setStep(s => s + 1)} type="button" style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Continue â†’</button>
-              : <button onClick={submit} disabled={submitting} style={{ padding: "10px 28px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>{submitting ? "Savingâ€¦" : "Save Changes"}</button>
+              ? <button onClick={() => setStep(s => s + 1)} type="button" style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Continue →</button>
+              : <button onClick={submit} disabled={submitting} style={{ padding: "10px 28px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>{submitting ? "Saving…" : "Save Changes"}</button>
             }
           </div>
         </div>
@@ -1836,7 +1835,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
   );
 }
 
-// â”€â”€â”€ Forum Feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Forum Feed ───────────────────────────────────────────────────────────────
 function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTickerClick, T, addToast }) {
   const { isMobile, isTablet } = useViewport(); const getToken = useToken();
   const [threads, setThreads] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(null);
@@ -1863,7 +1862,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
       if (cached) {
         setThreads(cached.data);
         setLoading(false);
-        if (!cached.stale) return; // fresh â€” no network call needed
+        if (!cached.stale) return; // fresh — no network call needed
         // Stale: fall through to background revalidation without showing spinner
       } else {
         setLoading(true);
@@ -1923,13 +1922,13 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
 
   useEffect(() => { loadThreads(); }, [loadThreads]);
 
-  // Background revalidation every 60s â€” keeps data fresh without any visible blink
+  // Background revalidation every 60s — keeps data fresh without any visible blink
   useEffect(() => {
     const id = setInterval(() => loadThreads(true), 60_000);
     return () => clearInterval(id);
   }, [loadThreads]);
 
-  // Realtime â€” updates wrapped in startTransition so they render in background without blinking
+  // Realtime — updates wrapped in startTransition so they render in background without blinking
   useEffect(() => {
     const ch = supabase.channel("forum:feed")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "forum_threads" }, p => {
@@ -2021,20 +2020,20 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
         {/* Page header */}
         <div style={{ marginBottom: isMobile ? 20 : 32 }}>
           <h1 style={{ fontSize: isMobile ? 28 : 36, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.04em" }}>Discussion Forum</h1>
-          <p style={{ fontSize: 14, color: T.muted, marginTop: 4 }}>High-conviction theses Â· Professional research Â· Signal over noise</p>
+          <p style={{ fontSize: 14, color: T.muted, marginTop: 4 }}>High-conviction theses · Professional research · Signal over noise</p>
         </div>
 
         {/* Sticky filter bar */}
         <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 20, background: `${withAlpha(T.bg, 0.92)}`, backdropFilter: "blur(20px)", padding: "10px 0", borderBottom: `1px solid ${withAlpha(T.text, 0.07)}` }}>
           {/* Search */}
           <div style={{ position: "relative", flex: isMobile ? "1 1 100%" : "0 0 260px" }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, opacity: 0.4 }}>ðŸ”</span>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tickers, theses, tagsâ€¦" style={{ width: "100%", padding: "9px 14px 9px 36px", borderRadius: 10, background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, opacity: 0.4 }}>🔍</span>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tickers, theses, tags…" style={{ width: "100%", padding: "9px 14px 9px 36px", borderRadius: 10, background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
           </div>
 
           {/* Sort/filter tabs */}
           <div style={{ display: "flex", background: T.mutedFill, borderRadius: 9, padding: 2, overflowX: "auto", flexShrink: 0 }}>
-            {[{ id: "all", label: "All" }, { id: "trending", label: "ðŸ”¥ Hot" }, { id: "new", label: "âš¡ New" }, ...(session ? [{ id: "mine", label: "My Posts" }] : [])].map(f => (
+            {[{ id: "all", label: "All" }, { id: "trending", label: "🔥 Hot" }, { id: "new", label: "⚡ New" }, ...(session ? [{ id: "mine", label: "My Posts" }] : [])].map(f => (
               <button key={f.id} onClick={() => { setFilter(f.id); setPage(1); }} style={{ padding: "7px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", background: filter === f.id ? T.surface : "transparent", color: filter === f.id ? T.text : T.subtext, transition: "background 0.15s, color 0.15s, box-shadow 0.15s", whiteSpace: "nowrap", boxShadow: filter === f.id ? `0 2px 8px ${T.shadow}` : "none" }}>
                 {f.label}
               </button>
@@ -2079,7 +2078,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
                 )}
                 {displayed.length === 0 && (
                   <div style={{ textAlign: "center", padding: "80px 24px" }}>
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>ðŸ•¯ï¸</div>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>🕯️</div>
                     <div style={{ fontSize: 15, color: T.muted }}>{filter === "saved" && session ? "No saved posts yet." : "No discussions found."}</div>
                     {session && <button onClick={onNewThread} style={{ marginTop: 16, padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Start a Discussion</button>}
                   </div>
@@ -2099,14 +2098,14 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
           onClick={session ? onNewThread : onLoginRequired}
           style={{ position: "fixed", bottom: 24, right: 20, width: 56, height: 56, borderRadius: "50%", background: T.accent, color: "#fff", fontSize: 24, border: "none", boxShadow: `0 8px 28px ${withAlpha(T.accent, 0.45)}`, zIndex: 100, cursor: "pointer" }}
         >
-          âœï¸
+          ✍️
         </button>
       )}
     </div>
   );
 }
 
-// â”€â”€â”€ Root â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Root ─────────────────────────────────────────────────────────────────────
 export default function ForumModule({ T, session, getToken: getTokenProp, onTickerClick, onLoginRequired: onLoginRequiredProp }) {
   const getToken = useCallback(async () => {
     if (getTokenProp) return getTokenProp();
@@ -2124,7 +2123,7 @@ export default function ForumModule({ T, session, getToken: getTokenProp, onTick
   }, [onLoginRequiredProp, addToast]);
 
   const handleViewThread = useCallback((t) => { setActiveThread(t); setView("thread"); window.scrollTo(0, 0); }, []);
-  const handlePosted = useCallback((t) => { if (t) { setActiveThread(t); setView("thread"); addToast("Published! ðŸš€"); } }, [addToast]);
+  const handlePosted = useCallback((t) => { if (t) { setActiveThread(t); setView("thread"); addToast("Published! 🚀"); } }, [addToast]);
 
   return (
     <TokenContext.Provider value={getToken}>
@@ -2162,5 +2161,3 @@ export default function ForumModule({ T, session, getToken: getTokenProp, onTick
     </TokenContext.Provider>
   );
 }
-
-

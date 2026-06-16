@@ -1,23 +1,22 @@
-﻿import React from 'react';
 // ============================================================
-//  WatchlistDashboard.jsx  â€” v7  (Institutional Redesign)
+//  WatchlistDashboard.jsx  — v7  (Institutional Redesign)
 //
-//  âš¡ DESIGN SYSTEM: strict T.* token-only usage
-//  ðŸ“ LAYOUT: Sidebar 220px | Table flex | Detail 320px
-//  ðŸ— COMPONENTS:
-//     WatchlistSidebar Â· WatchlistTable Â· StockRow Â· DetailPanel
+//  ⚡ DESIGN SYSTEM: strict T.* token-only usage
+//  📐 LAYOUT: Sidebar 220px | Table flex | Detail 320px
+//  🏗 COMPONENTS:
+//     WatchlistSidebar · WatchlistTable · StockRow · DetailPanel
 //
-//  âœ… RETAINED (unchanged):
+//  ✅ RETAINED (unchanged):
 //     - All data fetching (loadWatchlistRows, fetchPrices, etc.)
 //     - Cache layer (watchlistCache, dedupedFetch)
 //     - All REST helpers (GET/POST/PATCH/DELETE/RPC)
 //     - All state management and callbacks
 //     - Keyboard navigation, event system, sparklines
-//  âœ… REDESIGNED:
-//     - StockRow â†’ multi-line card layout
-//     - Status pills â†’ minimal [S2] [BO] [VOL] style
-//     - Sidebar â†’ thin left-border active state
-//     - Detail panel â†’ clean, borderLeft only
+//  ✅ REDESIGNED:
+//     - StockRow → multi-line card layout
+//     - Status pills → minimal [S2] [BO] [VOL] style
+//     - Sidebar → thin left-border active state
+//     - Detail panel → clean, borderLeft only
 //     - Removed duplicate metrics, bright colors, thick borders
 // ============================================================
 
@@ -29,7 +28,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PAGE_SIZE      = 100;
 const MAX_WATCHLISTS = 25;
 
-// â”€â”€â”€ Event Intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Event Intelligence ────────────────────────────────────────
 const EVENTS_CACHE_KEY = "events_cache";
 const EVENTS_CACHE_TTL = 5 * 60 * 1000;
 const seenSeqIds = new Set();
@@ -46,7 +45,7 @@ const EVENT_BADGE_MAP = {
   INVESTOR_MEET: { abbr:"I",  color:"#d97706", bg:"rgba(217,119,6,0.10)",  border:"rgba(217,119,6,0.25)" },
   ANALYST:       { abbr:"I",  color:"#d97706", bg:"rgba(217,119,6,0.10)",  border:"rgba(217,119,6,0.25)" },
   BOARD:         { abbr:"B",  color:"#64748b", bg:"rgba(100,116,139,0.10)",border:"rgba(100,116,139,0.25)"},
-  DEFAULT:       { abbr:"â€¢",  color:"#475569", bg:"rgba(71,85,105,0.08)",  border:"rgba(71,85,105,0.2)"  },
+  DEFAULT:       { abbr:"•",  color:"#475569", bg:"rgba(71,85,105,0.08)",  border:"rgba(71,85,105,0.2)"  },
 };
 
 function getEventBadge(category = "") {
@@ -60,9 +59,9 @@ function slope(arr) {
     return arr[arr.length - 1] - arr[0];
 }
 
-// â”€â”€â”€ Weekly Candlestick Chart Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const _wlWeeklyChartCache    = new Map(); // ticker â†’ candles[] | null
-const _wlWeeklyChartInFlight = new Map(); // ticker â†’ Promise
+// ─── Weekly Candlestick Chart Helpers ─────────────────────────
+const _wlWeeklyChartCache    = new Map(); // ticker → candles[] | null
+const _wlWeeklyChartInFlight = new Map(); // ticker → Promise
 
 function _wlAggregateToWeekly(rows) {
   const weeks = {};
@@ -130,7 +129,7 @@ async function fetchWlWeeklyOHLC(ticker) {
   return promise;
 }
 
-// â”€â”€â”€ Mini Candlestick Chart (weekly, SVG) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Mini Candlestick Chart (weekly, SVG) ─────────────────────
 function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
   if (!candles || candles.length < 4) return null;
   const isDark = T.surface !== "#ffffff" && T.surface !== "#f8fafc";
@@ -180,7 +179,7 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
 
   const priceFmt = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v).toString();
   const volFmt   = v => v >= 1e7 ? `${(v / 1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v);
-  // Axis ticks: min, geometric mean, max â€” evenly spaced on the log scale
+  // Axis ticks: min, geometric mean, max — evenly spaced on the log scale
   const axisVals = [pMin, Math.exp((logMin + logMax) / 2), pMax];
 
   return (
@@ -223,7 +222,7 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
         fontSize="7" fill={T.subtext}
         fontFamily="'IBM Plex Mono',monospace"
         textAnchor="start" opacity="0.55">
-        {candles.length}W Â· 10WMA
+        {candles.length}W · 10WMA
       </text>
       <line x1={pad.l} x2={pad.l + W} y1={volTop - 2} y2={volTop - 2}
         stroke={T.border} strokeWidth="0.5" opacity="0.4" />
@@ -256,13 +255,13 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
         fontSize="7" fill={T.subtext}
         fontFamily="'IBM Plex Mono',monospace"
         textAnchor="start" opacity="0.5">
-        VOL Â· 20W avg
+        VOL · 20W avg
       </text>
     </svg>
   );
 }
 
-// â”€â”€â”€ Candlestick section (used in both desktop panel and mobile sheet) â”€â”€â”€â”€
+// ─── Candlestick section (used in both desktop panel and mobile sheet) ────
 function WlCandleSection({ ticker, T, width }) {
   const [candles, setCandles] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -284,7 +283,7 @@ function WlCandleSection({ ticker, T, width }) {
     <div style={{ background: T.card, borderRadius: 8, padding: "10px 10px 8px", overflow: "hidden" }}>
       <div style={{ fontSize: 9, color: T.subtext, fontWeight: 500, textTransform: "uppercase",
         letterSpacing: "0.1em", marginBottom: 8, opacity: 0.55, fontFamily: "'DM Sans',sans-serif" }}>
-        Weekly Chart Â· 52W
+        Weekly Chart · 52W
       </div>
       {loading ? (
         <div style={{ height: 80, display: "flex", flexDirection: "column", alignItems: "center",
@@ -352,16 +351,16 @@ async function fetchAnnouncements(symbols, token) {
 
 
 
-// â”€â”€â”€ Cache Layer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Cache Layer ───────────────────────────────────────────────
 const watchlistCache = new Map();
 const inFlightRequests = new Map();
 const CACHE_TTL = 60 * 1000;
 
-// â”€â”€â”€ Persistent SWR Helpers (localStorage) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Persistent SWR Helpers (localStorage) ────────────────────
 // Rows cache: key = `wl_rows_<watchlistId>`, TTL = 24h (stale-but-usable)
-// Fresh threshold = 90s â€” if data is newer than this, skip background refetch
-const LS_ROWS_TTL        = 24 * 60 * 60 * 1000; // 24h â€” stale but usable
-const LS_ROWS_FRESH_TTL  =       90 * 1000;       // 90s â€” skip background fetch
+// Fresh threshold = 90s — if data is newer than this, skip background refetch
+const LS_ROWS_TTL        = 24 * 60 * 60 * 1000; // 24h — stale but usable
+const LS_ROWS_FRESH_TTL  =       90 * 1000;       // 90s — skip background fetch
 const LS_FEED_TTL        = 24 * 60 * 60 * 1000;
 const LS_FEED_FRESH_TTL  =      120 * 1000;
 
@@ -380,7 +379,7 @@ function getPersistedRows(watchlistId) {
   if (!c || !c.rows || Date.now() - c.ts > LS_ROWS_TTL) return null;
   // Strip any optimistic/phantom rows that may have been persisted from a
   // previous session. Optimistic rows have loading:true or _optimistic:true
-  // and no real data â€” they must never survive a cache read.
+  // and no real data — they must never survive a cache read.
   const cleaned = c.rows.filter(r => !r._optimistic && !r.loading);
   return { ...c, rows: cleaned };
 }
@@ -391,7 +390,7 @@ function setPersistedRows(watchlistId, rows, total) {
 }
 
 function getPersistedFeed(userId, watchlistId) {
-  // Strictly watchlist-scoped â€” never fall back to a cross-watchlist key.
+  // Strictly watchlist-scoped — never fall back to a cross-watchlist key.
   // The old wl_feed_v2_<userId> fallback was the root cause of showing
   // a different watchlist's announcements when the per-WL key was cold.
   if (!userId || !watchlistId) return null;
@@ -400,7 +399,7 @@ function getPersistedFeed(userId, watchlistId) {
   return c; // { data, ts }
 }
 function setPersistedFeed(userId, watchlistId, data) {
-  // Only write to the watchlist-scoped key â€” never pollute a shared userId key.
+  // Only write to the watchlist-scoped key — never pollute a shared userId key.
   if (!userId || !watchlistId) return;
   lsSet(`wl_feed_v3_${userId}_${watchlistId}`, { data, ts: Date.now() });
 }
@@ -422,7 +421,7 @@ async function dedupedFetch(params, fn) {
   return p;
 }
 
-// â”€â”€â”€ Auth / REST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Auth / REST ───────────────────────────────────────────────
 function hdrs(token) {
   return { "Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${token||SUPABASE_ANON_KEY}` };
 }
@@ -451,7 +450,7 @@ async function RPC(fn, params, token) {
   return r.json();
 }
 
-// â”€â”€â”€ Data Loader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Data Loader ──────────────────────────────────────────────
 async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, sortAsc, filters }) {
   const items = await GET(`watchlist_items?watchlist_id=eq.${watchlistId}&select=ticker&order=added_at.asc`, token);
   if (!items || items.length === 0) return { rows:[], total:0 };
@@ -464,7 +463,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
   }
 
   // Fetch only the single latest indicator row per ticker by using a recent
-  // 14-day window. This avoids the Supabase row-count explosion (N tickers Ã—
+  // 14-day window. This avoids the Supabase row-count explosion (N tickers ×
   // 90 days) that causes page-2 tickers to be silently dropped when the
   // response is truncated at the default 1000-row limit.
   // If a ticker has no row in the last 14 days we fall back to fetching its
@@ -521,7 +520,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
 
       if (close != null && sma50 != null && sma150 != null && sma200 != null) {
 
-          // â”€â”€ Stage 2 (Uptrend) â”€â”€
+          // ── Stage 2 (Uptrend) ──
           if (
               close > sma50 &&
               sma50 >= sma150 * 0.98 &&   // tolerance
@@ -530,12 +529,12 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
               trend = "stage2";
           }
 
-          // â”€â”€ Stage 4 (Downtrend) â”€â”€
+          // ── Stage 4 (Downtrend) ──
           else if (close < sma200) {
               trend = "stage4";
           }
 
-          // â”€â”€ Stage 1 (Base / Transition) â”€â”€
+          // ── Stage 1 (Base / Transition) ──
           else {
               trend = "stage1";
           }
@@ -577,7 +576,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
   return { rows, total };
 }
 
-// â”€â”€â”€ Screen Membership â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Screen Membership ────────────────────────────────────────
 let _scMemberCache = null;
 let _scMemberLoadedAt = 0;
 async function fetchScreenMembership(token) {
@@ -612,7 +611,7 @@ async function fetchScreenMembership(token) {
     const rows=allTickers.map(joinRow).filter(r=>r.close>0);
     const top=(arr,sortFn,n=50)=>new Set(arr.slice().sort(sortFn).slice(0,n).map(r=>r.ticker));
     const screens={
-      // â”€â”€ Market Leaders â”€â”€
+      // ── Market Leaders ──
       "Near 52W High":    top(rows.filter(r=>r.pctHigh>=-5&&r.close>r.sma50&&r.close>r.sma200),(a,b)=>b.pctHigh-a.pctHigh),
       "RS Leader":        top(rows.filter(r=>r.rs>=85),(a,b)=>b.rs-a.rs),
       "RS 3M Leader":     top(rows.filter(r=>r.rs3m>0),(a,b)=>b.rs3m-a.rs3m),
@@ -620,11 +619,11 @@ async function fetchScreenMembership(token) {
       "RS 12M Leader":    top(rows.filter(r=>r.rs12m>0),(a,b)=>b.rs12m-a.rs12m),
       "Multi-TF RS":      top(rows.filter(r=>r.rs3m>70&&r.rs6m>70&&r.rs12m>70),(a,b)=>b.rs-a.rs),
       "RS Accel":         top(rows.filter(r=>r.rs3m>r.rs6m&&r.rs3m>70),(a,b)=>(b.rs3m-b.rs6m)-(a.rs3m-a.rs6m)),
-      // â”€â”€ Breakouts â”€â”€
+      // ── Breakouts ──
       "Vol Breakout":     top(rows.filter(r=>r.relVol>=2.0&&r.close>r.sma50&&r.close>r.sma200&&r.rs>=70),(a,b)=>b.relVol-a.relVol),
       "52W High BO":      top(rows.filter(r=>r.pctHigh>=-7&&r.close>r.sma50&&r.close>r.sma200&&r.rs>=80),(a,b)=>b.rs-a.rs),
       "Pivot BO":         top(rows.filter(r=>r.p20w>0&&r.close>=r.p20w*0.97&&r.close>r.sma50&&r.close>r.sma200),(a,b)=>b.rs-a.rs),
-      // â”€â”€ Pullbacks â”€â”€
+      // ── Pullbacks ──
       "Pullback 50DMA":   top(rows.filter(r=>r.close>0&&r.sma50>0&&Math.abs(r.close-r.sma50)/r.sma50<0.03&&r.close>r.sma200&&r.rs>=70),(a,b)=>b.rs-a.rs),
       "Shallow Pullback": top(rows.filter(r=>r.p20w>0&&r.close<r.p20w&&r.close>=r.p20w*0.95&&r.close>r.sma50&&r.rs>=80),(a,b)=>b.rs-a.rs),
       "Weekly Pullback":  top(rows.filter(r=>r.p20w>0&&r.close>=r.p20w*0.95&&r.close>r.sma50&&r.rs>=75),(a,b)=>b.rs-a.rs),
@@ -637,19 +636,19 @@ async function fetchScreenMembership(token) {
   } catch { return {}; }
 }
 
-// â”€â”€â”€ Default-Watchlist Seeding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Default-Watchlist Seeding ────────────────────────────────
 // When a brand-new user has zero watchlists we clone kumodiit@gmail.com's
 // watchlists (names + tickers) into their account as a starting point.
 // The seed runs exactly once, guarded by a localStorage flag.
 //
-// âš ï¸  SETUP: replace the placeholder below with the real UUID of
-//     kumodiit@gmail.com from your Supabase Auth â†’ Users dashboard.
-// â”€â”€â”€ Default Watchlist Seeding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ⚠️  SETUP: replace the placeholder below with the real UUID of
+//     kumodiit@gmail.com from your Supabase Auth → Users dashboard.
+// ─── Default Watchlist Seeding ───────────────────────────────────────────────
 // Copies the template user's watchlists+tickers to a brand-new user via a
-// SECURITY DEFINER Postgres RPC that bypasses RLS entirely â€” the only reliable
+// SECURITY DEFINER Postgres RPC that bypasses RLS entirely — the only reliable
 // way to read another user's rows from the client.
 //
-// âš ï¸  ONE-TIME SETUP: Run this SQL in Supabase â†’ SQL Editor before deploying:
+// ⚠️  ONE-TIME SETUP: Run this SQL in Supabase → SQL Editor before deploying:
 //
 //   CREATE OR REPLACE FUNCTION clone_template_watchlists(
 //     p_template_user_id uuid,
@@ -680,14 +679,14 @@ async function fetchScreenMembership(token) {
 //   END;
 //   $$;
 //
-//   -- Allow any logged-in user to call it (safe â€” they can only seed themselves)
+//   -- Allow any logged-in user to call it (safe — they can only seed themselves)
 //   GRANT EXECUTE ON FUNCTION clone_template_watchlists(uuid, uuid) TO authenticated;
 
-// UUID of kumodiit@gmail.com â€” copy from Supabase Auth â†’ Users dashboard
+// UUID of kumodiit@gmail.com — copy from Supabase Auth → Users dashboard
 const TEMPLATE_USER_ID  = "d185de46-d490-422d-9b74-cd715d236771";
 const SEED_FLAG_KEY     = (uid) => `wl_seeded_v3_${uid}`;
 
-// Module-level in-memory guard â€” blocks duplicate concurrent calls within the
+// Module-level in-memory guard — blocks duplicate concurrent calls within the
 // same page session (e.g. React StrictMode double-invoke, token refresh re-run).
 const _seedBusy = new Set();
 
@@ -700,7 +699,7 @@ async function seedDefaultWatchlists(newUserId, token) {
 
   _seedBusy.add(newUserId);
   try {
-    // Call the SECURITY DEFINER RPC â€” it runs as postgres and bypasses all RLS.
+    // Call the SECURITY DEFINER RPC — it runs as postgres and bypasses all RLS.
     // This is the only reliable way to read another user's rows from the browser.
     const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/clone_template_watchlists`, {
       method: "POST",
@@ -731,7 +730,7 @@ async function seedDefaultWatchlists(newUserId, token) {
   }
 }
 
-// â”€â”€â”€ Price Cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Price Cache ───────────────────────────────────────────────
 const priceCache = {};
 async function fetchPrices(tickers, token) {
   const missing = tickers.filter(t=>!priceCache[t]);
@@ -746,7 +745,7 @@ async function fetchPrices(tickers, token) {
   return {...priceCache};
 }
 
-// â”€â”€â”€ Earnings Date Fetcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Earnings Date Fetcher ────────────────────────────────────
 // Returns a map: { [ticker]: "YYYY-MM-DD" } for the next upcoming earnings date
 async function fetchEarningsDates(tickers, token) {
   if (!tickers || tickers.length === 0) return {};
@@ -769,15 +768,15 @@ async function fetchEarningsDates(tickers, token) {
   } catch { return {}; }
 }
 
-// â”€â”€â”€ Formatters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Formatters ───────────────────────────────────────────────
 const fmt = {
-  pct:      v=>v==null?"â€”":(isNaN(+v)?"â€”":((+v>=0?"+":"")+((+v).toFixed(1))+"%")),
-  pctRound: v=>v==null?"â€”":(isNaN(+v)?"â€”":((+v>=0?"+":"")+Math.round(+v)+"%")),
-  price:    v=>v==null?"â€”":isNaN(+v)?"â€”":"â‚¹"+(+v).toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0}),
-  priceFull:v=>v==null?"â€”":isNaN(+v)?"â€”":"â‚¹"+(+v).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2}),
+  pct:      v=>v==null?"—":(isNaN(+v)?"—":((+v>=0?"+":"")+((+v).toFixed(1))+"%")),
+  pctRound: v=>v==null?"—":(isNaN(+v)?"—":((+v>=0?"+":"")+Math.round(+v)+"%")),
+  price:    v=>v==null?"—":isNaN(+v)?"—":"₹"+(+v).toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0}),
+  priceFull:v=>v==null?"—":isNaN(+v)?"—":"₹"+(+v).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2}),
 };
 
-// â”€â”€â”€ Sparkline (mini) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Sparkline (mini) ─────────────────────────────────────────
 const Sparkline = memo(({ data, positive, width=60, height=24 }) => {
   if (!data || data.length < 2) return <svg width={width} height={height}/>;
   const vals = data.map(d=>+d.close);
@@ -791,14 +790,14 @@ const Sparkline = memo(({ data, positive, width=60, height=24 }) => {
   );
 });
 
-// â”€â”€â”€ Minimal Status Pills â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Minimal Status Pills ─────────────────────────────────────
 // Replaces colorful badges with dim bordered pills: [S2] [BO] [VOL]
 const StatusPills = memo(({ row, screenMembership, T }) => {
   const pills = [];
-  if (row.trend === "stage2") pills.push({ label:"Stage 2", title:"Stage 2 â€” Above 50 & 200 DMA" });
-  else if (row.trend === "stage1") pills.push({ label:"Stage 1", title:"Stage 1 â€” Above 200 DMA" });
+  if (row.trend === "stage2") pills.push({ label:"Stage 2", title:"Stage 2 — Above 50 & 200 DMA" });
+  else if (row.trend === "stage1") pills.push({ label:"Stage 1", title:"Stage 1 — Above 200 DMA" });
   if (row.signals?.includes("breakout")) pills.push({ label:"Near 52w High", title:"Near 52W High Breakout" });
-  if (row.signals?.includes("vol_spike")) pills.push({ label:"Volume Spike", title:"Volume Spike â‰¥1.5Ã—" });
+  if (row.signals?.includes("vol_spike")) pills.push({ label:"Volume Spike", title:"Volume Spike ≥1.5×" });
   if (row.signals?.includes("pullback")) pills.push({ label:"Pullback to 50DMA", title:"Pullback to 50 DMA" });
   const screens = screenMembership[row.ticker] || [];
   if (screens.includes("RS Leader") || screens.includes("RS Accel")) pills.push({ label:"RS Accelerating", title:"RS Leader or Accelerating" });
@@ -817,10 +816,10 @@ const StatusPills = memo(({ row, screenMembership, T }) => {
   );
 });
 
-// â”€â”€â”€ Return Color (uses T tokens) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Return Color (uses T tokens) ─────────────────────────────
 const retColor = (v, T) => v==null ? T.subtext : +v>=0 ? T.pos : T.neg;
 
-// â”€â”€â”€ Skeleton Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Skeleton Row ─────────────────────────────────────────────
 const SkeletonRow = ({ T }) => (
   <div style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
@@ -836,14 +835,14 @@ const SkeletonRow = ({ T }) => (
   </div>
 );
 
-// â”€â”€â”€ Sort Icon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Sort Icon ────────────────────────────────────────────────
 const SortIco = ({ active, asc }) => (
   <span style={{ marginLeft:3, fontSize:9, opacity:active?1:0.35, color:"inherit" }}>
-    {active ? (asc?"â–²":"â–¼") : "â¬"}
+    {active ? (asc?"▲":"▼") : "⬍"}
   </span>
 );
 
-// â”€â”€â”€ Filter Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Filter Panel ─────────────────────────────────────────────
 function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile }) {
   if (!visible) return null;
   const NumField = (label, key, ph) => (
@@ -887,12 +886,12 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
           </div>
         )}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: isMobile ? 12 : 12, marginBottom: isMobile ? 18 : 14 }}>
-          {NumField("RS â‰¥","rs_min","80")}
-          {NumField("Rel Vol â‰¥","relvol_min","1.5")}
-          {NumField("Ret 3M â‰¥","ret3m_min","0")}
-          {NumField("Ret 6M â‰¥","ret6m_min","20")}
-          {NumField("Ret 12M â‰¥","ret12m_min","50")}
-          {NumField("52W High â‰¥%","pct_high_min","-10")}
+          {NumField("RS ≥","rs_min","80")}
+          {NumField("Rel Vol ≥","relvol_min","1.5")}
+          {NumField("Ret 3M ≥","ret3m_min","0")}
+          {NumField("Ret 6M ≥","ret6m_min","20")}
+          {NumField("Ret 12M ≥","ret12m_min","50")}
+          {NumField("52W High ≥%","pct_high_min","-10")}
         </div>
         <div style={{ borderTop:`1px solid ${T.border}`, paddingTop: isMobile ? 16 : 14, marginBottom: isMobile ? 18 : 12 }}>
           <div style={{ fontSize: isMobile ? 11 : 10, fontWeight:700, color:T.subtext, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom: isMobile ? 12 : 8 }}>SMA Conditions</div>
@@ -964,7 +963,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
   );
 }
 
-// â”€â”€â”€ Ticker Autocomplete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Ticker Autocomplete ──────────────────────────────────────
 function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compact, isMobile = false }) {
   const [sugg, setSugg] = useState([]);
   const [open, setOpen] = useState(false);
@@ -1001,7 +1000,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
             onChange={e=>{onChange(e.target.value);search(e.target.value);}}
             onKeyDown={onKD}
             onFocus={()=>sugg.length>0&&setOpen(true)}
-            placeholder="Add tickerâ€¦"
+            placeholder="Add ticker…"
             style={{
               width:"100%", padding:isMobile ? "12px 38px 12px 13px" : "8px 32px 8px 10px",
               background:T.card, border:`1px solid ${addError?"#dc2626":T.border}`,
@@ -1050,7 +1049,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
             <div key={s.ticker} onMouseDown={()=>pick(s)} onMouseEnter={()=>setHi(i)}
               style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:isMobile ? "10px 12px" : "8px 10px",cursor:"pointer",background:i===hi?T.hover:"transparent",borderBottom:`1px solid ${T.border}`}}>
               <span style={{fontWeight:600,fontSize:12,color:T.text,fontFamily:"'IBM Plex Mono',monospace"}}>{s.ticker}</span>
-              {s.close!=null&&<span style={{fontSize:11,color:T.subtext,fontFamily:"'IBM Plex Mono',monospace"}}>â‚¹{(+s.close).toLocaleString("en-IN",{maximumFractionDigits:0})}</span>}
+              {s.close!=null&&<span style={{fontSize:11,color:T.subtext,fontFamily:"'IBM Plex Mono',monospace"}}>₹{(+s.close).toLocaleString("en-IN",{maximumFractionDigits:0})}</span>}
             </div>
           ))}
         </div>
@@ -1059,13 +1058,13 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  STOCK ROW â€” Multi-line institutional card
+// ═══════════════════════════════════════════════════════════════
+//  STOCK ROW — Multi-line institutional card
 //  Layout:
 //    [NAME]         [PRICE]      [RS##]
 //    3M   6M  12M
 //    VOL x.x  [S2] [BO] [VOL]
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 // ONLY KEY UPDATED PARTS (StockRow + improvements)
 // Drop-in replacement for StockRow component
 
@@ -1095,32 +1094,32 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
 
     const rc = v => v == null ? T.subtext : +v >= 0 ? T.pos : T.neg;
 
-    // â”€â”€ Stage label (all 3 stages) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Stage label (all 3 stages) ─────────────────────────────
     const stageLabel = row.trend === "stage2" ? "Stage 2"
                      : row.trend === "stage1" ? "Stage 1"
                      : row.trend === "stage4" ? "Stage 4"
                      : null;
 
-    // â”€â”€ Screen pills derived directly from row data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Screen pills derived directly from row data ────────────
     // (No dependency on async screenMembership universe fetch)
     const SCREEN_PILL_CFG = {
-      // Market Leaders â€” blue/violet
+      // Market Leaders — blue/violet
       "RS Leader":      { color:"#a78bfa", bg:"rgba(167,139,250,0.12)", border:"rgba(167,139,250,0.3)" },
       "Near 52W High":  { color:"#60a5fa", bg:"rgba(96,165,250,0.12)",  border:"rgba(96,165,250,0.3)"  },
       "Multi-TF RS":    { color:"#818cf8", bg:"rgba(129,140,248,0.12)", border:"rgba(129,140,248,0.3)" },
       "RS Accel":       { color:"#c084fc", bg:"rgba(192,132,252,0.12)", border:"rgba(192,132,252,0.3)" },
-      // Breakouts â€” green
+      // Breakouts — green
       "Vol Breakout":   { color:"#34d399", bg:"rgba(52,211,153,0.10)",  border:"rgba(52,211,153,0.28)" },
       "52W High BO":    { color:"#4ade80", bg:"rgba(74,222,128,0.10)",  border:"rgba(74,222,128,0.28)" },
       "Pivot BO":       { color:"#22c55e", bg:"rgba(34,197,94,0.10)",   border:"rgba(34,197,94,0.28)"  },
-      // Pullbacks â€” amber/orange
+      // Pullbacks — amber/orange
       "Pullback 50DMA": { color:"#fbbf24", bg:"rgba(251,191,36,0.10)",  border:"rgba(251,191,36,0.28)" },
       "Shallow PB":     { color:"#fb923c", bg:"rgba(251,146,60,0.10)",  border:"rgba(251,146,60,0.28)" },
       "Weekly PB":      { color:"#f59e0b", bg:"rgba(245,158,11,0.10)",  border:"rgba(245,158,11,0.28)" },
       "Vol Dry-up":     { color:"#d97706", bg:"rgba(217,119,6,0.08)",   border:"rgba(217,119,6,0.22)"  },
     };
 
-    // Derive screens from row fields directly â€” always works, no async dependency
+    // Derive screens from row fields directly — always works, no async dependency
     const rs   = row.rs_rating ?? 0;
     const cl   = row.close     ?? 0;
     const s50  = row.sma50     ?? 0;
@@ -1140,13 +1139,13 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
     if (p20w > 0 && cl < p20w && cl >= p20w * 0.95 && cl > s50 && rs >= 80)  rowScreens.push("Shallow PB");
     if (p20w > 0 && cl >= p20w * 0.95 && cl > s50 && rs >= 75)               rowScreens.push("Weekly PB");
     if (rv > 0 && rv < 0.7 && cl > s50 && cl > s200 && rs >= 60)             rowScreens.push("Vol Dry-up");
-    // Multi-TF RS â€” needs rs_3m/rs_6m/rs_12m from screenMembership if available, else skip
+    // Multi-TF RS — needs rs_3m/rs_6m/rs_12m from screenMembership if available, else skip
     const smScreens = screenMembership?.[row.ticker] ?? [];
     if (smScreens.includes("Multi-TF RS") || smScreens.includes("RS Accel")) {
       if (!rowScreens.includes("Multi-TF RS") && smScreens.includes("Multi-TF RS")) rowScreens.push("Multi-TF RS");
       if (!rowScreens.includes("RS Accel")    && smScreens.includes("RS Accel"))    rowScreens.push("RS Accel");
     }
-    // â”€â”€ PRIORITY ORDER (most actionable first) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── PRIORITY ORDER (most actionable first) ─────────────
     const PRIORITY = [
         "RS Leader",
         "52W High BO",
@@ -1158,7 +1157,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
         "Vol Dry-up"
     ];
 
-    // â”€â”€ Sort screens by priority â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Sort screens by priority ───────────────────────────
     const tickerScreens = [...rowScreens].sort((a, b) => {
         const ai = PRIORITY.indexOf(a);
         const bi = PRIORITY.indexOf(b);
@@ -1196,7 +1195,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 transition: "all 0.15s ease",
             }}
         >
-            {/* ROW 1 â€” ticker + price + RS + sparkline */}
+            {/* ROW 1 — ticker + price + RS + sparkline */}
             <div style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -1234,9 +1233,9 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                         letterSpacing: "0.01em",
                         transition: "color 0.25s",
                     }}>
-                        {p != null ? `â‚¹${p.toLocaleString("en-IN")}` : "â€”"}
+                        {p != null ? `₹${p.toLocaleString("en-IN")}` : "—"}
                         {isPending && (
-                            <span title="Fetching live priceâ€¦" style={{
+                            <span title="Fetching live price…" style={{
                                 display: "inline-block",
                                 width: 4, height: 4,
                                 borderRadius: "50%",
@@ -1260,7 +1259,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 </div>
             </div>
 
-            {/* ROW 2 â€” returns + vol/stage info */}
+            {/* ROW 2 — returns + vol/stage info */}
             <div style={{
                 display: "flex",
                 alignItems: "center",
@@ -1270,23 +1269,23 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 gap: 0,
             }}>
                 <span style={{ color: rc(row.ret_3m), letterSpacing: "0.02em" }}>
-                    {row.ret_3m != null ? `${Math.round(row.ret_3m) > 0 ? "+" : ""}${Math.round(row.ret_3m)}%` : "â€”"}
+                    {row.ret_3m != null ? `${Math.round(row.ret_3m) > 0 ? "+" : ""}${Math.round(row.ret_3m)}%` : "—"}
                 </span>
-                <span style={{ margin: "0 5px", color: T.subtext }}>Â·</span>
+                <span style={{ margin: "0 5px", color: T.subtext }}>·</span>
                 <span style={{ color: rc(row.ret_6m) }}>
-                    {row.ret_6m != null ? `${Math.round(row.ret_6m) > 0 ? "+" : ""}${Math.round(row.ret_6m)}%` : "â€”"}
+                    {row.ret_6m != null ? `${Math.round(row.ret_6m) > 0 ? "+" : ""}${Math.round(row.ret_6m)}%` : "—"}
                 </span>
-                <span style={{ margin: "0 5px", color: T.subtext }}>Â·</span>
+                <span style={{ margin: "0 5px", color: T.subtext }}>·</span>
                 <span style={{ color: rc(row.ret_12m) }}>
-                    {row.ret_12m != null ? `${Math.round(row.ret_12m) > 0 ? "+" : ""}${Math.round(row.ret_12m)}%` : "â€”"}
+                    {row.ret_12m != null ? `${Math.round(row.ret_12m) > 0 ? "+" : ""}${Math.round(row.ret_12m)}%` : "—"}
                 </span>
 
                 {(row.rel_vol != null || stageLabel) && (
                     <>
                         <span style={{ margin: "0 8px", color: T.border, fontSize: 11 }}>|</span>
                         <span style={{ color: T.subtext, fontSize: 11, letterSpacing: "0.03em" }}>
-                            {row.rel_vol != null ? `${row.rel_vol.toFixed(1)}Ã—` : ""}
-                            {stageLabel ? ` Â· ${stageLabel}` : ""}
+                            {row.rel_vol != null ? `${row.rel_vol.toFixed(1)}×` : ""}
+                            {stageLabel ? ` · ${stageLabel}` : ""}
                         </span>
                     </>
                 )}
@@ -1310,11 +1309,11 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                         display: "flex", alignItems: "center", justifyContent: "center",
                     }}
                 >
-                    âœ•
+                    ✕
                 </button>
             </div>
 
-            {/* ROW 3 â€” Screen membership pills */}
+            {/* ROW 3 — Screen membership pills */}
             {tickerScreens.length > 0 && (() => {
                 const PRIORITY = ["52W High BO","Pivot BO","Vol Breakout","RS Leader","Pullback 50DMA","Shallow PB","Weekly PB","Vol Dry-up"];
                 const sortedScreens = [...tickerScreens].sort((a, b) => {
@@ -1359,7 +1358,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 );
             })()}
 
-            {/* ROW 4 â€” Upcoming earnings date */}
+            {/* ROW 4 — Upcoming earnings date */}
             {earningsDate && (() => {
                 const today = new Date(); today.setHours(0,0,0,0);
                 const d = new Date(earningsDate + "T00:00:00");
@@ -1379,7 +1378,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                             color: urgColor, whiteSpace: "nowrap", letterSpacing: "0.04em",
                             fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
                         }}>
-                            ðŸ“… Results {dateStr}
+                            📅 Results {dateStr}
                         </span>
                         <span style={{
                             fontSize: 9, color: urgColor, fontFamily: "'DM Mono', monospace",
@@ -1394,7 +1393,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
     );
 });
 
-// â”€â”€â”€ Compare Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Compare Panel ────────────────────────────────────────────
 function ComparePanel({ watchlists, token, onClose, T }) {
   const [sel, setSel]   = useState([]);
   const [data, setData] = useState([]);
@@ -1414,7 +1413,7 @@ function ComparePanel({ watchlists, token, onClose, T }) {
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:22,width:580,maxHeight:"80vh",overflow:"auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
           <h3 style={{fontSize:13,fontWeight:500,color:T.text,margin:0}}>Compare Watchlists</h3>
-          <button onClick={onClose} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:5,color:T.subtext,cursor:"pointer",fontSize:12,padding:"4px 8px"}}>âœ•</button>
+          <button onClick={onClose} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:5,color:T.subtext,cursor:"pointer",fontSize:12,padding:"4px 8px"}}>✕</button>
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:12}}>
           {watchlists.map(w=>(
@@ -1427,12 +1426,12 @@ function ComparePanel({ watchlists, token, onClose, T }) {
         </div>
         <button onClick={run} disabled={sel.length<2||busy}
           style={{padding:"5px 16px",background:T.green,color:"#fff",border:"none",borderRadius:5,fontSize:12,fontWeight:600,cursor:sel.length<2?"not-allowed":"pointer",opacity:sel.length<2?0.5:1,marginBottom:16}}>
-          {busy?"Comparingâ€¦":"Compare"}</button>
+          {busy?"Comparing…":"Compare"}</button>
         {data.length>0&&(
           <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(data.length,3)},1fr)`,gap:8}}>
             {data.map(d=>(
               <div key={d.watchlist_id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:10}}>
-                <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:8,borderBottom:`1px solid ${T.border}`,paddingBottom:6}}>{wlMap[d.watchlist_id]||"â€”"}</div>
+                <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:8,borderBottom:`1px solid ${T.border}`,paddingBottom:6}}>{wlMap[d.watchlist_id]||"—"}</div>
                 {[["Stocks",d.stock_count,T.text],["Avg RS",d.avg_rs,T.green],["Avg 3M",fmt.pct(d.avg_ret_3m),retColor(d.avg_ret_3m,T)],["Avg 6M",fmt.pct(d.avg_ret_6m),retColor(d.avg_ret_6m,T)],["Avg 12M",fmt.pct(d.avg_ret_12m),retColor(d.avg_ret_12m,T)]].map(([l,v,c])=>(
                   <div key={l} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                     <span style={{fontSize:10,color:T.subtext}}>{l}</span>
@@ -1448,10 +1447,10 @@ function ComparePanel({ watchlists, token, onClose, T }) {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  DETAIL PANEL â€” Right panel (320px)
-//  Structure: Header Â· Chart Â· Performance Â· Levels
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
+//  DETAIL PANEL — Right panel (320px)
+//  Structure: Header · Chart · Performance · Levels
+// ═══════════════════════════════════════════════════════════════
 function DetailPanel({ row, sparkData, onClose, T }) {
   if (!row) return null;
   const rc = v => retColor(v, T);
@@ -1505,12 +1504,12 @@ function DetailPanel({ row, sparkData, onClose, T }) {
                   fontSize:10, padding:"2px 6px", borderRadius:3,
                   border:`1px solid ${T.border}`, color:T.subtext,
                 }}>
-                  {row.trend==="stage2"?"Stage 2 â†‘":row.trend==="stage1"?"Stage 1 â†’":"Stage 4 â†“"}
+                  {row.trend==="stage2"?"Stage 2 ↑":row.trend==="stage1"?"Stage 1 →":"Stage 4 ↓"}
                 </span>
               )}
             </div>
           </div>
-          <button onClick={onClose} style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:5, padding:"4px 8px", cursor:"pointer", color:T.subtext, fontSize:12 }}>âœ•</button>
+          <button onClick={onClose} style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:5, padding:"4px 8px", cursor:"pointer", color:T.subtext, fontSize:12 }}>✕</button>
         </div>
 
         {/* Chart */}
@@ -1540,8 +1539,8 @@ function DetailPanel({ row, sparkData, onClose, T }) {
         {/* Quality */}
         <div>
           <div style={{ fontSize:9, color:T.subtext, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:4 }}>Quality</div>
-          <MetricRow label="RS Rating"  value={row.rs_rating!=null?Math.round(row.rs_rating):"â€”"} color={T.green}/>
-          <MetricRow label="Rel Volume" value={row.rel_vol!=null?`${row.rel_vol.toFixed(1)}Ã—`:"â€”"} color={row.rel_vol>=2?T.pos:undefined}/>
+          <MetricRow label="RS Rating"  value={row.rs_rating!=null?Math.round(row.rs_rating):"—"} color={T.green}/>
+          <MetricRow label="Rel Volume" value={row.rel_vol!=null?`${row.rel_vol.toFixed(1)}×`:"—"} color={row.rel_vol>=2?T.pos:undefined}/>
           {row.pct_from_high!=null&&<MetricRow label="From 52W High" value={fmt.pct(row.pct_from_high)} color={rc(row.pct_from_high)}/>}
           {row.pct_from_low!=null&&<MetricRow label="From 52W Low" value={`+${Math.round(row.pct_from_low)}%`} color={T.pos}/>}
         </div>
@@ -1550,12 +1549,12 @@ function DetailPanel({ row, sparkData, onClose, T }) {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 //  MAIN COMPONENT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 export default function WatchlistDashboard({ T, session, getToken, darkMode: darkModeProp, onToggleDark, onNavigateToScreen, onTechnoFunda,
   fetchAndCachePrice, bestPrice, isPricePending, isMarketLive }) {
-  // â”€â”€ Fallback stubs so the component works standalone (e.g. storybook / tests) â”€â”€
+  // ── Fallback stubs so the component works standalone (e.g. storybook / tests) ──
   const _isMarketLive   = isMarketLive   ?? (() => false);
   const _bestPrice      = bestPrice      ?? ((_, bhav) => bhav != null ? { price: bhav, source: "bhav" } : null);
   const _isPricePending = isPricePending ?? (() => false);
@@ -1569,7 +1568,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         return session?.access_token || null;
     }, [getToken, session]);
 
-  // â”€â”€ Mobile detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Mobile detection ─────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -1615,21 +1614,21 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
   const [earningsOpen,  setEarningsOpen]  = useState(false);
   const [feedAnnouncements, setFeedAnnouncements] = useState([]);
   const [feedLoading,   setFeedLoading]   = useState(true); // true until first cache/network resolves
-  // Incremented each time a batch of live prices lands â€” forces StockRow re-renders
+  // Incremented each time a batch of live prices lands — forces StockRow re-renders
   const [livePriceTick, setLivePriceTick] = useState(0);
 
   const dark = darkModeProp ?? true;
   const filterRef = useRef(null);
   const prevActiveWlRef = useRef(null);
 
-  // â”€â”€ Scroll refs for keyboard navigation per panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Scroll refs for keyboard navigation per panel ────────────
   const sidebarScrollRef  = useRef(null);
   const stocksScrollRef   = useRef(null);
   const announcScrollRef  = useRef(null);
   const earningsScrollRef = useRef(null);
   const hoveredPanelRef   = useRef("stocks"); // "sidebar"|"stocks"|"announcements"|"earnings"
 
-  // â”€â”€ Effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Effects ─────────────────────────────────────────────────
   useEffect(() => {
     const h=e=>{if(filterRef.current&&!filterRef.current.contains(e.target))setFilterOpen(false);};
     document.addEventListener("mousedown",h);
@@ -1665,7 +1664,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         if (e.key === "Escape") { setExpandedTicker(null); setKeySelectedIdx(-1); return; }
       }
 
-      // Arrow keys on sidebar, announcements, earnings â€” just scroll the container
+      // Arrow keys on sidebar, announcements, earnings — just scroll the container
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         const refMap = {
           sidebar:       sidebarScrollRef,
@@ -1702,7 +1701,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     if(!hasCached)setWlLoading(true);
     GET(`watchlists?user_id=eq.${userId}&order=created_at.asc&select=*`,token)
       .then(async data=>{
-        // Only seed brand-new users â€” those with zero watchlists AND no seed flag.
+        // Only seed brand-new users — those with zero watchlists AND no seed flag.
         // Never touch existing users' data.
         const alreadySeeded = (() => { try { return !!localStorage.getItem(SEED_FLAG_KEY(userId)); } catch { return false; } })();
         const isNewUser = Array.isArray(data) && data.length === 0 && !alreadySeeded;
@@ -1740,7 +1739,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
       else if(!isSameWl){
         // Only blank the list when switching to a genuinely different (empty) watchlist.
         // When refreshKey bumps after add/remove on the SAME watchlist, keep current
-        // rows visible â€” this is what causes the blink if we call setRows([]) here.
+        // rows visible — this is what causes the blink if we call setRows([]) here.
         setRows([]);
       }
       // isSameWl + no cache = add/remove just busted the cache; rows already set optimistically
@@ -1789,15 +1788,15 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
       }).catch(()=>{});
   },[rows,token]);
 
-  // â”€â”€ Live price overlay â€” identical pattern to Screener / Peer Analysis â”€â”€â”€â”€â”€â”€
-  // During market hours (9:15 AM â€“ 7:00 PM IST) we batch-fetch Yahoo quotes for
+  // ── Live price overlay — identical pattern to Screener / Peer Analysis ──────
+  // During market hours (9:15 AM – 7:00 PM IST) we batch-fetch Yahoo quotes for
   // every ticker currently visible.  Prices are stored in the shared module-level
   // _sessionPriceCache (via the `fetchAndCachePrice` prop from App.jsx) so tickers
-  // already fetched by the Screener are NOT re-fetched here â€” instant display.
+  // already fetched by the Screener are NOT re-fetched here — instant display.
   // Outside market hours we fall back to the bhav_copy close from `rows` unchanged.
   // `livePriceTick` is bumped after every batch to force StockRow re-renders.
   // Prices clear on page refresh (session cache), so users always get a fresh
-  // Yahoo hit on next load â€” exactly the behaviour requested.
+  // Yahoo hit on next load — exactly the behaviour requested.
   useEffect(()=>{
     if(!rows.length) return;
     // Always sync the legacy priceCache with bhav prices so the DetailPanel / fallback
@@ -1823,7 +1822,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
       await Promise.allSettled(batch.map(t => _fetchAndCache(t, bhavMap[t.toUpperCase()])));
       if(!cancelled) {
         setLivePriceTick(n => n + 1); // trigger re-render with freshly cached Yahoo prices
-        setTimeout(runBatch, 600);    // 600 ms stagger â€” mirrors Screener pattern
+        setTimeout(runBatch, 600);    // 600 ms stagger — mirrors Screener pattern
       }
     };
     runBatch();
@@ -1835,7 +1834,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     fetchScreenMembership(token).then(m=>setScreenMembership(m)).catch(()=>{});
   },[token]);
 
-  // â”€â”€ Background pre-warm: on first login, silently populate feed caches for ALL watchlists â”€â”€
+  // ── Background pre-warm: on first login, silently populate feed caches for ALL watchlists ──
   // This ensures the announcements panel feels instant on every watchlist switch.
   useEffect(()=>{
     if(!userId||!token||!watchlists.length)return;
@@ -1891,7 +1890,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     }).catch(()=>{});
   },[rows,token]);
 
-  // â”€â”€ Fetch upcoming earnings dates for all watchlist rows â”€â”€â”€â”€
+  // ── Fetch upcoming earnings dates for all watchlist rows ────
   useEffect(()=>{
     if(!rows.length)return;
     const tickers=rows.map(r=>r.ticker).filter(Boolean);
@@ -1901,14 +1900,14 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     }).catch(()=>{});
   },[rows,token]);
 
-  // Full feed: fetch ALL announcements for current watchlist tickers â€” decoupled from rows.
+  // Full feed: fetch ALL announcements for current watchlist tickers — decoupled from rows.
   // Fires on activeWl change. Always clears stale data first so we never show
   // a previous watchlist's announcements while the new one loads.
   useEffect(()=>{
     if(!activeWl)return;
     let cancelled=false;
 
-    // â”€â”€ PHASE 1: Clear previous watchlist's data immediately, then serve cache if available â”€â”€
+    // ── PHASE 1: Clear previous watchlist's data immediately, then serve cache if available ──
     // Always reset first to prevent cross-watchlist bleed.
     setFeedAnnouncements([]);
     setFeedLoading(true);
@@ -1925,8 +1924,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
       if(!cancelled) setFeedLoading(false);
     }
 
-    // â”€â”€ PHASE 2: Always fetch ALL tickers for this watchlist from watchlist_items.
-    // NEVER use `rows` here â€” rows is a paginated slice (e.g. 20 of 50 stocks).
+    // ── PHASE 2: Always fetch ALL tickers for this watchlist from watchlist_items.
+    // NEVER use `rows` here — rows is a paginated slice (e.g. 20 of 50 stocks).
     // Using rows would silently drop announcements for stocks on other pages.
     const getSymbols = async () => {
       try {
@@ -1958,9 +1957,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     });
 
     return()=>{cancelled=true;};
-  },[activeWl, token, userId]); // NOTE: intentionally NOT in rows dep â€” rows used opportunistically inside
+  },[activeWl, token, userId]); // NOTE: intentionally NOT in rows dep — rows used opportunistically inside
 
-  // â”€â”€ Callbacks (memoized) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Callbacks (memoized) ─────────────────────────────────────
   const refreshPrices = useCallback(async()=>{
     if(!rows.length)return;
     setPriceLoading(true);
@@ -2012,7 +2011,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         // watchlist switch can't corrupt a different list's rows.
         const targetWl = activeWl;
 
-        // Optimistic update â€” scoped to the target watchlist only.
+        // Optimistic update — scoped to the target watchlist only.
         // We tag the row with targetWl so it can be safely removed on error.
         setRows(prev => {
             // Only inject if we're still viewing the same watchlist
@@ -2025,20 +2024,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         try {
             await POST("watchlist_items", { watchlist_id: targetWl, ticker }, token);
 
-            // Bust ONLY the target watchlist's caches â€” never clear other watchlists.
+            // Bust ONLY the target watchlist's caches — never clear other watchlists.
             // Clearing all caches was the root cause of phantom rows appearing elsewhere.
             for (const [key] of watchlistCache) {
                 try {
                     const parsed = JSON.parse(key);
                     if (parsed?.watchlistId === targetWl) watchlistCache.delete(key);
-                } catch { watchlistCache.delete(key); } // malformed key â€” safe to evict
+                } catch { watchlistCache.delete(key); } // malformed key — safe to evict
             }
             try { localStorage.removeItem(getRowsCacheKey(targetWl)); } catch { }
 
             setAddTicker("");
             setTimeout(() => { setRefreshKey(k => k + 1); }, 50);
         } catch (e) {
-            setAddError("Failed to add â€” ticker may not exist or is already in this list");
+            setAddError("Failed to add — ticker may not exist or is already in this list");
             // Roll back the optimistic row for the target watchlist only
             setRows(prev => prev.filter(r => !(r.ticker === ticker && r._optimistic)));
         }
@@ -2079,7 +2078,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     a.click();URL.revokeObjectURL(a.href);
   },[rows,prices]);
 
-  // â”€â”€ Derived â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Derived ──────────────────────────────────────────────────
   const totalPages         = Math.ceil(totalCount/PAGE_SIZE);
   const activeFiltersCount = Object.values(filtersApplied).filter(v=>v!=null).length;
   const activeWlName       = watchlists.find(w=>w.id===activeWl)?.name||"";
@@ -2120,16 +2119,16 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     { key:"leaders",  label:"Leaders" },
   ];
   const insightCards = activeWl ? [
-    { label:"Average RS", value:avgRS != null ? `${avgRS}` : "â€”", tone:T.green, hint:`${leaders} leaders above 90` },
-    { label:"Average 3M", value:avgRet3m != null ? `${avgRet3m >= 0 ? "+" : ""}${avgRet3m.toFixed(1)}%` : "â€”", tone:avgRet3m != null ? retColor(avgRet3m,T) : T.subtext, hint:`${stage2Count}/${rows.length || 0} in Stage 2` },
-    { label:"Liquidity", value:avgRelVol != null ? `${avgRelVol.toFixed(2)}Ã—` : "â€”", tone:avgRelVol != null && avgRelVol >= 1.5 ? T.pos : T.text, hint:highImpactToday > 0 ? `${highImpactToday} key event${highImpactToday > 1 ? "s" : ""} today` : "No critical events today" },
-    { label:"Top 5 Leaders", value:topLeaders.length ? topLeaders.join(", ") : "â€”", tone:T.text, hint:totalCount > 0 ? `${totalCount} stocks tracked` : "Build this watchlist", compactList:true },
+    { label:"Average RS", value:avgRS != null ? `${avgRS}` : "—", tone:T.green, hint:`${leaders} leaders above 90` },
+    { label:"Average 3M", value:avgRet3m != null ? `${avgRet3m >= 0 ? "+" : ""}${avgRet3m.toFixed(1)}%` : "—", tone:avgRet3m != null ? retColor(avgRet3m,T) : T.subtext, hint:`${stage2Count}/${rows.length || 0} in Stage 2` },
+    { label:"Liquidity", value:avgRelVol != null ? `${avgRelVol.toFixed(2)}×` : "—", tone:avgRelVol != null && avgRelVol >= 1.5 ? T.pos : T.text, hint:highImpactToday > 0 ? `${highImpactToday} key event${highImpactToday > 1 ? "s" : ""} today` : "No critical events today" },
+    { label:"Top 5 Leaders", value:topLeaders.length ? topLeaders.join(", ") : "—", tone:T.text, hint:totalCount > 0 ? `${totalCount} stocks tracked` : "Build this watchlist", compactList:true },
   ] : [];
 
   // No-auth state
   if (!session) return (
     <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:T.bg,flexDirection:"column",gap:12}}>
-      <div style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.subtext,opacity:0.3}}>â—ˆ</div>
+      <div style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.subtext,opacity:0.3}}>◈</div>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:14,fontWeight:500,color:T.text,marginBottom:4,opacity:0.7,fontFamily:"'DM Sans',sans-serif"}}>Sign in to use Watchlists</div>
         <div style={{fontSize:12,color:T.subtext,opacity:0.4,fontFamily:"'DM Sans',sans-serif"}}>Track and analyse your favourite stocks.</div>
@@ -2231,7 +2230,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
               gap: isMobile ? 0 : 12,
           }}>
 
-        {/* â”€â”€ MOBILE OVERLAY BACKDROP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── MOBILE OVERLAY BACKDROP ───────────────────────── */}
         {isMobile && (
           <div
             onClick={() => setSidebarOpen(false)}
@@ -2247,7 +2246,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
           />
         )}
 
-              {/* â•â• SIDEBAR â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ══ SIDEBAR ═══════════════════════════════════════════ */}
               <div className={isMobile ? "wl-mobile-sidebar-shell" : undefined} style={{
                   width: isMobile ? "min(86vw, 340px)" : (sidebarOpen ? 240 : 0),
                   maxWidth: isMobile ? 340 : 240,
@@ -2270,7 +2269,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                       top: 0,
                       left: 0,
 
-                      // ðŸ”¥ KEY FIX: stop above the bottom action bar (~60px) so
+                      // 🔥 KEY FIX: stop above the bottom action bar (~60px) so
                       //    the "New Watchlist" footer is never hidden behind it.
                       //    Falls back gracefully on older Safari via the -webkit-fill-available chain.
                       height: "calc(100dvh - 60px - env(safe-area-inset-bottom, 0px))",
@@ -2336,7 +2335,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                           height: 34,
                                           color: T.subtext
                                       }}>
-                                      âœ•
+                                      ✕
                                   </button>
                               )}
                           </div>
@@ -2363,7 +2362,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                           overflowY: "auto",
                           overflowX: "hidden",
 
-                          // ðŸ”¥ IMPORTANT FIX
+                          // 🔥 IMPORTANT FIX
                           padding: isMobile ? "10px 0 92px" : "6px 0 10px",
 
                           WebkitOverflowScrolling: "touch"
@@ -2418,7 +2417,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                           {w.name}
                                       </span>
 
-                                      {/* Delete button â€” hover-reveal on desktop, always visible on mobile */}
+                                      {/* Delete button — hover-reveal on desktop, always visible on mobile */}
                                       <button
                                           className="wl-item-actions"
                                           title="Delete watchlist"
@@ -2442,7 +2441,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                           onMouseEnter={e => { e.currentTarget.style.color = "#f87171"; e.currentTarget.style.opacity = "1"; }}
                                           onMouseLeave={e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.opacity = isMobile ? "0.45" : "0"; }}
                                       >
-                                          âœ•
+                                          ✕
                                       </button>
                                   </div>
                               </div>
@@ -2461,7 +2460,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         : T.surface,
                       borderTop: `1px solid ${T.border}`,
 
-                      // ðŸ”¥ CRITICAL SAFE AREA FIX
+                      // 🔥 CRITICAL SAFE AREA FIX
                       padding: isMobile
                           ? "12px 12px calc(16px + env(safe-area-inset-bottom))"
                           : "10px",
@@ -2541,7 +2540,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
               </div>
 
 
-              {/* â•â• MAIN AREA â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ══ MAIN AREA ═════════════════════════════════════════ */}
               <div style={{
                   flex: 1,
                   display: "flex",
@@ -2555,7 +2554,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                   background: isMobile ? "transparent" : (dark ? "rgba(8,15,28,0.58)" : "rgba(255,255,255,0.52)"),
                   backdropFilter: isMobile ? "none" : "blur(18px)"
               }}>
-                  {/* â”€â”€ TOOLBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+                  {/* ── TOOLBAR ─────────────────────────────────────────── */}
                   <div style={{
                       flexShrink: 0,
                       minHeight: isMobile ? 58 : 72,
@@ -2587,7 +2586,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                               transition: "background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease",
                           }}
                           title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
-                          {sidebarOpen ? "â—€" : "â–¶"}
+                          {sidebarOpen ? "◀" : "▶"}
                       </button>
 
                       {/* Watchlist name + count */}
@@ -2640,10 +2639,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                           </div>
                       )}
 
-                      {/* Divider â€” desktop only */}
+                      {/* Divider — desktop only */}
                       {activeWl && !isMobile && <div style={{ width: 1, height: 14, background: T.border }} />}
 
-                      {/* Summary pills â€” desktop only */}
+                      {/* Summary pills — desktop only */}
                       {activeWl && rows.length > 0 && !isMobile && (
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                               {avgRS != null && (
@@ -2690,7 +2689,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                           fontSize: 11,
                                           cursor: "pointer"
                                       }}>
-                                      {isMobile ? (activeFiltersCount > 0 ? `FilterÂ·${activeFiltersCount}` : "Filter") : "Filter"}
+                                      {isMobile ? (activeFiltersCount > 0 ? `Filter·${activeFiltersCount}` : "Filter") : "Filter"}
                                   </button>
 
                                   <FilterPanel
@@ -2716,10 +2715,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                       fontSize: 12,
                                       cursor: "pointer"
                                   }}>
-                                  â†º
+                                  ↺
                               </button>
 
-                              {/* Export â€” desktop only */}
+                              {/* Export — desktop only */}
                               {!isMobile && (
                                 <button onClick={exportCSV}
                                     disabled={!rows.length}
@@ -2732,11 +2731,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         fontSize: 12,
                                         cursor: "pointer"
                                     }}>
-                                    â†“
+                                    ↓
                                 </button>
                               )}
 
-                              {/* Feed + Earnings toggles â€” DESKTOP ONLY (moved to bottom bar on mobile) */}
+                              {/* Feed + Earnings toggles — DESKTOP ONLY (moved to bottom bar on mobile) */}
                               {!isMobile && (
                                 <>
                                   <button onClick={() => setFeedOpen(o => !o)}
@@ -2770,11 +2769,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                       )}
                   </div>
 
-          {/* â”€â”€ CONTENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── CONTENT ──────────────────────────────────────────── */}
           {!activeWl ? (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }}>
               <div style={{ width:40, height:40, borderRadius:10, border:`1px solid ${T.border}`,
-                display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:T.subtext, opacity:0.3 }}>â—ˆ</div>
+                display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:T.subtext, opacity:0.3 }}>◈</div>
               <div style={{ textAlign:"center" }}>
                 <div style={{ fontSize:14, fontWeight:500, color:T.text, marginBottom:4, opacity:0.7, fontFamily:"'DM Sans',sans-serif" }}>No watchlist selected</div>
                 <div style={{ fontSize:12, color:T.subtext, opacity:0.4, fontFamily:"'DM Sans',sans-serif" }}>Create or select a watchlist to get started.</div>
@@ -2782,7 +2781,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             </div>
           ) : (
             <div style={{ flex:1, display:"flex", overflow:"hidden", flexDirection: isMobile ? "column" : "row" }}>
-              {/* â”€â”€ TABLE (flex) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+              {/* ── TABLE (flex) ───────────────────────────── */}
               <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minWidth:0, paddingBottom: isMobile ? 8 : 0 }}>
                 {/* Rows */}
                 <div
@@ -2806,7 +2805,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     <div style={{ padding:40, textAlign:"center", color:T.subtext, fontSize:14 }}>
                       {eventFilter==="high"?"No high-impact events in current view."
                         :activeFiltersCount>0||quickFilter?"No stocks match the current filters."
-                        :"No stocks yet â€” add tickers using the search bar above."}
+                        :"No stocks yet — add tickers using the search bar above."}
                     </div>
                   ) : displayRows.map((row,i)=>(
                     <StockRow
@@ -2833,26 +2832,26 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                   ))}
                 </div>
 
-                {/* Pagination â€” desktop only; mobile uses swipe left/right */}
+                {/* Pagination — desktop only; mobile uses swipe left/right */}
                 {totalPages > 1 && !isMobile && (
                   <div style={{ flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
                     gap:8, padding:"10px 14px", borderTop:`1px solid ${T.border}`, background:T.surface }}>
                     <button onClick={()=>setPage(p=>Math.max(p-1,0))} disabled={page===0}
                       style={{ padding:"4px 12px", background:"transparent", border:`1px solid ${T.border}`,
                         borderRadius:4, color:T.subtext, fontSize:14, cursor:page===0?"not-allowed":"pointer",
-                        opacity:page===0?0.25:0.6, transition:"opacity 0.15s", fontFamily:"'DM Mono',monospace" }}>â€¹</button>
+                        opacity:page===0?0.25:0.6, transition:"opacity 0.15s", fontFamily:"'DM Mono',monospace" }}>‹</button>
                     <span style={{ fontSize:11, color:T.subtext, fontFamily:"'DM Mono',monospace", opacity:0.9, letterSpacing:"0.04em" }}>
                       {page+1} / {totalPages}
                     </span>
                     <button onClick={()=>setPage(p=>Math.min(p+1,totalPages-1))} disabled={page===totalPages-1}
                       style={{ padding:"4px 12px", background:"transparent", border:`1px solid ${T.border}`,
                         borderRadius:4, color:T.subtext, fontSize:14, cursor:page===totalPages-1?"not-allowed":"pointer",
-                        opacity:page===totalPages-1?0.25:0.6, transition:"opacity 0.15s", fontFamily:"'DM Mono',monospace" }}>â€º</button>
+                        opacity:page===totalPages-1?0.25:0.6, transition:"opacity 0.15s", fontFamily:"'DM Mono',monospace" }}>›</button>
                   </div>
                 )}
               </div>
 
-              {/* â”€â”€ DETAIL PANEL â€” inline on desktop, bottom sheet on mobile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+              {/* ── DETAIL PANEL — inline on desktop, bottom sheet on mobile ───────────── */}
               {expandedTicker && expandedRow && (
                 isMobile ? (
                   // Mobile bottom sheet
@@ -2886,15 +2885,15 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                               )}
                               {expandedRow.trend&&(
                                 <span style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:`1px solid ${T.border}`, color:T.subtext, fontFamily:"'DM Sans',sans-serif", letterSpacing:"0.04em" }}>
-                                  {expandedRow.trend==="stage2"?"Stage 2 â†‘":expandedRow.trend==="stage1"?"Stage 1 â†’":"Stage 4 â†“"}
+                                  {expandedRow.trend==="stage2"?"Stage 2 ↑":expandedRow.trend==="stage1"?"Stage 1 →":"Stage 4 ↓"}
                                 </span>
                               )}
                             </div>
                           </div>
                           <button onClick={()=>setExpandedTicker(null)}
-                            style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px", cursor:"pointer", color:T.subtext, fontSize:13 }}>âœ•</button>
+                            style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px", cursor:"pointer", color:T.subtext, fontSize:13 }}>✕</button>
                         </div>
-                        {/* Candlestick Chart â€” mobile */}
+                        {/* Candlestick Chart — mobile */}
                         <WlCandleSection ticker={expandedRow.ticker} T={T} width={Math.min(window.innerWidth - 36, 480)} />
                         {[
                           { label:"Performance", rows:[
@@ -2909,8 +2908,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             ["200 DMA",  fmt.priceFull(expandedRow.sma200),   T.text],
                           ]},
                           { label:"Quality", rows:[
-                            ["RS Rating", expandedRow.rs_rating!=null?Math.round(expandedRow.rs_rating):"â€”", T.green],
-                            ["Rel Volume", expandedRow.rel_vol!=null?`${expandedRow.rel_vol.toFixed(1)}Ã—`:"â€”", expandedRow.rel_vol>=2?T.pos:T.text],
+                            ["RS Rating", expandedRow.rs_rating!=null?Math.round(expandedRow.rs_rating):"—", T.green],
+                            ["Rel Volume", expandedRow.rel_vol!=null?`${expandedRow.rel_vol.toFixed(1)}×`:"—", expandedRow.rel_vol>=2?T.pos:T.text],
                             ...(expandedRow.pct_from_high!=null?[["From High", fmt.pct(expandedRow.pct_from_high), retColor(expandedRow.pct_from_high,T)]]:[] ),
                           ]},
                         ].map(section=>(
@@ -2954,7 +2953,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                               <span style={{ fontSize:10, padding:"2px 6px", borderRadius:3,
                                 border:`1px solid ${T.border}`, color:T.subtext,
                                 fontFamily:"'DM Sans',sans-serif", letterSpacing:"0.04em" }}>
-                                {expandedRow.trend==="stage2"?"S2 â†‘":expandedRow.trend==="stage1"?"S1 â†’":"S4 â†“"}
+                                {expandedRow.trend==="stage2"?"S2 ↑":expandedRow.trend==="stage1"?"S1 →":"S4 ↓"}
                               </span>
                             )}
                           </div>
@@ -2963,7 +2962,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                           style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:5, padding:"4px 8px", cursor:"pointer", color:T.subtext, fontSize:11, opacity:0.6, transition:"opacity 0.15s" }}
                           onMouseEnter={e=>e.currentTarget.style.opacity="1"}
                           onMouseLeave={e=>e.currentTarget.style.opacity="0.6"}
-                        >âœ•</button>
+                        >✕</button>
                       </div>
 
                       {/* Candlestick Chart */}
@@ -2983,8 +2982,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                           ...(expandedRow.pivot_20w?[["20W Pivot",fmt.priceFull(expandedRow.pivot_20w),T.text]]:[]),
                         ]},
                         { label:"Quality", rows:[
-                          ["RS Rating", expandedRow.rs_rating!=null?Math.round(expandedRow.rs_rating):"â€”", T.green],
-                          ["Rel Volume", expandedRow.rel_vol!=null?`${expandedRow.rel_vol.toFixed(1)}Ã—`:"â€”", expandedRow.rel_vol>=2?T.pos:T.text],
+                          ["RS Rating", expandedRow.rs_rating!=null?Math.round(expandedRow.rs_rating):"—", T.green],
+                          ["Rel Volume", expandedRow.rel_vol!=null?`${expandedRow.rel_vol.toFixed(1)}×`:"—", expandedRow.rel_vol>=2?T.pos:T.text],
                           ...(expandedRow.pct_from_high!=null?[["From High", fmt.pct(expandedRow.pct_from_high), retColor(expandedRow.pct_from_high,T)]]:[] ),
                           ...(earningsMap[expandedRow.ticker] ? (()=>{
                             const eDate = earningsMap[expandedRow.ticker];
@@ -3032,7 +3031,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                 )
               )}
 
-              {/* â”€â”€ ANNOUNCEMENTS FEED â€” right panel on desktop, bottom sheet on mobile â”€â”€â”€ */}
+              {/* ── ANNOUNCEMENTS FEED — right panel on desktop, bottom sheet on mobile ─── */}
               {feedOpen && activeWl && (
                 isMobile ? (
                   <>
@@ -3075,7 +3074,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                 )
               )}
 
-              {/* â”€â”€ EARNINGS CALENDAR â€” right panel on desktop, bottom sheet on mobile â”€â”€â”€ */}
+              {/* ── EARNINGS CALENDAR — right panel on desktop, bottom sheet on mobile ─── */}
               {earningsOpen && activeWl && (
                 isMobile ? (
                   <>
@@ -3120,7 +3119,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         </div>
       </div>
 
-      {/* â”€â”€ MOBILE BOTTOM ACTION BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── MOBILE BOTTOM ACTION BAR ──────────────────────────────── */}
       {isMobile && activeWl && (
         <div className="wl-mobile-bottom-bar" style={{
           background: T.surface,
@@ -3145,7 +3144,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
               transition: "all 0.15s",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
             }}>
-            <span style={{ fontSize: 13 }}>âš¡</span> Announcements
+            <span style={{ fontSize: 13 }}>⚡</span> Announcements
           </button>
           <button onClick={() => { setEarningsOpen(o => !o); setFeedOpen(false); }}
             style={{
@@ -3160,7 +3159,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
               transition: "all 0.15s",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
             }}>
-            <span style={{ fontSize: 13 }}>â—·</span> Earnings
+            <span style={{ fontSize: 13 }}>◷</span> Earnings
           </button>
         </div>
       )}
@@ -3174,9 +3173,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  ANNOUNCEMENTS FEED â€” Screener-style right panel
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
+//  ANNOUNCEMENTS FEED — Screener-style right panel
+// ═══════════════════════════════════════════════════════════════
 const FEED_PAGE_SIZE = 8; // announcements revealed per "Show more" click
 
 function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scrollRef, onPanelEnter, isMobile }) {
@@ -3186,7 +3185,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
   // Reset pagination whenever the filter or announcement list changes
   useEffect(() => { setVisibleCount(FEED_PAGE_SIZE); }, [filter, announcements]);
 
-  // Group by date â€” only the currently visible slice
+  // Group by date — only the currently visible slice
   const grouped = useMemo(() => {
     const allFiltered = filter === "all" ? announcements
       : announcements.filter(a => {
@@ -3238,7 +3237,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
 
   const truncate = (text, n=110) => {
     if (!text || text.length <= n) return text || "";
-    return text.slice(0, n).trimEnd() + "â€¦";
+    return text.slice(0, n).trimEnd() + "…";
   };
 
   // Derive badge color from category
@@ -3256,7 +3255,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
   const shortCat = cat => {
     const c = (cat||"").replace(/\(.*?\)/g,"").trim();
     if (c.length <= 22) return c;
-    return c.slice(0,21)+"â€¦";
+    return c.slice(0,21)+"…";
   };
 
   return (
@@ -3283,14 +3282,14 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
               <span style={{ fontSize: isMobile ? 13 : 14, fontWeight:500, color:T.subtext, fontFamily:"'DM Mono', monospace" }}>{announcements.length}</span>
             )}
             {refreshing&&!loading&&(
-              <span style={{ fontSize:14, color:T.subtext, fontWeight:400, animation:"spin 1s linear infinite", display:"inline-block" }}>â†»</span>
+              <span style={{ fontSize:14, color:T.subtext, fontWeight:400, animation:"spin 1s linear infinite", display:"inline-block" }}>↻</span>
             )}
           </div>
           <button onClick={onClose}
             style={{ background:"none", border:`1px solid ${T.border}`, borderRadius: isMobile ? 8 : 4, cursor:"pointer", color:T.subtext, fontSize:14, lineHeight:1, padding: isMobile ? "6px 10px" : "3px 7px", transition:"all 0.15s" }}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=T.text;e.currentTarget.style.color=T.text;}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.subtext;}}
-          >âœ•</button>
+          >✕</button>
         </div>
         {/* Category filters */}
         <div style={{ display:"flex", gap: isMobile ? 6 : 3 }}>
@@ -3361,7 +3360,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                     </span>
                     <span style={{ fontSize:13, color:T.subtext, fontFamily:"'DM Mono',monospace" }}>
                       {fmtTime(ann.announcement_datetime)}
-                      {ann.attachment_url && <span style={{ marginLeft:5, opacity:0.6 }}>â†—</span>}
+                      {ann.attachment_url && <span style={{ marginLeft:5, opacity:0.6 }}>↗</span>}
                     </span>
                   </div>
 
@@ -3412,12 +3411,12 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  EARNINGS CALENDAR â€” Right panel, toggled via toolbar
+// ═══════════════════════════════════════════════════════════════
+//  EARNINGS CALENDAR — Right panel, toggled via toolbar
 //  Fetches from earnings_calendar table in Supabase
 //  Shows upcoming results for all companies or watchlist stocks
 //  Includes company name search filter
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef, onPanelEnter, isMobile }) {
   const [entries,      setEntries]      = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -3470,7 +3469,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
   const filtered = useMemo(() => {
     let list = entries;
 
-    // Mode filter â€” watchlist only
+    // Mode filter — watchlist only
     if (mode === "watchlist" && watchlistTickers.length > 0) {
       const tickerSet = new Set(watchlistTickers.map(t => t.toUpperCase()));
       list = list.filter(e => tickerSet.has((e.ticker || "").toUpperCase()));
@@ -3510,7 +3509,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
 
   // Format date for group header
   const fmtDate = raw => {
-    if (!raw) return "â€”";
+    if (!raw) return "—";
     try {
       const d = new Date(raw + "T00:00:00");
       const today = new Date();
@@ -3577,7 +3576,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
               color: T.subtext, fontSize: 14, lineHeight: 1, padding: isMobile ? "6px 10px" : "3px 7px", transition: "all 0.15s" }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = T.text; e.currentTarget.style.color = T.text; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.subtext; }}
-          >âœ•</button>
+          >✕</button>
         </div>
 
         {/* Mode toggle + Search */}
@@ -3601,7 +3600,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
             ref={searchRef}
             value={search}
             onChange={e => { setSearch(e.target.value); setVisibleCount(30); }}
-            placeholder="Search company or tickerâ€¦"
+            placeholder="Search company or ticker…"
             style={{ width: "100%", padding: isMobile ? "10px 32px 10px 12px" : "6px 28px 6px 10px",
               background: T.card, border: `1px solid ${T.border}`,
               borderRadius: isMobile ? 8 : 6, color: T.text,
@@ -3615,7 +3614,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
             <button onClick={() => setSearch("")}
               style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
                 background: "none", border: "none", cursor: "pointer", color: T.subtext,
-                fontSize: 13, padding: 0, lineHeight: 1 }}>âœ•</button>
+                fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
           )}
         </div>
       </div>
@@ -3682,7 +3681,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                               <span style={{ fontSize: 14, fontWeight: 700, color: T.text,
                                 fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em", flexShrink: 0 }}>
-                                {item.ticker || "â€”"}
+                                {item.ticker || "—"}
                               </span>
                               {inWl && (
                                 <span style={{ fontSize: 11, fontWeight: 600, padding: "1px 5px", borderRadius: 3,
@@ -3695,7 +3694,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                             </div>
                             <div style={{ fontSize: 14, color: T.subtext, fontFamily: "'DM Sans', sans-serif",
                               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {item.company_name || "â€”"}
+                              {item.company_name || "—"}
                             </div>
                           </div>
 
@@ -3764,5 +3763,3 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
     </div>
   );
 }
-
-

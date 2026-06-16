@@ -1,4 +1,3 @@
-﻿import React from 'react';
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -67,7 +66,7 @@ function TagPill({ tag, darkMode }) {
     );
 }
 
-// â”€â”€â”€ Add / Edit Filter Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Add / Edit Filter Modal ─────────────────────────────────────────────────
 
 const EXAMPLE_QUERIES = [
     "Mergers and de-mergers",
@@ -145,7 +144,7 @@ function FilterModal({ existing, onSave, onClose, T }) {
                         letterSpacing: "0.04em",
                     }}
                 >
-                    SHOW RESULTS â€º
+                    SHOW RESULTS ›
                 </button>
 
                 <hr style={{ margin: "28px 0", border: "none", borderTop: `1px solid ${T.border}` }} />
@@ -188,7 +187,7 @@ function FilterModal({ existing, onSave, onClose, T }) {
     );
 }
 
-// â”€â”€â”€ Announcement Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Announcement Card ───────────────────────────────────────────────────────
 
 function AnnouncementCard({ item, T, darkMode }) {
     const tags = useMemo(() => {
@@ -239,7 +238,7 @@ function AnnouncementCard({ item, T, darkMode }) {
                     <span style={{ fontSize: 15, fontWeight: 700, color: T.text, letterSpacing: "-0.01em" }}>
                         {item.company_name
                             ? item.company_name.length > 40
-                                ? item.company_name.slice(0, 40) + "â€¦"
+                                ? item.company_name.slice(0, 40) + "…"
                                 : item.company_name
                             : item.symbol}
                     </span>
@@ -252,7 +251,7 @@ function AnnouncementCard({ item, T, darkMode }) {
                         {item.symbol}
                     </span>
                     {item.industry && (
-                        <span style={{ fontSize: 13, color: T.subtext }}>Â· {item.industry}</span>
+                        <span style={{ fontSize: 13, color: T.subtext }}>· {item.industry}</span>
                     )}
                     <span style={{ fontSize: 13, color: T.subtext, marginLeft: "auto", whiteSpace: "nowrap" }}>
                         {formatTime(item.announcement_datetime)}
@@ -309,9 +308,9 @@ function AnnouncementCard({ item, T, darkMode }) {
     );
 }
 
-// â”€â”€â”€ Main Module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Module ─────────────────────────────────────────────────────────────
 
-// â”€â”€â”€ PostgREST server-side filter builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PostgREST server-side filter builder ────────────────────────────────────
 // Builds the query params object that will be sent to Supabase REST API
 // so ALL filtering/searching happens on the database, not in the browser.
 
@@ -326,11 +325,11 @@ const RESULTS_CATEGORY_KEYWORDS = ["Financial Results", "Quarterly Results", "An
  * BUT special chars like & in "M&A" break array literal parsing.
  *
  * Strategy:
- *  - "Important" tab â†’ use `priority.gte.2` (all important-tagged rows have priority â‰¥ 2)
+ *  - "Important" tab → use `priority.gte.2` (all important-tagged rows have priority ≥ 2)
  *    This is reliable, fast (indexed integer), and avoids all array literal issues.
- *  - "Results" tab   â†’ category.ilike on well-known category strings (no special chars)
- *  - Custom filters  â†’ full-text search on text columns (no tags array needed)
- *  - Search box      â†’ ilike on text columns
+ *  - "Results" tab   → category.ilike on well-known category strings (no special chars)
+ *  - Custom filters  → full-text search on text columns (no tags array needed)
+ *  - Search box      → ilike on text columns
  */
 function buildServerParams(activeFilter, customFilters, debouncedSearch) {
     const base = {
@@ -342,7 +341,7 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
     // Multiple pairs AND together in PostgREST.
     const filterPairs = [];
 
-    // â”€â”€ Tab filters â”€â”€
+    // ── Tab filters ──
     if (activeFilter === "important") {
         // All "important" rows have priority >= 2 (M&A=12, BOARD_MEETING=4,
         // MANAGEMENT_CHANGE=2, INVESTOR_ACTIVITY=3, ORDER_FLOW=4-5).
@@ -350,7 +349,7 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
         filterPairs.push(["priority", "gte.2"]);
 
     } else if (activeFilter === "results") {
-        // category is a plain text column â€” ilike works fine here
+        // category is a plain text column — ilike works fine here
         const catOr = RESULTS_CATEGORY_KEYWORDS
             .map(k => `category.ilike.*${k}*`)
             .join(",");
@@ -382,7 +381,7 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
         }
     }
 
-    // â”€â”€ Search box â”€â”€
+    // ── Search box ──
     if (debouncedSearch && debouncedSearch.trim()) {
         const s = debouncedSearch.trim().replace(/%/g, "\\%").replace(/_/g, "\\_");
         filterPairs.push(["or", `(company_name.ilike.*${s}*,symbol.ilike.*${s}*,category.ilike.*${s}*,announcement_text.ilike.*${s}*)`]);
@@ -391,7 +390,7 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
     return { ...base, _filterPairs: filterPairs };
 }
 
-// â”€â”€â”€ Module-level cache (persists across tab navigations) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Module-level cache (persists across tab navigations) ────────────────────
 // Key: stringified {activeFilter, debouncedSearch}
 // Value: { announcements: [], offset: number, hasMore: boolean }
 const announcementsCache = new Map();
@@ -427,32 +426,6 @@ function writeStoredAnnouncementsCache() {
 
 readStoredAnnouncementsCache();
 
-// â”€â”€â”€ fetchAnnouncementsPage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Fetches one page from corporate_announcements with automatic retry on
-// transient failures (statement_timeout, network blips).
-//
-//  â€¢ Up to MAX_RETRIES attempts with exponential backoff (1s â†’ 2s â†’ 4s).
-//  â€¢ "canceling statement due to statement timeout" from Supabase is treated as
-//    a retryable condition, never surfaced directly to the user.
-//  â€¢ Client-side abort fires at 25s per attempt (well above Supabase's ~8-10s
-//    statement_timeout so we always get the server's error body, not a silent abort).
-//  â€¢ Only throws after all retries are exhausted.
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const FETCH_TIMEOUT_MS = 25000;   // per-attempt client timeout
-const MAX_RETRIES      = 3;       // total attempts (1 initial + 2 retries)
-const RETRY_BASE_MS    = 1000;    // backoff seed: 1s, 2s, 4sâ€¦
-
-function isRetryableError(err, httpStatus) {
-    if (err?.name === "AbortError") return true;                   // client timeout
-    if (httpStatus >= 500 && httpStatus !== 501) return true;      // server errors
-    const msg = (err?.message || "").toLowerCase();
-    // Supabase statement_timeout surfaces as a 200 with an error body or as a 408/503
-    return msg.includes("statement timeout") ||
-           msg.includes("canceling statement") ||
-           msg.includes("timeout") ||
-           msg.includes("network");
-}
-
 async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSearch, pageOffset = 0) {
     const { _filterPairs, ...baseParams } = buildServerParams(activeFilter, customFilters, debouncedSearch);
     const url = new URL(`${SUPABASE_URL}/rest/v1/corporate_announcements`);
@@ -460,63 +433,24 @@ async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSear
         .forEach(([k, v]) => url.searchParams.append(k, String(v)));
     (_filterPairs || []).forEach(([k, v]) => url.searchParams.append(k, v));
 
-    let lastErr = null;
-
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        // Exponential backoff before every retry (not before first attempt)
-        if (attempt > 0) {
-            await new Promise(res => setTimeout(res, RETRY_BASE_MS * Math.pow(2, attempt - 1)));
-        }
-
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-        try {
-            const resp = await fetch(url.toString(), {
-                signal: controller.signal,
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                    "Content-Type": "application/json",
-                    Prefer: "count=exact",
-                },
-            });
-
-            clearTimeout(timer);
-
-            // Parse body regardless of HTTP status so we can read Supabase error objects
-            let body;
-            try { body = await resp.json(); } catch { body = null; }
-
-            // Supabase sometimes returns statement_timeout as a 200 with an error object
-            if (!resp.ok || !Array.isArray(body)) {
-                const msg = body?.message || body?.error || `HTTP ${resp.status}`;
-                const err = new Error(msg);
-                err.httpStatus = resp.status;
-
-                if (isRetryableError(err, resp.status)) {
-                    console.warn(`[Announcements] attempt ${attempt + 1} retryable error:`, msg);
-                    lastErr = err;
-                    continue;  // retry
-                }
-                throw err;  // non-retryable (e.g. 400 bad request) â€” surface immediately
-            }
-
-            return body;   // success
-        } catch (e) {
-            clearTimeout(timer);
-            if (!isRetryableError(e, e?.httpStatus)) throw e;
-            console.warn(`[Announcements] attempt ${attempt + 1} failed:`, e.message);
-            lastErr = e;
-        }
+    const controller = new AbortController();
+    const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+    try {
+        const resp = await fetch(url.toString(), {
+            signal: controller.signal,
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json",
+                Prefer: "count=exact",
+            },
+        });
+        const data = await resp.json();
+        if (!Array.isArray(data)) throw new Error(data?.message || "Unexpected response from server");
+        return data;
+    } finally {
+        clearTimeout(fetchTimeout);
     }
-
-    // All retries exhausted â€” throw a user-friendly message
-    throw new Error(
-        lastErr?.name === "AbortError"
-            ? "Request timed out after multiple attempts. Please try again."
-            : "Data temporarily unavailable â€” please try again in a moment."
-    );
 }
 
 export function prefetchAnnouncementsData() {
@@ -558,7 +492,7 @@ export default function AnnouncementsModule({ T }) {
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
 
-    // Debounce search input â€” only fire server query after 400 ms of inactivity
+    // Debounce search input — only fire server query after 400 ms of inactivity
     useEffect(() => {
         const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
         return () => clearTimeout(t);
@@ -583,7 +517,7 @@ export default function AnnouncementsModule({ T }) {
                 setHasMore(cached.hasMore);
                 setRevalidating(true);
             } else {
-                // No cache yet â€” show full loading spinner
+                // No cache yet — show full loading spinner
                 setLoading(true);
                 setAnnouncements([]);
             }
@@ -612,21 +546,15 @@ export default function AnnouncementsModule({ T }) {
                 setHasMore(data.length === PAGE_SIZE);
             }
         } catch (e) {
-            // If we were doing a silent background revalidation (stale data was
-            // already visible), swallow the error â€” the user keeps seeing the
-            // cached data and never hits an error state.
-            // Only surface an error when there was genuinely nothing to show.
-            const wasRevalidating = reset && announcements.length > 0;
-            if (!wasRevalidating) {
-                setError(e.message || "Failed to load announcements");
-            } else {
-                console.warn("[Announcements] background revalidation failed (stale data kept):", e.message);
-            }
+            const msg = e?.name === "AbortError"
+                ? "Request timed out (15s). Your network may be blocking access to the data server."
+                : (e.message || "Failed to load announcements");
+            setError(msg);
         } finally {
             setLoading(false);
             setRevalidating(false);
         }
-    }, [activeFilter, customFilters, debouncedSearch, announcements.length]);
+    }, [activeFilter, customFilters, debouncedSearch]);
 
     const loadMore = () => fetchPage(offset, false);
 
@@ -691,7 +619,7 @@ export default function AnnouncementsModule({ T }) {
             <div style={{ marginBottom: 32 }}>
                 <div style={{ fontSize: 12, color: T.subtext, marginBottom: 8, display: "flex", gap: 6, letterSpacing: "0.02em" }}>
                     <span style={{ color: "#5b5bd6", cursor: "pointer" }}>Fundamentals</span>
-                    <span>â€º</span>
+                    <span>›</span>
                     <span>Announcements</span>
                 </div>
                 <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, color: T.text, letterSpacing: "-0.03em", lineHeight: 1.15 }}>
@@ -725,18 +653,18 @@ export default function AnnouncementsModule({ T }) {
                                 style={{ ...tabStyle(activeFilter === i), paddingRight: 8 }}
                                 onClick={() => setActiveFilter(i)}
                             >
-                                {f.length > 20 ? f.slice(0, 20) + "â€¦" : f}
+                                {f.length > 20 ? f.slice(0, 20) + "…" : f}
                             </button>
                             <button
                                 title="Edit"
                                 onClick={(e) => { e.stopPropagation(); setEditingFilter(i); setShowFilterModal(true); }}
                                 style={{ marginLeft: -1, padding: "0 5px", border: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderLeft: "none", borderRadius: "0 7px 7px 0", background: "transparent", cursor: "pointer", color: T.subtext, fontSize: 12, transition: "background .12s" }}
-                            >âœŽ</button>
+                            >✎</button>
                             <button
                                 title="Remove"
                                 onClick={(e) => { e.stopPropagation(); removeFilter(i); }}
                                 style={{ padding: "0 5px", border: `1.5px solid ${activeFilter === i ? "#5b5bd6" : T.border}`, borderLeft: "none", borderRadius: "0 7px 7px 0", marginLeft: -1, background: "transparent", cursor: "pointer", color: "#ef4444", fontSize: 12, transition: "background .12s" }}
-                            >Ã—</button>
+                            >×</button>
                         </div>
                     ))}
 
@@ -769,7 +697,7 @@ export default function AnnouncementsModule({ T }) {
                 <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search company or announcementâ€¦"
+                    placeholder="Search company or announcement…"
                     style={{
                         width: "100%", padding: "11px 16px 11px 38px",
                         border: `1.5px solid ${T.border}`, borderRadius: 10,
@@ -782,7 +710,7 @@ export default function AnnouncementsModule({ T }) {
             </div>
 
             {/* Content */}
-            {/* Subtle revalidation indicator â€” shown while background refresh is in progress */}
+            {/* Subtle revalidation indicator — shown while background refresh is in progress */}
             {revalidating && (
                 <div style={{
                     display: "flex", alignItems: "center", gap: 8,
@@ -798,7 +726,7 @@ export default function AnnouncementsModule({ T }) {
                         animation: "te-spin 0.7s linear infinite",
                         flexShrink: 0,
                     }} />
-                    <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 500 }}>Refreshingâ€¦</span>
+                    <span style={{ fontSize: 12, color: "#6366f1", fontWeight: 500 }}>Refreshing…</span>
                     <style>{`@keyframes te-spin { to { transform: rotate(360deg); } }`}</style>
                 </div>
             )}
@@ -811,7 +739,7 @@ export default function AnnouncementsModule({ T }) {
                         borderTopColor: "#6366f1",
                         animation: "te-spin 0.7s linear infinite",
                     }} />
-                <span style={{ fontSize: 14, color: T.subtext }}>Loading announcementsâ€¦</span>
+                <span style={{ fontSize: 14, color: T.subtext }}>Loading announcements…</span>
                     <style>{`@keyframes te-spin { to { transform: rotate(360deg); } }`}</style>
                 </div>
             ) : error ? (
@@ -823,11 +751,8 @@ export default function AnnouncementsModule({ T }) {
                     display: "flex", alignItems: "center", gap: 10,
                 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    {/* Show a clean user-facing message; raw DB errors are logged to console */}
-                    {error.toLowerCase().includes("timeout") || error.toLowerCase().includes("statement")
-                        ? "Data temporarily unavailable â€” please try again."
-                        : error}
-                    <button onClick={() => { setError(null); fetchPage(0, true); }} style={{ marginLeft: "auto", color: "#ef4444", background: "none", border: "1px solid #ef4444", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}>
+                    {error}
+                    <button onClick={() => fetchPage(0, true)} style={{ marginLeft: "auto", color: "#ef4444", background: "none", border: "1px solid #ef4444", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 12 }}>
                         Retry
                     </button>
                 </div>
@@ -882,7 +807,7 @@ export default function AnnouncementsModule({ T }) {
                                 onMouseEnter={(e) => !loading && (e.currentTarget.style.background = T.surface)}
                                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                             >
-                                {loading ? "Loadingâ€¦" : "Load more"}
+                                {loading ? "Loading…" : "Load more"}
                             </button>
                         </div>
                     )}
@@ -902,5 +827,3 @@ export default function AnnouncementsModule({ T }) {
         </div>
     );
 }
-
-

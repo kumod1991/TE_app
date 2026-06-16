@@ -1,25 +1,24 @@
-﻿import React from 'react';
 /**
  * /pages/technicals/vcp.jsx
- * VCP Pattern Screen â€” Volatility Contraction Pattern candidates
+ * VCP Pattern Screen — Volatility Contraction Pattern candidates
  *
  * Props:
- *   T       â€” theme tokens from THEMES.light / THEMES.dark (passed from parent)
- *   onBack  â€” callback to go back to Screens list
+ *   T       — theme tokens from THEMES.light / THEMES.dark (passed from parent)
+ *   onBack  — callback to go back to Screens list
  *
  * Data source: Supabase `vcp_candidates` table
  */
 
 import { useState, useEffect, useMemo } from "react";
 
-/* â”€â”€â”€ Supabase config (mirrors App.jsx) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Supabase config (mirrors App.jsx) ─────────────────────────────────────── */
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-/* â”€â”€â”€ Shared font stacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Shared font stacks ─────────────────────────────────────────────────────── */
 const SANS = "'IBM Plex Sans', system-ui, sans-serif";
 const MONO = "'IBM Plex Mono', monospace";
 
-/* â”€â”€â”€ Column definition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Column definition ─────────────────────────────────────────────────────── */
 const COLS = [
   { key: "ticker",              label: "Symbol",      w: "130px", align: "left"   },
   { key: "exchange",            label: "Exch",        w: "56px",  align: "left"   },
@@ -38,15 +37,15 @@ const COLS = [
 
 const PAGE_SIZE = 50;
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ══════════════════════════════════════════════════════════════════════════════
    VCPScreen component
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+══════════════════════════════════════════════════════════════════════════════ */
 export default function VCPScreen({ T, onBack }) {
   /* Detect dark mode from theme */
   const isDark = T?.bg !== "#f0f4f8"; // THEMES.light.bg
   const ACCENT = isDark ? "#6366f1" : "#4f46e5";
 
-  /* â”€â”€ State â”€â”€ */
+  /* ── State ── */
   const [rows,        setRows]        = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState(null);
@@ -57,7 +56,7 @@ export default function VCPScreen({ T, onBack }) {
   const [sortDir,     setSortDir]     = useState("desc");
   const [page,        setPage]        = useState(0);
 
-  /* â”€â”€ Fetch once on mount â”€â”€ */
+  /* ── Fetch once on mount ── */
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -72,7 +71,7 @@ export default function VCPScreen({ T, onBack }) {
       .catch(e  => { setError(e.message); setLoading(false); });
   }, []);
 
-  /* â”€â”€ Memoised filter + sort â”€â”€ */
+  /* ── Memoised filter + sort ── */
   const filtered = useMemo(() => {
     let r = rows;
     if (catFilter   !== "ALL")  r = r.filter(x => x.category === catFilter);
@@ -90,7 +89,7 @@ export default function VCPScreen({ T, onBack }) {
   const paginated      = useMemo(() => filtered.slice(page * PAGE_SIZE, (page+1)*PAGE_SIZE), [filtered, page]);
   const totalPages     = Math.ceil(filtered.length / PAGE_SIZE);
 
-  /* â”€â”€ Mini insights â”€â”€ */
+  /* ── Mini insights ── */
   const tightest     = useMemo(() =>
     rows.length ? [...rows].sort((a,b) => Number(a.base_depth||99) - Number(b.base_depth||99))[0] : null,
     [rows]);
@@ -99,7 +98,7 @@ export default function VCPScreen({ T, onBack }) {
         .sort((a,b) => Math.abs(Number(a.pct_from_high)) - Math.abs(Number(b.pct_from_high)))[0] || null,
     [rows]);
 
-  /* â”€â”€ Colour helpers â”€â”€ */
+  /* ── Colour helpers ── */
   const scoreColor = v => {
     const n = Number(v);
     if (n >= 80) return isDark ? "#4ade80"  : "#15803d";
@@ -114,7 +113,7 @@ export default function VCPScreen({ T, onBack }) {
   };
   const boolIcon = (v, icon) => v
     ? <span style={{ fontSize: 13 }}>{icon}</span>
-    : <span style={{ color: T?.muted, fontSize: 11 }}>â€”</span>;
+    : <span style={{ color: T?.muted, fontSize: 11 }}>—</span>;
   const fmtTime  = v => {
     if (!v) return null;
     const d = new Date(v);
@@ -126,7 +125,7 @@ export default function VCPScreen({ T, onBack }) {
     setPage(0);
   };
 
-  /* â”€â”€ Sub-components â”€â”€ */
+  /* ── Sub-components ── */
   const FilterBtn = ({ active, onClick, children }) => (
     <button onClick={onClick} style={{
       height: 28, padding: "0 12px",
@@ -217,7 +216,7 @@ export default function VCPScreen({ T, onBack }) {
           <span style={{ display: "inline-block", fontFamily: MONO, fontSize: 12, fontWeight: 700,
             padding: "2px 7px", borderRadius: 4,
             background: scoreTagBg(row.vcp_score), color: scoreColor(row.vcp_score) }}>
-            {row.vcp_score != null ? Number(row.vcp_score).toFixed(0) : "â€”"}
+            {row.vcp_score != null ? Number(row.vcp_score).toFixed(0) : "—"}
           </span>
         </div>
 
@@ -244,13 +243,13 @@ export default function VCPScreen({ T, onBack }) {
         {/* Legs */}
         <div style={{ fontFamily: MONO, fontSize: 12, textAlign: "right", paddingRight: 4,
           color: T?.text, fontVariantNumeric: "tabular-nums" }}>
-          {row.contractions ?? "â€”"}
+          {row.contractions ?? "—"}
         </div>
 
         {/* Pattern */}
         <div style={{ fontSize: 11, color: T?.subtext, fontFamily: MONO,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {row.contraction_pattern ?? "â€”"}
+          {row.contraction_pattern ?? "—"}
         </div>
 
         {/* Near High */}
@@ -259,43 +258,43 @@ export default function VCPScreen({ T, onBack }) {
           color: row.pct_from_high != null
             ? (Math.abs(Number(row.pct_from_high)) <= 5 ? (isDark ? "#4ade80" : "#15803d") : T?.text)
             : T?.muted }}>
-          {row.pct_from_high != null ? `${Number(row.pct_from_high).toFixed(1)}%` : "â€”"}
+          {row.pct_from_high != null ? `${Number(row.pct_from_high).toFixed(1)}%` : "—"}
         </div>
 
         {/* Base Depth */}
         <div style={{ textAlign: "right", paddingRight: 4, fontFamily: MONO, fontSize: 12,
           color: T?.subtext, fontVariantNumeric: "tabular-nums" }}>
-          {row.base_depth != null ? `${Number(row.base_depth).toFixed(1)}%` : "â€”"}
+          {row.base_depth != null ? `${Number(row.base_depth).toFixed(1)}%` : "—"}
         </div>
 
         {/* Boolean badges */}
-        <div style={{ textAlign: "center" }}>{boolIcon(row.volume_dryup, "ðŸ“‰")}</div>
-        <div style={{ textAlign: "center" }}>{boolIcon(row.tight_range,  "ðŸ“¦")}</div>
-        <div style={{ textAlign: "center" }}>{boolIcon(row.near_pivot,   "ðŸŽ¯")}</div>
+        <div style={{ textAlign: "center" }}>{boolIcon(row.volume_dryup, "📉")}</div>
+        <div style={{ textAlign: "center" }}>{boolIcon(row.tight_range,  "📦")}</div>
+        <div style={{ textAlign: "center" }}>{boolIcon(row.near_pivot,   "🎯")}</div>
 
         {/* Pivot Price */}
         <div style={{ textAlign: "right", paddingRight: 4, fontFamily: MONO, fontSize: 12,
           color: T?.text, fontVariantNumeric: "tabular-nums" }}>
           {row.breakout_level != null
-            ? `â‚¹${Number(row.breakout_level).toLocaleString("en-IN", { maximumFractionDigits: 1 })}`
-            : "â€”"}
+            ? `₹${Number(row.breakout_level).toLocaleString("en-IN", { maximumFractionDigits: 1 })}`
+            : "—"}
         </div>
 
         {/* Time */}
         <div style={{ textAlign: "right", paddingRight: 16, fontSize: 11, color: T?.muted }}>
-          {fmtTime(row.detected_at) ?? "â€”"}
+          {fmtTime(row.detected_at) ?? "—"}
         </div>
       </div>
     );
   };
 
-  /* â”€â”€ Main render â”€â”€ */
+  /* ── Main render ── */
   return (
     <div style={{ fontFamily: SANS, flex: 1, overflow: "auto", minHeight: 0,
       display: "flex", flexDirection: "column",
       background: T?.bg, color: T?.text }}>
 
-      {/* â”€â”€ TOP BAR â”€â”€ */}
+      {/* ── TOP BAR ── */}
       <div style={{ flexShrink: 0, background: T?.card, borderBottom: `1px solid ${T?.border}`,
         padding: "0 24px", display: "flex", alignItems: "center",
         height: 44, gap: 14, position: "sticky", top: 0, zIndex: 20 }}>
@@ -311,7 +310,7 @@ export default function VCPScreen({ T, onBack }) {
           </svg>
           Screens
         </button>
-        <span style={{ color: T?.border }}>â€º</span>
+        <span style={{ color: T?.border }}>›</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: T?.text }}>VCP Pattern</span>
         {!loading && (
           <span style={{ fontFamily: MONO, fontSize: 11, color: T?.muted }}>
@@ -320,7 +319,7 @@ export default function VCPScreen({ T, onBack }) {
         )}
       </div>
 
-      {/* â”€â”€ FILTER BAR â”€â”€ */}
+      {/* ── FILTER BAR ── */}
       <div style={{ flexShrink: 0, padding: "10px 24px", background: T?.surface,
         borderBottom: `1px solid ${T?.border}`,
         display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -328,7 +327,7 @@ export default function VCPScreen({ T, onBack }) {
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <span style={{ fontSize: 11, color: T?.muted, marginRight: 2,
             textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600 }}>Type:</span>
-          {[["ALL","All"],["IDEAL","ðŸ”¥ Ideal"],["DEVELOPING","âš¡ Developing"]].map(([v,l]) => (
+          {[["ALL","All"],["IDEAL","🔥 Ideal"],["DEVELOPING","⚡ Developing"]].map(([v,l]) => (
             <FilterBtn key={v} active={catFilter === v}
               onClick={() => { setCatFilter(v); setPage(0); }}>{l}</FilterBtn>
           ))}
@@ -339,7 +338,7 @@ export default function VCPScreen({ T, onBack }) {
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <span style={{ fontSize: 11, color: T?.muted, marginRight: 2,
             textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600 }}>Score:</span>
-          {[["ALL","All"],["HIGH","â‰¥80"],["MID","60â€“80"]].map(([v,l]) => (
+          {[["ALL","All"],["HIGH","≥80"],["MID","60–80"]].map(([v,l]) => (
             <FilterBtn key={v} active={scoreFilter === v}
               onClick={() => { setScoreFilter(v); setPage(0); }}>{l}</FilterBtn>
           ))}
@@ -349,19 +348,19 @@ export default function VCPScreen({ T, onBack }) {
 
         <FilterBtn active={nearPivot}
           onClick={() => { setNearPivot(p => !p); setPage(0); }}>
-          ðŸŽ¯ Near Pivot
+          🎯 Near Pivot
         </FilterBtn>
 
         <div style={{ flex: 1 }} />
 
         {!loading && rows.length > 0 && (
           <span style={{ fontSize: 11, color: T?.muted, fontFamily: MONO }}>
-            Sorted: {COLS.find(c => c.key === sortKey)?.label} {sortDir === "desc" ? "â†“" : "â†‘"}
+            Sorted: {COLS.find(c => c.key === sortKey)?.label} {sortDir === "desc" ? "↓" : "↑"}
           </span>
         )}
       </div>
 
-      {/* â”€â”€ INSIGHTS BAR â”€â”€ */}
+      {/* ── INSIGHTS BAR ── */}
       {!loading && !error && rows.length > 0 && (
         <div style={{ flexShrink: 0, padding: "8px 24px",
           borderBottom: `1px solid ${T?.border}`,
@@ -372,19 +371,19 @@ export default function VCPScreen({ T, onBack }) {
                 textTransform: "uppercase", letterSpacing: ".07em" }}>Tightest Contraction</span>
               <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600,
                 color: isDark ? "#4ade80" : "#15803d" }}>
-                {tightest.ticker} Â· {Number(tightest.base_depth || 0).toFixed(1)}%
+                {tightest.ticker} · {Number(tightest.base_depth || 0).toFixed(1)}%
               </span>
             </div>
           )}
           {closestBreak && (
             <>
-              <span style={{ color: T?.border }}>Â·</span>
+              <span style={{ color: T?.border }}>·</span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: T?.muted,
                   textTransform: "uppercase", letterSpacing: ".07em" }}>Closest to Breakout</span>
                 <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600,
                   color: isDark ? "#818cf8" : "#4f46e5" }}>
-                  {closestBreak.ticker} Â· {Number(closestBreak.pct_from_high || 0).toFixed(1)}%
+                  {closestBreak.ticker} · {Number(closestBreak.pct_from_high || 0).toFixed(1)}%
                 </span>
               </div>
             </>
@@ -392,32 +391,32 @@ export default function VCPScreen({ T, onBack }) {
         </div>
       )}
 
-      {/* â”€â”€ LOADING â”€â”€ */}
+      {/* ── LOADING ── */}
       {loading && (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
           flexDirection: "column", gap: 12, color: T?.muted }}>
           <div style={{ width: 28, height: 28, borderRadius: "50%",
             border: `2px solid ${T?.border}`, borderTopColor: ACCENT,
             animation: "spin .8s linear infinite" }} />
-          <span style={{ fontSize: 13 }}>Fetching VCP candidatesâ€¦</span>
+          <span style={{ fontSize: 13 }}>Fetching VCP candidates…</span>
         </div>
       )}
 
-      {/* â”€â”€ ERROR â”€â”€ */}
+      {/* ── ERROR ── */}
       {!loading && error && (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
           flexDirection: "column", gap: 8 }}>
-          <span style={{ fontSize: 28 }}>âš ï¸</span>
+          <span style={{ fontSize: 28 }}>⚠️</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: T?.text }}>Failed to load data</span>
           <span style={{ fontSize: 12, color: T?.muted }}>{error}</span>
         </div>
       )}
 
-      {/* â”€â”€ EMPTY â”€â”€ */}
+      {/* ── EMPTY ── */}
       {!loading && !error && filtered.length === 0 && (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
           flexDirection: "column", gap: 8 }}>
-          <span style={{ fontSize: 32 }}>ðŸ“Š</span>
+          <span style={{ fontSize: 32 }}>📊</span>
           <span style={{ fontSize: 15, fontWeight: 700, color: T?.text }}>
             No VCP setups found for today
           </span>
@@ -427,11 +426,11 @@ export default function VCPScreen({ T, onBack }) {
         </div>
       )}
 
-      {/* â”€â”€ TABLE â”€â”€ */}
+      {/* ── TABLE ── */}
       {!loading && !error && filtered.length > 0 && (
         <div style={{ flex: 1, overflow: "auto" }}>
 
-          {/* Column headers â€” sticky */}
+          {/* Column headers — sticky */}
           <div style={{
             display: "grid",
             gridTemplateColumns: COLS.map(c => c.w).join(" "),
@@ -443,19 +442,19 @@ export default function VCPScreen({ T, onBack }) {
             {COLS.map(col => <ColHeader key={col.key} col={col} />)}
           </div>
 
-          {/* Rows â€” grouped when no category filter */}
+          {/* Rows — grouped when no category filter */}
           {catFilter === "ALL" ? (
             <>
               {idealRows.length > 0 && (
                 <>
-                  <SectionHeader icon="ðŸ”¥" label="IDEAL SETUPS"
+                  <SectionHeader icon="🔥" label="IDEAL SETUPS"
                     count={idealRows.length} color={isDark ? "#4ade80" : "#15803d"} />
                   {idealRows.map((row, i) => <RenderRow key={row.ticker + i} row={row} />)}
                 </>
               )}
               {developingRows.length > 0 && (
                 <>
-                  <SectionHeader icon="âš¡" label="DEVELOPING SETUPS"
+                  <SectionHeader icon="⚡" label="DEVELOPING SETUPS"
                     count={developingRows.length} color={isDark ? "#fbbf24" : "#a16207"} />
                   {developingRows.map((row, i) => <RenderRow key={row.ticker + i} row={row} />)}
                 </>
@@ -474,7 +473,7 @@ export default function VCPScreen({ T, onBack }) {
                 style={{ height: 28, padding: "0 12px", border: `1px solid ${T?.border}`,
                   borderRadius: 5, background: "transparent", color: T?.subtext,
                   cursor: page === 0 ? "not-allowed" : "pointer", fontSize: 12, fontFamily: SANS,
-                  opacity: page === 0 ? .4 : 1 }}>â† Prev</button>
+                  opacity: page === 0 ? .4 : 1 }}>← Prev</button>
               <span style={{ fontSize: 12, color: T?.muted, fontFamily: MONO }}>
                 {page + 1} / {totalPages}
               </span>
@@ -484,7 +483,7 @@ export default function VCPScreen({ T, onBack }) {
                   borderRadius: 5, background: "transparent", color: T?.subtext,
                   cursor: page === totalPages - 1 ? "not-allowed" : "pointer",
                   fontSize: 12, fontFamily: SANS,
-                  opacity: page === totalPages - 1 ? .4 : 1 }}>Next â†’</button>
+                  opacity: page === totalPages - 1 ? .4 : 1 }}>Next →</button>
             </div>
           )}
         </div>
@@ -492,5 +491,3 @@ export default function VCPScreen({ T, onBack }) {
     </div>
   );
 }
-
-

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
 import { ensureAllowedTickerSet, filterRowsByAllowedTickers, getAllowedTickerSetSync, preloadAllowedTickerSet } from "./marketUniverse";
 
@@ -16,8 +16,6 @@ const prefetchFiiDiiData = () => import("./FiiDiiModule").then(m => m.prefetchFi
 const prefetchOwnershipData = () => import("./OwnershipScansModule").then(m => m.prefetchOwnershipData?.()).catch(() => null);
 const prefetchAnnouncementsData = () => import("./AnnouncementsModule").then(m => m.prefetchAnnouncementsData?.()).catch(() => null);
 const warmStockDashboardCaches = (userToken) => import("./StockDashboard").then(m => m.default?.warmStockDashboardCaches?.(userToken)).catch(() => null);
-const prefetchGlobalNameMap = (userToken) => import("./StockDashboard").then(m => m.default?.prefetchGlobalNameMap?.(userToken)).catch(() => null);
-
 
 
 
@@ -1125,33 +1123,6 @@ a:hover { text-decoration: underline; }
   .top-nav-mobile-drawer.open { display: flex; }
 }
 
-/* Mobile floating back button */
-@keyframes mobileBackFadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-@media (max-width: 768px) {
-  .mobile-back-btn {
-    display: flex;
-    position: fixed;
-    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
-    left: 16px;
-    z-index: 7000;
-    align-items: center;
-    justify-content: center;
-    width: 40px; height: 40px;
-    border-radius: 50%;
-    background: ${D ? 'rgba(12,26,54,0.94)' : 'rgba(255,255,255,0.94)'};
-    border: 1px solid ${D ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'};
-    box-shadow: 0 4px 18px rgba(0,0,0,0.22);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    cursor: pointer;
-    color: ${T.text};
-    transition: opacity .15s, transform .12s;
-    animation: mobileBackFadeIn .18s ease;
-  }
-  .mobile-back-btn:active { transform: scale(0.92); opacity: 0.8; }
-}
-@media (min-width: 769px) { .mobile-back-btn { display: none !important; } }
-
 @keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
 
 .top-nav-mobile-section-label {
@@ -1376,7 +1347,7 @@ a:hover { text-decoration: underline; }
   /* Prevent zoom on input focus (iOS) */
   input, select, textarea { font-size: 16px !important; }
 
-  /* Hide the persistent footer on mobile â€” it eats vertical space and
+  /* Hide the persistent footer on mobile — it eats vertical space and
      the screener already shows a legal notice inline */
   .persistent-footer { display: none !important; }
 }
@@ -1516,24 +1487,24 @@ a:hover { text-decoration: underline; }
 
 .stat-card {
   position: relative; overflow: hidden;
-  background: ${D ? "rgba(255,255,255,.03)" : "#ffffff"};
-  border: 1px solid ${D ? "rgba(255,255,255,.06)" : "rgba(15,23,42,.06)"};
-  border-radius: 24px; padding: 20px 22px;
-  transition: transform .2s ease, box-shadow .2s ease;
-  animation: slideUp .3s cubic-bezier(.16,1,.3,1);
-  box-shadow: ${D ? "0 8px 30px rgba(0,0,0,.2)" : "0 6px 20px rgba(15,23,42,.03)"};
+  background: ${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92))"};
+  border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
+  border-radius: 22px; padding: 18px 18px;
+  transition: box-shadow .15s, transform .15s, border-color .15s;
+  animation: slideUp .2s cubic-bezier(.16,1,.3,1);
+  box-shadow: ${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 16px 34px rgba(15,23,42,.05)"};
 }
-.stat-card:hover { 
-  box-shadow: ${D ? "0 16px 40px rgba(0,0,0,.3)" : "0 12px 30px rgba(15,23,42,.06)"}; 
-  transform: translateY(-2px); 
+.stat-card:hover { box-shadow: 0 22px 46px ${T.shadow}; transform: translateY(-2px); border-color: ${D ? "rgba(255,255,255,.12)" : "rgba(15,23,42,.12)"}; }
+.stat-card.hero { border-color: rgba(5,150,105,.28); background: ${D ? "linear-gradient(180deg, rgba(16,185,129,.10), rgba(255,255,255,.025))" : "linear-gradient(180deg, rgba(16,185,129,.08), rgba(255,255,255,.96))"}; }
+.stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: ${T.muted}; margin-bottom: 6px; }
+.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: ${T.text}; letter-spacing: -.03em; }
+.stat-value.hero.green { color: #059669; }
+.stat-sub { font-size: 11px; color: ${T.subtext}; margin-top: 6px; line-height: 1.6; }
+@media (max-width:480px) {
+  .stat-card { padding: 16px 16px; border-radius: 18px; }
+  .stat-value { font-size: 18px; }
+  .stat-value.hero { font-size: 22px; }
 }
-.stat-card.hero { 
-  border-color: rgba(16,185,129,.24); 
-  background: ${D ? "linear-gradient(180deg, rgba(16,185,129,.08), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(16,185,129,.05), rgba(255,255,255,.98))"}; 
-}
-.stat-label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: ${T.muted}; margin-bottom: 8px; }
-.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 24px; font-weight: 700; color: ${T.text}; letter-spacing: -.02em; }
-.stat-sub { font-size: 11.5px; color: ${T.subtext}; margin-top: 8px; line-height: 1.6; opacity: 0.8; }
 
 .table-shell {
   background: ${T.card}; border: 1px solid ${T.border}; border-radius: 10px;
@@ -1684,16 +1655,11 @@ a:hover { text-decoration: underline; }
 .journal-nav-item.active .journal-nav-icon { opacity: 1; }
 .journal-main {
   flex: 1; overflow-y: auto; padding: 20px 22px 34px;
-  background: ${T.bg};
-}
-@media (min-width: 1024px) {
-  .journal-main {
-    background:
-      ${D
-            ? "radial-gradient(circle at top left, rgba(16,185,129,0.08), transparent 24%), radial-gradient(circle at top right, rgba(59,130,246,0.08), transparent 26%)"
-            : "radial-gradient(circle at top left, rgba(5,150,105,0.06), transparent 24%), radial-gradient(circle at top right, rgba(37,99,235,0.06), transparent 26%)"},
-      ${T.bg};
-  }
+  background:
+    ${D
+            ? "radial-gradient(circle at top left, rgba(16,185,129,0.10), transparent 24%), radial-gradient(circle at top right, rgba(59,130,246,0.10), transparent 26%), linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))"
+            : "radial-gradient(circle at top left, rgba(5,150,105,0.08), transparent 24%), radial-gradient(circle at top right, rgba(37,99,235,0.08), transparent 26%), linear-gradient(180deg, rgba(15,23,42,0.02), rgba(15,23,42,0))"},
+    ${T.bg};
 }
 .journal-main-inner { width: 100%; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
 .journal-hero {
@@ -1780,27 +1746,23 @@ a:hover { text-decoration: underline; }
 }
 @media (max-width: 768px) {
   .journal-main-inner { gap: 14px; }
-  .journal-hero { padding: 18px; border-radius: 24px; }
-  .journal-hero-title { font-size: 20px; letter-spacing: -.03em; margin: 8px 0 6px; }
-  .journal-hero-subtitle { font-size: 12px; margin-bottom: 12px; opacity: 0.8; }
-  .journal-chip-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .journal-chip { padding: 10px 12px; border-radius: 16px; }
-  .journal-chip-value { font-size: 13.5px; }
-  .journal-toolbar { align-items: stretch; border-radius: 16px; padding: 12px; }
-  .journal-hero-aside { padding: 14px; border-radius: 18px; }
+  .journal-hero-title { font-size: 22px; letter-spacing: -.04em; margin: 12px 0 8px; }
+  .journal-hero-subtitle { font-size: 12.5px; margin-bottom: 14px; }
+  .journal-chip-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+  .journal-chip { min-width: 0; padding: 9px 10px 10px; }
+  .journal-chip-value { font-size: 13px; }
+  .journal-toolbar { align-items: stretch; }
+  .journal-hero-aside { padding: 14px; border-radius: 16px; }
 }
 @media (max-width: 520px) {
-  .journal-main { padding: 10px 8px 20px; }
-  .journal-hero { padding: 14px 12px; border-radius: 20px; gap: 10px; }
-  .journal-hero-title { font-size: 18px; margin: 6px 0 4px; }
-  .journal-kicker { font-size: 8.5px; padding: 4px 8px; }
-  .journal-chip-row { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .journal-chip { padding: 8px 10px; }
-  .journal-chip-label { font-size: 8.5px; margin-bottom: 2px; }
-  .journal-chip-value { font-size: 12.5px; }
-  .journal-action-row { gap: 6px; }
-  .journal-action-row > * { flex: 1; min-width: 0; justify-content: center; font-size: 11px; padding: 8px 10px; }
-  .journal-btn-ghost { font-size: 11.5px; padding: 8px 12px; }
+  .journal-main { padding: 12px 10px 22px; }
+  .journal-hero { padding: 16px 14px; border-radius: 20px; gap: 12px; }
+  .journal-hero-title { font-size: 20px; }
+  .journal-kicker { font-size: 9px; padding: 5px 9px; }
+  .journal-chip-row { grid-template-columns: 1fr 1fr; }
+  .journal-action-row { flex-wrap: wrap; }
+  .journal-action-row > * { flex: 1; min-width: 0; justify-content: center; }
+  .journal-btn-ghost { font-size: 12px; padding: 9px 12px; }
 }
 
 .ann-outer { display:flex; flex-direction:column; height:100%; overflow:hidden; }
@@ -2053,57 +2015,20 @@ box-shadow:0 22px 48px ${T.shadow}; }
   .stats-row-2 { grid-template-columns:repeat(2,1fr); }
 }
 @media (max-width:480px) {
-  .stats-row { grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:12px; }
-  .stats-row-2 { grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:14px; }
-  .stats-row .stat-card.hero { grid-column:span 2; }
-  .stat-card { padding: 14px 12px; border-radius: 16px; }
-  .stat-label { font-size: 8.5px; margin-bottom: 4px; }
-  .stat-value { font-size: 16px; }
+  .stats-row { grid-template-columns:1fr; gap:10px; margin-bottom:12px; }
+  .stats-row-2 { grid-template-columns:1fr; gap:10px; margin-bottom:14px; }
+  .stats-row .stat-card.hero { grid-column:1; }
 }
-
 .table-wrap {
   background:${D ? "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.94))"};
   border:1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"}; border-radius:24px; overflow:auto;
   box-shadow:${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 16px 34px rgba(15,23,42,.05)"};
-  -webkit-overflow-scrolling: touch;
 }
-table { width:100%; border-collapse:separate; border-spacing:0; }
-thead th { 
-  background:${T.tableHead}; padding:10px 14px; font-size:10px; font-weight:700; 
-  text-transform:uppercase; letter-spacing:.07em; color:${T.muted}; text-align:left; 
-  white-space:nowrap; position:sticky; top:0; z-index:10;
-  border-bottom:1px solid ${T.border};
-}
-.table-sticky-1 { 
-  position: sticky; left: 0; z-index: 20; 
-  background: ${T.tableHead}; 
-  will-change: transform;
-}
-tbody .table-sticky-1 { background: ${T.surface}; }
-.table-sticky-2 { 
-  position: sticky; left: 42px; z-index: 20; 
-  background: ${T.tableHead}; 
-  will-change: transform;
-}
-tbody .table-sticky-2 { background: ${T.surface}; }
-.table-sticky-1::after, .table-sticky-2::after {
-  content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 1px;
-  background: ${T.border}; opacity: 0.8;
-}
-tbody tr:hover .table-sticky-1, tbody tr:hover .table-sticky-2 { background: ${T.hover}; }
-
-.table-wrap th, .table-wrap td { padding:10px 14px; font-size:12.5px; white-space:nowrap; color:${T.text}; border-bottom: 1px solid ${T.border}; }
-@media (max-width: 640px) {
-  .table-wrap th, .table-wrap td { padding: 8px 10px; font-size: 11.5px; }
-  .table-wrap { border-radius: 16px; }
-}
-tbody tr { transition:background .08s; }
+table { width:100%; border-collapse:collapse; }
+thead th { background:${T.tableHead}; padding:9px 13px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:${T.muted}; text-align:left; white-space:nowrap; position:sticky; top:0; border-bottom:1px solid ${T.border}; }
+tbody tr { border-top:1px solid ${T.border}; transition:background .08s; }
 tbody tr:hover { background:${T.hover}; }
-td { padding:10px 14px; font-size:12.5px; white-space:nowrap; color:${T.text}; border-bottom: 1px solid ${T.border}; }
-@media (max-width: 640px) {
-  td, thead th { padding: 8px 10px; font-size: 11.5px; }
-  .table-wrap { border-radius: 16px; }
-}
+td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
 .td-mono { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
 .pnl-pos { color:${T.pos}; font-weight:600; }
 .pnl-neg { color:${T.neg}; font-weight:600; }
@@ -2119,22 +2044,18 @@ td { padding:10px 14px; font-size:12.5px; white-space:nowrap; color:${T.text}; b
   transition:opacity .15s, transform .15s, box-shadow .15s; box-shadow:0 12px 26px rgba(5,150,105,.24);
 }
 .btn-add:hover { opacity:.94; transform: translateY(-1px); box-shadow:0 16px 30px rgba(5,150,105,.28); }
-.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-bottom:24px; }
-@media (max-width:768px) {
-  .chart-grid { grid-template-columns:1fr; gap:16px; }
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+@media (max-width:640px) {
+  .chart-grid { grid-template-columns:1fr; }
   .chart-grid .chart-card[style*="span 2"],
   .chart-grid .chart-card { grid-column:1 !important; }
 }
 .chart-card {
-  background:${D ? "rgba(255,255,255,.025)" : "rgba(255,255,255,.98)"};
-  border: 1px solid ${D ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.07)"}; border-radius: 28px; padding: 24px;
-  box-shadow:${D ? "0 10px 30px rgba(0,0,0,.2)" : "0 8px 24px rgba(15,23,42,.03)"};
+  background:${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92))"};
+  border:1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"}; border-radius:24px; padding:20px;
+  box-shadow:${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 16px 34px rgba(15,23,42,.05)"};
 }
-.chart-title { 
-  font-size: 13px; font-weight: 700; color: ${T.text}; margin-bottom: 20px; 
-  letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; 
-}
-.chart-title::before { content: ""; width: 3px; height: 14px; background: ${T.green}; border-radius: 4px; }
+.chart-title { font-size:10px; font-weight:700; color:${T.muted}; margin-bottom:14px; text-transform:uppercase; letter-spacing:.07em; }
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
 .form-divider { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:${T.muted}; margin:16px 0 10px; font-weight:700; display:flex; align-items:center; gap:8px; }
 .form-divider::after { content:''; flex:1; height:1px; background:${T.border}; }
@@ -2722,7 +2643,7 @@ async function fetchFinancialAutocompleteSuggestions(rawQ, historyItems = []) {
     // Use company_financials which has: ticker, name, nse_code, bse_code.
     // nse_code = the actual NSE trading symbol (e.g. "PRICOLLTD")
     // bse_code = BSE numeric code (e.g. "540064")
-    // ticker   = can be either NSE symbol or BSE numeric code â€” not reliable for prefix search
+    // ticker   = can be either NSE symbol or BSE numeric code — not reliable for prefix search
     //
     // Fast path: if the module-level cache is already populated, filter in-memory (instant).
     // Slow path: fetch from DB on every keystroke.
@@ -3455,7 +3376,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
 }
 
 //  PAGES 
-const JournalHero = memo(({ T, kicker, title, subtitle, metrics = [], actions = null, asideTitle = "", asideValue = "", asideBody = "", asideTone = "neutral" }) => {
+function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null, asideTitle = "", asideValue = "", asideBody = "", asideTone = "neutral" }) {
     const toneColor = (tone) => tone === "positive" ? T.pos : tone === "negative" ? T.neg : T.text;
     const asideColor = toneColor(asideTone);
 
@@ -3501,7 +3422,7 @@ const JournalHero = memo(({ T, kicker, title, subtitle, metrics = [], actions = 
             )}
         </section>
     );
-});
+}
 
 function Dashboard({ trades, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
@@ -3626,27 +3547,6 @@ function Dashboard({ trades, isDemo, T }) {
     );
 }
 
-const TradeRow = memo(({ t, i, T, onEdit, onDelete }) => {
-    return (
-        <tr>
-            <td className="td-mono table-sticky-1" style={{ color: T.muted, width: 42, textAlign: "center", padding: "10px 0" }}>{i + 1}</td>
-            <td style={{ fontWeight: 700 }} className="table-sticky-2">{t.ticker}</td>
-            <td className="td-mono" style={{ color: T.subtext }}>{t.entry_date}</td>
-            <td className="td-mono">{t.buy_qty}</td>
-            <td className="td-mono">{t.buy_price}</td>
-            <td className="td-mono">{t.buyAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-            <td className="td-mono" style={{ color: T.subtext }}>{t.exit_date || ""}</td>
-            <td className="td-mono">{t.sell_qty || ""}</td>
-            <td className="td-mono">{t.sell_price ? `${t.sell_price}` : ""}</td>
-            <td className="td-mono">{t.exit_date ? `${t.sellAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : ""}</td>
-            <td>{t.exit_date ? <span className={t.pnl > 0 ? "pnl-pos" : t.pnl < 0 ? "pnl-neg" : ""}>{t.pnl >= 0 ? "+" : ""}{t.pnl.toFixed(2)}</span> : <span style={{ color: T.muted }}></span>}</td>
-            <td className="td-mono" style={{ color: T.subtext }}>{t.days !== null ? t.days : ""}</td>
-            <td>{!t.exit_date ? <span className="badge badge-open">Open</span> : t.pnl > 0 ? <span className="badge badge-win">Win</span> : t.pnl < 0 ? <span className="badge badge-loss">Loss</span> : <span className="badge" style={{ background: T.pill, color: T.subtext }}>Break</span>}</td>
-            <td><span style={{ display: "flex", gap: 2 }}><button className="action-btn" onClick={() => onEdit(t)} title="Edit trade">âœï¸</button><button className="action-btn" onClick={() => onDelete(t.id)} title="Delete trade">ðŸ—‘ï¸</button></span></td>
-        </tr>
-    );
-});
-
 function Trades({ trades, onAdd, onEdit, onDelete, onImportCSV, T }) {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
@@ -3729,10 +3629,25 @@ function Trades({ trades, onAdd, onEdit, onDelete, onImportCSV, T }) {
                 {filtered.length === 0
                     ? <div className="empty"><div className="empty-icon"></div><div className="empty-text">No trades found</div></div>
                     : <table>
-                        <thead><tr><th className="table-sticky-1" style={{ width: 42, textAlign: "center", padding: "10px 0" }}>#</th><th className="table-sticky-2">Ticker</th><th>Entry</th><th>Buy Qty</th><th>Buy Price</th><th>Buy Amt</th><th>Exit</th><th>Sell Qty</th><th>Sell Price</th><th>Sell Amt</th><th>P&amp;L</th><th>Days</th><th>Status</th><th></th></tr></thead>
+                        <thead><tr><th>#</th><th>Ticker</th><th>Entry</th><th>Buy Qty</th><th>Buy Price</th><th>Buy Amt</th><th>Exit</th><th>Sell Qty</th><th>Sell Price</th><th>Sell Amt</th><th>P&amp;L</th><th>Days</th><th>Status</th><th></th></tr></thead>
                         <tbody>
                             {filtered.map((t, i) => (
-                                <TradeRow key={t.id} t={t} i={i} T={T} onEdit={onEdit} onDelete={onDelete} />
+                                <tr key={t.id}>
+                                    <td className="td-mono" style={{ color: T.muted }}>{i + 1}</td>
+                                    <td style={{ fontWeight: 700 }}>{t.ticker}</td>
+                                    <td className="td-mono" style={{ color: T.subtext }}>{t.entry_date}</td>
+                                    <td className="td-mono">{t.buy_qty}</td>
+                                    <td className="td-mono">{t.buy_price}</td>
+                                    <td className="td-mono">{t.buyAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                    <td className="td-mono" style={{ color: T.subtext }}>{t.exit_date || ""}</td>
+                                    <td className="td-mono">{t.sell_qty || ""}</td>
+                                    <td className="td-mono">{t.sell_price ? `${t.sell_price}` : ""}</td>
+                                    <td className="td-mono">{t.exit_date ? `${t.sellAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : ""}</td>
+                                    <td>{t.exit_date ? <span className={t.pnl > 0 ? "pnl-pos" : t.pnl < 0 ? "pnl-neg" : ""}>{t.pnl >= 0 ? "+" : ""}{t.pnl.toFixed(2)}</span> : <span style={{ color: T.muted }}></span>}</td>
+                                    <td className="td-mono" style={{ color: T.subtext }}>{t.days !== null ? t.days : ""}</td>
+                                    <td>{!t.exit_date ? <span className="badge badge-open">Open</span> : t.pnl > 0 ? <span className="badge badge-win">Win</span> : t.pnl < 0 ? <span className="badge badge-loss">Loss</span> : <span className="badge" style={{ background: T.pill, color: T.subtext }}>Break</span>}</td>
+                                    <td><span style={{ display: "flex", gap: 2 }}><button className="action-btn" onClick={() => onEdit(t)} title="Edit trade">✏️</button><button className="action-btn" onClick={() => onDelete(t.id)} title="Delete trade">🗑️</button></span></td>
+                                </tr>
                             ))}
                         </tbody>
                     </table>
@@ -3929,7 +3844,7 @@ function CapitalGains({ trades, T }) {
 
             {/* Main table */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: `0 2px 8px ${T.shadow}` }}>
-                <table style={{ ...tableStyle, minWidth: isMobileTable ? 850 : 600 }}>
+                <table style={{ ...tableStyle, minWidth: 560 }}>
                     <colgroup>
                         <col style={{ width: "10%" }} />
                         <col style={{ width: "15%" }} /><col style={{ width: "15%" }} /><col style={{ width: "15%" }} />
@@ -4772,65 +4687,6 @@ async function triggerBseFinancials(ticker) {
 }
 
 
-const PortfolioRow = memo(({ r, loading, T, td, Badge, pnlColor, inr, mono }) => {
-    return (
-        <tr>
-            <td style={td({ textAlign: "left" })} className="table-sticky-1">
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontWeight: 700, color: T.greenText, ...mono, fontSize: 12 }}>{r.ticker}</span>
-                    {loading && !r.loaded && <span style={{ fontSize: 9, color: T.muted, background: T.pill, padding: "1px 5px", borderRadius: 4 }}></span>}
-                    {!loading && !r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
-                </div>
-            </td>
-            <td style={td({ textAlign: "left", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, color: T.subtext })}>
-                {r.name}
-            </td>
-            <td style={td({ textAlign: "right", ...mono, fontWeight: 700, color: r.currentPrice ? T.text : T.muted })}>
-                {r.currentPrice ? `${r.currentPrice.toFixed(2)}` : ""}
-            </td>
-            <td style={td({ textAlign: "right", ...mono, color: T.subtext })}>
-                {r.avgBuyPrice.toFixed(2)}
-            </td>
-            <td style={td({ textAlign: "right", ...mono, color: pnlColor(r.dayChg) })}>
-                {r.dayChg != null ? `${r.dayChg >= 0 ? "+" : ""}${r.dayChg.toFixed(2)}` : <span style={{ color: T.muted }}></span>}
-            </td>
-            <td style={td({ textAlign: "right" })}><Badge v={r.dayChgPct} /></td>
-            <td style={td({ textAlign: "right", ...mono })}>{r.openQty.toLocaleString("en-IN")}</td>
-            <td style={td({ textAlign: "right", ...mono, fontWeight: 700 })}>{inr(r.curVal)}</td>
-            <td style={td({ textAlign: "right" })}><Badge v={r.apprc} /></td>
-            <td style={td({ textAlign: "right" })}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                    <div style={{ width: 44, height: 4, background: T.border, borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
-                        <div style={{ width: `${Math.min(r.alloc, 100)}%`, height: "100%", background: T.green, borderRadius: 2 }} />
-                    </div>
-                    <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 34, textAlign: "right" }}>
-                        {r.alloc.toFixed(1)}%
-                    </span>
-                </div>
-            </td>
-            <td style={td({ textAlign: "right" })}>
-                {r.rs == null
-                    ? <span style={{ color: T.muted, fontSize: 11 }}></span>
-                    : (() => {
-                        const pctVal = (r.rs * 100).toFixed(1);
-                        const isPos = r.rs >= 0;
-                        return (
-                            <span style={{
-                                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                padding: "2px 8px", borderRadius: 100, fontSize: 11, fontWeight: 700,
-                                background: isPos ? T.greenGlow : T.redGlow,
-                                color: isPos ? T.pos : T.neg
-                            }}>
-                                {isPos ? "+" : ""}{pctVal}%
-                            </span>
-                        );
-                    })()
-                }
-            </td>
-        </tr>
-    );
-});
-
 function Portfolio({ trades, T }) {
     const openPositions = useMemo(() => {
         // Group trades by ticker
@@ -5017,20 +4873,19 @@ function Portfolio({ trades, T }) {
 
     const thBase = {
         padding: "10px 14px", fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-        letterSpacing: ".08em", whiteSpace: "nowrap", cursor: "pointer",
-        userSelect: "none", position: "sticky", top: 0, zIndex: 10
+        letterSpacing: ".08em", background: T.surface, whiteSpace: "nowrap", cursor: "pointer",
+        userSelect: "none", position: "sticky", top: 0
     };
-    const Th = ({ col, label, left = false, sticky = false }) => (
-        <th onClick={() => toggleSort(col)} className={sticky ? "table-sticky-1" : ""} style={{
+    const Th = ({ col, label, left = false }) => (
+        <th onClick={() => toggleSort(col)} style={{
             ...thBase, textAlign: left ? "left" : "right",
             color: sortCol === col ? T.greenText : T.subtext,
-            background: T.tableHead,
             borderBottom: `2px solid ${sortCol === col ? T.green : T.border}`
         }}>
-            {label}
+            {label}{sortCol === col ? (sortDir === "asc" ? " " : " ") : ""}
         </th>
     );
-    const td = (extra = {}) => ({ padding: "10px 14px", fontSize: 12.5, verticalAlign: "middle", borderBottom: `1px solid ${T.border}`, ...extra });
+    const td = (extra = {}) => ({ padding: "10px 12px", fontSize: 13, borderTop: `1px solid ${T.border}`, verticalAlign: "middle", ...extra });
 
     const Badge = ({ v, suffix = "%" }) => v == null ? <span style={{ color: T.muted }}></span> : (
         <span style={{
@@ -5114,11 +4969,11 @@ function Portfolio({ trades, T }) {
                     <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>All trades are closed. Add open trades in the Trade Journal tab.</div>
                 </div>
             ) : (
-                <div className="table-wrap">
-                    <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 1080 }}>
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", boxShadow: `0 2px 8px ${T.shadow}` }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}>
                         <thead>
                             <tr>
-                                <Th col="ticker" label="Symbol" left sticky />
+                                <Th col="ticker" label="Symbol" left />
                                 <Th col="name" label="Stock Name" left />
                                 <Th col="currentPrice" label="Cur Price" />
                                 <Th col="avgBuyPrice" label="Buy Price" />
@@ -5132,19 +4987,78 @@ function Portfolio({ trades, T }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {sorted.map((r, i) => (
-                                <PortfolioRow 
-                                    key={r.ticker} 
-                                    r={r} 
-                                    loading={loading} 
-                                    T={T} 
-                                    td={td} 
-                                    Badge={Badge} 
-                                    pnlColor={pnlColor} 
-                                    inr={inr} 
-                                    mono={mono} 
-                                />
-                            ))}
+                            {sorted.map((r, i) => {
+                                const rowBg = i % 2 === 0 ? T.card : T.surface;
+                                return (
+                                    <tr key={r.ticker} style={{ background: rowBg, transition: "background .1s" }}
+                                        onMouseOver={e => e.currentTarget.style.background = T.hover}
+                                        onMouseOut={e => e.currentTarget.style.background = rowBg}>
+                                        {/* Symbol */}
+                                        <td style={td({ textAlign: "left" })}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <span style={{ fontWeight: 700, color: T.greenText, ...mono, fontSize: 12 }}>{r.ticker}</span>
+                                                {loading && !r.loaded && <span style={{ fontSize: 9, color: T.muted, background: T.pill, padding: "1px 5px", borderRadius: 4 }}></span>}
+                                                {!loading && !r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
+                                            </div>
+                                        </td>
+                                        {/* Name */}
+                                        <td style={td({ textAlign: "left", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, color: T.subtext })}>
+                                            {r.name}
+                                        </td>
+                                        {/* Current Price */}
+                                        <td style={td({ textAlign: "right", ...mono, fontWeight: 700, color: r.currentPrice ? T.text : T.muted })}>
+                                            {r.currentPrice ? `${r.currentPrice.toFixed(2)}` : ""}
+                                        </td>
+                                        {/* Avg Buy Price */}
+                                        <td style={td({ textAlign: "right", ...mono, color: T.subtext })}>
+                                            {r.avgBuyPrice.toFixed(2)}
+                                        </td>
+                                        {/* Day Change  */}
+                                        <td style={td({ textAlign: "right", ...mono, color: pnlColor(r.dayChg) })}>
+                                            {r.dayChg != null ? `${r.dayChg >= 0 ? "+" : ""}${r.dayChg.toFixed(2)}` : <span style={{ color: T.muted }}></span>}
+                                        </td>
+                                        {/* Day Change % badge */}
+                                        <td style={td({ textAlign: "right" })}><Badge v={r.dayChgPct} /></td>
+                                        {/* Shares */}
+                                        <td style={td({ textAlign: "right", ...mono })}>{r.openQty.toLocaleString("en-IN")}</td>
+                                        {/* Current Value */}
+                                        <td style={td({ textAlign: "right", ...mono, fontWeight: 700 })}>{inr(r.curVal)}</td>
+                                        {/* Appreciation % badge */}
+                                        <td style={td({ textAlign: "right" })}><Badge v={r.apprc} /></td>
+                                        {/* Allocation mini bar */}
+                                        <td style={td({ textAlign: "right" })}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                                                <div style={{ width: 44, height: 4, background: T.border, borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
+                                                    <div style={{ width: `${Math.min(r.alloc, 100)}%`, height: "100%", background: T.green, borderRadius: 2 }} />
+                                                </div>
+                                                <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 34, textAlign: "right" }}>
+                                                    {r.alloc.toFixed(1)}%
+                                                </span>
+                                            </div>
+                                        </td>
+                                        {/* RS-6M vs Nifty 500 */}
+                                        <td style={td({ textAlign: "right" })}>
+                                            {r.rs == null
+                                                ? <span style={{ color: T.muted, fontSize: 11 }}></span>
+                                                : (() => {
+                                                    const pct = (r.rs * 100).toFixed(1);
+                                                    const isPos = r.rs >= 0;
+                                                    return (
+                                                        <span style={{
+                                                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                                            padding: "2px 8px", borderRadius: 100, fontSize: 11, fontWeight: 700,
+                                                            background: isPos ? T.greenGlow : T.redGlow,
+                                                            color: isPos ? T.pos : T.neg
+                                                        }}>
+                                                            {isPos ? "+" : ""}{pct}%
+                                                        </span>
+                                                    );
+                                                })()
+                                            }
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -5262,57 +5176,6 @@ function FundModal({ fund, onClose, onSave, T }) {
         </div>
     );
 }
-
-const FundRow = memo(({ f, i, isDeposit, isChecked, T, toggleSelectOne, inr, mono, onEdit, onDelete }) => {
-    return (
-        <tr style={{ background: isChecked ? T.hover : "inherit" }}>
-            <td className="table-sticky-1" style={{ padding: "10px 12px 10px 16px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
-                <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => toggleSelectOne(f.id)}
-                    style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }}
-                />
-            </td>
-            <td className="td-mono table-sticky-2" style={{ padding: "10px 16px", fontSize: 12.5, color: T.muted, borderBottom: `1px solid ${T.border}`, textAlign: "left" }}>{i + 1}</td>
-            <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, borderBottom: `1px solid ${T.border}`, textAlign: "left" }} className="td-mono">
-                {new Date(f.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-            </td>
-            <td style={{ padding: "10px 16px", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 700,
-                    background: isDeposit ? T.greenGlow : T.redGlow,
-                    color: isDeposit ? T.pos : T.neg,
-                    border: `1px solid ${isDeposit ? T.green + "44" : T.red + "33"}`
-                }}>
-                    {isDeposit ? "Deposit" : "Withdrawal"}
-                </span>
-            </td>
-            <td style={{
-                padding: "10px 16px", textAlign: "right", fontSize: 13, fontWeight: 700,
-                color: isDeposit ? T.pos : T.neg, borderBottom: `1px solid ${T.border}`
-            }} className="td-mono">
-                {isDeposit ? "+" : "-"}{inr(f.amount)}
-            </td>
-            <td style={{ padding: "10px 16px", fontSize: 12.5, color: T.text, fontWeight: 500, borderBottom: `1px solid ${T.border}` }}>{f.dp}</td>
-            <td style={{
-                padding: "10px 16px", textAlign: "right", fontSize: 13,
-                color: f.runningBalance >= 0 ? T.text : T.neg, borderBottom: `1px solid ${T.border}`
-            }} className="td-mono">
-                {inr(f.runningBalance)}
-            </td>
-            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>
-                {f.note || <span style={{ color: T.border }}>â€”</span>}
-            </td>
-            <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ display: "flex", gap: 2 }}>
-                    <button className="action-btn" onClick={() => onEdit(f)} title="Edit">âœï¸</button>
-                    <button className="action-btn" onClick={() => onDelete(f.id)} title="Delete">ðŸ—‘ï¸</button>
-                </span>
-            </td>
-        </tr>
-    );
-});
 
 function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, onImportCSV, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
@@ -5766,12 +5629,12 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                             </button>
                         </div>
                     )}
-                    <div className="table-wrap">
-                        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", boxShadow: `0 2px 8px ${T.shadow}` }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
                             <thead>
                                 <tr>
                                     {/* Checkbox select-all */}
-                                    <th className="table-sticky-1" style={{ padding: "11px 12px 11px 16px", background: T.tableHead, borderBottom: `2px solid ${T.border}`, width: 42, minWidth: 42, position: "sticky", top: 0, zIndex: 25 }}>
+                                    <th style={{ padding: "11px 12px 11px 16px", background: T.surface, borderBottom: `2px solid ${T.border}`, width: 36, position: "sticky", top: 0 }}>
                                         <input
                                             type="checkbox"
                                             checked={allSelected}
@@ -5780,12 +5643,12 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                                             style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }}
                                         />
                                     </th>
-                                    {["#", "Date", "Type", "Amount", "Broker / DP", "Running Balance", "Note", ""].map((h, i) => (
-                                        <th key={i} className={i === 0 ? "table-sticky-2" : ""} style={{
+                                    {["#", "Date", "Type", "Amount ()", "Broker / DP", "Running Balance", "Note", ""].map((h, i) => (
+                                        <th key={i} style={{
                                             padding: "11px 16px", fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".08em", color: T.subtext, background: T.tableHead,
+                                            letterSpacing: ".08em", color: T.subtext, background: T.surface,
                                             textAlign: i <= 1 || i === 4 || i === 6 ? "left" : "right",
-                                            borderBottom: `2px solid ${T.border}`, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 10
+                                            borderBottom: `2px solid ${T.border}`, whiteSpace: "nowrap", position: "sticky", top: 0
                                         }}>
                                             {h}
                                         </th>
@@ -5793,31 +5656,71 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                                 </tr>
                             </thead>
                             <tbody>
-                                {withBalance.map((f, i) => (
-                                    <FundRow 
-                                        key={f.id} 
-                                        f={f} 
-                                        i={i} 
-                                        isDeposit={f.type === "deposit"} 
-                                        isChecked={selectedIds.has(f.id)} 
-                                        T={T} 
-                                        toggleSelectOne={toggleSelectOne} 
-                                        inr={inr} 
-                                        mono={mono} 
-                                        onEdit={handleEdit} 
-                                        onDelete={onDelete} 
-                                    />
-                                ))}
+                                {withBalance.map((f, i) => {
+                                    const isDeposit = f.type === "deposit";
+                                    const isChecked = selectedIds.has(f.id);
+                                    const rowBg = isChecked ? T.redGlow : (i % 2 === 0 ? T.card : T.surface);
+                                    return (
+                                        <tr key={f.id} style={{ background: rowBg, borderTop: `1px solid ${T.border}`, transition: "background .1s" }}
+                                            onMouseOver={e => { if (!isChecked) e.currentTarget.style.background = T.hover; }}
+                                            onMouseOut={e => { if (!isChecked) e.currentTarget.style.background = rowBg; }}>
+                                            <td style={{ padding: "10px 12px 10px 16px" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleSelectOne(f.id)}
+                                                    style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }}
+                                                />
+                                            </td>
+                                            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, ...mono }}>{i + 1}</td>
+                                            <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, ...mono }}>
+                                                {new Date(f.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                            </td>
+                                            <td style={{ padding: "10px 16px" }}>
+                                                <span style={{
+                                                    display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 700,
+                                                    background: isDeposit ? T.greenGlow : T.redGlow,
+                                                    color: isDeposit ? T.greenText : T.redText,
+                                                    border: `1px solid ${isDeposit ? T.green + "55" : T.red + "44"}`
+                                                }}>
+                                                    {isDeposit ? " Deposit" : " Withdrawal"}
+                                                </span>
+                                            </td>
+                                            <td style={{
+                                                padding: "10px 16px", textAlign: "right", ...mono, fontSize: 13, fontWeight: 700,
+                                                color: isDeposit ? T.pos : T.neg
+                                            }}>
+                                                {isDeposit ? "+" : "-"}{inr(f.amount)}
+                                            </td>
+                                            <td style={{ padding: "10px 16px", fontSize: 12, color: T.text, fontWeight: 500 }}>{f.dp}</td>
+                                            <td style={{
+                                                padding: "10px 16px", textAlign: "right", ...mono, fontSize: 13,
+                                                color: f.runningBalance >= 0 ? T.text : T.neg
+                                            }}>
+                                                {inr(f.runningBalance)}
+                                            </td>
+                                            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {f.note || <span style={{ color: T.border }}></span>}
+                                            </td>
+                                            <td style={{ padding: "10px 10px" }}>
+                                                <span style={{ display: "flex", gap: 2 }}>
+                                                    <button className="action-btn" onClick={() => handleEdit(f)}></button>
+                                                    <button className="action-btn" onClick={() => onDelete(f.id)}></button>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                             {/* Totals footer */}
                             <tfoot>
-                                <tr style={{ background: T.greenGlow }}>
-                                    <td style={{ borderBottom: "none" }} />
-                                    <td colSpan={3} style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: T.greenText, borderBottom: "none" }}>TOTAL NET INVESTED</td>
-                                    <td style={{ padding: "12px 16px", textAlign: "right", fontSize: 13, fontWeight: 700, color: T.greenText, borderBottom: "none" }} className="td-mono">
+                                <tr style={{ background: T.greenGlow, borderTop: `2px solid ${T.green}` }}>
+                                    <td />
+                                    <td colSpan={3} style={{ padding: "10px 16px", fontSize: 12, fontWeight: 700, color: T.greenText }}>TOTAL</td>
+                                    <td style={{ padding: "10px 16px", textAlign: "right", ...mono, fontSize: 13, fontWeight: 700, color: T.greenText }}>
                                         {inr(netInvested)}
                                     </td>
-                                    <td colSpan={4} style={{ borderBottom: "none" }} />
+                                    <td colSpan={4} />
                                 </tr>
                             </tfoot>
                         </table>
@@ -5912,33 +5815,6 @@ function DividendModal({ dividend, onClose, onSave, T }) {
 }
 
 //  DIVIDENDS 
-const DividendRow = memo(({ d, i, isChecked, T, toggleOne, inr, getFY, onEdit, onDelete }) => {
-    return (
-        <tr style={{ background: isChecked ? T.hover : "inherit" }}>
-            <td className="table-sticky-1" style={{ padding: "10px 12px 10px 16px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
-                <input type="checkbox" checked={isChecked} onChange={() => toggleOne(d.id)}
-                    style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }} />
-            </td>
-            <td className="td-mono table-sticky-2" style={{ padding: "10px 16px", fontSize: 12.5, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{i + 1}</td>
-            <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, color: T.text, borderBottom: `1px solid ${T.border}` }} className="td-mono">{d.ticker}</td>
-            <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, borderBottom: `1px solid ${T.border}` }} className="td-mono">
-                {new Date(d.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-            </td>
-            <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, fontSize: 13, color: Number(d.amount) >= 0 ? T.pos : T.neg, borderBottom: `1px solid ${T.border}` }} className="td-mono">
-                {Number(d.amount) >= 0 ? "+" : ""}{inr(Number(d.amount))}
-            </td>
-            <td style={{ padding: "10px 16px", fontSize: 12.5, color: T.subtext, borderBottom: `1px solid ${T.border}` }} className="td-mono">{getFY(d.date)}</td>
-            <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderBottom: `1px solid ${T.border}` }}>{d.note || "â€”"}</td>
-            <td style={{ padding: "10px 10px", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ display: "flex", gap: 2 }}>
-                    <button className="action-btn" onClick={() => onEdit(d)} title="Edit">âœï¸</button>
-                    <button className="action-btn" onClick={() => onDelete(d.id)} title="Delete">ðŸ—‘ï¸</button>
-                </span>
-            </td>
-        </tr>
-    );
-});
-
 function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
     const [showModal, setShowModal] = useState(false);
     const [editDiv, setEditDiv] = useState(null);
@@ -6199,49 +6075,71 @@ function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
                     <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>Add your first dividend or import from CSV.</div>
                 </div>
             ) : (
-                <div className="table-wrap">
-                    <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", boxShadow: `0 2px 8px ${T.shadow}` }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                             <tr>
-                                <th className="table-sticky-1" style={{ padding: "11px 12px 11px 16px", background: T.tableHead, borderBottom: `2px solid ${T.border}`, width: 42, minWidth: 42, position: "sticky", top: 0, zIndex: 25 }}>
+                                <th style={{ padding: "11px 12px 11px 16px", background: T.surface, borderBottom: `2px solid ${T.border}`, width: 36, position: "sticky", top: 0 }}>
                                     <input type="checkbox" checked={allSelected} onChange={toggleAll}
                                         ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
                                         style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }} />
                                 </th>
-                                {["#", "Ticker", "Date of Credit", "Amount", "FY", "Note", ""].map((h, i) => (
-                                    <th key={i} className={i === 0 ? "table-sticky-2" : ""} style={{
+                                {["#", "Ticker", "Date of Credit", "Amount ()", "FY", "Note", ""].map((h, i) => (
+                                    <th key={i} style={{
                                         padding: "11px 16px", fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                        letterSpacing: ".08em", color: T.subtext, background: T.tableHead,
+                                        letterSpacing: ".08em", color: T.subtext, background: T.surface,
                                         textAlign: i === 3 ? "right" : "left",
-                                        borderBottom: `2px solid ${T.border}`, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 10
+                                        borderBottom: `2px solid ${T.border}`, whiteSpace: "nowrap", position: "sticky", top: 0
                                     }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map((d, i) => (
-                                <DividendRow 
-                                    key={d.id} 
-                                    d={d} 
-                                    i={i} 
-                                    isChecked={selectedIds.has(d.id)} 
-                                    T={T} 
-                                    toggleOne={toggleOne} 
-                                    inr={inr} 
-                                    getFY={getFY} 
-                                    onEdit={(div) => { setEditDiv(div); setShowModal(true); }} 
-                                    onDelete={onDelete} 
-                                />
-                            ))}
+                            {filtered.map((d, i) => {
+                                const isChecked = selectedIds.has(d.id);
+                                const rowBg = isChecked ? T.redGlow : (i % 2 === 0 ? T.card : T.surface);
+                                return (
+                                    <tr key={d.id} style={{ background: rowBg, borderTop: `1px solid ${T.border}`, transition: "background .1s" }}
+                                        onMouseOver={e => { if (!isChecked) e.currentTarget.style.background = T.hover; }}
+                                        onMouseOut={e => { if (!isChecked) e.currentTarget.style.background = rowBg; }}>
+                                        <td style={{ padding: "10px 12px 10px 16px" }}>
+                                            <input type="checkbox" checked={isChecked} onChange={() => toggleOne(d.id)}
+                                                style={{ cursor: "pointer", accentColor: T.green, width: 15, height: 15 }} />
+                                        </td>
+                                        <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, ...mono }}>{i + 1}</td>
+                                        <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, color: T.text, ...mono }}>{d.ticker}</td>
+                                        <td style={{ padding: "10px 16px", fontSize: 13, color: T.subtext, ...mono }}>
+                                            {new Date(d.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                        </td>
+                                        <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 700, fontSize: 13, color: Number(d.amount) >= 0 ? T.pos : T.neg, ...mono }}>
+                                            {Number(d.amount) >= 0 ? "+" : ""}{inr(Number(d.amount))}
+                                        </td>
+                                        <td style={{ padding: "10px 16px" }}>
+                                            <span style={{ padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 700, background: T.greenGlow, color: T.greenText, border: `1px solid ${T.green}44` }}>
+                                                {d.fy || getFY(d.date)}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: "10px 16px", fontSize: 12, color: T.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            {d.note || <span style={{ color: T.border }}></span>}
+                                        </td>
+                                        <td style={{ padding: "10px 10px" }}>
+                                            <span style={{ display: "flex", gap: 2 }}>
+                                                <button className="action-btn" onClick={() => { setEditDiv(d); setShowModal(true); }}></button>
+                                                <button className="action-btn" onClick={() => onDelete(d.id)}></button>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                         <tfoot>
-                            <tr style={{ background: T.greenGlow }}>
-                                <td style={{ borderBottom: "none" }} /><td style={{ borderBottom: "none" }} />
-                                <td colSpan={2} style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: T.greenText, borderBottom: "none" }}>TOTAL DIVIDENDS ({filterFY})</td>
-                                <td style={{ padding: "12px 16px", textAlign: "right", fontSize: 13, fontWeight: 700, color: T.greenText, borderBottom: "none" }} className="td-mono">
+                            <tr style={{ background: T.greenGlow, borderTop: `2px solid ${T.green}` }}>
+                                <td /><td />
+                                <td colSpan={2} style={{ padding: "10px 16px", fontSize: 12, fontWeight: 700, color: T.greenText }}>TOTAL ({filterFY})</td>
+                                <td style={{ padding: "10px 16px", textAlign: "right", ...mono, fontSize: 13, fontWeight: 700, color: T.greenText }}>
                                     +{inr(filteredTotal)}
                                 </td>
-                                <td colSpan={3} style={{ borderBottom: "none" }} />
+                                <td colSpan={3} />
                             </tr>
                         </tfoot>
                     </table>
@@ -6304,7 +6202,7 @@ function ComingSoonModule({ icon, title, desc, features, pills, T }) {
 let _cachedTickerIndex = null; // loaded from DB at runtime
 let _cachedBseTickerIndex = null; // BSE ticker index loaded from bse_tickers
 
-// Paginated fetch for the ticker index â€” Supabase caps each response at 1000 rows,
+// Paginated fetch for the ticker index — Supabase caps each response at 1000 rows,
 // so a single limit=5000 request silently returns only 1000. We page through all rows.
 async function fetchAllTickerPages() {
     const PAGE = 1000;
@@ -6334,7 +6232,7 @@ async function fetchAllTickerPages() {
             nse_code: (row.nse_code || "").trim().toUpperCase() || null,
             bse_code: (row.bse_code || "").trim().toUpperCase() || null,
         }));
-    } catch { /* silently ignore â€” autocomplete falls back to per-keystroke fetch */ }
+    } catch { /* silently ignore — autocomplete falls back to per-keystroke fetch */ }
 })();
 
 // Format numbers as  Cr
@@ -8603,7 +8501,7 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
         if (!sym && !nseCode) return;
         setLoading(true); setError(""); setAnnouncements([]); setPage(0);
         const candidates = [nseCode, sym, bseCode].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
-        // Per-fetch timeout of 20 s â€” long enough for a cold query but short enough to surface errors fast
+        // Per-fetch timeout of 20 s — long enough for a cold query but short enough to surface errors fast
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 20000);
         try {
@@ -8836,7 +8734,7 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
                                     color: accentGrn, background: "none", border: "none",
                                     cursor: "pointer", fontFamily: "inherit", padding: 0,
                                 }}
-                            >â†º Retry</button>
+                            >↺ Retry</button>
                         </div>
                     </div>
                 )}
@@ -11998,7 +11896,7 @@ const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
 const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
 const _LS_SCR_VCP = "te_scr_vcp_v1";
 
-// In-flight promise refs â€” prevent duplicate concurrent fetches during prefetch + mount race
+// In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
 let _prefetchBreakoutPromise = null;
 let _prefetchPivotPromise = null;
 let _prefetchVolBreakPromise = null;
@@ -12031,11 +11929,11 @@ function _lsWriteScreens(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota */ }
 }
 
-// â”€â”€â”€ Background prefetch helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Background prefetch helpers ─────────────────────────────────────────────
 // Each function mirrors the fetch logic inside the corresponding ScreensModule
 // useEffect, but runs at module level so the cache is warm before the component
 // ever mounts.  The component useEffects call these same functions and reuse
-// the in-flight promise â€” no duplicate requests even if mount races with prefetch.
+// the in-flight promise — no duplicate requests even if mount races with prefetch.
 
 function _prefetchScreensBreakout() {
     if (_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0 &&
@@ -12379,13 +12277,13 @@ async function _loadNifty500() {
         // Supabase returns an error object (not array) when table/column is missing
         if (!Array.isArray(rows) || rows.length === 0) {
             console.warn("[Nifty500] fetch returned non-array or empty:", rows);
-            return new Set(); // don't cache â€” allow retry on next navigation
+            return new Set(); // don't cache — allow retry on next navigation
         }
         _nifty500Cache = new Set(rows.map(r => r.ticker).filter(Boolean));
         console.log(`[Nifty500] loaded ${_nifty500Cache.size} constituents`);
     } catch (e) {
         console.warn("[Nifty500] fetch failed:", e);
-        return new Set(); // don't cache â€” allow retry
+        return new Set(); // don't cache — allow retry
     }
     return _nifty500Cache;
 }
@@ -12424,7 +12322,6 @@ function _warmMarketAndTechnicalCaches(userToken) {
         _prefetchScreensPullback();
         _prefetchScreensVcp();
         warmStockDashboardCaches(userToken);
-        prefetchGlobalNameMap(userToken);
     };
     warm();
 }
@@ -15835,11 +15732,11 @@ function IntelligenceSignalCard({ label, value, score, T }) {
     );
 }
 
-// â”€â”€â”€ TickerPage mini chart helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── TickerPage mini chart helpers ───────────────────────────────────────────
 function TpSparkline({ data, color, fill = true, W = 200, H = 52, fmt }) {
     const [tip, setTip] = useState(null); // { x, y, val }
     const d2 = (data || []).filter(v => v != null && !isNaN(v));
-    if (d2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
+    if (d2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
     const mn = Math.min(...d2), mx = Math.max(...d2), rng = mx - mn || 1;
     const pts = d2.map((v, i) => {
         const x = (i / (d2.length - 1)) * W;
@@ -15880,10 +15777,10 @@ function TpSparkline({ data, color, fill = true, W = 200, H = 52, fmt }) {
 function TpMiniBar({ data, color, W = 280, H = 60, fmt }) {
     const [tip, setTip] = useState(null);
     const d2 = (data || []).filter(v => v != null && !isNaN(v));
-    if (!d2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
+    if (!d2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
     const mx = Math.max(...d2) || 1;
     const bw = W / d2.length - 2;
-    const fmtVal = v => fmt ? fmt(v) : (v >= 1000 ? `â‚¹${(v / 100).toFixed(0)}Cr` : v.toFixed(1));
+    const fmtVal = v => fmt ? fmt(v) : (v >= 1000 ? `₹${(v / 100).toFixed(0)}Cr` : v.toFixed(1));
     const handleMove = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const idx = Math.min(d2.length - 1, Math.max(0, Math.floor((e.clientX - rect.left) / rect.width * d2.length)));
@@ -15914,7 +15811,7 @@ function TpCombo({ bars, line, bc, lc, W = 280, H = 70, fmtBar, fmtLine }) {
     const [tip, setTip] = useState(null);
     const b2 = (bars || []).map(v => v ?? 0);
     const l2 = (line || []).filter(v => v != null);
-    if (!b2.length || !l2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
+    if (!b2.length || !l2.length) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
     const bmx = Math.max(...b2.map(Math.abs)) || 1;
     const lmn = Math.min(...l2), lmx = Math.max(...l2), lrng = lmx - lmn || 1;
     const n = b2.length;
@@ -15947,8 +15844,8 @@ function TpCombo({ bars, line, bc, lc, W = 280, H = 70, fmtBar, fmtLine }) {
                     padding: "4px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
                     whiteSpace: "nowrap", border: `1px solid ${lc}`, zIndex: 10, lineHeight: 1.6,
                 }}>
-                    <span style={{ color: bc }}>â– </span> {tip.bar}
-                    {tip.line && <><br /><span style={{ color: lc }}>â—</span> {tip.line}</>}
+                    <span style={{ color: bc }}>■</span> {tip.bar}
+                    {tip.line && <><br /><span style={{ color: lc }}>●</span> {tip.line}</>}
                 </div>
             )}
         </div>
@@ -15958,7 +15855,7 @@ function TpDual({ s1, s2, c1, c2, W = 280, H = 70, fmt1, fmt2 }) {
     const [tip, setTip] = useState(null);
     const a1 = (s1 || []).filter(v => v != null);
     const a2 = (s2 || []).filter(v => v != null);
-    if (a1.length < 2 || a2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>â€”</span>;
+    if (a1.length < 2 || a2.length < 2) return <span style={{ fontSize: 12, color: "#aaa" }}>—</span>;
     const all = [...a1, ...a2];
     const mn = Math.min(...all), mx = Math.max(...all), rng = mx - mn || 1;
     const toY = v => H - ((v - mn) / rng) * (H - 8) - 4;
@@ -15989,15 +15886,15 @@ function TpDual({ s1, s2, c1, c2, W = 280, H = 70, fmt1, fmt2 }) {
                     padding: "4px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
                     whiteSpace: "nowrap", border: `1px solid ${c1}`, zIndex: 10, lineHeight: 1.6,
                 }}>
-                    <span style={{ color: c1 }}>â—</span> {tip.v1}<br />
-                    <span style={{ color: c2 }}>â—</span> {tip.v2}
+                    <span style={{ color: c1 }}>●</span> {tip.v1}<br />
+                    <span style={{ color: c2 }}>●</span> {tip.v2}
                 </div>
             )}
         </div>
     );
 }
 
-// â”€â”€â”€ Gauge Arc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Gauge Arc ────────────────────────────────────────────────────────────────
 function TpGauge({ value = 7, max = 10, color = "#00e5a0", size = 88 }) {
     const r = 33, cx = size / 2, cy = size / 2;
     const toRad = d => (d * Math.PI) / 180;
@@ -16016,7 +15913,7 @@ function TpGauge({ value = 7, max = 10, color = "#00e5a0", size = 88 }) {
     );
 }
 
-// â”€â”€â”€ Sub-score bar card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Sub-score bar card ────────────────────────────────────────────────────────
 function TpSubScore({ label, value, score, color, T }) {
     const D = T === THEMES.dark;
     return (
@@ -16038,7 +15935,7 @@ function TpSubScore({ label, value, score, color, T }) {
     );
 }
 
-// â”€â”€â”€ Chart card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Chart card ──────────────────────────────────────────────────────────────
 function TpCard({ title, subtitle, children, T, style = {} }) {
     const D = T === THEMES.dark;
     return (
@@ -16056,7 +15953,7 @@ function TpCard({ title, subtitle, children, T, style = {} }) {
     );
 }
 
-// â”€â”€â”€ Valuation row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Valuation row ────────────────────────────────────────────────────────────
 function TpValRow({ label, value, color, T }) {
     return (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
@@ -16066,7 +15963,7 @@ function TpValRow({ label, value, color, T }) {
     );
 }
 
-// â”€â”€â”€ Pill badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Pill badge ───────────────────────────────────────────────────────────────
 function TpPill({ children, color }) {
     return (
         <span style={{
@@ -16144,7 +16041,7 @@ function TpRatioSparkCard({ title, subtitle, value, delta, color, series, T, mod
     );
 }
 
-// â”€â”€â”€ Main TickerPage component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main TickerPage component ────────────────────────────────────────────────
 function TickerPage({ symbol, T }) {
     const [tickerData, setTickerData] = useState({ raw: null, analytics: null });
     const [finData, setFinData] = useState(null);   // { incAnn, bsAnn, cfAnn }
@@ -16201,14 +16098,14 @@ function TickerPage({ symbol, T }) {
     const raw = tickerData.raw;
     const analytics = tickerData.analytics;
 
-    // â”€â”€ Derive chart series from annual financial data + TTM scalar â”€â”€
+    // ── Derive chart series from annual financial data + TTM scalar ──
     // company_financials stores values in Crores. Margins are computed as ratios (no unit scaling).
     const pct = (num, den) => (num != null && den != null && Number(den) !== 0)
         ? parseFloat((Number(num) / Number(den) * 100).toFixed(2)) : null;
     const safe = v => v != null ? parseFloat(Number(v).toFixed(2)) : null;
     const safeN = (v, dec = 2) => v != null ? parseFloat(Number(v).toFixed(dec)) : null;
 
-    // Sort annual periods oldestâ†’newest
+    // Sort annual periods oldest→newest
     const incAnn = [...(finData?.incAnn || [])].sort((a, b) =>
         (a._period || "").localeCompare(b._period || ""));
     const bsAnn = [...(finData?.bsAnn || [])].sort((a, b) =>
@@ -16228,7 +16125,7 @@ function TickerPage({ symbol, T }) {
         return pts;
     };
 
-    // â”€â”€ Margin series (annual FY + TTM from stock_ratios) â”€â”€
+    // ── Margin series (annual FY + TTM from stock_ratios) ──
     const gp_s = buildSeries(incAnn,
         p => pct(p.GrossProfit, p.Revenue),
         safeN(raw?.gpm, 2));
@@ -16245,10 +16142,10 @@ function TickerPage({ symbol, T }) {
 
     const npm_s = pat_s; // PAT margin = NPM
 
-    // Revenue (Crores) â€” TTM from stock_ratios doesn't have revenue directly, skip TTM append
+    // Revenue (Crores) — TTM from stock_ratios doesn't have revenue directly, skip TTM append
     const sales_s = buildSeries(incAnn, p => safe(p.Revenue));
 
-    // â”€â”€ Net Block (Crores) â”€â”€
+    // ── Net Block (Crores) ──
     const nb_s = (() => {
         const fromBs = buildSeries(bsAnn,
             b => safe(b.NetBlock ?? b.PropertyPlantEquipment ?? b.NetPPE ?? null),
@@ -16260,14 +16157,14 @@ function TickerPage({ symbol, T }) {
             .filter(v => v != null);
     })();
 
-    // â”€â”€ Asset Turnover = Revenue / TotalAssets (annual) + TTM from stock_ratios â”€â”€
+    // ── Asset Turnover = Revenue / TotalAssets (annual) + TTM from stock_ratios ──
     const asset_turn_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         return (bs?.TotalAssets && p.Revenue)
             ? parseFloat((Number(p.Revenue) / Number(bs.TotalAssets)).toFixed(2)) : null;
     }, safeN(raw?.asset_turnover, 2));
 
-    // â”€â”€ NFA Turnover = Revenue / NetBlock â”€â”€
+    // ── NFA Turnover = Revenue / NetBlock ──
     const nfa_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         const netBlock = bs?.NetBlock ?? bs?.PropertyPlantEquipment ?? bs?.NetPPE ?? null;
@@ -16275,7 +16172,7 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((Number(p.Revenue) / Number(netBlock)).toFixed(2)) : null;
     }, safeN(raw?.asset_turnover, 2)); // best scalar proxy for NFA turnover
 
-    // â”€â”€ Cash Conversion Cycle â”€â”€
+    // ── Cash Conversion Cycle ──
     const ccc_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         const rev = Number(p.Revenue);
@@ -16287,7 +16184,7 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((debtorDays + inventDays - payableDays).toFixed(1)) : null;
     });
 
-    // â”€â”€ Net Debt / Equity â”€â”€
+    // ── Net Debt / Equity ──
     const netd_s = buildSeries(bsAnn, b => {
         const equity = b.TotalEquity ?? b.StockholderEquity ?? null;
         const debt = b.TotalDebt ?? ((b.BorrowingsCurrent ?? 0) + (b.LongTermDebt ?? 0));
@@ -16297,21 +16194,21 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((netDebt / Number(equity)).toFixed(2)) : null;
     }, safeN(raw?.debt_eq, 2));
 
-    // â”€â”€ Interest Coverage Ratio â”€â”€
+    // ── Interest Coverage Ratio ──
     const icr_s = buildSeries(incAnn, p => {
         const interest = p.InterestExpense != null ? Math.abs(Number(p.InterestExpense)) : null;
         return (p.EBIT != null && interest != null && interest !== 0)
             ? parseFloat((Number(p.EBIT) / interest).toFixed(2)) : null;
     }, safeN(raw?.icr, 2));
 
-    // â”€â”€ Financial Leverage = TotalAssets / Equity â”€â”€
+    // ── Financial Leverage = TotalAssets / Equity ──
     const finlev_s = buildSeries(bsAnn, b => {
         const equity = b.TotalEquity ?? b.StockholderEquity ?? null;
         return (b.TotalAssets && equity && Number(equity) !== 0)
             ? parseFloat((Number(b.TotalAssets) / Number(equity)).toFixed(2)) : null;
     }, safeN(raw?.fin_leverage, 2));
 
-    // â”€â”€ DuPont ROE â”€â”€
+    // ── DuPont ROE ──
     const dup_s = buildSeries(incAnn, p => {
         const bs = getBsFor(p._period);
         if (!bs || !p.Revenue || !p.NetIncome) return null;
@@ -16323,12 +16220,12 @@ function TickerPage({ symbol, T }) {
             ? parseFloat((npm * assetT * finLev * 100).toFixed(2)) : null;
     }, safeN(raw?.roe, 2));
 
-    // Valuation series â€” TTM scalar only (no per-year history in DB)
+    // Valuation series — TTM scalar only (no per-year history in DB)
     const ps_s = raw?.ps != null ? [parseFloat(Number(raw.ps).toFixed(2))] : [];
     const ev_s = raw?.ev_ebitda != null ? [parseFloat(Number(raw.ev_ebitda).toFixed(2))] : [];
     const pe_s = raw?.pe != null ? [parseFloat(Number(raw.pe).toFixed(1))] : [];
 
-    // â”€â”€ Valuation display values â”€â”€
+    // ── Valuation display values ──
     const fmtX = (v, dec = 2) => v != null ? `${Number(v).toFixed(dec)}x` : "--";
     const fmtPct = (v, dec = 1) => v != null ? `${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(dec)}%` : "--";
     const peDisp = fmtX(raw?.pe, 1);
@@ -16338,7 +16235,7 @@ function TickerPage({ symbol, T }) {
     const ebitdaYoy = fmtPct(analytics?.momentum?.ebitda);
     const patYoy = fmtPct(analytics?.momentum?.pat);
 
-    // â”€â”€ Colors â”€â”€
+    // ── Colors ──
     const C = {
         green: "#00c58e",
         blue: "#4a9eff",
@@ -16349,7 +16246,7 @@ function TickerPage({ symbol, T }) {
 
     const TABS = ["Overview", "Margins", "Efficiency", "Valuation", "DuPont"];
 
-    // â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Styles ──────────────────────────────────────────────────────────────
     const navBg = D ? "linear-gradient(180deg,#07111e 0%,#060d17 100%)" : "linear-gradient(180deg,#f8fafc 0%,#f0f4f8 100%)";
     const heroBg = D ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.02)";
 
@@ -16372,10 +16269,10 @@ function TickerPage({ symbol, T }) {
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, height: "100%", overflowY: "auto", background: T.bg }}>
 
-            {/* â”€â”€ LOADING / ERROR states â”€â”€ */}
+            {/* ── LOADING / ERROR states ── */}
             {loading && (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 12, color: T.muted, fontSize: 13 }}>
-                    <div className="fin-spinner" /> Loading intelligence for {symbol}â€¦
+                    <div className="fin-spinner" /> Loading intelligence for {symbol}…
                 </div>
             )}
             {error && !loading && (
@@ -16384,11 +16281,11 @@ function TickerPage({ symbol, T }) {
                 </div>
             )}
 
-            {/* â”€â”€ DASHBOARD â”€â”€ */}
+            {/* ── DASHBOARD ── */}
             {!loading && (raw || analytics) && (
                 <div style={{ display: "flex", flexDirection: "column" }}>
 
-                    {/* â”€â”€ HERO HEADER â”€â”€ */}
+                    {/* ── HERO HEADER ── */}
                     <div style={{
                         background: navBg,
                         borderBottom: `1px solid ${T.border}`,
@@ -16424,7 +16321,7 @@ function TickerPage({ symbol, T }) {
                                     <div key={k.label} style={{ textAlign: "center" }}>
                                         <div style={{ fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>{k.label}</div>
                                         <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 19, fontWeight: 700, color: k.color }}>{k.value}</div>
-                                        <div style={{ fontSize: 9, color: k.color + "80", marginTop: 2 }}>â–² Momentum</div>
+                                        <div style={{ fontSize: 9, color: k.color + "80", marginTop: 2 }}>▲ Momentum</div>
                                     </div>
                                 ))}
                             </div>
@@ -16451,10 +16348,10 @@ function TickerPage({ symbol, T }) {
                         {analytics && (
                             <div style={{ ...grid4, marginBottom: 16 }}>
                                 {[
-                                    { label: "Growth", value: analytics.signals?.growth || "â€”", score: analytics.subscores?.growth || 0, color: C.green },
-                                    { label: "Profitability", value: analytics.signals?.profitability || "â€”", score: analytics.subscores?.profitability || 0, color: C.blue },
-                                    { label: "Balance Sheet", value: analytics.signals?.balance || "â€”", score: analytics.subscores?.balance || 0, color: C.amber },
-                                    { label: "Cash Flow", value: analytics.signals?.cashflow || "â€”", score: analytics.subscores?.cash || 0, color: C.purple },
+                                    { label: "Growth", value: analytics.signals?.growth || "—", score: analytics.subscores?.growth || 0, color: C.green },
+                                    { label: "Profitability", value: analytics.signals?.profitability || "—", score: analytics.subscores?.profitability || 0, color: C.blue },
+                                    { label: "Balance Sheet", value: analytics.signals?.balance || "—", score: analytics.subscores?.balance || 0, color: C.amber },
+                                    { label: "Cash Flow", value: analytics.signals?.cashflow || "—", score: analytics.subscores?.cash || 0, color: C.purple },
                                 ].map(s => <TpSubScore key={s.label} {...s} T={T} />)}
                             </div>
                         )}
@@ -16479,31 +16376,31 @@ function TickerPage({ symbol, T }) {
                         </div>
                     </div>
 
-                    {/* â”€â”€ GRID PANELS â”€â”€ */}
+                    {/* ── GRID PANELS ── */}
                     <div style={{ padding: "16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
 
-                        {/* â”€â”€ OVERVIEW â”€â”€ */}
+                        {/* ── OVERVIEW ── */}
                         {dashTab === "overview" && (<>
                             <div style={{ ...grid4 }}>
                                 <TpCard title="GP Margin %" T={T}>
                                     <TpSparkline data={gp_s} color={C.green} />
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
-                                        <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1) ?? "â€”"}%` : "â€”"}</span>
+                                        <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1) ?? "—"}%` : "—"}</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="EBITDA Margin %" T={T}>
                                     <TpSparkline data={ebitda_s} color={C.blue} />
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
-                                        <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1) ?? "â€”"}%` : "â€”"}</span>
+                                        <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1) ?? "—"}%` : "—"}</span>
                                     </div>
                                 </TpCard>
-                                <TpCard title="Net Block (â‚¹ Cr)" T={T}>
+                                <TpCard title="Net Block (₹ Cr)" T={T}>
                                     <TpSparkline data={nb_s} color={C.amber} />
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
-                                        <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{nb_s.length ? `${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "â€”"}</span>
+                                        <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{nb_s.length ? `${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "—"}</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="NFA Turnover" T={T}>
@@ -16511,25 +16408,25 @@ function TickerPage({ symbol, T }) {
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>10Y</span>
                                         <span style={{ fontSize: 12, color: C.purple, fontWeight: 700 }}>
-                                            {nfa_s.length ? `${nfa_s[nfa_s.length - 1]?.toFixed?.(2) ?? "â€”"}x` : raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "â€”"}
+                                            {nfa_s.length ? `${nfa_s[nfa_s.length - 1]?.toFixed?.(2) ?? "—"}x` : raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "—"}
                                         </span>
                                     </div>
                                 </TpCard>
                             </div>
 
                             <div style={{ ...grid2 }}>
-                                <TpCard title="Revenue (â‚¹ Cr)" subtitle="Sales bars Â· CCC line" T={T}>
+                                <TpCard title="Revenue (₹ Cr)" subtitle="Sales bars · CCC line" T={T}>
                                     <TpCombo bars={sales_s} line={ccc_s.length ? ccc_s : icr_s} bc={D ? "#1f4f82" : "#3b82f6"} lc={C.green} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.blue }}>â–  Sales</span>
-                                        <span style={{ fontSize: 10, color: C.green }}>â— CCC / ICR</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>■ Sales</span>
+                                        <span style={{ fontSize: 10, color: C.green }}>● CCC / ICR</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="Interest Coverage & Net Debt/Equity" T={T}>
                                     <TpCombo bars={netd_s} line={icr_s} bc={D ? "#1f4f82" : "#3b82f6"} lc={C.amber} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.blue }}>â–  Net D/E</span>
-                                        <span style={{ fontSize: 10, color: C.amber }}>â— ICR</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>■ Net D/E</span>
+                                        <span style={{ fontSize: 10, color: C.amber }}>● ICR</span>
                                     </div>
                                 </TpCard>
                             </div>
@@ -16538,11 +16435,11 @@ function TickerPage({ symbol, T }) {
                                 <TpCard title="DuPont ROE Decomposition" T={T}>
                                     <TpDual s1={npm_s} s2={dup_s.map(v => v / 10)} c1={C.rose} c2={C.purple} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.rose }}>â— NPM</span>
-                                        <span style={{ fontSize: 10, color: C.purple }}>â— DuPont ROE</span>
+                                        <span style={{ fontSize: 10, color: C.rose }}>● NPM</span>
+                                        <span style={{ fontSize: 10, color: C.purple }}>● DuPont ROE</span>
                                     </div>
                                 </TpCard>
-                                <TpCard title="Valuation â€” TTM" T={T}>
+                                <TpCard title="Valuation — TTM" T={T}>
                                     <TpValRow label="Current P/E" value={peDisp} color={C.amber} T={T} />
                                     <TpValRow label="Current EV/EBITDA" value={evDisp} color={C.blue} T={T} />
                                     <TpValRow label="Current P/S" value={psDisp} color={C.green} T={T} />
@@ -16556,98 +16453,98 @@ function TickerPage({ symbol, T }) {
                             </div>
                         </>)}
 
-                        {/* â”€â”€ MARGINS â”€â”€ */}
+                        {/* ── MARGINS ── */}
                         {dashTab === "margins" && (<>
                             <div style={{ ...grid3 }}>
                                 <TpCard title="GP Margin %" T={T}>
                                     <TpSparkline data={gp_s} color={C.green} H={68} />
-                                    <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1)}% (latest)` : "â€”"}</span>
+                                    <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{gp_s.length ? `${gp_s[gp_s.length - 1]?.toFixed?.(1)}% (latest)` : "—"}</span>
                                 </TpCard>
                                 <TpCard title="EBITDA Margin %" T={T}>
                                     <TpSparkline data={ebitda_s} color={C.blue} H={68} />
-                                    <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1)}% (latest)` : "â€”"}</span>
+                                    <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>{ebitda_s.length ? `${ebitda_s[ebitda_s.length - 1]?.toFixed?.(1)}% (latest)` : "—"}</span>
                                 </TpCard>
                                 <TpCard title="PAT Margin %" T={T}>
                                     <TpSparkline data={pat_s} color={C.amber} H={68} />
-                                    <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{pat_s.length ? `${pat_s[pat_s.length - 1]?.toFixed?.(1)}% (latest)` : raw?.pat_margin != null ? `${Number(raw.pat_margin).toFixed(1)}%` : "â€”"}</span>
+                                    <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{pat_s.length ? `${pat_s[pat_s.length - 1]?.toFixed?.(1)}% (latest)` : raw?.pat_margin != null ? `${Number(raw.pat_margin).toFixed(1)}%` : "—"}</span>
                                 </TpCard>
                             </div>
                             <div style={{ ...grid2 }}>
-                                <TpCard title="Revenue (â‚¹ Cr) â€” 10Y" T={T}>
+                                <TpCard title="Revenue (₹ Cr) — 10Y" T={T}>
                                     <TpMiniBar data={sales_s} color={D ? "#1f6feb" : "#3b82f6"} H={72} />
                                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                                         <span style={{ fontSize: 10, color: T.muted }}>Earliest</span>
                                         <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>
-                                            {sales_s.length ? `â‚¹${Number(sales_s[sales_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "â€”"}
+                                            {sales_s.length ? `₹${Number(sales_s[sales_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "—"}
                                         </span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="GP vs EBITDA Margin" T={T}>
                                     <TpDual s1={gp_s} s2={ebitda_s} c1={C.green} c2={C.blue} H={72} />
                                     <div style={{ display: "flex", gap: 14 }}>
-                                        <span style={{ fontSize: 10, color: C.green }}>â— GP Margin</span>
-                                        <span style={{ fontSize: 10, color: C.blue }}>â— EBITDA</span>
+                                        <span style={{ fontSize: 10, color: C.green }}>● GP Margin</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>● EBITDA</span>
                                     </div>
                                 </TpCard>
                             </div>
                         </>)}
 
-                        {/* â”€â”€ EFFICIENCY â”€â”€ */}
+                        {/* ── EFFICIENCY ── */}
                         {dashTab === "efficiency" && (<>
                             <div style={{ ...grid3 }}>
-                                <TpCard title="Net Block (â‚¹ Cr)" subtitle="Fixed asset base" T={T}>
+                                <TpCard title="Net Block (₹ Cr)" subtitle="Fixed asset base" T={T}>
                                     <TpSparkline data={nb_s} color={C.amber} H={68} />
                                     <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>
-                                        {nb_s.length ? `â‚¹${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "â€”"}
+                                        {nb_s.length ? `₹${Number(nb_s[nb_s.length - 1]).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr` : "—"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="NFA Turnover" subtitle="Sales / Net Block" T={T}>
                                     <TpSparkline data={nfa_s} color={C.purple} H={68} />
                                     <span style={{ fontSize: 12, color: C.purple, fontWeight: 700 }}>
-                                        {raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "â€”"}
+                                        {raw?.nfa_turnover != null ? `${Number(raw.nfa_turnover).toFixed(2)}x` : "—"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="Cash Conversion Cycle" subtitle="Days" T={T}>
                                     <TpSparkline data={ccc_s} color={C.rose} H={68} />
                                     <span style={{ fontSize: 12, color: C.rose, fontWeight: 700 }}>
-                                        {raw?.ccc != null ? `${Number(raw.ccc).toFixed(1)}d` : ccc_s.length ? `${ccc_s[ccc_s.length - 1]?.toFixed?.(1)}d` : "â€”"}
+                                        {raw?.ccc != null ? `${Number(raw.ccc).toFixed(1)}d` : ccc_s.length ? `${ccc_s[ccc_s.length - 1]?.toFixed?.(1)}d` : "—"}
                                     </span>
                                 </TpCard>
                             </div>
                             <div style={{ ...grid2 }}>
-                                <TpCard title="Key Ratios â€” Latest" T={T}>
-                                    <TpValRow label="Contingent Liability / NW" value={raw?.contingent_liab_nw != null ? `${Number(raw.contingent_liab_nw).toFixed(2)}%` : "â€”"} color={C.amber} T={T} />
-                                    <TpValRow label="Goodwill / NW" value={raw?.goodwill_nw != null ? `${Number(raw.goodwill_nw).toFixed(2)}%` : "â€”"} color={C.blue} T={T} />
-                                    <TpValRow label="CFO/PAT (5Y Avg)" value={raw?.cfo_pat_5y != null ? Number(raw.cfo_pat_5y).toFixed(2) : "â€”"} color={C.green} T={T} />
-                                    <TpValRow label="CFO/EBITDA (5Y Avg)" value={raw?.cfo_ebitda_5y != null ? Number(raw.cfo_ebitda_5y).toFixed(2) : "â€”"} color={C.purple} T={T} />
+                                <TpCard title="Key Ratios — Latest" T={T}>
+                                    <TpValRow label="Contingent Liability / NW" value={raw?.contingent_liab_nw != null ? `${Number(raw.contingent_liab_nw).toFixed(2)}%` : "—"} color={C.amber} T={T} />
+                                    <TpValRow label="Goodwill / NW" value={raw?.goodwill_nw != null ? `${Number(raw.goodwill_nw).toFixed(2)}%` : "—"} color={C.blue} T={T} />
+                                    <TpValRow label="CFO/PAT (5Y Avg)" value={raw?.cfo_pat_5y != null ? Number(raw.cfo_pat_5y).toFixed(2) : "—"} color={C.green} T={T} />
+                                    <TpValRow label="CFO/EBITDA (5Y Avg)" value={raw?.cfo_ebitda_5y != null ? Number(raw.cfo_ebitda_5y).toFixed(2) : "—"} color={C.purple} T={T} />
                                 </TpCard>
                                 <TpCard title="Interest Coverage vs Net D/E" T={T}>
                                     <TpCombo bars={netd_s} line={icr_s} bc={D ? "#1f4f82" : "#3b82f6"} lc={C.amber} H={72} />
                                     <div style={{ display: "flex", gap: 12 }}>
-                                        <span style={{ fontSize: 10, color: C.blue }}>â–  Net D/E</span>
-                                        <span style={{ fontSize: 10, color: C.amber }}>â— ICR</span>
+                                        <span style={{ fontSize: 10, color: C.blue }}>■ Net D/E</span>
+                                        <span style={{ fontSize: 10, color: C.amber }}>● ICR</span>
                                     </div>
                                 </TpCard>
                             </div>
                         </>)}
 
-                        {/* â”€â”€ VALUATION â”€â”€ */}
+                        {/* ── VALUATION ── */}
                         {dashTab === "valuation" && (<>
                             <div style={{ ...grid3 }}>
-                                <TpCard title="P/S Ratio â€” 10Y" T={T}>
+                                <TpCard title="P/S Ratio — 10Y" T={T}>
                                     <TpSparkline data={ps_s} color={C.green} H={68} />
                                     <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>Current: {psDisp}</span>
                                 </TpCard>
-                                <TpCard title="EV/EBITDA â€” 10Y" T={T}>
+                                <TpCard title="EV/EBITDA — 10Y" T={T}>
                                     <TpSparkline data={ev_s} color={C.blue} H={68} />
                                     <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>Current: {evDisp}</span>
                                 </TpCard>
-                                <TpCard title="P/E â€” 10Y" T={T}>
+                                <TpCard title="P/E — 10Y" T={T}>
                                     <TpSparkline data={pe_s} color={C.amber} H={68} />
                                     <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>Current: {peDisp}</span>
                                 </TpCard>
                             </div>
-                            <TpCard title="Valuation Summary â€” TTM" T={T}>
+                            <TpCard title="Valuation Summary — TTM" T={T}>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginTop: 4 }}>
                                     {[
                                         { label: "P/E", value: peDisp, note: raw?.pe != null && Number(raw.pe) > 40 ? "Premium" : "Fair", color: C.amber },
@@ -16669,49 +16566,49 @@ function TickerPage({ symbol, T }) {
                             </TpCard>
                         </>)}
 
-                        {/* â”€â”€ DUPONT â”€â”€ */}
+                        {/* ── DUPONT ── */}
                         {dashTab === "dupont" && (<>
                             <div style={{ ...grid3 }}>
                                 <TpCard title="Net Profit Margin (NPM)" T={T}>
                                     <TpSparkline data={npm_s} color={C.rose} H={68} />
                                     <span style={{ fontSize: 12, color: C.rose, fontWeight: 700 }}>
-                                        {raw?.npm != null ? `${Number(raw.npm).toFixed(2)}%` : npm_s.length ? `${npm_s[npm_s.length - 1]?.toFixed?.(2)}` : "â€”"}
+                                        {raw?.npm != null ? `${Number(raw.npm).toFixed(2)}%` : npm_s.length ? `${npm_s[npm_s.length - 1]?.toFixed?.(2)}` : "—"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="Asset Turnover" T={T}>
                                     <TpSparkline data={asset_turn_s} color={C.green} H={68} />
                                     <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>
-                                        {raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "â€”"}
+                                        {raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "—"}
                                     </span>
                                 </TpCard>
                                 <TpCard title="Financial Leverage" T={T}>
                                     <TpSparkline data={finlev_s} color={C.amber} H={68} />
                                     <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>
-                                        {raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "â€”"}
+                                        {raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "—"}
                                     </span>
                                 </TpCard>
                             </div>
                             <div style={{ ...grid2 }}>
-                                <TpCard title="DuPont ROE â€” Trend" T={T}>
+                                <TpCard title="DuPont ROE — Trend" T={T}>
                                     <TpDual s1={dup_s} s2={npm_s.map(v => v * 10)} c1={C.purple} c2={C.rose} H={80} />
                                     <div style={{ display: "flex", gap: 14 }}>
-                                        <span style={{ fontSize: 10, color: C.purple }}>â— DuPont ROE</span>
-                                        <span style={{ fontSize: 10, color: C.rose }}>â— NPM Ã—10</span>
+                                        <span style={{ fontSize: 10, color: C.purple }}>● DuPont ROE</span>
+                                        <span style={{ fontSize: 10, color: C.rose }}>● NPM ×10</span>
                                     </div>
                                 </TpCard>
                                 <TpCard title="DuPont Key Ratios" T={T}>
-                                    <TpValRow label="ROE" value={raw?.roe != null ? `${Number(raw.roe).toFixed(2)}%` : "â€”"} color={C.purple} T={T} />
-                                    <TpValRow label="ROA" value={raw?.roa != null ? `${Number(raw.roa).toFixed(2)}%` : "â€”"} color={C.green} T={T} />
-                                    <TpValRow label="ROCE" value={raw?.roce != null ? `${Number(raw.roce).toFixed(2)}%` : "â€”"} color={C.blue} T={T} />
-                                    <TpValRow label="Asset Turns" value={raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "â€”"} color={C.amber} T={T} />
-                                    <TpValRow label="Financial Leverage" value={raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "â€”"} color={C.rose} T={T} />
+                                    <TpValRow label="ROE" value={raw?.roe != null ? `${Number(raw.roe).toFixed(2)}%` : "—"} color={C.purple} T={T} />
+                                    <TpValRow label="ROA" value={raw?.roa != null ? `${Number(raw.roa).toFixed(2)}%` : "—"} color={C.green} T={T} />
+                                    <TpValRow label="ROCE" value={raw?.roce != null ? `${Number(raw.roce).toFixed(2)}%` : "—"} color={C.blue} T={T} />
+                                    <TpValRow label="Asset Turns" value={raw?.asset_turnover != null ? `${Number(raw.asset_turnover).toFixed(2)}x` : "—"} color={C.amber} T={T} />
+                                    <TpValRow label="Financial Leverage" value={raw?.fin_leverage != null ? `${Number(raw.fin_leverage).toFixed(2)}x` : raw?.debt_eq != null ? `${Number(raw.debt_eq).toFixed(2)}x` : "—"} color={C.rose} T={T} />
                                 </TpCard>
                             </div>
                         </>)}
 
                     </div>
 
-                    {/* â”€â”€ DEEP DIVE: FinancialAnalyticsModule â”€â”€ */}
+                    {/* ── DEEP DIVE: FinancialAnalyticsModule ── */}
                     <div style={{
                         margin: "0 24px 24px",
                         borderRadius: 14,
@@ -18689,7 +18586,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
           }
         }
         .sdv-techno-mobile { display:none; }
-        /* Mobile back bar â€” hidden on desktop */
+        /* Mobile back bar — hidden on desktop */
         .sdv-mobile-back {
           display:none;
         }
@@ -18704,7 +18601,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
 
             <div className="sdv-shell">
 
-                {/* Mobile-only slim back bar â€” hidden on desktop via CSS */}
+                {/* Mobile-only slim back bar — hidden on desktop via CSS */}
                 <div className="sdv-mobile-back">
                     <button onClick={onBack}
                         style={{
@@ -19480,9 +19377,9 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     const filterByUniverse = useCallback(rows => {
         if (universe !== "nifty500") return rows;
-        // Still loading nifty500 constituents â€” return empty so UI shows loading state
+        // Still loading nifty500 constituents — return empty so UI shows loading state
         if (nifty500Loading || !nifty500Set) return [];
-        // Fetch succeeded but returned empty set (table missing/empty) â€” fall back to all rows
+        // Fetch succeeded but returned empty set (table missing/empty) — fall back to all rows
         if (nifty500Set.size === 0) return rows;
         return rows.filter(r => nifty500Set.has(r.ticker));
     }, [universe, nifty500Set, nifty500Loading]);
@@ -21008,7 +20905,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             fontVariantNumeric: "tabular-nums"
                         }}>
                             {(universe === "nifty500" && nifty500Loading) ? (
-                                <span style={{ color: T.muted, fontStyle: "italic" }}>loadingâ€¦</span>
+                                <span style={{ color: T.muted, fontStyle: "italic" }}>loading…</span>
                             ) : (
                                 <><strong style={{ color: T.text, fontWeight: 600 }}>
                                     {totalCount.toLocaleString("en-IN")}
@@ -23085,7 +22982,7 @@ function SectorRotationModule({ T }) {
                                 <span style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: text, letterSpacing: "-0.03em", flexShrink: 0 }}>Opportunity Rankings</span>
                                 {!isMobile && stats?.topOpp?.length > 0 && (
                                     <span style={{ fontSize: 12, color: subtext, opacity: 0.82 }}>
-                                        Leaders: {stats.topOpp.slice(0, 2).map(s => `${s.label} (${(s.opportunity_score ?? 0) > 0 ? "+" : ""}${(s.opportunity_score ?? 0).toFixed(2)})`).join(" Â· ")}
+                                        Leaders: {stats.topOpp.slice(0, 2).map(s => `${s.label} (${(s.opportunity_score ?? 0) > 0 ? "+" : ""}${(s.opportunity_score ?? 0).toFixed(2)})`).join(" · ")}
                                     </span>
                                 )}
                             </div>
@@ -24651,7 +24548,7 @@ function SectoralHeatmapModule({ T }) {
 
 
 function AuthScreen({ onLogin, onDemo, theme, toggleTheme }) {
-    const T = THEMES[theme];
+    const T = THEMES[theme] || THEMES.light;
     const [mode, setMode] = useState("login");
     const [step, setStep] = useState("options"); // "options" | "email"
     const [email, setEmail] = useState("");
@@ -24677,8 +24574,8 @@ function AuthScreen({ onLogin, onDemo, theme, toggleTheme }) {
             if (res.access_token && res.user?.id) {
                 onLogin(res); // Login success
             } else if (mode === "signup" && (res.id || res.user?.id)) {
-                // Signup success â€” email confirmation required
-                setErr("âœ… Account created! Please check your email and click the confirmation link, then log in.");
+                // Signup success — email confirmation required
+                setErr("✅ Account created! Please check your email and click the confirmation link, then log in.");
             } else {
                 setErr(res.error_description || res.msg || "Authentication failed.");
             }
@@ -25560,7 +25457,7 @@ function LegalCenter({ T, onNavigate, initialTab }) {
                     {/* Sections */}
                     {current.sections.map((s, i) => (
                         <div key={i} style={{ marginBottom: 14, padding: "16px 18px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9 }}>
-                            <h3 style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 7, textTransform: "uppercase", letterSpacing: ".04em", opacity: .8 }}>{s.title}</h3>
+                            <h3 style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 7, letterSpacing: "-.01em", textTransform: "uppercase", opacity: .8 }}>{s.title}</h3>
                             <p style={{ fontSize: 13, color: T.subtext, lineHeight: 1.75, margin: 0 }}>{s.body}</p>
                         </div>
                     ))}
@@ -25866,7 +25763,7 @@ function LoginGate({ T, onLogin, theme, tabLabel, onBack }) {
                         <circle cx="12" cy="8" r="4" />
                         <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
                     </svg>
-                    Login / Sign Up â€” It&apos;s Free
+                    Login / Sign Up — It&apos;s Free
                 </button>
                 <button
                     onClick={() => onBack?.()}
@@ -25879,7 +25776,7 @@ function LoginGate({ T, onLogin, theme, tabLabel, onBack }) {
                     onMouseOver={e => e.currentTarget.style.color = T.text}
                     onMouseOut={e => e.currentTarget.style.color = T.subtext}
                 >
-                    â† Go back to Dashboard
+                    ← Go back to Dashboard
                 </button>
             </div>
         </div>
@@ -25919,7 +25816,7 @@ function ModuleSuspenseFallback({ T, label = "Loading" }) {
 // A self-contained modal that reuses the same auth logic as AuthScreen but
 // opens as an overlay on top of the dashboard (no full-screen auth page).
 function LoginModal({ onClose, onLogin, theme }) {
-    const T = THEMES[theme];
+    const T = THEMES[theme] || THEMES.light;
     const [mode, setMode] = useState("login");
     const [step, setStep] = useState("options"); // "options" | "email"
     const [email, setEmail] = useState("");
@@ -25983,8 +25880,8 @@ function LoginModal({ onClose, onLogin, theme }) {
             if (res.access_token && res.user?.id) {
                 onLogin(res); // Login success
             } else if (mode === "signup" && (res.id || res.user?.id)) {
-                // Signup success â€” email confirmation required
-                setErr("âœ… Account created! Please check your email and click the confirmation link, then log in.");
+                // Signup success — email confirmation required
+                setErr("✅ Account created! Please check your email and click the confirmation link, then log in.");
             } else {
                 setErr(res.error_description || res.msg || "Authentication failed.");
             }
@@ -26146,7 +26043,7 @@ function LoginModal({ onClose, onLogin, theme }) {
                                 <label style={{ fontSize: 11, fontWeight: 600, color: R.sub, textTransform: "uppercase", letterSpacing: ".07em" }}>Password</label>
                                 {mode === "login" && <button className="lm-link" style={{ fontSize: 12 }} onClick={e => e.preventDefault()}>Forgot password?</button>}
                             </div>
-                            <input className="lm-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" onKeyDown={e => e.key === "Enter" && handle()} />
+                            <input className="lm-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === "Enter" && handle()} />
                         </div>
                         <div style={{ height: 16 }} />
                         <button className="lm-btn-primary" onClick={handle} disabled={loading || !email.trim() || !password}>
@@ -26221,7 +26118,7 @@ function ContactForm({ T }) {
                 maxWidth: 420,
                 fontWeight: 400,
             }}>
-                For suggestions, improvements, or queries about TradeEdge â€” write to us directly. Every message is read personally.
+                For suggestions, improvements, or queries about TradeEdge — write to us directly. Every message is read personally.
             </p>
 
             {/* Divider */}
@@ -26267,7 +26164,7 @@ function ContactForm({ T }) {
                 fontFamily: "'Helvetica Neue', Arial, sans-serif",
                 letterSpacing: "0.02em",
             }}>
-                We typically respond within 1â€“2 business days.<br />
+                We typically respond within 1–2 business days.<br />
                 Your feedback makes TradeEdge better for everyone.
             </p>
         </div>
@@ -26302,7 +26199,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
     return (
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg, position: "relative" }}>
 
-            {/* â”€â”€ Sticky Header â”€â”€ */}
+            {/* ── Sticky Header ── */}
             <div style={{
                 position: "sticky", top: 0, zIndex: 10,
                 background: T.surface,
@@ -26310,7 +26207,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                 padding: "16px 24px 0",
                 flexShrink: 0,
             }}>
-                {/* Title row with âœ• */}
+                {/* Title row with ✕ */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                     <h2 style={{ margin: 0, color: T.green, fontSize: 18, fontWeight: 700 }}>Legal Information</h2>
                     <button
@@ -26331,7 +26228,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             e.currentTarget.style.color = T.subtext;
                             e.currentTarget.style.background = "none";
                         }}
-                    >âœ•</button>
+                    >✕</button>
                 </div>
 
                 {/* Tab bar */}
@@ -26354,15 +26251,15 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                 </div>
             </div>
 
-            {/* â”€â”€ Scrollable Body â”€â”€ */}
+            {/* ── Scrollable Body ── */}
             <div style={{ flex: 1, overflowY: "auto", padding: "32px 28px", maxWidth: 820, width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
 
-                {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• DISCLAIMER â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+                {/* ══════════════ DISCLAIMER ══════════════ */}
                 {activeTab === "disclaimer" && (
                     <div>
                         <div style={warningBoxStyle}>
                             <p style={{ ...pStyle, marginBottom: 0, color: "#e6a817", fontWeight: 600 }}>
-                                âš  Important Notice: TradeEdge is NOT a SEBI-registered Investment Advisor, Research Analyst, Broker, or Portfolio Management Service (PMS). Nothing on this platform constitutes investment advice.
+                                ⚠ Important Notice: TradeEdge is NOT a SEBI-registered Investment Advisor, Research Analyst, Broker, or Portfolio Management Service (PMS). Nothing on this platform constitutes investment advice.
                             </p>
                         </div>
 
@@ -26439,11 +26336,11 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             </p>
                         </div>
 
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 Â· Governing jurisdiction: Courts of Mumbai, India</p>
+                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Governing jurisdiction: Courts of Mumbai, India</p>
                     </div>
                 )}
 
-                {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• PRIVACY POLICY â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+                {/* ══════════════ PRIVACY POLICY ══════════════ */}
                 {activeTab === "privacy" && (
                     <div>
                         <div style={sectionStyle}>
@@ -26515,7 +26412,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                                 <li>Encrypted data transmission via HTTPS/TLS 1.2+;</li>
                                 <li>Row-level security policies ensuring users can only access their own data;</li>
                                 <li>Authentication tokens are short-lived and refreshed securely;</li>
-                                <li>No plaintext storage of passwords â€” authentication is handled via Supabase Auth with bcrypt hashing;</li>
+                                <li>No plaintext storage of passwords — authentication is handled via Supabase Auth with bcrypt hashing;</li>
                                 <li>Access to the production database is restricted to authorised administrators only.</li>
                             </ul>
                             <p style={pStyle}>
@@ -26567,7 +26464,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                                 <li><strong style={strongStyle}>Account data:</strong> Retained until account deletion or for up to 3 years from last login, whichever is earlier;</li>
                                 <li><strong style={strongStyle}>Trade journal & portfolio data:</strong> Retained until you delete it or close your account;</li>
                                 <li><strong style={strongStyle}>Usage logs:</strong> Retained for up to 12 months for security and debugging purposes;</li>
-                                <li><strong style={strongStyle}>Legal compliance records:</strong> Retained for the minimum period required under applicable Indian law (typically 5â€“7 years for financial records, where applicable).</li>
+                                <li><strong style={strongStyle}>Legal compliance records:</strong> Retained for the minimum period required under applicable Indian law (typically 5–7 years for financial records, where applicable).</li>
                             </ul>
                         </div>
 
@@ -26585,11 +26482,11 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             </p>
                         </div>
 
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 Â· Contact: support@tradeedge.in</p>
+                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Contact: support@tradeedge.in</p>
                     </div>
                 )}
 
-                {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â• TERMS OF SERVICE â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+                {/* ══════════════ TERMS OF SERVICE ══════════════ */}
                 {activeTab === "terms" && (
                     <div>
                         <div style={sectionStyle}>
@@ -26605,7 +26502,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                         <div style={sectionStyle}>
                             <h3 style={h3Style}>2. Nature of Service</h3>
                             <p style={pStyle}>
-                                TradeEdge provides a self-service financial analytics and portfolio tracking platform for informational and personal record-keeping purposes. The Platform is a technology tool only. It does not execute trades, hold securities, manage funds, or provide regulated financial services of any kind. All outputs â€” including portfolio analytics, capital gains estimates, and performance metrics â€” are indicative and for personal reference only.
+                                TradeEdge provides a self-service financial analytics and portfolio tracking platform for informational and personal record-keeping purposes. The Platform is a technology tool only. It does not execute trades, hold securities, manage funds, or provide regulated financial services of any kind. All outputs — including portfolio analytics, capital gains estimates, and performance metrics — are indicative and for personal reference only.
                             </p>
                         </div>
 
@@ -26615,7 +26512,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             <ul style={ulStyle}>
                                 <li>Provide accurate information during account registration and maintain its accuracy;</li>
                                 <li>Use the Platform solely for lawful purposes and in accordance with these Terms;</li>
-                                <li>Ensure that all trade data, quantities, prices, and dates entered by you are accurate â€” the Platform relies entirely on user-entered data for analytics outputs;</li>
+                                <li>Ensure that all trade data, quantities, prices, and dates entered by you are accurate — the Platform relies entirely on user-entered data for analytics outputs;</li>
                                 <li>Independently verify all analytics, estimates, and calculations with your broker statements and a qualified tax professional before relying on them;</li>
                                 <li>Comply with all applicable Indian laws, including SEBI regulations, the Income Tax Act, and the Prevention of Money Laundering Act, as applicable to your investment activities.</li>
                             </ul>
@@ -26741,7 +26638,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             </p>
                         </div>
 
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 Â· Governing jurisdiction: Courts of Mumbai, Maharashtra, India</p>
+                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Governing jurisdiction: Courts of Mumbai, Maharashtra, India</p>
                     </div>
                 )}
 
@@ -26832,7 +26729,7 @@ export default function App() {
         // Delegate entirely to getValidToken() which already handles refresh + _session update
         const token = await supabase.getValidToken();
         if (token && supabase._session && supabase._session.access_token !== session?.access_token) {
-            // _session was refreshed internally â€” sync React state so consumers get the new token
+            // _session was refreshed internally — sync React state so consumers get the new token
             setSession({ ...supabase._session });
         }
         return token;
@@ -26858,7 +26755,7 @@ export default function App() {
     const navigateToTicker = useCallback((rawSymbol, options = {}) => {
         const symbol = (rawSymbol || "").trim().toUpperCase();
         if (!symbol) return;
-        // Don't set productTab/financialSubPage here â€” the route.kind === "ticker" effect
+        // Don't set productTab/financialSubPage here — the route.kind === "ticker" effect
         // handles that reactively, and setting them here causes a spurious history entry
         // via the URL-sync effect before the ticker route is committed.
         setTechnoFundaFilter(null);
@@ -26901,7 +26798,6 @@ export default function App() {
     const [modal, setModal] = useState(null);
     const [checking, setChecking] = useState(true);
     const [railCollapsed, setRailCollapsed] = useState(true);   //  changed to true
-    const [navDepth, setNavDepth] = useState(0); // tracks how many pushStates deep we are (for mobile back button)
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -26944,7 +26840,7 @@ export default function App() {
     const [theme, setTheme] = useState(() => {
         try { return localStorage.getItem("tv_theme") || "light"; } catch { return "light"; }
     });
-    const T = THEMES[theme];
+    const T = THEMES[theme] || THEMES.light;
 
     const toggleTheme = () => {
         const next = theme === "dark" ? "light" : "dark";
@@ -27047,7 +26943,7 @@ export default function App() {
         } catch (e) { console.error(e); }
     };
 
-    // â”€â”€ Guest data helpers (localStorage) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Guest data helpers (localStorage) ────────────────────────────────────
     const GUEST_LS_KEY = "te_guest_journal";
     const saveGuestData = (t, f, d) => {
         try { localStorage.setItem(GUEST_LS_KEY, JSON.stringify({ trades: t, funds: f, dividends: d })); } catch { }
@@ -27084,7 +26980,7 @@ export default function App() {
                 setSession(sess);
                 loadTrades(sess); loadFunds(sess); loadDividends(sess);
             } else {
-                // No session â€“ load any previously saved guest data
+                // No session – load any previously saved guest data
                 const guest = loadGuestData();
                 if (guest) {
                     if (Array.isArray(guest.trades)) setTrades(guest.trades);
@@ -27392,7 +27288,7 @@ export default function App() {
                 { id: "fiidii", label: "FII / DII Flow", description: "Track institutional cash and derivatives participation." },
                 { id: "ownership", label: "Ownership Scans", description: "Review promoter, fund, and shareholder positioning." },
                 { id: "announcements", label: "Announcements", description: "Track corporate disclosures and regulatory filings in real time." },
-                { id: "niftyPE", label: "Nifty PE", description: "Monthly Nifty 50 P/E ratio heatmap â€” spot cheap and expensive markets at a glance." },
+                { id: "niftyPE", label: "Nifty PE", description: "Monthly Nifty 50 P/E ratio heatmap — spot cheap and expensive markets at a glance." },
             ],
         },
         {
@@ -27461,7 +27357,6 @@ export default function App() {
             const parsed = parseAppRoute(window.location.pathname);
             restoringHistoryRef.current = true;
             setRoute(parsed);
-            setNavDepth(d => Math.max(0, d - 1));
             // Clear stale ticker state when back-navigating away from a ticker route
             if (parsed.kind === "app") {
                 setTopbarSearch("");
@@ -27485,7 +27380,6 @@ export default function App() {
             return;
         }
         window.history.pushState(null, "", nextPath);
-        setNavDepth(d => d + 1);
         setRoute(parseAppRoute(nextPath));
     }, [route.kind, productTab, page, financialSubPage, technicalSubPage, legalInitialTab]);
 
@@ -28156,7 +28050,7 @@ export default function App() {
 
             {modal && <TradeModal trade={modal.mode === "edit" ? modal.trade : null} onClose={() => setModal(null)} onSave={handleSave} T={T} />}
 
-            {/* Login Modal â€” shown when user clicks Login in the top nav */}
+            {/* Login Modal — shown when user clicks Login in the top nav */}
             {showLoginModal && (
                 <LoginModal
                     onClose={() => setShowLoginModal(false)}
@@ -28164,21 +28058,6 @@ export default function App() {
                     theme={theme}
                 />
             )}
-
-            {/* Mobile back button â€” visible only on small screens when there's history to go back to */}
-            {navDepth > 0 && createPortal(
-                <button
-                    className="mobile-back-btn"
-                    aria-label="Go back"
-                    onClick={() => window.history.back()}
-                >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="15 18 9 12 15 6" />
-                    </svg>
-                </button>,
-                document.body
-            )}
         </>
     );
 }
-

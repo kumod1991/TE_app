@@ -1,5 +1,4 @@
-﻿import React from 'react';
-// â”€â”€â”€ FII/DII DECISION GUIDE â€” Drop-in replacement for the docs tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FII/DII DECISION GUIDE — Drop-in replacement for the docs tab ───────────
 // Usage: Replace the {activeTab==="docs"&&(...)} block in FiiDiiModule.jsx
 // Props: { T, phase, absorptionLabel, absorptionTrend, momentumLabel, confidence, tradeImplication, invalidation }
 // All props come from the existing computed values in FiiDiiModule
@@ -9,7 +8,7 @@ const RD = "#dc2626"; // red
 const AM = "#d97706"; // amber
 const SK = "#0284c7"; // sky
 
-// â”€â”€â”€ Section wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Section wrapper ──────────────────────────────────────────────────────────
 function DocSection({ icon, title, accent = null, children, T }) {
     return (
         <div style={{
@@ -36,7 +35,7 @@ function DocSection({ icon, title, accent = null, children, T }) {
     );
 }
 
-// â”€â”€â”€ Pill badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Pill badge ───────────────────────────────────────────────────────────────
 function Pill({ label, color, T }) {
     return (
         <span style={{
@@ -49,7 +48,7 @@ function Pill({ label, color, T }) {
     );
 }
 
-// â”€â”€â”€ Step row (numbered) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Step row (numbered) ─────────────────────────────────────────────────────
 function Step({ n, label, desc, T }) {
     return (
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
@@ -66,7 +65,7 @@ function Step({ n, label, desc, T }) {
     );
 }
 
-// â”€â”€â”€ Warning row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Warning row ─────────────────────────────────────────────────────────────
 function Warn({ text, T }) {
     return (
         <div style={{
@@ -74,13 +73,13 @@ function Warn({ text, T }) {
             padding: "7px 10px", borderRadius: 5, marginBottom: 5,
             background: AM + "0a", border: `1px solid ${AM}25`,
         }}>
-            <span style={{ fontSize: 10, flexShrink: 0, marginTop: 2, color: AM, fontWeight: 700 }}>â–²</span>
+            <span style={{ fontSize: 10, flexShrink: 0, marginTop: 2, color: AM, fontWeight: 700 }}>▲</span>
             <span style={{ fontSize: 11, color: T.subtext, lineHeight: 1.6 }}>{text}</span>
         </div>
     );
 }
 
-// â”€â”€â”€ Metric row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Metric row ──────────────────────────────────────────────────────────────
 function MetricRow({ label, definition, strong, strong2, weak, T }) {
     return (
         <div style={{
@@ -97,7 +96,7 @@ function MetricRow({ label, definition, strong, strong2, weak, T }) {
     );
 }
 
-// â”€â”€â”€ Phase row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Phase row ───────────────────────────────────────────────────────────────
 function PhaseRow({ emoji, phase, condition, implication, color, T }) {
     return (
         <div style={{
@@ -111,13 +110,13 @@ function PhaseRow({ emoji, phase, condition, implication, color, T }) {
             <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 3 }}>{phase}</div>
                 <div style={{ fontSize: 11, color: T.subtext, marginBottom: 3, lineHeight: 1.5 }}>{condition}</div>
-                <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5 }}>â†’ {implication}</div>
+                <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5 }}>→ {implication}</div>
             </div>
         </div>
     );
 }
 
-// â”€â”€â”€ CURRENT STATE PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── CURRENT STATE PANEL ─────────────────────────────────────────────────────
 function CurrentStatePanel({ phase, absorptionLabel, absorptionTrend, momentumLabel, confidence, tradeImplication, invalidation, T }) {
     if (!phase) return null;
 
@@ -131,7 +130,7 @@ function CurrentStatePanel({ phase, absorptionLabel, absorptionTrend, momentumLa
     const confColor = confidence?.color || AM;
 
     return (
-        <DocSection icon="â—‰" title="Current State â€” Live Reading" accent={phaseColor} T={T}>
+        <DocSection icon="◉" title="Current State — Live Reading" accent={phaseColor} T={T}>
             {/* Phase + Absorption headline */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
                 <Pill label={phase} color={phaseColor} T={T} />
@@ -168,7 +167,7 @@ function CurrentStatePanel({ phase, absorptionLabel, absorptionTrend, momentumLa
     );
 }
 
-// â”€â”€â”€ MAIN EXPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
 export function FiiDiiDocsTab({
     T,
     // Live state props (pass from FiiDiiModule computed values)
@@ -185,9 +184,9 @@ export function FiiDiiDocsTab({
     return (
         <div style={{ maxWidth: 680, display: "flex", flexDirection: "column", gap: 8 }}>
 
-            {/* â”€â”€ 1. HOW TO READ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <DocSection icon="â†’" title="How to Read This Dashboard" accent={SK} T={T}>
-                <Step n="1" label="Start with Phase" desc="Phase defines the structural regime â€” the most important signal. Sets the context for everything else." T={T} />
+            {/* ── 1. HOW TO READ ──────────────────────────────────────────────── */}
+            <DocSection icon="→" title="How to Read This Dashboard" accent={SK} T={T}>
+                <Step n="1" label="Start with Phase" desc="Phase defines the structural regime — the most important signal. Sets the context for everything else." T={T} />
                 <Step n="2" label="Check Absorption" desc="Absorption tells you if domestic institutions are stepping in. High absorption means selling pressure is being cushioned." T={T} />
                 <Step n="3" label="Read Momentum" desc="Momentum detects early directional shifts. An early warning, not a confirmation." T={T} />
                 <Step n="4" label="Validate with Derivatives" desc="Derivatives confirm or contradict cash flows. Divergence between cash and derivatives = extra uncertainty." T={T} />
@@ -196,11 +195,11 @@ export function FiiDiiDocsTab({
                     background: SK + "0a", border: `1px solid ${SK}25`,
                     fontSize: 11, color: T.subtext, lineHeight: 1.6,
                 }}>
-                    <span style={{ fontWeight: 600, color: SK }}>Reading order:</span> Phase â†’ Absorption â†’ Momentum â†’ Derivatives
+                    <span style={{ fontWeight: 600, color: SK }}>Reading order:</span> Phase → Absorption → Momentum → Derivatives
                 </div>
             </DocSection>
 
-            {/* â”€â”€ 2. CURRENT STATE (live, only if data available) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── 2. CURRENT STATE (live, only if data available) ─────────────── */}
             {hasLiveData && (
                 <CurrentStatePanel
                     phase={phase}
@@ -214,18 +213,18 @@ export function FiiDiiDocsTab({
                 />
             )}
 
-            {/* â”€â”€ 3. COMMON MISINTERPRETATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <DocSection icon="â–²" title="Common Misinterpretations" accent={AM} T={T}>
-                <Warn text="Strong absorption â‰  bullish reversal. DII buying cushions falls â€” it does not cause uptrends." T={T} />
-                <Warn text="Improving momentum â‰  trend change. Momentum shows the direction of change, not its completion." T={T} />
-                <Warn text="Transition Phase â‰  directional signal. Transition is the default state â€” mixed or indeterminate flows. Avoid forcing a view." T={T} />
-                <Warn text="Derivatives alone â‰  market direction. Index futures and options show positioning bias, not outcome." T={T} />
-                <Warn text="Recovery Phase â‰  confirmed uptrend. Recovery requires FII 20D to cross above 0 before becoming structural." T={T} />
-                <Warn text="High confidence â‰  guaranteed result. Confidence reflects signal clarity, not price outcome." T={T} />
+            {/* ── 3. COMMON MISINTERPRETATIONS ────────────────────────────────── */}
+            <DocSection icon="▲" title="Common Misinterpretations" accent={AM} T={T}>
+                <Warn text="Strong absorption ≠ bullish reversal. DII buying cushions falls — it does not cause uptrends." T={T} />
+                <Warn text="Improving momentum ≠ trend change. Momentum shows the direction of change, not its completion." T={T} />
+                <Warn text="Transition Phase ≠ directional signal. Transition is the default state — mixed or indeterminate flows. Avoid forcing a view." T={T} />
+                <Warn text="Derivatives alone ≠ market direction. Index futures and options show positioning bias, not outcome." T={T} />
+                <Warn text="Recovery Phase ≠ confirmed uptrend. Recovery requires FII 20D to cross above 0 before becoming structural." T={T} />
+                <Warn text="High confidence ≠ guaranteed result. Confidence reflects signal clarity, not price outcome." T={T} />
             </DocSection>
 
-            {/* â”€â”€ 4. KEY METRICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <DocSection icon="â‰¡" title="Key Metrics" T={T}>
+            {/* ── 4. KEY METRICS ──────────────────────────────────────────────── */}
+            <DocSection icon="≡" title="Key Metrics" T={T}>
                 <div style={{
                     display: "grid", gridTemplateColumns: "1fr 1.6fr 1fr 1fr",
                     gap: 4, padding: "4px 0 8px", marginBottom: 2,
@@ -235,20 +234,20 @@ export function FiiDiiDocsTab({
                         <div key={i} style={{ fontSize: 9, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: ".1em" }}>{h}</div>
                     ))}
                 </div>
-                <MetricRow label="FII 20D" definition="Rolling 20-day sum of FII net flows. Represents institutional trend strength." strong="> 0 (buying)" weak="< âˆ’50K (deep sell)" T={T} />
+                <MetricRow label="FII 20D" definition="Rolling 20-day sum of FII net flows. Represents institutional trend strength." strong="> 0 (buying)" weak="< −50K (deep sell)" T={T} />
                 <MetricRow label="DII 20D" definition="Rolling 20-day sum of DII net flows. Represents domestic support base." strong="> 0 (active support)" weak="< 0 (domestic exit)" T={T} />
                 <MetricRow label="Momentum" definition="FII 5D minus FII 20D. Positive = FII short-term flows improving vs trend." strong="> +20K (clear shift)" weak="< 0 (worsening)" T={T} />
-                <MetricRow label="Absorption" definition="DII 20D Ã· |FII 20D|. How much DII is absorbing FII selling." strong="> 1.2 (strong)" strong2="0.5â€“1.2 (moderate)" weak="< 0.5 (weak/absent)" T={T} />
+                <MetricRow label="Absorption" definition="DII 20D ÷ |FII 20D|. How much DII is absorbing FII selling." strong="> 1.2 (strong)" strong2="0.5–1.2 (moderate)" weak="< 0.5 (weak/absent)" T={T} />
                 <MetricRow label="Confidence" definition="Phase base + absorption modifier + momentum modifier. Hard-capped per phase." strong="> 75 = High" weak="< 50 = Low" T={T} />
             </DocSection>
 
-            {/* â”€â”€ 5. PHASE LOGIC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <DocSection icon="â—ˆ" title="Phase Logic â€” Priority Order" T={T}>
+            {/* ── 5. PHASE LOGIC ──────────────────────────────────────────────── */}
+            <DocSection icon="◈" title="Phase Logic — Priority Order" T={T}>
                 <div style={{ fontSize: 11, color: T.subtext, marginBottom: 10, lineHeight: 1.6 }}>
                     Phases are checked in strict priority order. Distribution is evaluated first to prevent false Recovery signals.
                 </div>
                 <PhaseRow phase="Distribution" color={RD}
-                    condition="FII 20D < âˆ’50K and DII 20D < 0 â€” OR â€” absorption < 0.5"
+                    condition="FII 20D < −50K and DII 20D < 0 — OR — absorption < 0.5"
                     implication="Broad institutional selling. Avoid longs. Sell-on-rise bias."
                     T={T} />
                 <PhaseRow phase="Accumulation" color={GR}
@@ -256,7 +255,7 @@ export function FiiDiiDocsTab({
                     implication="Both institutions buying. Buy-on-dips environment."
                     T={T} />
                 <PhaseRow phase="Recovery" color={SK}
-                    condition="FII 20D > âˆ’40K AND FII 5D > FII 20D AND momentum > 0"
+                    condition="FII 20D > −40K AND FII 5D > FII 20D AND momentum > 0"
                     implication="Selling slowing, early reversal forming. Cautious long bias."
                     T={T} />
                 <PhaseRow phase="Transition" color={AM}
@@ -268,16 +267,16 @@ export function FiiDiiDocsTab({
                     background: T.text + "06", border: `1px solid ${T.border}`,
                     fontSize: 11, color: T.subtext, lineHeight: 1.6,
                 }}>
-                    <span style={{ fontWeight: 600, color: T.text }}>Absorption</span> is computed independently â€” it never changes the phase label. Phase = structure. Absorption = support strength.
+                    <span style={{ fontWeight: 600, color: T.text }}>Absorption</span> is computed independently — it never changes the phase label. Phase = structure. Absorption = support strength.
                 </div>
             </DocSection>
 
-            {/* â”€â”€ 6. DATA SOURCES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <DocSection icon="âŠ¡" title="Data Sources" T={T}>
+            {/* ── 6. DATA SOURCES ─────────────────────────────────────────────── */}
+            <DocSection icon="⊡" title="Data Sources" T={T}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {[
-                        { label: "Cash Flows", detail: "fii_dii_activity â€” Daily FII & DII gross buy/sell and net flows in â‚¹ Crore. Source: NSE." },
-                        { label: "Derivatives OI", detail: "fii_dii_fo â€” Index Futures, Index Calls, Index Puts split by long/short. NSE Participant-wise OI. Filtered by client_type FII or DII." },
+                        { label: "Cash Flows", detail: "fii_dii_activity — Daily FII & DII gross buy/sell and net flows in ₹ Crore. Source: NSE." },
+                        { label: "Derivatives OI", detail: "fii_dii_fo — Index Futures, Index Calls, Index Puts split by long/short. NSE Participant-wise OI. Filtered by client_type FII or DII." },
                         { label: "Smoothing", detail: "All primary signals use 5-day and 20-day rolling sums. Raw daily values available in the Databases tab." },
                     ].map(({ label, detail }) => (
                         <div key={label} style={{ display: "flex", gap: 12, fontSize: 11 }}>
@@ -288,7 +287,7 @@ export function FiiDiiDocsTab({
                 </div>
             </DocSection>
 
-            {/* â”€â”€ Disclaimer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── Disclaimer ──────────────────────────────────────────────────── */}
             <div style={{ fontSize: 10, color: T.subtext, padding: "4px 2px", lineHeight: 1.7, opacity: 0.7 }}>
                 For informational purposes only. Not SEBI registered. Not investment advice. Market data may be delayed.
             </div>
@@ -296,7 +295,7 @@ export function FiiDiiDocsTab({
     );
 }
 
-// â”€â”€â”€ DROP-IN REPLACEMENT SNIPPET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── DROP-IN REPLACEMENT SNIPPET ─────────────────────────────────────────────
 // In FiiDiiModule.jsx, replace the {activeTab==="docs"&&(...)} block with:
 //
 // {activeTab === "docs" && (
@@ -315,5 +314,3 @@ export function FiiDiiDocsTab({
 // All props come directly from the existing `flowPhase` useMemo in FiiDiiModule.
 // Either import { FiiDiiDocsTab } from "./FiiDiiDocsTab"
 // or paste this component directly into FiiDiiModule.jsx above the main export.
-
-

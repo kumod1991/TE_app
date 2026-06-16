@@ -168,18 +168,7 @@ async function sbFetch(path, token, { ttl = 5 * 60 * 1000, noCache = false, onSt
     }
 
     // True cache miss (first-ever load or noCache) – await the network call.
-    let data = await _doFetch(path, token, ttl, noCache);
-    
-    // If network failed (data is null), check localStorage as a last resort.
-    if (!data && !noCache) {
-        const ls = _lsGet(key);
-        if (ls?.data) {
-            console.warn("[sbFetch] network failed, falling back to localStorage", key);
-            data = ls.data;
-        }
-    }
-    
-    return data;
+    return _doFetch(path, token, ttl, noCache);
 }
 
 // Internal: deduplicated network fetch; writes to both cache layers on success.
@@ -198,12 +187,12 @@ function _doFetch(path, token, ttl, noCache) {
             },
         });
         const raw = await res.text();
-        if (!res.ok) { console.error("[sbFetch]", res.status, raw); return null; }
+        if (!res.ok) { console.error("[sbFetch]", res.status, raw); throw new Error(`Supabase ${res.status}: ${raw}`); }
         let data;
-        try { data = JSON.parse(raw); } catch { console.error("[sbFetch] Invalid JSON"); return null; }
+        try { data = JSON.parse(raw); } catch { throw new Error("Invalid JSON from Supabase"); }
         if (data && !Array.isArray(data) && data.code) {
             console.error("[sbFetch] error body:", data);
-            return null;
+            throw new Error(data.message || data.hint || JSON.stringify(data));
         }
         console.log("[sbFetch]", path.split("?")[0], "->", Array.isArray(data) ? `${data.length} rows` : data);
         if (!noCache) cacheSet(key, data, ttl);
@@ -431,15 +420,11 @@ function applyNamesFromMap(rows) {
 
 
 // â”€â”€â”€ BATCH FETCH (splits large ticker lists to avoid query timeouts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 50;
 
 function toSupabaseInList(values) {
-    // PostgREST `in` filter with string values uses comma-separated, double-quoted values.
-    // Special characters like '&' MUST be encoded for the URL, but the PostgREST
-    // syntax inside the 'in' filter itself needs careful handling.
-    // A safer way is to encode the components properly.
     return `(${values
-        .map(v => `"${encodeURIComponent(String(v).trim())}"`)
+        .map(v => `"${String(v).trim()}"`)   // â† wrap each ticker in double-quotes
         .filter(Boolean)
         .join(",")})`;
 }
@@ -507,18 +492,22 @@ async function batchFetchBhavNames(tickers, userToken) {
     for (let i = 0; i < tickers.length; i += BATCH_SIZE) {
         chunks.push(tickers.slice(i, i + BATCH_SIZE));
     }
-    // Fetch all chunks in parallel — cache dedup in sbFetch prevents write races
-    const results = await Promise.all(
-        chunks.map(chunk => {
-            const tickersIn = toSupabaseInList(chunk);
-            return sbFetch(
+    const allRows = [];
+    // Fetch sequentially per chunk to avoid racing cache writes
+    for (const chunk of chunks) {
+        const tickersIn = toSupabaseInList(chunk);
+        try {
+            // order=ticker.asc,date.desc → for each ticker, latest date row first
+            const rows = await sbFetch(
                 `bhav_copy?select=ticker,name&ticker=in.${tickersIn}&order=ticker.asc,date.desc`,
                 userToken,
                 { ttl: 60 * 60 * 1000 }
-            ).catch(e => { console.warn("[batchFetchBhavNames] chunk failed:", e.message); return []; });
-        })
-    );
-    const allRows = results.flat();
+            );
+            if (Array.isArray(rows)) allRows.push(...rows);
+        } catch (e) {
+            console.warn("[batchFetchBhavNames] chunk failed:", e.message);
+        }
+    }
     // Deduplicate: keep only the first (= latest-date) row per ticker
     const seen = new Set();
     const deduped = [];
@@ -2846,14 +2835,7 @@ function enrichRsStocks(tirsData, returnsMap, allowedSet = getAllowedTickerSetSy
 async function warmStockDashboardCaches(userToken) {
     if (_stockDashboardWarmPromise) return _stockDashboardWarmPromise;
 
-    // Fetch only ranked rows at the DB level — avoids pulling 10k rows client-side.
-    // Gainers+losers: rank_gainer/rank_loser not null; near_high/near_low: boolean flag.
-    // Three small queries (~200 rows each) replace one massive limit=10000 query.
-    const MOVERS_GAINERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&rank_gainer=not.is.null&order=rank_gainer.asc&limit=200";
-    const MOVERS_LOSERS_PATH  = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&rank_loser=not.is.null&order=rank_loser.asc&limit=200";
-    const MOVERS_BREADTH_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&or=(near_high.eq.true,near_low.eq.true)&limit=500";
-    // Legacy single-path key kept for cache compatibility — points to gainers query (primary).
-    const MOVERS_PATH = MOVERS_GAINERS_PATH;
+    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
     const STOCK52W_PATH = "stock_52w?select=ticker,volume_ma20";
     const MOVERS_TTL = 5 * 60 * 1000;
 
@@ -2872,20 +2854,7 @@ async function warmStockDashboardCaches(userToken) {
     _stockDashboardWarmPromise = (async () => {
         try {
             const allowedSetPromise = ensureAllowedTickerSet();
-            // Three targeted fetches replace one 10k-row query — run fully in parallel
-            const moversPromise = Promise.all([
-                sbFetch(MOVERS_GAINERS_PATH, headers, { ttl: MOVERS_TTL }).catch(() => []),
-                sbFetch(MOVERS_LOSERS_PATH,  headers, { ttl: MOVERS_TTL }).catch(() => []),
-                sbFetch(MOVERS_BREADTH_PATH, headers, { ttl: MOVERS_TTL }).catch(() => []),
-            ]).then(([g, l, b]) => {
-                // Merge and deduplicate by symbol — each row is identical across queries
-                const seen = new Set();
-                const merged = [];
-                for (const row of [...(g||[]), ...(l||[]), ...(b||[])]) {
-                    if (row?.symbol && !seen.has(row.symbol)) { seen.add(row.symbol); merged.push(row); }
-                }
-                return merged;
-            });
+            const moversPromise = sbFetch(MOVERS_PATH, headers, { ttl: MOVERS_TTL }).catch(() => null);
             const stock52wPromise = sbFetchAll(STOCK52W_PATH, headers, { ttl: RETURNS_TTL }).catch(() => []);
             const tirsRsPromise = sbFetchAll(TIRS_RS85_PATH, headers, { ttl: RS_TTL }).catch(() => []);
             const tirsAllPromise = sbFetchAll(TIRS_ALL_PATH, headers, { ttl: RS_TTL }).catch(() => []);
@@ -2980,16 +2949,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [lastUpdated, setLastUpdated] = useState(null);
 
     // ── Cache-key constants (same paths used in sbFetch calls below) ──────────
-    // Three targeted queries replace the old limit=10000 single fetch:
-    //   • GAINERS_PATH  – rows with rank_gainer set (top gainers)
-    //   • LOSERS_PATH   – rows with rank_loser set (top losers)
-    //   • BREADTH_PATH  – rows flagged near_high or near_low
-    // Each query returns at most ~200–500 rows vs 10 000, cutting payload ~10x.
-    const MOVERS_GAINERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&rank_gainer=not.is.null&order=rank_gainer.asc&limit=200";
-    const MOVERS_LOSERS_PATH  = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&rank_loser=not.is.null&order=rank_loser.asc&limit=200";
-    const MOVERS_BREADTH_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&or=(near_high.eq.true,near_low.eq.true)&limit=500";
-    // Alias used for cache seeding / backward compat (points to primary gainers key)
-    const MOVERS_PATH = MOVERS_GAINERS_PATH;
+    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
     const STOCK52W_PATH = "stock_52w?select=ticker,volume_ma20";
     const MOVERS_TTL = 5 * 60 * 1000;
 
@@ -3132,106 +3092,56 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             setLosers(applyNamesFromMap(derived.losers));
             setNearHigh(applyNamesFromMap(derived.nearHigh));
             setNearLow(applyNamesFromMap(derived.nearLow));
-            if (moversData && moversData.length > 0 && moversData[0]?.created_at) {
+            if (moversData[0]?.created_at) {
                 setLastUpdated(new Date(moversData[0].created_at).toLocaleString("en-IN", {
                     day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true,
                 }));
             }
         }
 
-        // Merge rows from three split queries, deduplicating by symbol.
-        function mergeMoversRows(g, l, b) {
-            const seen = new Set();
-            const merged = [];
-            for (const row of [...(g || []), ...(l || []), ...(b || [])]) {
-                if (row?.symbol && !seen.has(row.symbol)) { seen.add(row.symbol); merged.push(row); }
-            }
-            return merged;
-        }
-
         (async () => {
+            // If we already seeded from cache, don't show a spinner.
+            // loadingMovers is only true when there was no cache at mount.
             setError(null);
             try {
                 const allowedSet = await ensureAllowedTickerSet();
+                // Both calls respect SWR: they return stale cache immediately
+                // and call onStale when a background refresh completes.
                 let latestMovers = _cachedMovers || null;
                 let latestS52 = cacheGetAllPages(STOCK52W_PATH, RETURNS_TTL) || [];
 
-                // ── Three small parallel queries replace the old limit=10000 single fetch ──
-                // gainers (~200 rows) + losers (~200 rows) + breadth (~500 rows) = ~900 rows max
-                // vs the previous 10 000 rows — roughly 10x less data on the wire.
-                const [gainersRows, losersRows, breadthRows] = await Promise.all([
-                    sbFetch(MOVERS_GAINERS_PATH, userToken, {
+                const [moversData, stock52wData] = await Promise.all([
+                    sbFetch(MOVERS_PATH, userToken, {
                         ttl: MOVERS_TTL,
                         onStale: fresh => {
-                            latestMovers = mergeMoversRows(fresh, losersRows, breadthRows);
+                            latestMovers = fresh;
                             applyMovers(latestMovers, latestS52, allowedSet);
                         },
                     }),
-                    sbFetch(MOVERS_LOSERS_PATH, userToken, {
-                        ttl: MOVERS_TTL,
+                    sbFetchAll(STOCK52W_PATH, userToken, {
+                        ttl: RETURNS_TTL,
                         onStale: fresh => {
-                            latestMovers = mergeMoversRows(gainersRows, fresh, breadthRows);
-                            applyMovers(latestMovers, latestS52, allowedSet);
-                        },
-                    }),
-                    sbFetch(MOVERS_BREADTH_PATH, userToken, {
-                        ttl: MOVERS_TTL,
-                        onStale: fresh => {
-                            latestMovers = mergeMoversRows(gainersRows, losersRows, fresh);
-                            applyMovers(latestMovers, latestS52, allowedSet);
+                            latestS52 = fresh || [];
+                            if (latestMovers) applyMovers(latestMovers, latestS52, allowedSet);
                         },
                     }),
                 ]);
 
-                const moversData = mergeMoversRows(gainersRows, losersRows, breadthRows);
+                // If we got a stale SWR hit, the onStale cb fires later.
+                // The synchronous return here is used for the initial render.
                 latestMovers = moversData;
-
-                // ── Fetch stock_52w only for the tickers we actually have ──────────────
-                // Replaces sbFetchAll (5+ sequential pages for ~5000 tickers) with a
-                // targeted parallel batch for the ~400-600 mover tickers — much faster.
-                const moverTickers = [...new Set(moversData.map(r => r.symbol).filter(Boolean))];
-                let stock52wData = latestS52;
-
-                if (moverTickers.length) {
-                    const cachedS52 = cacheGetAllPages(STOCK52W_PATH, RETURNS_TTL) || [];
-                    const cachedTickerSet = new Set(cachedS52.map(r => r.ticker));
-                    const missingS52 = moverTickers.filter(t => !cachedTickerSet.has(t));
-
-                    if (cachedS52.length && !missingS52.length) {
-                        stock52wData = cachedS52; // full cache hit — zero network cost
-                    } else {
-                        const chunks = [];
-                        for (let i = 0; i < moverTickers.length; i += BATCH_SIZE)
-                            chunks.push(moverTickers.slice(i, i + BATCH_SIZE));
-                        const pages = await Promise.all(
-                            chunks.map(chunk => {
-                                const tickersIn = toSupabaseInList(chunk);
-                                return sbFetch(
-                                    `stock_52w?select=ticker,volume_ma20&ticker=in.${tickersIn}`,
-                                    userToken,
-                                    { ttl: RETURNS_TTL }
-                                ).catch(() => []);
-                            })
-                        );
-                        const freshS52 = pages.flat();
-                        // Merge with any existing cached rows so other parts of the app
-                        // that read the full table don't lose data they already had.
-                        const mergedMap = new Map(cachedS52.map(r => [r.ticker, r]));
-                        (freshS52 || []).forEach(r => { if (r?.ticker) mergedMap.set(r.ticker, r); });
-                        stock52wData = [...mergedMap.values()];
-                    }
-                }
-
-                latestS52 = stock52wData;
+                latestS52 = stock52wData || [];
                 applyMovers(moversData, stock52wData, allowedSet);
 
                 // ── Enrich mover rows with names (background, non-blocking) ────────
-                // Names already in _nameMap for cached tickers; this fills missing ones.
+                // Names already present from _nameMap for cached tickers.
+                // This fetch fills in any that were missing (new tickers).
                 try {
-                    const allTickers = [...new Set(moversData.map(r => r.symbol).filter(Boolean))];
+                    const allTickers = [...new Set((moversData || []).map(r => r.symbol).filter(Boolean))];
                     const missingTickers = allTickers.filter(t => !_nameMap.has(t));
                     if (missingTickers.length) {
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
+                        // _updateNameMap is called inside batchFetchBhavNames; push update to UI
                         if (nameRows.length) {
                             setGainers(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
                             setLosers(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
@@ -3964,7 +3874,6 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
 }
 
 StockDashboard.warmStockDashboardCaches = warmStockDashboardCaches;
-StockDashboard.prefetchGlobalNameMap = prefetchGlobalNameMap;
 
 function LoadMoreRowsButton({ T, visibleCount, totalCount, onLoadMore }) {
     if (visibleCount >= totalCount) return null;
@@ -3992,4 +3901,3 @@ function LoadMoreRowsButton({ T, visibleCount, totalCount, onLoadMore }) {
         </div>
     );
 }
-

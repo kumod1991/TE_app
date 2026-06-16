@@ -1,4 +1,3 @@
-﻿import React from 'react';
 
 function PremiumContactForm({ T }) {
     const panelBorder = "rgba(15,23,42,0.08)";
@@ -16,14 +15,14 @@ function PremiumContactForm({ T }) {
                         width: 52, height: 52, borderRadius: 16, flexShrink: 0,
                         background: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(16,185,129,0.22))",
                         display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26,
-                    }}>âœ‰ï¸</div>
+                    }}>✉️</div>
                     <div>
                         <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 800, color: T.green, marginBottom: 4 }}>Contact us</div>
                         <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>We'd love to hear from you</h3>
                     </div>
                 </div>
                 <p style={{ margin: "0 0 28px", fontSize: 15, lineHeight: 1.8, color: "rgba(15,23,42,0.70)" }}>
-                    Have suggestions, improvements, or queries about TradeEdge? Feel free to write to us directly â€” we read every message and aim to respond within 1â€“2 business days.
+                    Have suggestions, improvements, or queries about TradeEdge? Feel free to write to us directly — we read every message and aim to respond within 1–2 business days.
                 </p>
                 <div style={{
                     display: "inline-flex", alignItems: "center", gap: 12,
@@ -32,7 +31,7 @@ function PremiumContactForm({ T }) {
                     border: `1px solid ${panelBorder}`,
                     boxShadow: "0 2px 10px rgba(15,23,42,0.06)",
                 }}>
-                    <span style={{ fontSize: 18 }}>ðŸ“§</span>
+                    <span style={{ fontSize: 18 }}>📧</span>
                     <a
                         href="mailto:kmk03072018@gmail.com"
                         style={{ fontSize: 16, fontWeight: 700, color: "#0ea5e9", textDecoration: "none", letterSpacing: "0.01em" }}
@@ -152,4 +151,3 @@ export default function PremiumLegalPage({ T, onClose, initialTab = "disclaimer"
         </div>
     );
 }
-
