@@ -57,10 +57,12 @@ async function sbFetchAll(table, params = {}) {
 }
 
 const MODULE_CACHE_KEY = "fiidii-module-cache-v1";
+const MODULE_CACHE_KEY_SECONDARY = "fiidii-module-cache-secondary-v1";
 const MODULE_CACHE_TTL_MS = 15 * 60 * 1000;
 let fiidiiMemoryCache = null;
 let fiidiiMemoryCacheTs = 0;
 let fiidiiInflightPromise = null;
+let fiidiiSecondaryInflightPromise = null;
 
 // ─── FORMAT ───────────────────────────────────────────────────────────────────
 const fmtCrShort = (v) => {
@@ -319,19 +321,42 @@ async function fetchLatestCashDate() {
   return rows?.[0]?.date || null;
 }
 
-async function refreshModuleData() {
+async function refreshPrimaryData() {
+  // Phase 1: cash flows only — small, fast, needed for Overview first paint
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
     const twoYearsAgo = new Date();
     twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
     const dateFilter = `gte.${twoYearsAgo.toISOString().slice(0, 10)}`;
 
-    const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
-      sbFetchAll("fii_dii_activity", {
-        select: "date,fii_buy,fii_sell,fii_net,dii_buy,dii_sell,dii_net",
-        order: "date.asc",
-        date: dateFilter,
-      }),
+    const cash = await sbFetchAll("fii_dii_activity", {
+      select: "date,fii_buy,fii_sell,fii_net,dii_buy,dii_sell,dii_net",
+      order: "date.asc",
+      date: dateFilter,
+    });
+    const data = {
+      cashData: [...cash].sort((a, b) => new Date(a.date) - new Date(b.date)),
+    };
+    // Merge into existing cache preserving any already-loaded secondary data
+    const existing = fiidiiMemoryCache || {};
+    const merged = { ...existing, ...data };
+    fiidiiMemoryCache = merged;
+    fiidiiMemoryCacheTs = Date.now();
+    try { window.localStorage.setItem(MODULE_CACHE_KEY, JSON.stringify({ data: merged, ts: fiidiiMemoryCacheTs })); } catch {}
+    return merged;
+  })().finally(() => { fiidiiInflightPromise = null; });
+  return fiidiiInflightPromise;
+}
+
+async function refreshSecondaryData() {
+  // Phase 2: deriv + sector — larger, loaded after Overview is visible
+  if (fiidiiSecondaryInflightPromise) return fiidiiSecondaryInflightPromise;
+  fiidiiSecondaryInflightPromise = (async () => {
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1); // 1Y is enough for deriv/sector
+    const dateFilter = `gte.${oneYearAgo.toISOString().slice(0, 10)}`;
+
+    const [derivResult, sectorResult] = await Promise.allSettled([
       sbFetchAll("fii_dii_fo", {
         select: "date,client_type,index_fut_long,index_fut_short,index_call_long,index_call_short,index_put_long,index_put_short",
         order: "date.asc",
@@ -340,41 +365,50 @@ async function refreshModuleData() {
       sbFetchAll("fii_sector_flows", {
         select: "date,sector,net_investment",
         order: "date.desc",
-        date: dateFilter,  // limit sector data to same 2-year window
+        date: dateFilter,
       }),
     ]);
-    if (cashResult.status !== "fulfilled") throw cashResult.reason;
-    if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", derivResult.reason);
-    if (sectorResult.status === "rejected") console.warn("[FIIDII] Sector flow data unavailable; loading without sector tab data.", sectorResult.reason);
-    const cash = cashResult.value || [];
+    if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable.", derivResult.reason);
+    if (sectorResult.status === "rejected") console.warn("[FIIDII] Sector data unavailable.", sectorResult.reason);
+
     const derivRaw = derivResult.status === "fulfilled" ? derivResult.value || [] : [];
-    const sector = sectorResult.status === "fulfilled" ? sectorResult.value || [] : [];
-    const data = {
-      cashData: [...cash].sort((a, b) => new Date(a.date) - new Date(b.date)),
-      derivData: pivotDerivData(derivRaw),
-      sectorData: sector,
-    };
-    writeModuleCache(data);
-    return data;
-  })().finally(() => { fiidiiInflightPromise = null; });
-  return fiidiiInflightPromise;
+    const sector   = sectorResult.status === "fulfilled" ? sectorResult.value || [] : [];
+
+    const secondary = { derivData: pivotDerivData(derivRaw), sectorData: sector };
+    // Merge with existing primary data in cache
+    const existing = fiidiiMemoryCache || {};
+    const merged = { ...existing, ...secondary };
+    fiidiiMemoryCache = merged;
+    fiidiiMemoryCacheTs = Date.now();
+    try { window.localStorage.setItem(MODULE_CACHE_KEY, JSON.stringify({ data: merged, ts: fiidiiMemoryCacheTs })); } catch {}
+    return merged;
+  })().finally(() => { fiidiiSecondaryInflightPromise = null; });
+  return fiidiiSecondaryInflightPromise;
+}
+
+// Legacy alias used by prefetch export
+async function refreshModuleData() {
+  await refreshPrimaryData();
+  return refreshSecondaryData();
 }
 
 async function fetchModuleData({ preferCache = true } = {}) {
   const cached = readModuleCache();
   if (preferCache && cached.data && !cached.stale) {
+    // Check if new cash data available in background
     fetchLatestCashDate()
       .then(remoteLatest => {
-        if (remoteLatest && remoteLatest > latestCashDate(cached.data)) refreshModuleData().catch(() => null);
+        if (remoteLatest && remoteLatest > latestCashDate(cached.data)) refreshPrimaryData().catch(() => null);
       })
       .catch(() => null);
     return cached.data;
   }
   if (preferCache && cached.data && cached.stale) {
-    refreshModuleData().catch(() => null);
+    refreshPrimaryData().catch(() => null);
     return cached.data;
   }
-  return refreshModuleData();
+  // No cache — fetch primary (cash) only; secondary loads after component mounts
+  return refreshPrimaryData();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -814,6 +848,14 @@ const ViewToggle = ({ options, value, onChange, T, dataSpanYears }) => (
   </div>
 );
 
+// ── Inject shimmer keyframes once at module load time (not inside render) ──
+if (typeof document !== "undefined" && !document.getElementById("fiidii-shimmer-css")) {
+  const s = document.createElement("style");
+  s.id = "fiidii-shimmer-css";
+  s.textContent = "@keyframes fiidii-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}";
+  document.head.appendChild(s);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -827,7 +869,9 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   const [sectorData,      setSectorData]      = useState(() => initialCache.data?.sectorData || []);
   const [loading,         setLoading]         = useState(() => !initialCache.data);
   const [error,           setError]           = useState(null);
-  const [isMobile,        setIsMobile]        = useState(() => window.innerWidth < 768);
+    const [isMobile, setIsMobile] = useState(
+        () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+    );
   const [selectedSector,  setSelectedSector]  = useState("__ALL__");
   const [fullscreen,      setFullscreen]      = useState(false);
   const [selectedSectors, setSelectedSectors] = useState([]);
@@ -839,12 +883,12 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   // Table frequency toggles
   const [cashFreq,        setCashFreq]        = useState("Daily");
 
-  useEffect(() => {
-    let t;
-    const h = () => { clearTimeout(t); t = setTimeout(() => setIsMobile(window.innerWidth < 768), 150); };
-    window.addEventListener("resize", h, { passive: true });
-    return () => { window.removeEventListener("resize", h); clearTimeout(t); };
-  }, []);
+    useEffect(() => {
+        const mql = window.matchMedia("(max-width: 767px)");
+        const h = (e) => setIsMobile(e.matches);
+        mql.addEventListener("change", h);
+        return () => mql.removeEventListener("change", h);
+    }, []);
 
   // NOTE: Google Fonts (IBM Plex Mono + Manrope) must be loaded in index.html <head>
   // via a <link rel="stylesheet"> tag — NOT injected here. Runtime injection blocks
@@ -852,6 +896,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
 
   useEffect(() => {
     const cached = initialCache;
+    // If we have any cached data, use it immediately (no loading state shown)
     if (cached.data) {
       setCashData(cached.data.cashData || []);
       setDerivData(cached.data.derivData || []);
@@ -860,19 +905,22 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     }
 
     let cancelled = false;
+
+    // Phase 1: Load cash data — fast, unblocks Overview tab render
     (async () => {
       try {
         if (!cached.data) setLoading(true);
         const data = await fetchModuleData({ preferCache: !cached.data });
         if (cancelled) return;
         setCashData(data.cashData || []);
-        setDerivData(data.derivData || []);
-        setSectorData(data.sectorData || []);
+        // If cache had deriv/sector already, keep them
+        if (data.derivData)  setDerivData(data.derivData);
+        if (data.sectorData) setSectorData(data.sectorData);
         setError(null);
       } catch (e) {
         if (!cancelled) {
           if (cached.data) {
-            console.warn("[FIIDII] Refresh failed; keeping cached module data.", e);
+            console.warn("[FIIDII] Primary refresh failed; keeping cached data.", e);
             setError(null);
           } else {
             setError(e.message);
@@ -880,6 +928,27 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         }
       } finally {
         if (!cancelled) setLoading(false);
+      }
+
+      // Phase 2: Load deriv + sector after Overview has rendered (yield to paint first)
+      if (cancelled) return;
+      const loadSecondary = () => {
+        if (cancelled) return;
+        refreshSecondaryData()
+          .then(data => {
+            if (cancelled) return;
+            startTransition(() => {
+              if (data.derivData)  setDerivData(data.derivData);
+              if (data.sectorData) setSectorData(data.sectorData);
+            });
+          })
+          .catch(e => console.warn("[FIIDII] Secondary data load failed.", e));
+      };
+      // Defer secondary fetch until browser is idle / after paint
+      if (typeof requestIdleCallback !== "undefined") {
+        requestIdleCallback(loadSecondary, { timeout: 2000 });
+      } else {
+        setTimeout(loadSecondary, 500);
       }
     })();
 
@@ -914,46 +983,28 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return { latest, fii1, dii1, fii5, dii5, fii20, dii20, z, daily: null, rolling: null, participation, absorption, sellStreak, totalInst1: fii1 + dii1 };
   }, [cashData]);
 
-  // ── CASH CHART MEMO (heavy arrays — deferred, only needed when chart renders) ─
-  // Building daily (n objects) and rolling (O(n) summing) is the biggest TBT culprit.
-  // We defer this into a separate state updated after the first paint via useEffect.
+  // ── CASH CHART MEMO (deferred — built after paint via setTimeout) ──────────
   const [cashChartArrays, setCashChartArrays] = useState({ daily: [], rolling: [] });
   useEffect(() => {
     if (!cashData.length) return;
-    // Yield to browser paint first, then do the heavy work
-    const id = requestIdleCallback
-      ? requestIdleCallback(() => {
-          const S = (arr, k) => sum(arr.map(d => +d[k] || 0));
-          const daily = cashData.map(d => ({
-            date: d.date, label: fmtDateShort(d.date),
-            fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
-          }));
-          // Rolling 20D sum — O(n) with sliding window instead of O(n²) slices
-          let fiiAcc = 0, diiAcc = 0;
-          const rolling = cashData.map((d, i) => {
-            fiiAcc += +d.fii_net || 0;
-            diiAcc += +d.dii_net || 0;
-            if (i >= 20) { fiiAcc -= +cashData[i - 20].fii_net || 0; diiAcc -= +cashData[i - 20].dii_net || 0; }
-            return { date: d.date, label: fmtDateShort(d.date), fiiRoll: fiiAcc, diiRoll: diiAcc };
-          });
-          startTransition(() => setCashChartArrays({ daily, rolling }));
-        }, { timeout: 300 })
-      : setTimeout(() => {
-          const S = (arr, k) => sum(arr.map(d => +d[k] || 0));
-          const daily = cashData.map(d => ({
-            date: d.date, label: fmtDateShort(d.date),
-            fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
-          }));
-          let fiiAcc = 0, diiAcc = 0;
-          const rolling = cashData.map((d, i) => {
-            fiiAcc += +d.fii_net || 0;
-            diiAcc += +d.dii_net || 0;
-            if (i >= 20) { fiiAcc -= +cashData[i - 20].fii_net || 0; diiAcc -= +cashData[i - 20].dii_net || 0; }
-            return { date: d.date, label: fmtDateShort(d.date), fiiRoll: fiiAcc, diiRoll: diiAcc };
-          });
-          startTransition(() => setCashChartArrays({ daily, rolling }));
-        }, 0);
-    return () => { requestIdleCallback ? cancelIdleCallback(id) : clearTimeout(id); };
+    // Use setTimeout(0) instead of requestIdleCallback — rIC can be delayed indefinitely
+    // on Lighthouse's throttled CPU. setTimeout(0) runs reliably after the current paint.
+    const id = setTimeout(() => {
+      const daily = cashData.map(d => ({
+        date: d.date, label: fmtDateShort(d.date),
+        fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
+      }));
+      // O(n) sliding window rolling sum — not O(n²)
+      let fiiAcc = 0, diiAcc = 0;
+      const rolling = cashData.map((d, i) => {
+        fiiAcc += +d.fii_net || 0;
+        diiAcc += +d.dii_net || 0;
+        if (i >= 20) { fiiAcc -= +cashData[i - 20].fii_net || 0; diiAcc -= +cashData[i - 20].dii_net || 0; }
+        return { date: d.date, label: fmtDateShort(d.date), fiiRoll: fiiAcc, diiRoll: diiAcc };
+      });
+      startTransition(() => setCashChartArrays({ daily, rolling }));
+    }, 0);
+    return () => clearTimeout(id);
   }, [cashData]);
 
   // ── DERIV MEMO ─────────────────────────────────────────────────────────────
@@ -1163,14 +1214,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
       ...style,
     }} />
   );
-
-  // Inject shimmer keyframes once
-  if (typeof document !== "undefined" && !document.getElementById("fiidii-shimmer-css")) {
-    const s = document.createElement("style");
-    s.id = "fiidii-shimmer-css";
-    s.textContent = "@keyframes fiidii-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}";
-    document.head.appendChild(s);
-  }
 
   const SkeletonCard = ({ h = 80 }) => (
     <div style={{ ...card, padding: "16px 18px", minHeight: h }}>
