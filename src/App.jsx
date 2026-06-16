@@ -1125,6 +1125,33 @@ a:hover { text-decoration: underline; }
   .top-nav-mobile-drawer.open { display: flex; }
 }
 
+/* Mobile floating back button */
+@keyframes mobileBackFadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@media (max-width: 768px) {
+  .mobile-back-btn {
+    display: flex;
+    position: fixed;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    left: 16px;
+    z-index: 7000;
+    align-items: center;
+    justify-content: center;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: ${D ? 'rgba(12,26,54,0.94)' : 'rgba(255,255,255,0.94)'};
+    border: 1px solid ${D ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'};
+    box-shadow: 0 4px 18px rgba(0,0,0,0.22);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+    color: ${T.text};
+    transition: opacity .15s, transform .12s;
+    animation: mobileBackFadeIn .18s ease;
+  }
+  .mobile-back-btn:active { transform: scale(0.92); opacity: 0.8; }
+}
+@media (min-width: 769px) { .mobile-back-btn { display: none !important; } }
+
 @keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
 
 .top-nav-mobile-section-label {
@@ -26874,6 +26901,7 @@ export default function App() {
     const [modal, setModal] = useState(null);
     const [checking, setChecking] = useState(true);
     const [railCollapsed, setRailCollapsed] = useState(true);   //  changed to true
+    const [navDepth, setNavDepth] = useState(0); // tracks how many pushStates deep we are (for mobile back button)
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -27433,6 +27461,7 @@ export default function App() {
             const parsed = parseAppRoute(window.location.pathname);
             restoringHistoryRef.current = true;
             setRoute(parsed);
+            setNavDepth(d => Math.max(0, d - 1));
             // Clear stale ticker state when back-navigating away from a ticker route
             if (parsed.kind === "app") {
                 setTopbarSearch("");
@@ -27456,6 +27485,7 @@ export default function App() {
             return;
         }
         window.history.pushState(null, "", nextPath);
+        setNavDepth(d => d + 1);
         setRoute(parseAppRoute(nextPath));
     }, [route.kind, productTab, page, financialSubPage, technicalSubPage, legalInitialTab]);
 
@@ -28133,6 +28163,20 @@ export default function App() {
                     onLogin={(res) => { handleLogin(res); setShowLoginModal(false); }}
                     theme={theme}
                 />
+            )}
+
+            {/* Mobile back button — visible only on small screens when there's history to go back to */}
+            {navDepth > 0 && createPortal(
+                <button
+                    className="mobile-back-btn"
+                    aria-label="Go back"
+                    onClick={() => window.history.back()}
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                </button>,
+                document.body
             )}
         </>
     );
