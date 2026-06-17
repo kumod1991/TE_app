@@ -396,7 +396,7 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
 const announcementsCache = new Map();
 const ANNOUNCEMENTS_LS_KEY = "te_announcements_cache_v1";
 const ANNOUNCEMENTS_LS_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 
 function getCacheKey(activeFilter, debouncedSearch) {
     return JSON.stringify({ activeFilter, debouncedSearch });

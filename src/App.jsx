@@ -6203,37 +6203,103 @@ function ComingSoonModule({ icon, title, desc, features, pills, T }) {
 let _cachedTickerIndex = null; // loaded from DB at runtime
 let _cachedBseTickerIndex = null; // BSE ticker index loaded from bse_tickers
 
+// ── Ticker index localStorage persistence ─────────────────────────────────────
+// Avoids a network round-trip on every page load — autocomplete is instant
+// from the first keystroke once the cache is seeded.
+const _LS_TICKER_INDEX_KEY = "te_ticker_index_v1";
+const _LS_TICKER_INDEX_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h
+
+function _seedTickerIndexFromLS() {
+    try {
+        const s = localStorage.getItem(_LS_TICKER_INDEX_KEY);
+        if (!s) return;
+        const saved = JSON.parse(s);
+        if (!saved || !saved.loadedAt || (Date.now() - saved.loadedAt) > _LS_TICKER_INDEX_MAX_AGE_MS) return;
+        if (!Array.isArray(saved.rows) || saved.rows.length === 0) return;
+        _cachedTickerIndex = saved.rows;
+    } catch { /* ignore */ }
+}
+function _writeTickerIndexToLS(rows) {
+    try { localStorage.setItem(_LS_TICKER_INDEX_KEY, JSON.stringify({ rows, loadedAt: Date.now() })); } catch { }
+}
+_seedTickerIndexFromLS(); // run immediately so in-memory cache is hot before any fetch
+
 // Paginated fetch for the ticker index — Supabase caps each response at 1000 rows,
-// so a single limit=5000 request silently returns only 1000. We page through all rows.
+// so a single limit=5000 request silently returns only 1000. We use Prefer:count=exact
+// to fetch the total count on the first request, then fire all remaining pages in parallel.
+//
+// FIX: was ordering by nse_code.asc.nullslast which caused HTTP 500 errors because
+// nse_code is nullable and lacks an index suitable for that sort on large result sets.
+// ticker is the table PK (always indexed, never null) — safe and fast.
 async function fetchAllTickerPages() {
-    const PAGE = 500;
-    const base = `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,name,nse_code,bse_code&order=nse_code.asc.nullslast`;
-    const headers = { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` };
-    let all = [];
-    for (let page = 0; page < 20; page++) {           // cap at 20 pages = 20 000 rows, more than enough
-        const r = await fetch(`${base}&limit=${PAGE}&offset=${page * PAGE}`, { headers });
-        if (!r.ok) break;
-        const rows = await r.json();
-        if (!Array.isArray(rows) || rows.length === 0) break;
-        all = all.concat(rows);
-        if (rows.length < PAGE) break;                 // last page
-    }
-    return all;
+    const PAGE = 1000; // maximise rows per request to minimise round-trips
+    const base = `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,name,nse_code,bse_code&order=ticker.asc`;
+    const headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Prefer": "count=exact",
+    };
+    // First page + total count in one request
+    const firstRes = await fetch(`${base}&limit=${PAGE}&offset=0`, { headers });
+    if (!firstRes.ok) throw new Error(`Ticker index HTTP ${firstRes.status}`);
+    const totalCount = parseInt(firstRes.headers.get("content-range")?.split("/")[1] || "0", 10);
+    const firstPage = await firstRes.json();
+    if (!Array.isArray(firstPage) || firstPage.length === 0) return [];
+    if (firstPage.length >= totalCount || firstPage.length < PAGE) return firstPage; // single page
+
+    // Remaining pages — all in parallel
+    const offsets = [];
+    for (let offset = PAGE; offset < totalCount; offset += PAGE) offsets.push(offset);
+    const restPages = await Promise.all(
+        offsets.map(offset =>
+            fetch(`${base}&limit=${PAGE}&offset=${offset}`, { headers })
+                .then(r => r.ok ? r.json() : [])
+        )
+    );
+    return [firstPage, ...restPages].flat().filter(Boolean);
+}
+
+// Deduplicating module-level promise — prevents multiple parallel fetches
+// (IIFE at bottom + FinancialAnalyticsModule mount both call this)
+let _tickerIndexPromise = null;
+function _ensureTickerIndex() {
+    if (_cachedTickerIndex && _cachedTickerIndex.length > 0) return Promise.resolve(_cachedTickerIndex);
+    if (_tickerIndexPromise) return _tickerIndexPromise;
+    _tickerIndexPromise = (async () => {
+        // Retry up to 2 times with exponential backoff
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                if (attempt > 0) await new Promise(r => setTimeout(r, 800 * attempt));
+                const rows = await fetchAllTickerPages();
+                if (!rows.length) return [];
+                _cachedTickerIndex = rows.map(row => ({
+                    sym: (row.ticker || "").toUpperCase(),
+                    name: (row.name || "").toLowerCase(),
+                    nse_code: (row.nse_code || "").trim().toUpperCase() || null,
+                    bse_code: (row.bse_code || "").trim().toUpperCase() || null,
+                }));
+                _writeTickerIndexToLS(_cachedTickerIndex); // persist for next session
+                return _cachedTickerIndex;
+            } catch (e) {
+                if (attempt === 2) return _cachedTickerIndex || [];
+            }
+        }
+        return [];
+    })().finally(() => { _tickerIndexPromise = null; });
+    return _tickerIndexPromise;
 }
 
 // Eagerly pre-load the ticker index so topbar autocomplete works immediately
 // without waiting for the Fundamentals tab to open.
-(async () => {
-    try {
-        const rows = await fetchAllTickerPages();
-        if (!rows.length) return;
-        _cachedTickerIndex = rows.map(row => ({
-            sym: (row.ticker || "").toUpperCase(),
-            name: (row.name || "").toLowerCase(),
-            nse_code: (row.nse_code || "").trim().toUpperCase() || null,
-            bse_code: (row.bse_code || "").trim().toUpperCase() || null,
-        }));
-    } catch { /* silently ignore — autocomplete falls back to per-keystroke fetch */ }
+// Delayed to idle so it doesn't race with critical first-paint fetches.
+(function _scheduleTickerIndexPreload() {
+    const run = () => _ensureTickerIndex().catch(() => null);
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(run, { timeout: 3000 });
+    } else {
+        setTimeout(run, 1500);
+    }
 })();
 
 // Format numbers as  Cr
@@ -11758,9 +11824,9 @@ let _screenerCache = null;
 let _screenerCacheTime = null;
 let _screenerCacheLoadedAt = null;
 let _screenerPrefetchPromise = null;
-const _LS_SCREENER_KEY = "te_screener_cache_v1";
-const _SCREENER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min memory fresh window
-const _LS_SCREENER_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h stale-but-usable window
+const _LS_SCREENER_KEY = "te_screener_cache_v2"; // bumped v1→v2: clears old cache shape
+const _SCREENER_CACHE_TTL_MS = 60 * 60 * 1000; // 60 min memory fresh window (was 30 min)
+const _LS_SCREENER_MAX_AGE_MS = 48 * 60 * 60 * 1000; // 48 h stale-but-usable window (was 24 h)
 
 //  Nifty 500 constituent tickers cache 
 let _nifty500Cache = null; // Set<string> of tickers, null = not loaded yet
@@ -11806,15 +11872,17 @@ function _isScreenerCacheFresh() {
 
 async function _fetchScreenerRows() {
     const allowedSet = await ensureAllowedTickerSet();
-    const PAGE = 500;
+    const PAGE = 250; // Reduced page size to prevent timeouts
     const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "count=exact" };
     const base = `${SUPABASE_URL}/rest/v1/stock_ratios?select=*&order=market_cap_cr.desc.nullslast&limit=${PAGE}`;
     const firstRes = await fetch(`${base}&offset=0`, { headers });
     if (!firstRes.ok) throw new Error(`HTTP ${firstRes.status}`);
-    const totalCount = parseInt(firstRes.headers.get("content-range")?.split("/")[1] || "0");
+    const totalCount = parseInt(firstRes.headers.get("content-range")?.split("/")[1] || "0", 10);
     const firstPage = await firstRes.json();
+    if (!Array.isArray(firstPage)) throw new Error("Invalid screener response");
     const offsets = [];
     for (let offset = PAGE; offset < totalCount; offset += PAGE) offsets.push(offset);
+    // Fire all remaining pages in parallel
     const restPages = await Promise.all(
         offsets.map(offset =>
             fetch(`${base}&offset=${offset}`, { headers }).then(r => r.ok ? r.json() : [])
@@ -11824,13 +11892,11 @@ async function _fetchScreenerRows() {
 
     let enriched = all;
     try {
-        const cfHeaders = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-        const cfBase = `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,nse_code&limit=2000`;
-        const cfRes = await fetch(cfBase, { headers: cfHeaders });
-        if (cfRes.ok) {
-            const cfRows = await cfRes.json();
+        // Reuse the already-in-flight ticker index fetch instead of a new company_financials call
+        const cfRows = await _ensureTickerIndex().catch(() => []);
+        if (cfRows && cfRows.length > 0) {
             const cfMap = new Map();
-            for (const r of cfRows) if (r.ticker) cfMap.set(r.ticker.trim().toUpperCase(), r);
+            for (const r of cfRows) if (r.sym) cfMap.set(r.sym, r);
             enriched = all.filter(row => {
                 const t = (row.ticker || "").trim().toUpperCase();
                 if (/^\d+$/.test(t)) return false;
@@ -12296,6 +12362,8 @@ async function _loadNifty500() {
 function _preloadScreenerCache() {
     if (_screenerCache && _screenerCache.length > 0 && _isScreenerCacheFresh()) return Promise.resolve(_screenerCache);
     if (_screenerPrefetchPromise) return _screenerPrefetchPromise;
+    // Kick off ticker index in parallel with screener rows so both are ready together
+    _ensureTickerIndex().catch(() => null);
     _screenerPrefetchPromise = _fetchScreenerRows()
         .catch(() => _screenerCache || [])
         .finally(() => { _screenerPrefetchPromise = null; });
@@ -12303,17 +12371,26 @@ function _preloadScreenerCache() {
 }
 
 function _warmFundamentalsCaches() {
-    const warm = () => {
+    const warmCritical = () => {
         preloadAllowedTickerSet();
-        _preloadScreenerCache();
-        prefetchFiiDiiData();
-        prefetchOwnershipData();
-        prefetchAnnouncementsData();
+        _preloadScreenerCache(); // also kicks off _ensureTickerIndex internally
+        // FII/DII and Ownership deferred to idle — screener gets bandwidth first
+        const deferSecondary = () => {
+            prefetchFiiDiiData();
+            prefetchOwnershipData();
+            // Announcements NOT pre-warmed — loaded on demand when tab is opened
+            // (its query is prone to 500s under concurrent load)
+        };
+        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+            window.requestIdleCallback(deferSecondary, { timeout: 5000 });
+        } else {
+            setTimeout(deferSecondary, 3000);
+        }
     };
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-        window.requestIdleCallback(warm, { timeout: 1500 });
+        window.requestIdleCallback(warmCritical, { timeout: 1500 });
     } else {
-        setTimeout(warm, 250);
+        setTimeout(warmCritical, 250);
     }
 }
 
@@ -12692,7 +12769,9 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     const [colSearch, setColSearch] = useState("");
     // Live price overlay  incremented whenever _sessionPriceCache gains new entries
     const [livePriceTick, setLivePriceTick] = useState(0);
-    const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
+    const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(true);
+    // appliedFilters: null = screen never run yet (show empty state), array = committed filters driving results
+    const [appliedFilters, setAppliedFilters] = useState(null);
 
     const saveScreens = next => { setScreens(next); try { localStorage.setItem("screener_screens", JSON.stringify(next.filter(sc => sc.id !== TECHNO_ID))); } catch { } };
     const saveVisCols = next => { setVisibleCols(next); try { localStorage.setItem("screener_visible_cols", JSON.stringify(next)); } catch { } };
@@ -12705,6 +12784,8 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             const sc = { id: TECHNO_ID, name: "TechnoFunda", filters: [] };
             setScreens(prev => [...prev.filter(s => s.id !== TECHNO_ID), sc]);
             setActiveScreenId(TECHNO_ID);
+            // Auto-apply for TechnoFunda since tickers come from an external scan
+            setAppliedFilters([]);
         }
         if (!tickerFilter && prevTF.current) {
             prevTF.current = null;
@@ -12716,22 +12797,36 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     const activeScreen = screens.find(s => s.id === activeScreenId) || screens[0];
     const filters = activeScreen?.filters || [];
 
-    // Data load
+    // Reset applied state whenever user switches screen tab
+    useEffect(() => {
+        setAppliedFilters(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeScreenId]);
+
+    // Data load — stale-while-revalidate strategy:
+    // 1. If we have anything in memory (even stale), serve it immediately (no spinner).
+    // 2. If stale, kick off a background refresh and swap rows in silently.
+    // 3. Only show the spinner if we have absolutely nothing cached anywhere.
     const loadRatios = async (force) => {
         const allowedSet = await ensureAllowedTickerSet();
+        // Serve cached data immediately regardless of freshness
         if (!force && _screenerCache && _screenerCache.length > 0) {
             setLoadErr("");
             setAllRows(filterRowsByAllowedTickers(_screenerCache, "ticker", allowedSet));
             setLastRefresh(_screenerCacheTime);
             setLoading(false);
-            if (!_isScreenerCacheFresh()) _preloadScreenerCache().then(rows => {
-                if (Array.isArray(rows) && rows.length > 0) {
-                    setAllRows(filterRowsByAllowedTickers(rows, "ticker", allowedSet));
-                    setLastRefresh(_screenerCacheTime);
-                }
-            }).catch(() => { });
+            // Background revalidation — silent swap when done
+            if (!_isScreenerCacheFresh()) {
+                _preloadScreenerCache().then(rows => {
+                    if (Array.isArray(rows) && rows.length > 0) {
+                        setAllRows(filterRowsByAllowedTickers(rows, "ticker", allowedSet));
+                        setLastRefresh(_screenerCacheTime);
+                    }
+                }).catch(() => { });
+            }
             return;
         }
+        // Nothing cached at all — show spinner while fetching
         setLoading(true); setLoadErr("");
         try {
             const rows = await _preloadScreenerCache();
@@ -12747,12 +12842,13 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         _loadNifty500().then(set => setNifty500Set(set));
     }, []);
 
-    // Filter + sort + dedup
+    // Filter + sort + dedup — only runs after user clicks "Run Screen"
     const filtered = useMemo(() => {
+        if (appliedFilters === null) return [];
         let base = allRows;
         if (universe === "nifty500" && nifty500Set?.size > 0) base = base.filter(r => nifty500Set.has(r.ticker));
         if (tickerFilter?.size > 0) base = base.filter(r => tickerFilter.has(r.ticker));
-        const f = applyFilters(base, filters.filter(f => f.val !== "" && f.val != null));
+        const f = applyFilters(base, appliedFilters.filter(f => f.val !== "" && f.val != null));
         const sorted = [...f].sort((a, b) => {
             const av = a[sortCol], bv = b[sortCol];
             if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1;
@@ -12769,7 +12865,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1;
             return sortAsc ? Number(av) - Number(bv) : Number(bv) - Number(av);
         });
-    }, [allRows, filters, sortCol, sortAsc, universe, nifty500Set, tickerFilter]);
+    }, [allRows, appliedFilters, sortCol, sortAsc, universe, nifty500Set, tickerFilter]);
 
     const activeCols = SCREENER_COLS.filter(c => visibleCols.includes(c.key));
     const mobilePriorityKeys = ["current_price", "market_cap_cr", "pe", "pb", "roe", "roce", "pat_margin", "sales_growth", "debt_eq", "div_yld"];
@@ -12777,7 +12873,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         ? activeCols
         : mobilePriorityKeys.map(key => SCREENER_COLS.find(col => col.key === key)).filter(Boolean);
     const prevFilterKey = useRef("");
-    const filterKey = JSON.stringify(filters) + sortCol + sortAsc;
+    const filterKey = JSON.stringify(appliedFilters) + sortCol + sortAsc;
     if (filterKey !== prevFilterKey.current) { prevFilterKey.current = filterKey; if (currentPage !== 1) setCurrentPage(1); }
     const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
     const safePage = Math.min(currentPage, totalPages);
@@ -12815,7 +12911,6 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     // Mutations
     const updateFilter = (idx, patch) => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: filters.map((f, i) => i === idx ? { ...f, ...patch } : f) } : s));
-        if (isScreenerMobile) setMobileFiltersExpanded(false);
     };
     const addFilter = () => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: [...filters, makeEmptyFilter()] } : s));
@@ -12823,12 +12918,16 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     };
     const removeFilter = idx => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: filters.filter((_, i) => i !== idx) } : s));
-        if (isScreenerMobile) setMobileFiltersExpanded(false);
     };
     const clearFilters = () => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: [] } : s));
-        if (isScreenerMobile) setMobileFiltersExpanded(false);
     };
+    const runScreen = () => {
+        setAppliedFilters([...filters]);
+        setCurrentPage(1);
+    };
+    // True when pending filters differ from what was last applied
+    const filtersChanged = appliedFilters === null || JSON.stringify(filters) !== JSON.stringify(appliedFilters);
     const addScreen = () => { const id = "screen_" + Date.now(); saveScreens([...screens, { id, name: "New Screen", filters: [makeEmptyFilter()] }]); setActiveScreenId(id); };
     const deleteScreen = id => { if (screens.length <= 1) return; const next = screens.filter(s => s.id !== id); saveScreens(next); if (activeScreenId === id) setActiveScreenId(next[0].id); };
     const renameScreen = (id, name) => saveScreens(screens.map(s => s.id === id ? { ...s, name } : s));
@@ -12964,7 +13063,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                     flexWrap: isScreenerMobile ? "wrap" : "nowrap"
                 }}>
 
-                    {!loading && allRows.length > 0 && (
+                    {!loading && allRows.length > 0 && appliedFilters !== null && !filtersChanged && (
                         <span style={{
                             fontFamily: DS.mono, fontSize: 12,
                             color: DS.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
@@ -13181,6 +13280,66 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                 Clear all
                             </button>
                         )}
+
+                        {/* Run Screen CTA */}
+                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                            {appliedFilters !== null && !filtersChanged && (
+                                <span style={{
+                                    fontFamily: DS.mono, fontSize: 12,
+                                    color: DS.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap"
+                                }}>
+                                    <strong style={{ color: DS.text, fontWeight: 600 }}>
+                                        {filtered.length.toLocaleString("en-IN")}
+                                    </strong>{" results"}
+                                </span>
+                            )}
+                            {filtersChanged && appliedFilters !== null && (
+                                <span style={{
+                                    fontSize: 11, color: DS.textMuted, fontFamily: DS.sans,
+                                    fontStyle: "italic", whiteSpace: "nowrap"
+                                }}>
+                                    Filters changed
+                                </span>
+                            )}
+                            <button
+                                onClick={runScreen}
+                                disabled={loading}
+                                style={{
+                                    display: "inline-flex", alignItems: "center", gap: 7,
+                                    padding: "7px 16px",
+                                    background: filtersChanged
+                                        ? DS.accent
+                                        : (DS.isDark ? "rgba(99,102,241,0.12)" : "rgba(37,99,235,0.07)"),
+                                    border: `1px solid ${filtersChanged ? DS.accent : DS.accent + "44"}`,
+                                    borderRadius: 8,
+                                    color: filtersChanged ? "#fff" : DS.accent,
+                                    cursor: loading ? "not-allowed" : "pointer",
+                                    fontSize: 13, fontWeight: 600,
+                                    fontFamily: DS.sans,
+                                    transition: "all .15s",
+                                    whiteSpace: "nowrap",
+                                    opacity: loading ? .5 : 1,
+                                    boxShadow: filtersChanged ? `0 2px 12px ${DS.accent}33` : "none",
+                                }}
+                                onMouseEnter={e => {
+                                    if (!loading && filtersChanged) {
+                                        e.currentTarget.style.background = DS.accentHover || DS.accent;
+                                        e.currentTarget.style.boxShadow = `0 4px 18px ${DS.accent}44`;
+                                    }
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = filtersChanged
+                                        ? DS.accent
+                                        : (DS.isDark ? "rgba(99,102,241,0.12)" : "rgba(37,99,235,0.07)");
+                                    e.currentTarget.style.boxShadow = filtersChanged ? `0 2px 12px ${DS.accent}33` : "none";
+                                }}
+                            >
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polygon points="5,3 13,8 5,13" fill="currentColor" stroke="none" />
+                                </svg>
+                                Run Screen
+                            </button>
+                        </div>
                     </>
                 )}
             </div>
@@ -13190,6 +13349,58 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                 flex: 1, overflow: "hidden", background: DS.bg,
                 minHeight: 0, display: "flex", flexDirection: "column"
             }}>
+
+                {/* Not yet run — premium empty state */}
+                {!loading && !loadErr && appliedFilters === null && (
+                    <div style={{
+                        display: "flex", flexDirection: "column", alignItems: "center",
+                        justifyContent: "center", height: "100%", gap: 20,
+                        color: DS.textSub, userSelect: "none",
+                    }}>
+                        <div style={{
+                            width: 52, height: 52, borderRadius: 16,
+                            background: DS.isDark ? "rgba(99,102,241,0.08)" : "rgba(37,99,235,0.06)",
+                            border: `1px solid ${DS.accent}22`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={DS.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.8">
+                                <path d="M4 6h16M7 12h10M10 18h4" />
+                            </svg>
+                        </div>
+                        <div style={{ textAlign: "center", maxWidth: 320 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: DS.text, marginBottom: 6 }}>
+                                Configure your filters, then run
+                            </div>
+                            <div style={{ fontSize: 13, color: DS.textMuted, lineHeight: 1.6 }}>
+                                Set filter conditions above and click{" "}
+                                <span style={{ color: DS.accent, fontWeight: 600 }}>Run Screen</span>{" "}
+                                to see matching stocks.
+                            </div>
+                        </div>
+                        <button
+                            onClick={runScreen}
+                            disabled={loading}
+                            style={{
+                                display: "inline-flex", alignItems: "center", gap: 8,
+                                padding: "9px 22px",
+                                background: DS.accent,
+                                border: "none", borderRadius: 9,
+                                color: "#fff", cursor: loading ? "not-allowed" : "pointer",
+                                fontSize: 13, fontWeight: 600, fontFamily: DS.sans,
+                                boxShadow: `0 4px 18px ${DS.accent}33`,
+                                transition: "all .15s",
+                                opacity: loading ? .5 : 1,
+                            }}
+                            onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = `0 6px 24px ${DS.accent}55`; e.currentTarget.style.transform = "translateY(-1px)"; } }}
+                            onMouseLeave={e => { e.currentTarget.style.boxShadow = `0 4px 18px ${DS.accent}33`; e.currentTarget.style.transform = ""; }}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="5,3 13,8 5,13" fill="currentColor" stroke="none" />
+                            </svg>
+                            Run Screen
+                        </button>
+                    </div>
+                )}
 
                 {/* Loading */}
                 {loading && allRows.length === 0 && (
@@ -13229,7 +13440,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                 )}
 
                 {/* Empty */}
-                {!loading && !loadErr && filtered.length === 0 && (
+                {!loading && !loadErr && appliedFilters !== null && filtered.length === 0 && (
                     <div style={{
                         display: "flex", flexDirection: "column", alignItems: "center",
                         justifyContent: "center", height: "100%", gap: 8, color: DS.textSub
@@ -13251,262 +13462,173 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
 
                 {/*  TABLE  matches portfolio table-wrap + thead th + td styles  */}
                 {!loading && !loadErr && filtered.length > 0 && (
-                    isScreenerMobile ? (
-                        <div style={{ flex: 1, overflow: "auto", padding: "12px 14px 18px" }}>
-                            <div style={{ display: "grid", gap: 12 }}>
+                    <div style={{
+                        flex: 1, overflow: "auto",
+                        scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
+                    }}>
+                        <table style={{
+                            width: "max-content", minWidth: "100%",
+                            borderCollapse: "collapse", fontFamily: DS.sans
+                        }}>
+                            <thead>
+                                <tr style={{
+                                    position: "sticky", top: 0, zIndex: 10,
+                                    background: DS.tableHead,
+                                    borderBottom: `1px solid ${DS.border}`
+                                }}>
+                                    {/* # */}
+                                    <th style={{
+                                        padding: isScreenerMobile ? "7px 0 7px 10px" : "9px 0 9px 16px",
+                                        textAlign: "left",
+                                        fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase",
+                                        letterSpacing: ".07em", color: DS.textMuted,
+                                        position: "sticky", left: 0, zIndex: 11,
+                                        background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                        width: isScreenerMobile ? 28 : 40, whiteSpace: "nowrap",
+                                    }}>#</th>
+
+                                    {/* Company */}
+                                    <th style={{
+                                        padding: isScreenerMobile ? "7px 10px 7px 8px" : "9px 16px 9px 10px",
+                                        textAlign: "left",
+                                        fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase",
+                                        letterSpacing: ".07em", color: DS.textMuted,
+                                        position: "sticky", left: isScreenerMobile ? 28 : 40, zIndex: 11,
+                                        background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                        minWidth: isScreenerMobile ? 100 : 200, whiteSpace: "nowrap",
+                                    }}>Company</th>
+
+                                    {/* Metrics */}
+                                    {activeCols.map(col => {
+                                        const isSort = sortCol === col.key;
+                                        return (
+                                            <th key={col.key} onClick={() => handleSort(col.key)}
+                                                style={{
+                                                    padding: isScreenerMobile ? "7px 9px" : "9px 13px",
+                                                    textAlign: "right",
+                                                    fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700,
+                                                    textTransform: "uppercase", letterSpacing: ".07em",
+                                                    color: isSort ? DS.accent : DS.textMuted,
+                                                    background: isSort ? DS.accentDim : DS.tableHead,
+                                                    borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
+                                                    whiteSpace: "nowrap", cursor: "pointer",
+                                                    userSelect: "none", transition: "background .1s, color .1s",
+                                                }}
+                                                onMouseEnter={e => { if (!isSort) { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.hover; } }}
+                                                onMouseLeave={e => { if (!isSort) { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = DS.tableHead; } }}>
+                                                {col.label}
+                                                {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "↑" : "↓"}</span>}
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                            </thead>
+                            <tbody>
                                 {pageRows.map((row, ri) => {
                                     const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
                                     const ticker = row.ticker || row.symbol || "";
-                                    const name = row.name || "";
                                     const displayTicker = row.displayTicker || ticker;
-                                    const hue = displayTicker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
-                                    const badgeBg = DS.isDark ? `hsl(${hue},18%,18%)` : `hsl(${hue},28%,90%)`;
-                                    const badgeColor = DS.isDark ? `hsl(${hue},40%,60%)` : `hsl(${hue},35%,32%)`;
+                                    const stickyLeft = isScreenerMobile ? 28 : 40;
+                                    const rowPad = isScreenerMobile
+                                        ? (compactRow ? "4px 0 4px 10px" : "7px 0 7px 10px")
+                                        : (compactRow ? "5px 0 5px 16px" : "9px 0 9px 16px");
+                                    const cellPadV = isScreenerMobile ? (compactRow ? "4px" : "7px") : (compactRow ? "5px" : "9px");
+                                    const cellFs = isScreenerMobile ? 11 : 13;
+
                                     return (
-                                        <div key={ri} style={{
-                                            border: `1px solid ${DS.border}`,
-                                            borderRadius: 18,
-                                            background: DS.card,
-                                            boxShadow: `0 14px 28px ${DS.shadow}`,
-                                            overflow: "hidden",
-                                        }}>
-                                            <div style={{
-                                                padding: "14px 14px 12px",
-                                                background: DS.isDark ? "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0))" : "linear-gradient(180deg, rgba(37,99,235,0.04), rgba(37,99,235,0))",
-                                                borderBottom: `1px solid ${DS.border}`,
+                                        <tr key={ri}
+                                            style={{
+                                                borderTop: `1px solid ${DS.border}`,
+                                                transition: "background .07s", cursor: "default"
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.background = DS.hover;
+                                                e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.hover);
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.background = "";
+                                                e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.isDark ? DS.bg : DS.card);
                                             }}>
-                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-                                                    <div style={{ minWidth: 0 }}>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                                            <span style={{ fontFamily: DS.mono, fontSize: 11, color: DS.textMuted }}>#{rowNum}</span>
-                                                            <span style={{ minWidth: 36, height: 20, padding: "0 6px", borderRadius: 6, background: badgeBg, color: badgeColor, fontFamily: DS.mono, fontSize: 9, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", letterSpacing: ".04em" }}>
-                                                                {displayTicker.slice(0, 6)}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ marginTop: 8, fontSize: 16, fontWeight: 700, color: DS.text, fontFamily: DS.mono, letterSpacing: ".01em", wordBreak: "break-word" }}>
-                                                            {displayTicker}
-                                                        </div>
-                                                        {name && (
-                                                            <div style={{ marginTop: 4, fontSize: 12.5, color: DS.textSub, lineHeight: 1.45 }}>
-                                                                {name}
-                                                            </div>
+
+                                            {/* # */}
+                                            <td data-sticky="1" style={{
+                                                padding: rowPad,
+                                                fontSize: cellFs, color: DS.textMuted,
+                                                fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                position: "sticky", left: 0,
+                                                background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                borderRight: `1px solid ${DS.border}`,
+                                                width: isScreenerMobile ? 28 : 40, textAlign: "left",
+                                            }}>{rowNum}</td>
+
+                                            {/* Company */}
+                                            <td data-sticky="1" style={{
+                                                padding: `${cellPadV} ${isScreenerMobile ? "10px" : "13px"} ${cellPadV} ${isScreenerMobile ? "8px" : "10px"}`,
+                                                position: "sticky", left: stickyLeft,
+                                                background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                borderRight: `1px solid ${DS.border}`,
+                                                minWidth: isScreenerMobile ? 100 : 140,
+                                            }}>
+                                                <div style={{
+                                                    fontSize: cellFs, fontWeight: 600,
+                                                    color: DS.text, whiteSpace: "nowrap",
+                                                    overflow: "hidden", textOverflow: "ellipsis",
+                                                    fontFamily: DS.mono, letterSpacing: ".02em",
+                                                    maxWidth: isScreenerMobile ? 98 : 180
+                                                }}>
+                                                    {displayTicker}
+                                                </div>
+                                            </td>
+
+                                            {/* Metric cells */}
+                                            {activeCols.map(col => {
+                                                const raw = row[col.key];
+                                                let displayRaw = raw;
+                                                let isLivePrice = false;
+                                                if (col.key === "current_price") {
+                                                    const bp = _bestPrice(ticker, raw);
+                                                    if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
+                                                }
+                                                const formatted = col.fmt(displayRaw);
+                                                const color = col.key === "current_price" && isLivePrice
+                                                    ? (DS.isDark ? "#34d399" : "#059669")
+                                                    : cellColor(col, raw);
+                                                const isPending = col.key === "current_price" && isMarketLive()
+                                                    && _isPricePending(ticker) && raw != null;
+                                                return (
+                                                    <td key={col.key} style={{
+                                                        padding: `${cellPadV} ${isScreenerMobile ? "9px" : "13px"}`,
+                                                        textAlign: "right", fontSize: cellFs,
+                                                        fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                        color: formatted === "" ? DS.textMuted : color,
+                                                        whiteSpace: "nowrap", position: "relative",
+                                                    }}>
+                                                        {formatted}
+                                                        {isPending && (
+                                                            <span style={{
+                                                                position: "absolute", top: 4, right: 4,
+                                                                width: 5, height: 5, borderRadius: "50%",
+                                                                background: DS.isDark ? "#fbbf24" : "#d97706",
+                                                                opacity: 0.7
+                                                            }} title="Fetching live price" />
                                                         )}
-                                                    </div>
-                                                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                                        <div style={{ fontSize: 10, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".08em" }}>
-                                                            Rank
-                                                        </div>
-                                                        <div style={{ marginTop: 4, fontFamily: DS.mono, fontSize: 18, fontWeight: 700, color: DS.accent }}>
-                                                            {rowNum}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div style={{ padding: "12px 14px 14px" }}>
-                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                                                    {mobileCardCols.map(col => {
-                                                        const raw = row[col.key];
-                                                        let displayRaw = raw;
-                                                        let isLivePrice = false;
-                                                        if (col.key === "current_price") {
-                                                            const bp = _bestPrice(ticker, raw);
-                                                            if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
-                                                        }
-                                                        const formatted = col.fmt(displayRaw);
-                                                        const color = col.key === "current_price" && isLivePrice
-                                                            ? (DS.isDark ? "#34d399" : "#059669")
-                                                            : cellColor(col, raw);
-                                                        return (
-                                                            <div key={col.key} style={{
-                                                                border: `1px solid ${DS.border}`,
-                                                                borderRadius: 14,
-                                                                padding: "10px 10px 9px",
-                                                                background: DS.isDark ? "rgba(255,255,255,0.025)" : "rgba(15,23,42,0.02)",
-                                                                minWidth: 0,
-                                                            }}>
-                                                                <div style={{ fontSize: 10, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".07em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                                    {col.label}
-                                                                </div>
-                                                                <div style={{ marginTop: 6, fontFamily: DS.mono, fontSize: 14, fontWeight: 700, color: formatted === "" ? DS.textMuted : color, lineHeight: 1.25, wordBreak: "break-word" }}>
-                                                                    {formatted || "-"}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
+                                                        {isLivePrice && (
+                                                            <span style={{
+                                                                position: "absolute", top: 4, right: 4,
+                                                                width: 5, height: 5, borderRadius: "50%",
+                                                                background: DS.isDark ? "#34d399" : "#059669",
+                                                                opacity: 0.85
+                                                            }} title="Live price from Yahoo Finance" />
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
                                     );
                                 })}
-                            </div>
-                        </div>
-                    ) : (
-                        <div style={{
-                            flex: 1, overflow: "auto",
-                            scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
-                        }}>
-                            <table style={{
-                                width: "max-content", minWidth: "100%",
-                                borderCollapse: "collapse", fontFamily: DS.sans
-                            }}>
-                                <thead>
-                                    <tr style={{
-                                        position: "sticky", top: 0, zIndex: 10,
-                                        background: DS.tableHead,
-                                        borderBottom: `1px solid ${DS.border}`
-                                    }}>
-
-                                        {/* # */}
-                                        <th style={{
-                                            padding: "9px 0 9px 16px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: DS.textMuted,
-                                            position: "sticky", left: 0, zIndex: 11,
-                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            width: 40, whiteSpace: "nowrap",
-                                        }}>#</th>
-
-                                        {/* Company */}
-                                        <th style={{
-                                            padding: "9px 16px 9px 10px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: DS.textMuted,
-                                            position: "sticky", left: 40, zIndex: 11,
-                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            minWidth: 200, whiteSpace: "nowrap",
-                                        }}>Company</th>
-
-                                        {/* Metrics */}
-                                        {activeCols.map(col => {
-                                            const isSort = sortCol === col.key;
-                                            return (
-                                                <th key={col.key} onClick={() => handleSort(col.key)}
-                                                    style={{
-                                                        padding: "9px 13px", textAlign: "right",
-                                                        fontSize: 10, fontWeight: 700,
-                                                        textTransform: "uppercase", letterSpacing: ".07em",
-                                                        color: isSort ? DS.accent : DS.textMuted,
-                                                        background: isSort ? DS.accentDim : DS.tableHead,
-                                                        borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
-                                                        whiteSpace: "nowrap", cursor: "pointer",
-                                                        userSelect: "none", transition: "background .1s, color .1s",
-                                                    }}
-                                                    onMouseEnter={e => { if (!isSort) { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.hover; } }}
-                                                    onMouseLeave={e => { if (!isSort) { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = DS.tableHead; } }}>
-                                                    {col.label}
-                                                    {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "" : ""}</span>}
-                                                </th>
-                                            );
-                                        })}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pageRows.map((row, ri) => {
-                                        const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
-                                        const ticker = row.ticker || row.symbol || "";
-                                        const name = row.name || "";
-                                        const displayTicker = row.displayTicker || ticker;
-                                        // Muted deterministic badge color
-                                        const hue = displayTicker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
-                                        const badgeBg = DS.isDark ? `hsl(${hue},18%,18%)` : `hsl(${hue},28%,90%)`;
-                                        const badgeColor = DS.isDark ? `hsl(${hue},40%,60%)` : `hsl(${hue},35%,32%)`;
-
-                                        return (
-                                            <tr key={ri}
-                                                style={{
-                                                    borderTop: `1px solid ${DS.border}`,
-                                                    transition: "background .07s", cursor: "default"
-                                                }}
-                                                onMouseEnter={e => {
-                                                    e.currentTarget.style.background = DS.hover;
-                                                    e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.hover);
-                                                }}
-                                                onMouseLeave={e => {
-                                                    e.currentTarget.style.background = "";
-                                                    e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.isDark ? DS.bg : DS.card);
-                                                }}>
-
-                                                {/* # */}
-                                                <td data-sticky="1" style={{
-                                                    padding: compactRow ? "5px 0 5px 16px" : "9px 0 9px 16px",
-                                                    fontSize: 13, color: DS.textMuted,
-                                                    fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                    position: "sticky", left: 0,
-                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                    borderRight: `1px solid ${DS.border}`,
-                                                    width: 40, textAlign: "left",
-                                                }}>{rowNum}</td>
-
-                                                {/* Company */}
-                                                <td data-sticky="1" style={{
-                                                    padding: compactRow ? "5px 13px 5px 10px" : "9px 13px 9px 10px",
-                                                    position: "sticky", left: 40,
-                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                    borderRight: `1px solid ${DS.border}`,
-                                                    minWidth: 140,
-                                                }}>
-                                                    <div style={{
-                                                        fontSize: 13, fontWeight: 600,
-                                                        color: DS.text, whiteSpace: "nowrap",
-                                                        overflow: "hidden", textOverflow: "ellipsis",
-                                                        fontFamily: DS.mono, letterSpacing: ".02em",
-                                                        maxWidth: 180
-                                                    }}>
-                                                        {displayTicker}
-                                                    </div>
-                                                </td>
-
-                                                {/* Metric cells */}
-                                                {activeCols.map(col => {
-                                                    const raw = row[col.key];
-                                                    // For the price column, overlay with live Yahoo price during market hours
-                                                    let displayRaw = raw;
-                                                    let isLivePrice = false;
-                                                    if (col.key === "current_price") {
-                                                        const bp = _bestPrice(ticker, raw);
-                                                        if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
-                                                    }
-                                                    const formatted = col.fmt(displayRaw);
-                                                    const color = col.key === "current_price" && isLivePrice
-                                                        ? (DS.isDark ? "#34d399" : "#059669")
-                                                        : cellColor(col, raw);
-                                                    const isPending = col.key === "current_price" && isMarketLive()
-                                                        && _isPricePending(ticker) && raw != null;
-                                                    return (
-                                                        <td key={col.key} style={{
-                                                            padding: compactRow ? "5px 13px" : "9px 13px",
-                                                            textAlign: "right", fontSize: 13,
-                                                            fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                            color: formatted === "" ? DS.textMuted : color,
-                                                            whiteSpace: "nowrap", position: "relative",
-                                                        }}>
-                                                            {formatted}
-                                                            {isPending && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 4, right: 4,
-                                                                    width: 5, height: 5, borderRadius: "50%",
-                                                                    background: DS.isDark ? "#fbbf24" : "#d97706",
-                                                                    opacity: 0.7
-                                                                }} title="Fetching live price" />
-                                                            )}
-                                                            {isLivePrice && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 4, right: 4,
-                                                                    width: 5, height: 5, borderRadius: "50%",
-                                                                    background: DS.isDark ? "#34d399" : "#059669",
-                                                                    opacity: 0.85
-                                                                }} title="Live price from Yahoo Finance" />
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )
+                            </tbody>
+                        </table>
+                    </div>
                 )}
 
                 {/*  PAGINATION  */}
@@ -14386,29 +14508,11 @@ function FinancialAnalyticsModule({
     const tickerIndexRef = useRef([]);
     const bseTickerIndexRef = useRef([]);
     useEffect(() => {
-        // Load NSE index (company_financials)
-        if (_cachedTickerIndex && _cachedTickerIndex.length > 0) {
-            tickerIndexRef.current = _cachedTickerIndex;
-        } else {
-            (async () => {
-                try {
-                    const rows = await fetchAllTickerPages();
-                    if (!rows.length) return;
-                    const index = rows.map(row => ({
-                        sym: (row.ticker || "").toUpperCase(),
-                        name: (row.name || "").toLowerCase(),
-                        nse_code: (row.nse_code || "").trim().toUpperCase() || null,
-                        bse_code: (row.bse_code || "").trim().toUpperCase() || null,
-                    }));
-                    _cachedTickerIndex = index;
-                    tickerIndexRef.current = index;
-                } catch (e) { console.warn("NSE ticker index fetch failed", e); }
-            })();
-        }
-        // BSE index is intentionally not loaded separately.
-        // company_financials already holds one canonical row per company
-        // (BSE-preferred when both codes exist), so the NSE index above is the
-        // single source of truth for autocomplete suggestions.
+        // Load NSE index via shared deduplicating loader (no duplicate fetch if IIFE is in-flight)
+        _ensureTickerIndex().then(index => {
+            if (index && index.length > 0) tickerIndexRef.current = index;
+        }).catch(() => {});
+        // BSE index intentionally not loaded separately — company_financials is single source of truth
         bseTickerIndexRef.current = [];
     }, []);
 
