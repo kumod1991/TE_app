@@ -12497,7 +12497,7 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
 }
 
 //  SCREENER MODULE — Custom Filter + My Filters redesign
-function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onClearTickerFilter, onBack = null }) {
+function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onClearTickerFilter, onBack = null, myFilters, setMyFilters, loadScreenerFilters, persistMyFilters }) {
     const [allRows, setAllRows] = useState(() => filterRowsByAllowedTickers(_screenerCache || []));
     const [loading, setLoading] = useState(() => !(_screenerCache && _screenerCache.length > 0));
     const [loadErr, setLoadErr] = useState("");
@@ -12512,107 +12512,6 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
 
     // Working filters (Custom Filter workspace)
     const [workingFilters, setWorkingFilters] = useState([makeEmptyFilter()]);
-
-    const LS_MY_FILTERS = "screener_my_filters_v1";
-
-    const loadScreenerFilters = async () => {
-        try {
-            const sess = supabase._session;
-            if (!sess?.access_token || !sess.user?.id) {
-                console.log("No active session for filter load");
-                return;
-            }
-            const h = supabase._h(sess.access_token);
-            const url = `${SUPABASE_URL}/rest/v1/user_screener_filters?select=*&user_id=eq.${sess.user.id}`;
-            const r = await fetch(url, { headers: h });
-            if (!r.ok) {
-                console.error("Filter load failed:", r.status, r.statusText);
-                return;
-            }
-            const data = await r.json();
-            console.log("Filters loaded from DB:", data);
-            
-            // Force use DB data if returned, otherwise stick to what we have (local)
-            if (Array.isArray(data)) {
-                setMyFilters(data);
-                try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
-            }
-        } catch (e) { console.error("Error loading filters:", e); }
-    };
-
-    // Saved filters — persisted to localStorage
-    const [myFilters, setMyFilters] = useState(() => {
-        try {
-            const s = localStorage.getItem(LS_MY_FILTERS);
-            if (s) return JSON.parse(s);
-        } catch { }
-        // Seed with the classic defaults as starter filters
-        return [
-            {
-                id: "mf_quality_growth",
-                name: "Quality Growth",
-                filters: [
-                    { col: "market_cap_cr", op: ">", val: "500" },
-                    { col: "roce", op: ">", val: "15" },
-                    { col: "roe", op: ">", val: "15" },
-                    { col: "pat_margin", op: ">", val: "10" },
-                    { col: "debt_eq", op: "<", val: "1" },
-                ],
-                createdAt: Date.now(),
-            },
-            {
-                id: "mf_value_picks",
-                name: "Value Picks",
-                filters: [
-                    { col: "market_cap_cr", op: ">", val: "500" },
-                    { col: "pe", op: "<", val: "15" },
-                    { col: "pb", op: "<", val: "2" },
-                    { col: "roce", op: ">", val: "12" },
-                    { col: "debt_eq", op: "<", val: "0.5" },
-                ],
-                createdAt: Date.now(),
-            },
-            {
-                id: "mf_high_cashflow",
-                name: "High Cash Flow",
-                filters: [
-                    { col: "cfo_pat", op: ">", val: "0.8" },
-                    { col: "cfo_ebitda", op: ">", val: "0.6" },
-                    { col: "roce", op: ">", val: "10" },
-                ],
-                createdAt: Date.now(),
-            },
-        ];
-    });
-
-    const persistMyFilters = async (next) => {
-        setMyFilters(next);
-        try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(next)); } catch { }
-        
-        const sess = supabase._session;
-        if (sess?.access_token && sess.user?.id) {
-            try {
-                const h = supabase._h(sess.access_token);
-                // Use UPSERT by sending all rows (requires table primary key to be user_id or unique name+user_id)
-                // If ID is random UUID, we must delete first or change table to have a unique constraint.
-                // Assuming we can't change schema, continue DELETE+POST but wrap in a single transaction if possible,
-                // or ensure it's reliable. Given current DELETE+POST, let's keep it simple but add error handling.
-                const deleteRes = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user.id}`, { method: "DELETE", headers: h });
-                if (!deleteRes.ok) {
-                    console.error("Filter sync DELETE failed:", deleteRes.statusText);
-                    return;
-                }
-                const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters`, {
-                    method: "POST",
-                    headers: { ...h, Prefer: "return=minimal", "Content-Type": "application/json" },
-                    body: JSON.stringify(next.map(f => ({ ...f, user_id: sess.user.id })))
-                });
-                if (!insertRes.ok) {
-                    console.error("Filter sync POST failed:", insertRes.statusText);
-                }
-            } catch (e) { console.error("Error syncing filters:", e); }
-        }
-    };
 
     // Save-as dialog state
     const [showSaveDialog, setShowSaveDialog] = useState(false);
