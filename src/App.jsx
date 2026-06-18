@@ -12513,8 +12513,38 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     // Working filters (Custom Filter workspace)
     const [workingFilters, setWorkingFilters] = useState([makeEmptyFilter()]);
 
-    // Saved filters — persisted to localStorage
     const LS_MY_FILTERS = "screener_my_filters_v1";
+
+    const loadScreenerFilters = async () => {
+        try {
+            const sess = supabase._session;
+            if (!sess?.access_token || !sess.user?.id) {
+                console.log("No active session for filter load");
+                return;
+            }
+            const h = supabase._h(sess.access_token);
+            const url = `${SUPABASE_URL}/rest/v1/user_screener_filters?select=*&user_id=eq.${sess.user.id}`;
+            const r = await fetch(url, { headers: h });
+            if (!r.ok) {
+                console.error("Filter load failed:", r.status, r.statusText);
+                return;
+            }
+            const data = await r.json();
+            console.log("Filters loaded from DB:", data);
+            
+            if (Array.isArray(data)) {
+                // If filters found in DB, use them; otherwise keep existing/default
+                if (data.length > 0) {
+                    setMyFilters(data);
+                    try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
+                } else {
+                    console.log("No saved filters in DB, using defaults.");
+                }
+            }
+        } catch (e) { console.error("Error loading filters:", e); }
+    };
+
+    // Saved filters — persisted to localStorage
     const [myFilters, setMyFilters] = useState(() => {
         try {
             const s = localStorage.getItem(LS_MY_FILTERS);
@@ -12559,27 +12589,6 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         ];
     });
 
-    const loadScreenerFilters = async () => {
-        try {
-            const sess = supabase._session;
-            if (!sess?.access_token || !sess.user?.id) return;
-            const h = supabase._h(sess.access_token);
-            const r = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?select=*&user_id=eq.${sess.user.id}`, { headers: h });
-            if (!r.ok) {
-                console.error("Filter load failed:", r.statusText);
-                return;
-            }
-            const data = await r.json();
-            if (Array.isArray(data)) {
-                // If filters were found in DB, update state and local storage
-                if (data.length > 0) {
-                    setMyFilters(data);
-                    try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
-                }
-            }
-        } catch (e) { console.error("Error loading filters:", e); }
-    };
-
     const persistMyFilters = async (next) => {
         setMyFilters(next);
         try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(next)); } catch { }
@@ -12588,13 +12597,23 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         if (sess?.access_token && sess.user?.id) {
             try {
                 const h = supabase._h(sess.access_token);
-                // Simple sync: delete old, insert new
-                await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user?.id}`, { method: "DELETE", headers: h });
-                await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters`, {
+                // Use UPSERT by sending all rows (requires table primary key to be user_id or unique name+user_id)
+                // If ID is random UUID, we must delete first or change table to have a unique constraint.
+                // Assuming we can't change schema, continue DELETE+POST but wrap in a single transaction if possible,
+                // or ensure it's reliable. Given current DELETE+POST, let's keep it simple but add error handling.
+                const deleteRes = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user.id}`, { method: "DELETE", headers: h });
+                if (!deleteRes.ok) {
+                    console.error("Filter sync DELETE failed:", deleteRes.statusText);
+                    return;
+                }
+                const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters`, {
                     method: "POST",
                     headers: { ...h, Prefer: "return=minimal", "Content-Type": "application/json" },
                     body: JSON.stringify(next.map(f => ({ ...f, user_id: sess.user.id })))
                 });
+                if (!insertRes.ok) {
+                    console.error("Filter sync POST failed:", insertRes.statusText);
+                }
             } catch (e) { console.error("Error syncing filters:", e); }
         }
     };
