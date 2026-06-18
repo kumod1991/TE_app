@@ -1347,6 +1347,12 @@ a:hover { text-decoration: underline; }
   /* Prevent zoom on input focus (iOS) */
   input, select, textarea { font-size: 16px !important; }
 
+  /* Prevent double-tap zoom on interactive cards/rows (iOS Safari) */
+  .scr-screen-row, .scr-section-card > div:first-child,
+  .scr-ctrl-bar button, .breadth-pill, .pill {
+    touch-action: manipulation;
+  }
+
   /* Hide the persistent footer on mobile — it eats vertical space and
      the screener already shows a legal notice inline */
   .persistent-footer { display: none !important; }
@@ -13361,15 +13367,26 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                                 onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.boxShadow = "none"; }}>
                                                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                                                     <div style={{ fontWeight: 700, fontSize: 14, color: DS.text, lineHeight: 1.3 }}>{mf.name}</div>
-                                                    <button onClick={() => deleteSavedFilter(mf.id)}
-                                                        style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: DS.textMuted, padding: 4, borderRadius: 5, display: "flex", alignItems: "center", transition: "color .12s, background .12s" }}
-                                                        title="Delete filter"
-                                                        onMouseEnter={e => { e.currentTarget.style.color = DS.neg; e.currentTarget.style.background = DS.isDark ? "rgba(244,63,94,0.08)" : "rgba(220,38,38,0.06)"; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
-                                                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                                                            <path d="M1 1l10 10M11 1L1 11" />
-                                                        </svg>
-                                                    </button>
+                                                    <div style={{ display: "flex", gap: 2 }}>
+                                                        <button onClick={() => { loadSavedFilter(mf); setActivePanel("custom"); }}
+                                                            style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: DS.textMuted, padding: 4, borderRadius: 5, display: "flex", alignItems: "center", transition: "color .12s, background .12s" }}
+                                                            title="Edit filter"
+                                                            onMouseEnter={e => { e.currentTarget.style.color = DS.accent; e.currentTarget.style.background = DS.accentDim; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
+                                                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                <path d="M12.5 3a2.121 2.121 0 1 1 3 3L7 15H4v-3L12.5 3z" />
+                                                            </svg>
+                                                        </button>
+                                                        <button onClick={() => deleteSavedFilter(mf.id)}
+                                                            style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: DS.textMuted, padding: 4, borderRadius: 5, display: "flex", alignItems: "center", transition: "color .12s, background .12s" }}
+                                                            title="Delete filter"
+                                                            onMouseEnter={e => { e.currentTarget.style.color = DS.neg; e.currentTarget.style.background = DS.isDark ? "rgba(244,63,94,0.08)" : "rgba(220,38,38,0.06)"; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
+                                                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                                                                <path d="M1 1l10 10M11 1L1 11" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                                                     {mf.filters.slice(0, 4).map((f, i) => (
@@ -20252,6 +20269,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     .scr-screen-row {
       transition:background .1s, border-color .16s, transform .16s, box-shadow .16s; cursor:pointer;
       border:1px solid transparent; border-radius:18px; margin-bottom:10px;
+      touch-action: manipulation;
     }
     .scr-screen-row:hover {
       background:${T.hover}; border-color:${isDark ? "rgba(99,102,241,0.18)" : "rgba(79,70,229,0.12)"};
@@ -20262,7 +20280,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     .scr-arrow { opacity:0; transform:translateX(-4px); transition:opacity .15s, transform .15s; }
     .scr-preview-row { display:grid; border-top:1px solid ${T.border}; transition:background .07s; }
     .scr-preview-row:hover { background:${T.hover}; }
-    .scr-preview-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .scr-preview-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%; }
     .scr-preview-inner { min-width:520px; }
     .scr-preview-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
     .scr-preview-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
@@ -20285,6 +20303,10 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     }
     @media (max-width:600px) {
       .scr-stat-block { display:none !important; }
+      .scr-preview-scroll { -webkit-overflow-scrolling:touch; overflow-x:auto; }
+      .scr-preview-inner { min-width:0; width:max-content; max-width:none; }
+      .scr-section-card { max-width:100%; overflow:hidden; }
+      .scr-page-shell { overflow-x:hidden; }
       .scr-mobile-stats { display:flex; align-items:center; gap:14px; margin-top:10px; }
       .scr-arrow { opacity:1 !important; transform:translateX(0) !important; }
       .scr-cat-desc { display:block !important; }
@@ -20629,7 +20651,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                     <div style={{
                         padding: "0 12px 16px 8px",
                         background: isDark ? "rgba(255,255,255,0.014)" : "rgba(0,0,0,0.011)",
-                        borderTop: `1px solid ${T.border}`, borderBottomLeftRadius: 16, borderBottomRightRadius: 16
+                        borderTop: `1px solid ${T.border}`, borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
+                        overflow: "hidden", maxWidth: "100%"
                     }}>
                         <PreviewRows rows={rows} scoreKey={scoreKey} scoreLabel={scoreLabel}
                             formatScore={formatScore} accentColor={ACCENT}
@@ -20651,7 +20674,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         display: "flex", alignItems: "center", gap: 12,
                         padding: "16px 18px", cursor: "pointer", userSelect: "none",
                         borderBottom: open ? `1px solid ${T.border}` : "none",
-                        transition: "background .1s"
+                        transition: "background .1s", touchAction: "manipulation"
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = T.hover}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -20709,7 +20732,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     return (
         <div style={{
             fontFamily: sans, background: T.bg, color: T.text,
-            flex: 1, overflow: "auto", minHeight: 0, display: "flex", flexDirection: "column"
+            flex: 1, overflow: "auto", minHeight: 0, display: "flex", flexDirection: "column",
+            overflowX: "hidden"
         }}>
             <style>{css}</style>
 
