@@ -26541,13 +26541,21 @@ export default function App() {
         setMyFilters(next);
         
         const sess = supabase._session;
+        console.log("persistMyFilters called. Session:", sess ? "Active" : "None", "Filters count:", next.length);
+        
         if (sess?.access_token && sess.user?.id) {
             // LOGGED IN: Persist ONLY to Database
             try { localStorage.removeItem("screener_my_filters_v1"); } catch { }
             
             try {
                 const h = supabase._h(sess.access_token);
-                await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user.id}`, { method: "DELETE", headers: h });
+                console.log("Syncing to DB for user:", sess.user.id);
+                
+                const deleteRes = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user.id}`, { method: "DELETE", headers: h });
+                if (!deleteRes.ok) {
+                    console.error("Filter sync DELETE failed:", deleteRes.status, deleteRes.statusText);
+                    return;
+                }
                 
                 if (next.length > 0) {
                     const payload = next.map(f => ({
@@ -26555,15 +26563,23 @@ export default function App() {
                         name: f.name,
                         filters: f.filters
                     }));
-                    await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters`, {
+                    console.log("POSTing payload to DB:", payload);
+                    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters`, {
                         method: "POST",
                         headers: { ...h, Prefer: "return=minimal", "Content-Type": "application/json" },
                         body: JSON.stringify(payload)
                     });
+                    if (!insertRes.ok) {
+                        const err = await insertRes.text();
+                        console.error("Filter sync POST failed:", insertRes.status, insertRes.statusText, err);
+                    } else {
+                        console.log("Filters successfully synced to DB");
+                    }
                 }
             } catch (e) { console.error("Error syncing filters:", e); }
         } else {
             // GUEST: Persist to localStorage only
+            console.log("No session, persisting to localStorage");
             try { localStorage.setItem("screener_my_filters_v1", JSON.stringify(next)); } catch { }
         }
     };
