@@ -12558,9 +12558,38 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             },
         ];
     });
-    const persistMyFilters = (next) => {
+
+    const loadScreenerFilters = async () => {
+        try {
+            const sess = supabase._session;
+            if (!sess?.access_token) return;
+            const h = supabase._h(sess.access_token);
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?select=*&user_id=eq.${sess.user?.id}`, { headers: h });
+            const data = await r.json();
+            if (Array.isArray(data) && data.length > 0) {
+                setMyFilters(data);
+                try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
+            }
+        } catch (e) { console.error("Error loading filters:", e); }
+    };
+
+    const persistMyFilters = async (next) => {
         setMyFilters(next);
         try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(next)); } catch { }
+        
+        const sess = supabase._session;
+        if (sess?.access_token && sess.user?.id) {
+            try {
+                const h = supabase._h(sess.access_token);
+                // Simple sync: delete old, insert new
+                await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user?.id}`, { method: "DELETE", headers: h });
+                await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters`, {
+                    method: "POST",
+                    headers: { ...h, Prefer: "return=minimal", "Content-Type": "application/json" },
+                    body: JSON.stringify(next.map(f => ({ ...f, user_id: sess.user.id })))
+                });
+            } catch (e) { console.error("Error syncing filters:", e); }
+        }
     };
 
     // Save-as dialog state
@@ -26843,7 +26872,7 @@ export default function App() {
                     user: sess.user,
                 };
                 setSession(sess);
-                loadTrades(sess); loadFunds(sess); loadDividends(sess);
+                loadTrades(sess); loadFunds(sess); loadDividends(sess); loadScreenerFilters();
             } else {
                 // No session – load any previously saved guest data
                 const guest = loadGuestData();
@@ -26925,7 +26954,7 @@ export default function App() {
             clearGuestData();
         }
 
-        loadTrades(sess); loadFunds(sess); loadDividends(sess);
+        loadTrades(sess); loadFunds(sess); loadDividends(sess); loadScreenerFilters();
     };
 
     const handleDemo = () => {
