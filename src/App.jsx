@@ -3910,139 +3910,17 @@ function CapitalGains({ trades, T }) {
 
 
 //  PORTFOLIO (LIVE PRICES) 
+// Yahoo Finance logic removed for performance. Use bhav_copy instead.
 
-//  MULTI-SOURCE LIVE PRICE FETCHER 
-// Tries 3 independent sources in parallel per ticker.
-// First one that returns a valid price wins. Retries up to 2 times on failure.
-// No manual overrides needed  .NS, .BO, and SME-style NSE suffixes are tried automatically.
-
+/*
 const TICKER_OVERRIDES = {
     SWARAJ: "SWARAJ-SM.NS",
-}; // Only for tickers with a completely different Yahoo/Google symbol
+}; 
 
 function buildYahooTickerVariants(ticker, override) {
-    const up = (ticker || "").toUpperCase().trim();
-    if (!up) return [];
-    if (up.includes(".")) return [up];
-
-    const variants = [
-        ...(override ? (Array.isArray(override) ? override : [override]) : []),
-        `${up}.NS`,
-        `${up}.BO`,
-        // Some NSE SME listings appear on Yahoo with the SME board suffix.
-        `${up}-SM.NS`,
-    ];
-
-    return [...new Set(variants.filter(Boolean))];
+    ...
 }
-
-//  Source 1: Yahoo Finance v8 via allorigins proxy 
-// range=2d gives today + yesterday, so chartPreviousClose = yesterday's close exactly.
-// We also read regularMarketChange directly from meta when available  that's
-// the most reliable source since Yahoo computes it server-side.
-function parseV8Chart(meta) {
-    const price = meta?.regularMarketPrice;
-    if (!price) return null;
-    // Prefer the direct server-computed change over our own calculation
-    const directChange = meta?.regularMarketChange;          // e.g. +3.45
-    const directPrevClose = meta?.regularMarketPreviousClose; // explicit prev close field
-    // chartPreviousClose with range=2d = yesterday's close (not 5 days ago)
-    const prevClose = directPrevClose || meta?.chartPreviousClose || meta?.previousClose || null;
-    return {
-        currentPrice: price,
-        prevClose,
-        // Store the direct change so we can use it without any calculation
-        directChange: typeof directChange === "number" ? directChange : null,
-        name: meta?.longName || meta?.shortName || "",
-    };
-}
-
-async function fromYahooAllorigins(sym) {
-    // range=2d: today + yesterday  chartPreviousClose = yesterday's close
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
-    const res = await fetch(
-        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        { signal: AbortSignal.timeout(10000) }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json.contents) return null;
-    const data = JSON.parse(json.contents);
-    if (data?.chart?.error) return null;
-    return parseV8Chart(data?.chart?.result?.[0]?.meta);
-}
-
-//  Source 2: Yahoo Finance v8 via corsproxy.io 
-async function fromYahooCorsProxy(sym) {
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
-    const res = await fetch(
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        { signal: AbortSignal.timeout(10000) }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data?.chart?.error) return null;
-    return parseV8Chart(data?.chart?.result?.[0]?.meta);
-}
-
-//  Source 3: Yahoo Finance quoteSummary via allorigins 
-// The price module returns regularMarketChange and regularMarketPreviousClose
-// directly  the most authoritative source for day change.
-async function fromYahooQuoteSummary(sym) {
-    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${sym}?modules=price,summaryDetail`;
-    const res = await fetch(
-        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        { signal: AbortSignal.timeout(10000) }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json.contents) return null;
-    const data = JSON.parse(json.contents);
-    const pr = data?.quoteSummary?.result?.[0]?.price;
-    const price = pr?.regularMarketPrice?.raw;
-    if (!price) return null;
-    return {
-        currentPrice: price,
-        prevClose: pr?.regularMarketPreviousClose?.raw || null,
-        // regularMarketChange is explicitly the today's change computed by Yahoo
-        directChange: pr?.regularMarketChange?.raw ?? null,
-        name: pr?.longName || pr?.shortName || sym,
-    };
-}
-
-//  Race all 3 sources, return first winner 
-async function raceQuote(sym) {
-    return new Promise(resolve => {
-        let settled = false;
-        let pending = 3;
-        const done = (result) => {
-            if (result && !settled) { settled = true; resolve(result); }
-            else { pending--; if (pending === 0 && !settled) resolve(null); }
-        };
-        fromYahooAllorigins(sym).then(done).catch(() => done(null));
-        fromYahooCorsProxy(sym).then(done).catch(() => done(null));
-        fromYahooQuoteSummary(sym).then(done).catch(() => done(null));
-    });
-}
-
-//  Main entry: tries NSE/BSE first, then SME-style Yahoo suffix fallback.
-async function fetchYahooQuote(ticker) {
-    const up = ticker.toUpperCase().trim();
-    const override = TICKER_OVERRIDES[up];
-
-    // Build suffix variants to try
-    const variants = buildYahooTickerVariants(up, override);
-
-    for (const sym of variants) {
-        // Up to 2 attempts per variant (handles transient proxy failures)
-        for (let attempt = 0; attempt < 2; attempt++) {
-            const result = await raceQuote(sym);
-            if (result) return { ...result, usedTicker: sym };
-            if (attempt === 0) await new Promise(r => setTimeout(r, 400)); // brief pause before retry
-        }
-    }
-    return null;
-}
+*/
 
 // 
 //  SESSION LIVE-PRICE CACHE
@@ -4063,35 +3941,7 @@ const _sessionPriceFetching = new Set(); // tickers currently in-flight
 // stale price, wrong symbol resolution, or a corporate-action artefact (e.g. DPEL.NS
 // returning 106 when the real price is 397). In that case we treat it as unavailable.
 async function _fetchAndCachePrice(ticker, bhavPrice) {
-    const key = ticker.toUpperCase();
-    if (_sessionPriceFetching.has(key)) return;
-    if (_sessionPriceCache.has(key)) return;
-    _sessionPriceFetching.add(key);
-    try {
-        const q = await fetchYahooQuote(key);
-        if (q?.currentPrice) {
-            const yp = q.currentPrice;
-            // Sanity-check: if we have a bhav reference price, reject Yahoo if it
-            // deviates by more than 25%  likely a wrong/stale symbol match
-            if (bhavPrice != null && bhavPrice > 0) {
-                const deviation = Math.abs(yp - bhavPrice) / bhavPrice;
-                if (deviation > 0.25) {
-                    // Yahoo price is too far from bhav  treat as unavailable
-                    _sessionPriceCache.set(key, { price: null, source: "unavailable", ts: Date.now() });
-                    return;
-                }
-            }
-            _sessionPriceCache.set(key, { price: yp, source: "yahoo", ts: Date.now() });
-        } else {
-            // Not on Yahoo  mark unavailable so we use bhav and never show pending dot
-            _sessionPriceCache.set(key, { price: null, source: "unavailable", ts: Date.now() });
-        }
-    } catch (_) {
-        // Network/proxy error  sentinel to avoid retrying this session
-        _sessionPriceCache.set(key, { price: null, source: "unavailable", ts: Date.now() });
-    } finally {
-        _sessionPriceFetching.delete(key);
-    }
+    return; // Yahoo Finance disabled
 }
 
 // Returns the best price for a ticker:
@@ -4099,23 +3949,13 @@ async function _fetchAndCachePrice(ticker, bhavPrice) {
 //    Yahoo unavailable (sentinel)     bhav only
 //    Outside market hours             bhav only
 function _bestPrice(ticker, bhavPrice) {
-    if (isMarketLive()) {
-        const cached = _sessionPriceCache.get(ticker?.toUpperCase());
-        if (cached?.price != null && cached.source === "yahoo") {
-            return { price: cached.price, source: "yahoo" };
-        }
-    }
     return bhavPrice != null ? { price: bhavPrice, source: "bhav" } : null;
 }
 
 // True only while a Yahoo fetch is genuinely in-flight or not yet attempted.
 // Returns false once the ticker is resolved (success or unavailable sentinel).
 function _isPricePending(ticker) {
-    const key = ticker?.toUpperCase();
-    if (!key) return false;
-    if (_sessionPriceFetching.has(key)) return true;
-    if (!_sessionPriceCache.has(key)) return true;
-    return false;
+    return false; // Yahoo Finance disabled
 }
 
 //  RELATIVE STRENGTH vs Nifty 500 
@@ -4124,44 +3964,7 @@ function _isPricePending(ticker) {
 // Uses Yahoo Finance historical data with 3-proxy fallback
 
 async function fetchPriceAtDate(sym, daysAgo) {
-    // Fetch enough history to cover daysAgo, plus a buffer for weekends/holidays
-    const period = daysAgo + 30;
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=${period}d`;
-    const proxies = [
-        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        `https://api.allorigins.win/get?url=${encodeURIComponent(url.replace("query1", "query2"))}`,
-        `https://cors.bridged.cc/${url}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    ];
-    for (const proxy of proxies) {
-        try {
-            const res = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
-            if (!res.ok) continue;
-            const raw = await res.json();
-            const data = raw.contents ? JSON.parse(raw.contents) : raw;
-            if (data?.chart?.error) continue;
-            const result = data?.chart?.result?.[0];
-            if (!result) continue;
-
-            const timestamps = result.timestamp;
-            const closes = result.indicators?.quote?.[0]?.close;
-            const curPrice = result.meta?.regularMarketPrice;
-            if (!timestamps || !closes || !curPrice) continue;
-
-            // Find the close price closest to exactly `daysAgo` days back
-            const targetTs = (Date.now() / 1000) - (daysAgo * 86400);
-            let bestIdx = 0, bestDiff = Infinity;
-            timestamps.forEach((ts, i) => {
-                const diff = Math.abs(ts - targetTs);
-                if (diff < bestDiff && closes[i] != null) { bestDiff = diff; bestIdx = i; }
-            });
-
-            const oldPrice = closes[bestIdx];
-            if (!oldPrice) continue;
-            return { curPrice, oldPrice };
-        } catch { continue; }
-    }
-    return null;
+    return null; // Yahoo Finance disabled
 }
 
 // Nifty 500 on Yahoo Finance
@@ -4182,15 +3985,7 @@ async function fetchNifty500Return() {
 }
 
 async function fetchRS(usedTicker) {
-    try {
-        const [stockData, niftyReturn] = await Promise.all([
-            fetchPriceAtDate(usedTicker, 182),
-            fetchNifty500Return(),
-        ]);
-        if (!stockData?.oldPrice || niftyReturn === null) return null;
-        const stockReturn = (stockData.curPrice - stockData.oldPrice) / stockData.oldPrice;
-        return stockReturn - niftyReturn;
-    } catch { return null; }
+    return null; // Yahoo Finance disabled
 }
 
 //  BHAV COPY UTILITIES 
@@ -4263,36 +4058,11 @@ async function fetchBhavPriceForDate(ticker, dateStr) {
 // NSE market hours: 9:15 AM  3:30 PM IST (UTC+5:30)
 // After 7:00 PM IST the day's final Bhav Copy is available  use DB only
 function isMarketLive() {
-    const now = new Date();
-    // Convert to IST (UTC+5:30)
-    const istOffset = 5.5 * 60; // minutes
-    const istMs = now.getTime() + (now.getTimezoneOffset() + istOffset) * 60000;
-    const ist = new Date(istMs);
-    const day = ist.getDay(); // 0=Sun, 6=Sat
-    if (day === 0 || day === 6) return false; // weekend
-    const h = ist.getHours(), m = ist.getMinutes();
-    const mins = h * 60 + m;
-    // Live window: 9:15 AM (555) to 7:00 PM (1140) IST
-    // After 7:00 PM Bhav Copy is final  no need for Yahoo
-    return mins >= 555 && mins < 1140;
+    return false; // Yahoo Finance disabled
 }
 
 async function fetchBhavQuote(ticker) {
-    if (isMarketLive()) {
-        // 9:15 AM  7:00 PM IST: try Yahoo first for live price, Bhav as fallback
-        const yahoo = await fetchYahooQuote(ticker);
-        if (yahoo) return { ...yahoo, source: "yahoo" };
-        const bhav = await fetchBhavPrice(ticker);
-        if (bhav) return bhav;
-    } else {
-        // After 7:00 PM or weekend: Bhav Copy is final EOD price  use DB only
-        const bhav = await fetchBhavPrice(ticker);
-        if (bhav) return bhav;
-        // Bhav may not be populated yet for today  Yahoo as safety fallback
-        const yahoo = await fetchYahooQuote(ticker);
-        if (yahoo) return { ...yahoo, source: "yahoo" };
-    }
-    return null;
+    return await fetchBhavPrice(ticker);
 }
 
 // Manual trigger: force=true bypasses the "already have rows" skip check
@@ -4630,7 +4400,7 @@ async function upsert52wRows(rows, exchange, token) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Prefer": "return=minimal,count=exact",
+                "Prefer": "return=minimal",
                 apikey: SUPABASE_ANON_KEY,
                 Authorization: `Bearer ${token || SUPABASE_ANON_KEY}`,
             },
@@ -6224,40 +5994,47 @@ function _writeTickerIndexToLS(rows) {
 }
 _seedTickerIndexFromLS(); // run immediately so in-memory cache is hot before any fetch
 
-// Paginated fetch for the ticker index — Supabase caps each response at 1000 rows,
-// so a single limit=5000 request silently returns only 1000. We use Prefer:count=exact
-// to fetch the total count on the first request, then fire all remaining pages in parallel.
+// Paginated fetch for the ticker index — Supabase caps each response at 1000 rows.
 //
-// FIX: was ordering by nse_code.asc.nullslast which caused HTTP 500 errors because
-// nse_code is nullable and lacks an index suitable for that sort on large result sets.
-// ticker is the table PK (always indexed, never null) — safe and fast.
+// FIX history:
+//  v1 — order=nse_code.asc.nullslast  → 500s (nullable col, no suitable index)
+//  v2 — order=ticker.asc + Promise.all → 500s at offset=3000 (parallel requests flood
+//       the connection pool; count=exact on every page forces full table scans)
+//  v4 (current) — sequential page fetch WITHOUT count=exact (fixes 500 timeouts),
+//       hard cap at 3000 rows, early-exit when a page comes back short.
 async function fetchAllTickerPages() {
-    const PAGE = 1000; // maximise rows per request to minimise round-trips
+    const PAGE = 1000;
+    const MAX_ROWS = 3000; // stay well clear of offset ranges that 500
     const base = `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,name,nse_code,bse_code&order=ticker.asc`;
     const headers = {
-        "Content-Type": "application/json",
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-        "Prefer": "count=exact",
     };
-    // First page + total count in one request
+
+    // Page 0 — fetch WITHOUT count=exact to avoid 500 timeouts on large tables
     const firstRes = await fetch(`${base}&limit=${PAGE}&offset=0`, { headers });
     if (!firstRes.ok) throw new Error(`Ticker index HTTP ${firstRes.status}`);
-    const totalCount = parseInt(firstRes.headers.get("content-range")?.split("/")[1] || "0", 10);
     const firstPage = await firstRes.json();
     if (!Array.isArray(firstPage) || firstPage.length === 0) return [];
-    if (firstPage.length >= totalCount || firstPage.length < PAGE) return firstPage; // single page
+    
+    // If first page is already short, it's the only page.
+    if (firstPage.length < PAGE) return firstPage;
 
-    // Remaining pages — all in parallel
-    const offsets = [];
-    for (let offset = PAGE; offset < totalCount; offset += PAGE) offsets.push(offset);
-    const restPages = await Promise.all(
-        offsets.map(offset =>
-            fetch(`${base}&limit=${PAGE}&offset=${offset}`, { headers })
-                .then(r => r.ok ? r.json() : [])
-        )
-    );
-    return [firstPage, ...restPages].flat().filter(Boolean);
+    // Sequential pages — no parallel flooding, early-exit on short page
+    const all = [...firstPage];
+    for (let offset = PAGE; offset < MAX_ROWS; offset += PAGE) {
+        try {
+            const res = await fetch(`${base}&limit=${PAGE}&offset=${offset}`, { headers });
+            if (!res.ok) break; // stop silently on any 500, return what we have
+            const page = await res.json();
+            if (!Array.isArray(page) || page.length === 0) break;
+            all.push(...page);
+            if (page.length < PAGE) break; // last page
+        } catch {
+            break; // network error — return what we have
+        }
+    }
+    return all.filter(Boolean);
 }
 
 // Deduplicating module-level promise — prevents multiple parallel fetches
@@ -7677,7 +7454,7 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
             .map(p => p.ticker).filter(Boolean)
             .filter(t => !_sessionPriceCache.has(t.toUpperCase()) && !_sessionPriceFetching.has(t.toUpperCase()));
         if (newOnes.length === 0) return;
-        const BATCH = 5;
+        const BATCH = 1;
         let batchIdx = 0;
         const runBatch = async () => {
             if (cancelled) return;
@@ -7685,7 +7462,7 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
             if (batch.length === 0) return;
             batchIdx += BATCH;
             await Promise.allSettled(batch.map(t => _fetchAndCachePrice(t, bhavMap[t.toUpperCase()])));
-            if (!cancelled) { setLivePriceTick(n => n + 1); setTimeout(runBatch, 600); }
+            if (!cancelled) { setLivePriceTick(n => n + 1); setTimeout(runBatch, 2000); }
         };
         runBatch();
         return () => { cancelled = true; };
@@ -10869,46 +10646,12 @@ function RatiosTab({ data, sharedTtmCol, livePrice, T }) {
                         // but pre-populate with what we have so table renders instantly
                     }
                 }
-            } catch { /* fall through to Yahoo */ }
-
-            //  Step 2: Fallback  fetch from Yahoo Finance via proxy 
-            try {
-                const sym = ticker + ".NS";
-                const daysBack = Math.ceil((Date.now() - new Date(oldest).getTime()) / 86400000) + 10;
-                const rangeStr = daysBack > 1825 ? "10y" : daysBack > 730 ? "5y" : "2y";
-                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=${rangeStr}`;
-                const proxies = [
-                    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-                    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                    `https://api.allorigins.win/get?url=${encodeURIComponent(url.replace("query1", "query2"))}`,
-                ];
-
-                let timestamps = null, closes = null;
-                for (const proxy of proxies) {
-                    try {
-                        const r = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
-                        if (!r.ok) continue;
-                        const raw = await r.json();
-                        const parsed = raw.contents ? JSON.parse(raw.contents) : raw;
-                        const result = parsed?.chart?.result?.[0];
-                        if (!result?.timestamp?.length) continue;
-                        timestamps = result.timestamp;
-                        closes = result.indicators?.quote?.[0]?.close;
-                        break;
-                    } catch { continue; }
-                }
-
-                if (timestamps && closes) {
-                    setHistPrices(extractFromYahoo(timestamps, closes));
-                    setHistLoading(false);
-                    return;
-                }
             } catch { /* ignore */ }
 
-            // Both failed
+            // Step 2 fallback disabled (Yahoo Finance)
             const nulls = {};
-            periods.forEach(p => { nulls[p] = null; });
-            setHistPrices(nulls);
+            periods.forEach(p => { if (histPrices[p] === undefined) nulls[p] = null; });
+            setHistPrices(prev => ({ ...prev, ...nulls }));
             setHistLoading(false);
         })();
     }, [ratioSubTab, data?._sym]);
@@ -11872,23 +11615,31 @@ function _isScreenerCacheFresh() {
 
 async function _fetchScreenerRows() {
     const allowedSet = await ensureAllowedTickerSet();
-    const PAGE = 250; // Reduced page size to prevent timeouts
-    const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "count=exact" };
+    const PAGE = 250;
+    const MAX_ROWS = 5000;
+    const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
     const base = `${SUPABASE_URL}/rest/v1/stock_ratios?select=*&order=market_cap_cr.desc.nullslast&limit=${PAGE}`;
+    
+    // Page 0 — fetch WITHOUT count=exact to avoid 500 timeouts
     const firstRes = await fetch(`${base}&offset=0`, { headers });
     if (!firstRes.ok) throw new Error(`HTTP ${firstRes.status}`);
-    const totalCount = parseInt(firstRes.headers.get("content-range")?.split("/")[1] || "0", 10);
     const firstPage = await firstRes.json();
     if (!Array.isArray(firstPage)) throw new Error("Invalid screener response");
-    const offsets = [];
-    for (let offset = PAGE; offset < totalCount; offset += PAGE) offsets.push(offset);
-    // Fire all remaining pages in parallel
-    const restPages = await Promise.all(
-        offsets.map(offset =>
-            fetch(`${base}&offset=${offset}`, { headers }).then(r => r.ok ? r.json() : [])
-        )
-    );
-    const all = [firstPage, ...restPages].flat().filter(Boolean);
+    
+    // Sequential fetch — prevents connection pool saturation on large tables
+    const all = [...firstPage];
+    if (firstPage.length >= PAGE) {
+        for (let offset = PAGE; offset < MAX_ROWS; offset += PAGE) {
+            try {
+                const res = await fetch(`${base}&offset=${offset}`, { headers });
+                if (!res.ok) break;
+                const page = await res.json();
+                if (!Array.isArray(page) || page.length === 0) break;
+                all.push(...page);
+                if (page.length < PAGE) break;
+            } catch { break; }
+        }
+    }
 
     let enriched = all;
     try {
@@ -12371,21 +12122,26 @@ function _preloadScreenerCache() {
 }
 
 function _warmFundamentalsCaches() {
+    // Phase 1 (idle): screener rows + ticker index in parallel — these are the heaviest queries.
+    // Phase 2 (after screener resolves): FII/DII + Ownership staggered so they don't compete.
+    // Nifty500 deferred to Phase 2 as well — ScreenerModule reads from _nifty500Cache directly.
     const warmCritical = () => {
         preloadAllowedTickerSet();
-        _preloadScreenerCache(); // also kicks off _ensureTickerIndex internally
-        // FII/DII and Ownership deferred to idle — screener gets bandwidth first
+        const screenerReady = _preloadScreenerCache(); // also kicks off _ensureTickerIndex internally
+        // Wait for screener to finish before firing secondary fetches
         const deferSecondary = () => {
-            prefetchFiiDiiData();
-            prefetchOwnershipData();
-            // Announcements NOT pre-warmed — loaded on demand when tab is opened
-            // (its query is prone to 500s under concurrent load)
+            setTimeout(() => prefetchFiiDiiData(), 0);
+            setTimeout(() => prefetchOwnershipData(), 800);
+            // Nifty500 after ownership — low priority
+            setTimeout(() => _loadNifty500().catch(() => null), 1600);
         };
-        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-            window.requestIdleCallback(deferSecondary, { timeout: 5000 });
-        } else {
-            setTimeout(deferSecondary, 3000);
-        }
+        Promise.resolve(screenerReady).then(() => {
+            if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+                window.requestIdleCallback(deferSecondary, { timeout: 5000 });
+            } else {
+                setTimeout(deferSecondary, 1500);
+            }
+        });
     };
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
         window.requestIdleCallback(warmCritical, { timeout: 1500 });
@@ -12395,16 +12151,24 @@ function _warmFundamentalsCaches() {
 }
 
 function _warmMarketAndTechnicalCaches(userToken) {
-    const warm = () => {
-        preloadAllowedTickerSet();
-        _prefetchScreensBreakout();
-        _prefetchScreensPivot();
-        _prefetchScreensVolBreak();
-        _prefetchScreensPullback();
-        _prefetchScreensVcp();
-        warmStockDashboardCaches(userToken);
-    };
-    warm();
+    // Stagger all technical prefetches to avoid saturating Supabase connection pool.
+    // Fundamentals (screener + ticker index) are already in-flight; wait for idle
+    // then space each fetch 700 ms apart so connections don't pile up.
+    const tasks = [
+        () => _prefetchScreensBreakout(),
+        () => _prefetchScreensPivot(),
+        () => _prefetchScreensVolBreak(),
+        () => _prefetchScreensPullback(),
+        () => _prefetchScreensVcp(),
+        () => warmStockDashboardCaches(userToken),
+    ];
+    const STAGGER_MS = 700;
+    const run = () => tasks.forEach((fn, i) => setTimeout(fn, i * STAGGER_MS));
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(run, { timeout: 4000 });
+    } else {
+        setTimeout(run, 2000);
+    }
 }
 
 // ============================================================
@@ -12470,11 +12234,12 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
 
     return (
         <div style={{
-            display: "inline-flex", alignItems: "stretch",
+            display: "flex", alignItems: "stretch",
             height: 34, borderRadius: 8,
             border: `1px solid ${DS.border}`,
             background: DS.card,
-            overflow: "hidden", flexShrink: 0,
+            overflow: "hidden", 
+            width: "100%",
             fontSize: 13, fontFamily: DS.sans,
             boxShadow: `0 1px 3px ${DS.shadow}`,
             transition: "border-color .13s, box-shadow .13s",
@@ -12731,7 +12496,7 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
     );
 }
 
-//  SCREENER MODULE 
+//  SCREENER MODULE — Custom Filter + My Filters redesign
 function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onClearTickerFilter, onBack = null }) {
     const [allRows, setAllRows] = useState(() => filterRowsByAllowedTickers(_screenerCache || []));
     const [loading, setLoading] = useState(() => !(_screenerCache && _screenerCache.length > 0));
@@ -12739,24 +12504,76 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     const [lastRefresh, setLastRefresh] = useState(_screenerCacheTime);
     const [universe, setUniverse] = useState("all");
     const [nifty500Set, setNifty500Set] = useState(() => _nifty500Cache || null);
-    const [density, setDensity] = useState("comfortable"); // "compact"|"comfortable"
+    const [density, setDensity] = useState("comfortable");
     const isScreenerMobile = useViewportBelow(760);
 
-    const TECHNO_ID = "technofunda_scan";
-    const [screens, setScreens] = useState(() => {
+    // Panel: "custom" | "myFilters"
+    const [activePanel, setActivePanel] = useState("custom");
+
+    // Working filters (Custom Filter workspace)
+    const [workingFilters, setWorkingFilters] = useState([makeEmptyFilter()]);
+
+    // Saved filters — persisted to localStorage
+    const LS_MY_FILTERS = "screener_my_filters_v1";
+    const [myFilters, setMyFilters] = useState(() => {
         try {
-            const s = localStorage.getItem("screener_screens");
-            if (s) {
-                // Always strip the TechnoFunda screen on load  it must never persist
-                const parsed = JSON.parse(s).filter(sc => sc.id !== "technofunda_scan");
-                return parsed.length > 0 ? parsed : DEFAULT_SCREENS;
-            }
+            const s = localStorage.getItem(LS_MY_FILTERS);
+            if (s) return JSON.parse(s);
         } catch { }
-        return DEFAULT_SCREENS;
+        // Seed with the classic defaults as starter filters
+        return [
+            {
+                id: "mf_quality_growth",
+                name: "Quality Growth",
+                filters: [
+                    { col: "market_cap_cr", op: ">", val: "500" },
+                    { col: "roce", op: ">", val: "15" },
+                    { col: "roe", op: ">", val: "15" },
+                    { col: "pat_margin", op: ">", val: "10" },
+                    { col: "debt_eq", op: "<", val: "1" },
+                ],
+                createdAt: Date.now(),
+            },
+            {
+                id: "mf_value_picks",
+                name: "Value Picks",
+                filters: [
+                    { col: "market_cap_cr", op: ">", val: "500" },
+                    { col: "pe", op: "<", val: "15" },
+                    { col: "pb", op: "<", val: "2" },
+                    { col: "roce", op: ">", val: "12" },
+                    { col: "debt_eq", op: "<", val: "0.5" },
+                ],
+                createdAt: Date.now(),
+            },
+            {
+                id: "mf_high_cashflow",
+                name: "High Cash Flow",
+                filters: [
+                    { col: "cfo_pat", op: ">", val: "0.8" },
+                    { col: "cfo_ebitda", op: ">", val: "0.6" },
+                    { col: "roce", op: ">", val: "10" },
+                ],
+                createdAt: Date.now(),
+            },
+        ];
     });
-    const [activeScreenId, setActiveScreenId] = useState(DEFAULT_SCREENS[0].id);
-    const [editingName, setEditingName] = useState(false);
-    const [nameInput, setNameInput] = useState("");
+    const persistMyFilters = (next) => {
+        setMyFilters(next);
+        try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(next)); } catch { }
+    };
+
+    // Save-as dialog state
+    const [showSaveDialog, setShowSaveDialog] = useState(false);
+    const [saveNameInput, setSaveNameInput] = useState("");
+    const [saveNameError, setSaveNameError] = useState("");
+
+    // Loaded filter name (shows badge in Custom Filter header when a saved filter is loaded)
+    const [loadedFilterName, setLoadedFilterName] = useState(null);
+
+    // Applied filters (null = screen not yet run)
+    const [appliedFilters, setAppliedFilters] = useState(null);
+
     const [sortCol, setSortCol] = useState("market_cap_cr");
     const [sortAsc, setSortAsc] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
@@ -12767,55 +12584,32 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     });
     const [showColPicker, setShowColPicker] = useState(false);
     const [colSearch, setColSearch] = useState("");
-    // Live price overlay  incremented whenever _sessionPriceCache gains new entries
     const [livePriceTick, setLivePriceTick] = useState(0);
     const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(true);
-    // appliedFilters: null = screen never run yet (show empty state), array = committed filters driving results
-    const [appliedFilters, setAppliedFilters] = useState(null);
 
-    const saveScreens = next => { setScreens(next); try { localStorage.setItem("screener_screens", JSON.stringify(next.filter(sc => sc.id !== TECHNO_ID))); } catch { } };
     const saveVisCols = next => { setVisibleCols(next); try { localStorage.setItem("screener_visible_cols", JSON.stringify(next)); } catch { } };
 
-    // TechnoFunda  ephemeral tab, never persisted to localStorage
+    // TechnoFunda ephemeral overlay
     const prevTF = useRef(null);
     useEffect(() => {
         if (tickerFilter && tickerFilter !== prevTF.current) {
             prevTF.current = tickerFilter;
-            const sc = { id: TECHNO_ID, name: "TechnoFunda", filters: [] };
-            setScreens(prev => [...prev.filter(s => s.id !== TECHNO_ID), sc]);
-            setActiveScreenId(TECHNO_ID);
-            // Auto-apply for TechnoFunda since tickers come from an external scan
             setAppliedFilters([]);
         }
         if (!tickerFilter && prevTF.current) {
             prevTF.current = null;
-            setScreens(prev => { const w = prev.filter(s => s.id !== TECHNO_ID); return w.length > 0 ? w : DEFAULT_SCREENS; });
-            setActiveScreenId(s => s === TECHNO_ID ? DEFAULT_SCREENS[0].id : s);
+            setAppliedFilters(null);
         }
     }, [tickerFilter]);
 
-    const activeScreen = screens.find(s => s.id === activeScreenId) || screens[0];
-    const filters = activeScreen?.filters || [];
-
-    // Reset applied state whenever user switches screen tab
-    useEffect(() => {
-        setAppliedFilters(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeScreenId]);
-
-    // Data load — stale-while-revalidate strategy:
-    // 1. If we have anything in memory (even stale), serve it immediately (no spinner).
-    // 2. If stale, kick off a background refresh and swap rows in silently.
-    // 3. Only show the spinner if we have absolutely nothing cached anywhere.
+    // Data load
     const loadRatios = async (force) => {
         const allowedSet = await ensureAllowedTickerSet();
-        // Serve cached data immediately regardless of freshness
         if (!force && _screenerCache && _screenerCache.length > 0) {
             setLoadErr("");
             setAllRows(filterRowsByAllowedTickers(_screenerCache, "ticker", allowedSet));
             setLastRefresh(_screenerCacheTime);
             setLoading(false);
-            // Background revalidation — silent swap when done
             if (!_isScreenerCacheFresh()) {
                 _preloadScreenerCache().then(rows => {
                     if (Array.isArray(rows) && rows.length > 0) {
@@ -12826,7 +12620,6 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             }
             return;
         }
-        // Nothing cached at all — show spinner while fetching
         setLoading(true); setLoadErr("");
         try {
             const rows = await _preloadScreenerCache();
@@ -12838,11 +12631,26 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     };
     useEffect(() => { loadRatios(false); }, []);
     useEffect(() => {
+        // Read from cache immediately if available (warmed by _warmFundamentalsCaches).
+        // If not cached yet, poll briefly then fall back to a deferred fetch to avoid
+        // competing with the screener data load on mount.
         if (_nifty500Cache !== null && _nifty500Cache.size > 0) { setNifty500Set(_nifty500Cache); return; }
-        _loadNifty500().then(set => setNifty500Set(set));
+        // Poll for cache to be populated by the background warmer (up to 8 s)
+        let attempts = 0;
+        const poll = setInterval(() => {
+            if (_nifty500Cache !== null && _nifty500Cache.size > 0) {
+                clearInterval(poll);
+                setNifty500Set(_nifty500Cache);
+            } else if (++attempts >= 16) {
+                clearInterval(poll);
+                // Cache never arrived — fetch directly as last resort
+                _loadNifty500().then(set => setNifty500Set(set)).catch(() => null);
+            }
+        }, 500);
+        return () => clearInterval(poll);
     }, []);
 
-    // Filter + sort + dedup — only runs after user clicks "Run Screen"
+    // Filter + sort + dedup
     const filtered = useMemo(() => {
         if (appliedFilters === null) return [];
         let base = allRows;
@@ -12872,6 +12680,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     const mobileCardCols = activeCols.length > 0
         ? activeCols
         : mobilePriorityKeys.map(key => SCREENER_COLS.find(col => col.key === key)).filter(Boolean);
+
     const prevFilterKey = useRef("");
     const filterKey = JSON.stringify(appliedFilters) + sortCol + sortAsc;
     if (filterKey !== prevFilterKey.current) { prevFilterKey.current = filterKey; if (currentPage !== 1) setCurrentPage(1); }
@@ -12882,18 +12691,17 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         ? "0"
         : `${((safePage - 1) * rowsPerPage) + 1}-${Math.min(safePage * rowsPerPage, filtered.length)}`;
 
-    // Batch-fetch live prices for tickers on the current page (9:15 AM7:00 PM IST only)
+    // Live price fetch
     useEffect(() => {
         if (!isMarketLive()) return;
         if (!pageRows || pageRows.length === 0) return;
         let cancelled = false;
-        // Build bhav price lookup for sanity-checking Yahoo prices
         const bhavMap = Object.fromEntries(pageRows.map(r => [r.ticker?.toUpperCase(), r.current_price ?? null]));
         const newOnes = pageRows
             .map(r => r.ticker).filter(Boolean)
             .filter(t => !_sessionPriceCache.has(t.toUpperCase()) && !_sessionPriceFetching.has(t.toUpperCase()));
         if (newOnes.length === 0) return;
-        const BATCH = 5;
+        const BATCH = 1;
         let batchIdx = 0;
         const runBatch = async () => {
             if (cancelled) return;
@@ -12901,52 +12709,87 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             if (batch.length === 0) return;
             batchIdx += BATCH;
             await Promise.allSettled(batch.map(t => _fetchAndCachePrice(t, bhavMap[t.toUpperCase()])));
-            if (!cancelled) { setLivePriceTick(n => n + 1); setTimeout(runBatch, 600); }
+            if (!cancelled) { setLivePriceTick(n => n + 1); setTimeout(runBatch, 2000); }
         };
         runBatch();
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [safePage, filterKey, allRows]);
 
-    // Mutations
+    // Filter mutations
     const updateFilter = (idx, patch) => {
-        saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: filters.map((f, i) => i === idx ? { ...f, ...patch } : f) } : s));
+        setWorkingFilters(prev => prev.map((f, i) => i === idx ? { ...f, ...patch } : f));
+        setLoadedFilterName(null); // mark as modified
     };
     const addFilter = () => {
-        saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: [...filters, makeEmptyFilter()] } : s));
+        setWorkingFilters(prev => [...prev, makeEmptyFilter()]);
+        setLoadedFilterName(null);
         if (isScreenerMobile) setMobileFiltersExpanded(true);
     };
     const removeFilter = idx => {
-        saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: filters.filter((_, i) => i !== idx) } : s));
+        setWorkingFilters(prev => prev.filter((_, i) => i !== idx));
+        setLoadedFilterName(null);
     };
     const clearFilters = () => {
-        saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: [] } : s));
+        setWorkingFilters([]);
+        setLoadedFilterName(null);
+        setAppliedFilters(null);
     };
     const runScreen = () => {
-        setAppliedFilters([...filters]);
+        setAppliedFilters([...workingFilters]);
         setCurrentPage(1);
     };
-    // True when pending filters differ from what was last applied
-    const filtersChanged = appliedFilters === null || JSON.stringify(filters) !== JSON.stringify(appliedFilters);
-    const addScreen = () => { const id = "screen_" + Date.now(); saveScreens([...screens, { id, name: "New Screen", filters: [makeEmptyFilter()] }]); setActiveScreenId(id); };
-    const deleteScreen = id => { if (screens.length <= 1) return; const next = screens.filter(s => s.id !== id); saveScreens(next); if (activeScreenId === id) setActiveScreenId(next[0].id); };
-    const renameScreen = (id, name) => saveScreens(screens.map(s => s.id === id ? { ...s, name } : s));
+    const filtersChanged = appliedFilters === null || JSON.stringify(workingFilters) !== JSON.stringify(appliedFilters);
     const handleSort = key => { if (sortCol === key) setSortAsc(a => !a); else { setSortCol(key); setSortAsc(false); } };
+
+    // My Filters operations
+    const loadSavedFilter = (mf) => {
+        const cloned = mf.filters.map(f => ({ ...f, id: Date.now() + Math.random() }));
+        setWorkingFilters(cloned);
+        setLoadedFilterName(mf.name);
+        setAppliedFilters(null);
+        setActivePanel("custom");
+    };
+    const deleteSavedFilter = (id) => {
+        persistMyFilters(myFilters.filter(mf => mf.id !== id));
+    };
+    const openSaveDialog = () => {
+        setSaveNameInput(loadedFilterName || "");
+        setSaveNameError("");
+        setShowSaveDialog(true);
+    };
+    const commitSave = () => {
+        const name = saveNameInput.trim();
+        if (!name) { setSaveNameError("Enter a name for this filter"); return; }
+        const existing = myFilters.find(mf => mf.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+            // Overwrite
+            persistMyFilters(myFilters.map(mf => mf.name.toLowerCase() === name.toLowerCase()
+                ? { ...mf, filters: workingFilters.map(f => ({ ...f })), updatedAt: Date.now() }
+                : mf
+            ));
+        } else {
+            persistMyFilters([...myFilters, {
+                id: "mf_" + Date.now(),
+                name,
+                filters: workingFilters.map(f => ({ ...f })),
+                createdAt: Date.now(),
+            }]);
+        }
+        setLoadedFilterName(name);
+        setShowSaveDialog(false);
+    };
 
     // Design tokens
     const DS = makeDS(T);
 
-    // Cell color: ONLY red for negatives, everything else is DS.text
     const cellColor = (col, val) => {
         if (val == null) return DS.text;
         const n = Number(val); if (isNaN(n)) return DS.text;
         return n < 0 ? DS.neg : DS.text;
     };
-
-    // Row height matches portfolio td padding (9px top+bottom = natural)
     const compactRow = density === "compact";
 
-    // Ghost button  matches portfolio page style exactly
     const ghostBtn = (active = false) => ({
         display: "inline-flex", alignItems: "center", gap: 7,
         padding: "7px 13px",
@@ -12965,6 +12808,29 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         boxShadow: active ? `0 10px 24px ${DS.shadow}` : "none",
     });
 
+    // Sidebar nav item style
+    const navItem = (active) => ({
+        display: "flex", alignItems: "center", gap: 10,
+        width: "100%", padding: "10px 14px",
+        border: "none", borderRadius: 8, cursor: "pointer",
+        background: active ? DS.accentDim : "transparent",
+        color: active ? DS.accent : DS.textSub,
+        fontWeight: active ? 600 : 400, fontSize: 13,
+        fontFamily: DS.sans, textAlign: "left",
+        transition: "all .13s",
+    });
+
+    // Filter summary chip for My Filters cards
+    const summarizeFilter = (f) => {
+        const col = SCREENER_COLS.find(c => c.key === f.col);
+        const label = col?.label || f.col;
+        if (f.valType === "column") {
+            const rhsCol = SCREENER_COLS.find(c => c.key === f.rhsCol);
+            return `${label} ${f.op} ${f.rhsMul || 1}x ${rhsCol?.label || f.rhsCol}`;
+        }
+        return `${label} ${f.op} ${f.val}`;
+    };
+
     //  RENDER 
     return (
         <div style={{
@@ -12973,186 +12839,14 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             flex: 1, minHeight: 0, overflow: "hidden"
         }}>
 
-            {/*  ROW 1: Screen tabs + toolbar  */}
-            <div style={{
-                flexShrink: 0, background: DS.card,
-                borderBottom: `1px solid ${DS.border}`,
-                padding: isScreenerMobile ? "12px 14px" : "0 16px", display: isScreenerMobile ? "none" : "flex", alignItems: "stretch",
-                flexDirection: "row",
-                gap: 0,
-                minHeight: 44, overflow: "hidden"
-            }}>
-
-                {/* Tabs */}
-                <div style={{ display: "flex", alignItems: "stretch", flex: 1, overflow: isScreenerMobile ? "auto hidden" : "hidden", paddingBottom: isScreenerMobile ? 2 : 0 }}>
-                    {screens.map(sc => {
-                        const isTechno = sc.id === TECHNO_ID;
-                        const isActive = activeScreenId === sc.id;
-                        return (
-                            <div key={sc.id} style={{ display: "flex", alignItems: "stretch", flexShrink: 0 }}>
-                                {editingName && isActive && !isTechno ? (
-                                    <input autoFocus value={nameInput}
-                                        onChange={e => setNameInput(e.target.value)}
-                                        onBlur={() => { if (nameInput.trim()) renameScreen(sc.id, nameInput); setEditingName(false); }}
-                                        onKeyDown={e => { if (e.key === "Enter" && nameInput.trim()) { renameScreen(sc.id, nameInput); setEditingName(false); } }}
-                                        style={{
-                                            alignSelf: "center", fontSize: 13, fontWeight: 600,
-                                            padding: "4px 9px", border: `1px solid ${DS.accent}`,
-                                            borderRadius: 7, background: DS.accentDim,
-                                            color: DS.accent, fontFamily: DS.sans, outline: "none", width: 130
-                                        }} />
-                                ) : (
-                                    <button onClick={() => setActiveScreenId(sc.id)}
-                                        onDoubleClick={() => { if (!isTechno) { setNameInput(sc.name); setEditingName(true); } }}
-                                        style={{
-                                            display: "flex", alignItems: "center", gap: isTechno ? 6 : 0,
-                                            padding: isScreenerMobile ? "0 14px" : "0 15px", border: "none",
-                                            borderBottom: isScreenerMobile ? "none" : `2px solid ${isActive ? (isTechno ? "#818cf8" : DS.accent) : "transparent"}`,
-                                            marginBottom: isScreenerMobile ? 0 : -1,
-                                            background: isScreenerMobile
-                                                ? (isActive ? (isTechno ? "rgba(129,140,248,0.12)" : DS.accentDim) : DS.bg)
-                                                : "transparent",
-                                            color: isActive ? (isTechno ? "#818cf8" : DS.text) : DS.textSub,
-                                            fontWeight: isActive ? 600 : 400,
-                                            fontSize: 13, cursor: "pointer", fontFamily: DS.sans,
-                                            transition: "color .12s", whiteSpace: "nowrap",
-                                            borderRadius: isScreenerMobile ? 999 : 0,
-                                            height: isScreenerMobile ? 34 : "auto",
-                                            boxShadow: isScreenerMobile && isActive ? `inset 0 0 0 1px ${isTechno ? "rgba(129,140,248,0.28)" : `${DS.accent}33`}` : "none",
-                                        }}
-                                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = DS.text; }}
-                                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = DS.textSub; }}>
-                                        {isTechno && <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="6" cy="6" r="4" /><line x1="9.5" y1="9.5" x2="14" y2="14" /></svg>}
-                                        {sc.name}
-                                    </button>
-                                )}
-                                {screens.length > 1 && !isTechno && (
-                                    <button onClick={() => deleteScreen(sc.id)}
-                                        style={{
-                                            alignSelf: "center", background: "none", border: "none",
-                                            color: DS.textMuted, cursor: "pointer", fontSize: 15,
-                                            padding: isScreenerMobile ? "0 6px 0 2px" : "0 3px 0 0", opacity: .4, transition: "opacity .12s"
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-                                        onMouseLeave={e => e.currentTarget.style.opacity = "0.4"}>x</button>
-                                )}
-                            </div>
-                        );
-                    })}
-                    <button onClick={addScreen}
-                        style={{
-                            alignSelf: "center", marginLeft: 8,
-                            display: "flex", alignItems: "center", gap: 5,
-                            height: isScreenerMobile ? 34 : 26, padding: isScreenerMobile ? "0 12px" : "0 10px",
-                            border: `1px dashed ${DS.border}`, borderRadius: isScreenerMobile ? 999 : 7,
-                            background: isScreenerMobile ? DS.bg : "transparent", color: DS.textMuted,
-                            fontSize: 12, fontFamily: DS.sans, cursor: "pointer",
-                            transition: "border-color .12s, color .12s"
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent; e.currentTarget.style.color = DS.accent; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; }}>
-                        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
-                        Screen
-                    </button>
-                </div>
-
-                {/* Right controls */}
-                <div style={{
-                    display: "flex", alignItems: isScreenerMobile ? "stretch" : "center", gap: 8, flexShrink: 0,
-                    paddingLeft: isScreenerMobile ? 0 : 14, borderLeft: isScreenerMobile ? "none" : `1px solid ${DS.border}`,
-                    flexWrap: isScreenerMobile ? "wrap" : "nowrap"
-                }}>
-
-                    {!loading && allRows.length > 0 && appliedFilters !== null && !filtersChanged && (
-                        <span style={{
-                            fontFamily: DS.mono, fontSize: 12,
-                            color: DS.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
-                            width: isScreenerMobile ? "100%" : "auto"
-                        }}>
-                            <strong style={{ color: DS.text, fontWeight: 600 }}>
-                                {filtered.length.toLocaleString("en-IN")}
-                            </strong>{" results"}
-                        </span>
-                    )}
-
-                    {!isScreenerMobile && <div style={{ width: 1, height: 16, background: DS.border }} />}
-
-                    {/* Density toggle */}
-                    <div style={{ display: "flex", gap: 1, order: isScreenerMobile ? 2 : 0 }}>
-                        {[["compact", ""], ["comfortable", ""]].map(([d, icon]) => (
-                            <button key={d} onClick={() => setDensity(d)} title={d}
-                                style={{
-                                    width: 26, height: 26, border: "none", borderRadius: 6,
-                                    background: density === d ? DS.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" : "transparent",
-                                    color: density === d ? DS.accent : DS.textMuted,
-                                    cursor: "pointer", fontSize: 13,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    transition: "all .12s"
-                                }}>
-                                {icon}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Universe */}
-                    <div style={{
-                        display: "flex", gap: 2, background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-                        borderRadius: 8, padding: 3, border: `1px solid ${DS.border}`, order: isScreenerMobile ? 1 : 0,
-                        width: isScreenerMobile ? "100%" : "auto"
-                    }}>
-                        {[{ v: "all", l: "All" }, { v: "nifty500", l: "N500" }].map(opt => (
-                            <button key={opt.v} onClick={() => setUniverse(opt.v)}
-                                style={{
-                                    height: 22, padding: "0 10px", border: "none", borderRadius: 6,
-                                    background: universe === opt.v ? DS.accent : "transparent",
-                                    color: universe === opt.v ? "#fff" : DS.textSub,
-                                    fontWeight: universe === opt.v ? 600 : 400,
-                                    fontSize: 12, fontFamily: DS.sans, cursor: "pointer",
-                                    transition: ".12s", flex: isScreenerMobile ? 1 : "0 0 auto"
-                                }}>
-                                {opt.l}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Columns */}
-                    <button onClick={() => setShowColPicker(v => !v)}
-                        style={isScreenerMobile ? { ...mobileGhostBtn(showColPicker), flex: "1 1 0" } : ghostBtn(showColPicker)}
-                        onMouseEnter={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
-                        onMouseLeave={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; } }}>
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                            <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" /><line x1="1" y1="12" x2="15" y2="12" />
-                            <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" /><line x1="7" y1="10" x2="7" y2="14" />
-                        </svg>
-                        Columns
-                    </button>
-
-                    {/* Refresh */}
-                    <button onClick={() => loadRatios(true)} disabled={loading}
-                        style={isScreenerMobile
-                            ? { ...mobileGhostBtn(false), flex: "1 1 0", opacity: loading ? .5 : 1, cursor: loading ? "not-allowed" : "pointer" }
-                            : { ...ghostBtn(false), opacity: loading ? .5 : 1, cursor: loading ? "not-allowed" : "pointer" }}
-                        onMouseEnter={e => { if (!loading) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
-                            style={{ animation: loading ? "finspin .8s linear infinite" : "none" }}>
-                            <path d="M13.5 8A5.5 5.5 0 1 1 10.5 3.2" /><path d="M10 1l2.5 2.2L10 5.4" />
-                        </svg>
-                        {loading ? "Loading" : lastRefresh || "Refresh"}
-                    </button>
-                </div>
-            </div>
-
-            {/*  TECHNOFUNDA BANNER  */}
+            {/* TechnoFunda banner */}
             {tickerFilter && tickerFilter.size > 0 && (
                 <div style={{
                     flexShrink: 0,
                     background: DS.isDark ? "rgba(99,102,241,0.07)" : "rgba(99,102,241,0.05)",
                     borderBottom: `1px solid rgba(99,102,241,0.18)`,
-                    padding: "10px 16px", display: isScreenerMobile ? "none" : "flex", alignItems: "center", gap: 10,
-                    flexWrap: "nowrap"
+                    padding: "10px 16px", display: "flex", alignItems: "center", gap: 10,
                 }}>
-                    {/* Back button */}
                     {onBack && (
                         <button onClick={onBack}
                             style={{
@@ -13161,31 +12855,19 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                 border: `1px solid ${DS.border}`, borderRadius: 7,
                                 background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
                                 color: DS.textSub, cursor: "pointer", fontSize: 12,
-                                fontFamily: DS.sans, fontWeight: 500,
-                                transition: "all .13s", flexShrink: 0
+                                fontFamily: DS.sans, fontWeight: 500, transition: "all .13s",
                             }}
                             onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.5)"; e.currentTarget.style.color = DS.text; }}
                             onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 3L5 8l5 5" />
-                            </svg>
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L5 8l5 5" /></svg>
                             Back
                         </button>
                     )}
-                    {/* Divider */}
                     {onBack && <div style={{ width: 1, height: 16, background: DS.border, flexShrink: 0 }} />}
-                    {/* Label */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <span style={{
-                            fontSize: 10, fontWeight: 700, color: "#6366f1",
-                            letterSpacing: ".06em", textTransform: "uppercase",
-                            flexShrink: 0
-                        }}>TechnoFunda</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#6366f1", letterSpacing: ".06em", textTransform: "uppercase", flexShrink: 0 }}>TechnoFunda</span>
                         {technoFundaLabel && (
-                            <span style={{
-                                fontSize: 12, color: DS.textSub, fontWeight: 500,
-                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
-                            }}>
+                            <span style={{ fontSize: 12, color: DS.textSub, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {technoFundaLabel}
                             </span>
                         )}
@@ -13193,541 +12875,601 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                             <strong style={{ color: DS.text, fontWeight: 600 }}>{tickerFilter.size}</strong> stocks
                         </span>
                     </div>
-                    {/* Clear  only shown when no back button (edge case) */}
                     {!onBack && (
                         <button onClick={onClearTickerFilter}
-                            style={{ marginLeft: isScreenerMobile ? 0 : "auto", ...ghostBtn(false), padding: "4px 10px", fontSize: 12 }}
+                            style={{ marginLeft: "auto", ...ghostBtn(false), padding: "4px 10px", fontSize: 12 }}
                             onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
                             onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                            x Clear
+                            ✕ Clear
                         </button>
                     )}
                 </div>
             )}
 
-            {/*  FILTER BAR  */}
-            <div style={{
-                flexShrink: 0, borderBottom: `1px solid ${DS.border}`,
-                padding: "8px 16px", display: "flex", alignItems: "center",
-                gap: 7, flexWrap: "wrap", minHeight: 50, background: DS.bg
-            }}>
+            {/* Main layout: sidebar + content */}
+            <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
-                {isScreenerMobile && (
+                {/* LEFT SIDEBAR — nav */}
+                {!isScreenerMobile && (
                     <div style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        padding: "2px 0 6px",
+                        flexShrink: 0, width: 220,
+                        borderRight: `1px solid ${DS.border}`,
+                        background: DS.surface,
+                        display: "flex", flexDirection: "column",
+                        padding: "12px 8px",
+                        gap: 2,
                     }}>
-                        <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".08em" }}>
-                                Filters
-                            </div>
-                            <div style={{ marginTop: 3, fontSize: 13, color: DS.textSub, lineHeight: 1.35 }}>
-                                {filters.length > 0
-                                    ? `${filters.length} active rule${filters.length > 1 ? "s" : ""} on ${activeScreen?.name || "screen"}`
-                                    : "No active rules"}
-                            </div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".07em", padding: "4px 6px 8px" }}>
+                            Filters
                         </div>
-                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                            <button
-                                onClick={() => setShowColPicker(v => !v)}
-                                style={{ ...mobileGhostBtn(showColPicker), padding: "8px 12px", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}
-                            >
-                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                                    <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" /><line x1="1" y1="12" x2="15" y2="12" />
-                                    <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" /><line x1="7" y1="10" x2="7" y2="14" />
-                                </svg>
-                                Columns
-                            </button>
-                            <button
-                                onClick={() => setMobileFiltersExpanded(v => !v)}
-                                style={{ ...mobileGhostBtn(mobileFiltersExpanded), padding: "8px 12px", flexShrink: 0 }}
-                            >
-                                {mobileFiltersExpanded ? "Hide filters" : "Show filters"}
-                            </button>
-                        </div>
-                    </div>
-                )}
 
-                {(!isScreenerMobile || mobileFiltersExpanded) && (
-                    <>
-
-                        {filters.map((f, idx) => (
-                            <FilterPill key={f.id || idx} filter={f} idx={idx}
-                                onUpdate={updateFilter} onRemove={removeFilter} DS={DS} />
-                        ))}
-
-                        <button onClick={addFilter}
-                            style={{ ...(isScreenerMobile ? mobileGhostBtn(false) : ghostBtn(false)), borderStyle: "dashed", color: DS.textMuted }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; }}>
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
-                            Add Filter
-                        </button>
-
-                        {filters.length > 0 && (
-                            <button onClick={clearFilters}
-                                style={{
-                                    background: "none", border: "none", cursor: "pointer",
-                                    color: DS.textMuted, fontSize: 13, fontFamily: DS.sans, padding: "0 4px",
-                                    transition: "color .12s"
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.color = DS.text}
-                                onMouseLeave={e => e.currentTarget.style.color = DS.textMuted}>
-                                Clear all
-                            </button>
-                        )}
-
-                        {/* Run Screen CTA */}
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                            {appliedFilters !== null && !filtersChanged && (
-                                <span style={{
-                                    fontFamily: DS.mono, fontSize: 12,
-                                    color: DS.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap"
-                                }}>
-                                    <strong style={{ color: DS.text, fontWeight: 600 }}>
-                                        {filtered.length.toLocaleString("en-IN")}
-                                    </strong>{" results"}
-                                </span>
-                            )}
-                            {filtersChanged && appliedFilters !== null && (
-                                <span style={{
-                                    fontSize: 11, color: DS.textMuted, fontFamily: DS.sans,
-                                    fontStyle: "italic", whiteSpace: "nowrap"
-                                }}>
-                                    Filters changed
-                                </span>
-                            )}
-                            <button
-                                onClick={runScreen}
-                                disabled={loading}
-                                style={{
-                                    display: "inline-flex", alignItems: "center", gap: 7,
-                                    padding: "7px 16px",
-                                    background: filtersChanged
-                                        ? DS.accent
-                                        : (DS.isDark ? "rgba(99,102,241,0.12)" : "rgba(37,99,235,0.07)"),
-                                    border: `1px solid ${filtersChanged ? DS.accent : DS.accent + "44"}`,
-                                    borderRadius: 8,
-                                    color: filtersChanged ? "#fff" : DS.accent,
-                                    cursor: loading ? "not-allowed" : "pointer",
-                                    fontSize: 13, fontWeight: 600,
-                                    fontFamily: DS.sans,
-                                    transition: "all .15s",
-                                    whiteSpace: "nowrap",
-                                    opacity: loading ? .5 : 1,
-                                    boxShadow: filtersChanged ? `0 2px 12px ${DS.accent}33` : "none",
-                                }}
-                                onMouseEnter={e => {
-                                    if (!loading && filtersChanged) {
-                                        e.currentTarget.style.background = DS.accentHover || DS.accent;
-                                        e.currentTarget.style.boxShadow = `0 4px 18px ${DS.accent}44`;
-                                    }
-                                }}
-                                onMouseLeave={e => {
-                                    e.currentTarget.style.background = filtersChanged
-                                        ? DS.accent
-                                        : (DS.isDark ? "rgba(99,102,241,0.12)" : "rgba(37,99,235,0.07)");
-                                    e.currentTarget.style.boxShadow = filtersChanged ? `0 2px 12px ${DS.accent}33` : "none";
-                                }}
-                            >
-                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polygon points="5,3 13,8 5,13" fill="currentColor" stroke="none" />
-                                </svg>
-                                Run Screen
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
-
-            {/*  TABLE AREA  */}
-            <div style={{
-                flex: 1, overflow: "hidden", background: DS.bg,
-                minHeight: 0, display: "flex", flexDirection: "column"
-            }}>
-
-                {/* Not yet run — premium empty state */}
-                {!loading && !loadErr && appliedFilters === null && (
-                    <div style={{
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                        justifyContent: "center", height: "100%", gap: 20,
-                        color: DS.textSub, userSelect: "none",
-                    }}>
-                        <div style={{
-                            width: 52, height: 52, borderRadius: 16,
-                            background: DS.isDark ? "rgba(99,102,241,0.08)" : "rgba(37,99,235,0.06)",
-                            border: `1px solid ${DS.accent}22`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={DS.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.8">
-                                <path d="M4 6h16M7 12h10M10 18h4" />
-                            </svg>
-                        </div>
-                        <div style={{ textAlign: "center", maxWidth: 320 }}>
-                            <div style={{ fontSize: 15, fontWeight: 600, color: DS.text, marginBottom: 6 }}>
-                                Configure your filters, then run
-                            </div>
-                            <div style={{ fontSize: 13, color: DS.textMuted, lineHeight: 1.6 }}>
-                                Set filter conditions above and click{" "}
-                                <span style={{ color: DS.accent, fontWeight: 600 }}>Run Screen</span>{" "}
-                                to see matching stocks.
-                            </div>
-                        </div>
                         <button
-                            onClick={runScreen}
-                            disabled={loading}
-                            style={{
-                                display: "inline-flex", alignItems: "center", gap: 8,
-                                padding: "9px 22px",
-                                background: DS.accent,
-                                border: "none", borderRadius: 9,
-                                color: "#fff", cursor: loading ? "not-allowed" : "pointer",
-                                fontSize: 13, fontWeight: 600, fontFamily: DS.sans,
-                                boxShadow: `0 4px 18px ${DS.accent}33`,
-                                transition: "all .15s",
-                                opacity: loading ? .5 : 1,
-                            }}
-                            onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = `0 6px 24px ${DS.accent}55`; e.currentTarget.style.transform = "translateY(-1px)"; } }}
-                            onMouseLeave={e => { e.currentTarget.style.boxShadow = `0 4px 18px ${DS.accent}33`; e.currentTarget.style.transform = ""; }}
-                        >
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polygon points="5,3 13,8 5,13" fill="currentColor" stroke="none" />
+                            onClick={() => setActivePanel("custom")}
+                            style={navItem(activePanel === "custom")}
+                            onMouseEnter={e => { if (activePanel !== "custom") { e.currentTarget.style.background = DS.hover; e.currentTarget.style.color = DS.text; } }}
+                            onMouseLeave={e => { if (activePanel !== "custom") { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = DS.textSub; } }}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 4h12M4 8h8M6 12h4" />
                             </svg>
-                            Run Screen
+                            Custom Filter
+                            {workingFilters.length > 0 && (
+                                <span style={{
+                                    marginLeft: "auto", fontSize: 10, fontWeight: 700,
+                                    background: activePanel === "custom" ? DS.accent : DS.border,
+                                    color: activePanel === "custom" ? "#fff" : DS.textSub,
+                                    borderRadius: 99, padding: "1px 6px", minWidth: 18, textAlign: "center",
+                                }}>
+                                    {workingFilters.length}
+                                </span>
+                            )}
                         </button>
-                    </div>
-                )}
 
-                {/* Loading */}
-                {loading && allRows.length === 0 && (
-                    <div style={{
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                        justifyContent: "center", height: "100%", gap: 12, color: DS.textSub
-                    }}>
-                        <div style={{
-                            width: 20, height: 20, border: `2px solid ${DS.border}`,
-                            borderTopColor: DS.accent, borderRadius: "50%",
-                            animation: "finspin .7s linear infinite"
-                        }} />
-                        <span style={{ fontSize: 13 }}>Loading</span>
-                    </div>
-                )}
-
-                {/* Error */}
-                {loadErr && (
-                    <div style={{ padding: "40px 24px", textAlign: "center" }}>
-                        <div style={{
-                            display: "inline-block", background: DS.isDark ? "rgba(244,63,94,0.07)" : "rgba(220,38,38,0.05)",
-                            border: `1px solid ${DS.neg}33`, borderRadius: 10,
-                            padding: "16px 24px", maxWidth: 480
-                        }}>
-                            <div style={{ color: DS.neg, fontSize: 13, fontWeight: 600, marginBottom: 8 }}> {loadErr}</div>
-                            <button onClick={() => loadRatios(true)}
-                                style={{
-                                    padding: "7px 16px", border: `1px solid ${DS.accent}`,
-                                    borderRadius: 8, background: DS.accentDim,
-                                    color: DS.accent, fontSize: 13, cursor: "pointer",
-                                    fontFamily: DS.sans
+                        <button
+                            onClick={() => setActivePanel("myFilters")}
+                            style={navItem(activePanel === "myFilters")}
+                            onMouseEnter={e => { if (activePanel !== "myFilters") { e.currentTarget.style.background = DS.hover; e.currentTarget.style.color = DS.text; } }}
+                            onMouseLeave={e => { if (activePanel !== "myFilters") { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = DS.textSub; } }}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 2h5l1.5 2H14v9H2z" />
+                            </svg>
+                            My Filters
+                            {myFilters.length > 0 && (
+                                <span style={{
+                                    marginLeft: "auto", fontSize: 10, fontWeight: 700,
+                                    background: activePanel === "myFilters" ? DS.accent : DS.border,
+                                    color: activePanel === "myFilters" ? "#fff" : DS.textSub,
+                                    borderRadius: 99, padding: "1px 6px", minWidth: 18, textAlign: "center",
                                 }}>
-                                Retry
-                            </button>
-                        </div>
-                    </div>
-                )}
+                                    {myFilters.length}
+                                </span>
+                            )}
+                        </button>
 
-                {/* Empty */}
-                {!loading && !loadErr && appliedFilters !== null && filtered.length === 0 && (
-                    <div style={{
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                        justifyContent: "center", height: "100%", gap: 8, color: DS.textSub
-                    }}>
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: .2 }}>
-                            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-                        </svg>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub }}>No results</div>
-                        <div style={{ fontSize: 13, color: DS.textMuted }}>Adjust your filters to find matching stocks</div>
-                        {filters.length > 0 && (
-                            <button onClick={clearFilters} style={{ marginTop: 6, ...ghostBtn(false) }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                                Clear filters
-                            </button>
-                        )}
-                    </div>
-                )}
-
-                {/*  TABLE  matches portfolio table-wrap + thead th + td styles  */}
-                {!loading && !loadErr && filtered.length > 0 && (
-                    <div style={{
-                        flex: 1, overflow: "auto",
-                        scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
-                    }}>
-                        <table style={{
-                            width: "max-content", minWidth: "100%",
-                            borderCollapse: "collapse", fontFamily: DS.sans
-                        }}>
-                            <thead>
-                                <tr style={{
-                                    position: "sticky", top: 0, zIndex: 10,
-                                    background: DS.tableHead,
-                                    borderBottom: `1px solid ${DS.border}`
-                                }}>
-                                    {/* # */}
-                                    <th style={{
-                                        padding: isScreenerMobile ? "7px 0 7px 10px" : "9px 0 9px 16px",
-                                        textAlign: "left",
-                                        fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase",
-                                        letterSpacing: ".07em", color: DS.textMuted,
-                                        position: "sticky", left: 0, zIndex: 11,
-                                        background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                        width: isScreenerMobile ? 28 : 40, whiteSpace: "nowrap",
-                                    }}>#</th>
-
-                                    {/* Company */}
-                                    <th style={{
-                                        padding: isScreenerMobile ? "7px 10px 7px 8px" : "9px 16px 9px 10px",
-                                        textAlign: "left",
-                                        fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase",
-                                        letterSpacing: ".07em", color: DS.textMuted,
-                                        position: "sticky", left: isScreenerMobile ? 28 : 40, zIndex: 11,
-                                        background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                        minWidth: isScreenerMobile ? 100 : 200, whiteSpace: "nowrap",
-                                    }}>Company</th>
-
-                                    {/* Metrics */}
-                                    {activeCols.map(col => {
-                                        const isSort = sortCol === col.key;
-                                        return (
-                                            <th key={col.key} onClick={() => handleSort(col.key)}
-                                                style={{
-                                                    padding: isScreenerMobile ? "7px 9px" : "9px 13px",
-                                                    textAlign: "right",
-                                                    fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700,
-                                                    textTransform: "uppercase", letterSpacing: ".07em",
-                                                    color: isSort ? DS.accent : DS.textMuted,
-                                                    background: isSort ? DS.accentDim : DS.tableHead,
-                                                    borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
-                                                    whiteSpace: "nowrap", cursor: "pointer",
-                                                    userSelect: "none", transition: "background .1s, color .1s",
-                                                }}
-                                                onMouseEnter={e => { if (!isSort) { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.hover; } }}
-                                                onMouseLeave={e => { if (!isSort) { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = DS.tableHead; } }}>
-                                                {col.label}
-                                                {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "↑" : "↓"}</span>}
-                                            </th>
-                                        );
-                                    })}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {pageRows.map((row, ri) => {
-                                    const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
-                                    const ticker = row.ticker || row.symbol || "";
-                                    const displayTicker = row.displayTicker || ticker;
-                                    const stickyLeft = isScreenerMobile ? 28 : 40;
-                                    const rowPad = isScreenerMobile
-                                        ? (compactRow ? "4px 0 4px 10px" : "7px 0 7px 10px")
-                                        : (compactRow ? "5px 0 5px 16px" : "9px 0 9px 16px");
-                                    const cellPadV = isScreenerMobile ? (compactRow ? "4px" : "7px") : (compactRow ? "5px" : "9px");
-                                    const cellFs = isScreenerMobile ? 11 : 13;
-
-                                    return (
-                                        <tr key={ri}
-                                            style={{
-                                                borderTop: `1px solid ${DS.border}`,
-                                                transition: "background .07s", cursor: "default"
-                                            }}
-                                            onMouseEnter={e => {
-                                                e.currentTarget.style.background = DS.hover;
-                                                e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.hover);
-                                            }}
-                                            onMouseLeave={e => {
-                                                e.currentTarget.style.background = "";
-                                                e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.isDark ? DS.bg : DS.card);
-                                            }}>
-
-                                            {/* # */}
-                                            <td data-sticky="1" style={{
-                                                padding: rowPad,
-                                                fontSize: cellFs, color: DS.textMuted,
-                                                fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                position: "sticky", left: 0,
-                                                background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                borderRight: `1px solid ${DS.border}`,
-                                                width: isScreenerMobile ? 28 : 40, textAlign: "left",
-                                            }}>{rowNum}</td>
-
-                                            {/* Company */}
-                                            <td data-sticky="1" style={{
-                                                padding: `${cellPadV} ${isScreenerMobile ? "10px" : "13px"} ${cellPadV} ${isScreenerMobile ? "8px" : "10px"}`,
-                                                position: "sticky", left: stickyLeft,
-                                                background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                borderRight: `1px solid ${DS.border}`,
-                                                minWidth: isScreenerMobile ? 100 : 140,
-                                            }}>
-                                                <div style={{
-                                                    fontSize: cellFs, fontWeight: 600,
-                                                    color: DS.text, whiteSpace: "nowrap",
-                                                    overflow: "hidden", textOverflow: "ellipsis",
-                                                    fontFamily: DS.mono, letterSpacing: ".02em",
-                                                    maxWidth: isScreenerMobile ? 98 : 180
-                                                }}>
-                                                    {displayTicker}
-                                                </div>
-                                            </td>
-
-                                            {/* Metric cells */}
-                                            {activeCols.map(col => {
-                                                const raw = row[col.key];
-                                                let displayRaw = raw;
-                                                let isLivePrice = false;
-                                                if (col.key === "current_price") {
-                                                    const bp = _bestPrice(ticker, raw);
-                                                    if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
-                                                }
-                                                const formatted = col.fmt(displayRaw);
-                                                const color = col.key === "current_price" && isLivePrice
-                                                    ? (DS.isDark ? "#34d399" : "#059669")
-                                                    : cellColor(col, raw);
-                                                const isPending = col.key === "current_price" && isMarketLive()
-                                                    && _isPricePending(ticker) && raw != null;
-                                                return (
-                                                    <td key={col.key} style={{
-                                                        padding: `${cellPadV} ${isScreenerMobile ? "9px" : "13px"}`,
-                                                        textAlign: "right", fontSize: cellFs,
-                                                        fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                        color: formatted === "" ? DS.textMuted : color,
-                                                        whiteSpace: "nowrap", position: "relative",
-                                                    }}>
-                                                        {formatted}
-                                                        {isPending && (
-                                                            <span style={{
-                                                                position: "absolute", top: 4, right: 4,
-                                                                width: 5, height: 5, borderRadius: "50%",
-                                                                background: DS.isDark ? "#fbbf24" : "#d97706",
-                                                                opacity: 0.7
-                                                            }} title="Fetching live price" />
-                                                        )}
-                                                        {isLivePrice && (
-                                                            <span style={{
-                                                                position: "absolute", top: 4, right: 4,
-                                                                width: 5, height: 5, borderRadius: "50%",
-                                                                background: DS.isDark ? "#34d399" : "#059669",
-                                                                opacity: 0.85
-                                                            }} title="Live price from Yahoo Finance" />
-                                                        )}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/*  PAGINATION  */}
-                {!loading && !loadErr && filtered.length > 0 && (
-                    <div style={{
-                        flexShrink: 0, padding: isScreenerMobile ? "8px 14px" : "9px 16px",
-                        borderTop: `1px solid ${DS.border}`, background: DS.card,
-                        display: "flex", alignItems: "center",
-                        justifyContent: "space-between", gap: 8,
-                        flexDirection: "row",
-                        fontFamily: DS.sans
-                    }}>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-                                style={{ ...ghostBtn(false), padding: isScreenerMobile ? "5px 14px" : "6px 12px", opacity: safePage === 1 ? .4 : 1, cursor: safePage === 1 ? "not-allowed" : "pointer" }}>
-                                Prev
-                            </button>
-                            {!isScreenerMobile && (() => {
-                                const pages = []; let s = Math.max(1, safePage - 3); let e = Math.min(totalPages, s + 6); s = Math.max(1, e - 6);
-                                for (let p = s; p <= e; p++) pages.push(p);
-                                return pages.map(page => (
-                                    <button key={page} onClick={() => setCurrentPage(page)}
+                        {/* Divider + toolbar controls */}
+                        <div style={{ flex: 1 }} />
+                        <div style={{ borderTop: `1px solid ${DS.border}`, marginTop: 8, paddingTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+                            {/* Universe */}
+                            <div style={{ fontSize: 10, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".07em", padding: "0 6px 4px" }}>Universe</div>
+                            <div style={{ display: "flex", gap: 2, background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: 3, border: `1px solid ${DS.border}` }}>
+                                {[{ v: "all", l: "All" }, { v: "nifty500", l: "Nifty 500" }].map(opt => (
+                                    <button key={opt.v} onClick={() => setUniverse(opt.v)}
                                         style={{
-                                            ...ghostBtn(page === safePage),
-                                            padding: "6px 10px", minWidth: 34
+                                            height: 22, padding: "0 10px", flex: 1, border: "none", borderRadius: 6,
+                                            background: universe === opt.v ? DS.accent : "transparent",
+                                            color: universe === opt.v ? "#fff" : DS.textSub,
+                                            fontWeight: universe === opt.v ? 600 : 400,
+                                            fontSize: 11, fontFamily: DS.sans, cursor: "pointer", transition: ".12s",
                                         }}>
-                                        {page}
-                                    </button>
-                                ));
-                            })()}
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
-                                style={{ ...ghostBtn(false), padding: isScreenerMobile ? "5px 14px" : "6px 12px", opacity: safePage === totalPages ? .4 : 1, cursor: safePage === totalPages ? "not-allowed" : "pointer" }}>
-                                Next
-                            </button>
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            {!isScreenerMobile && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ fontSize: 12, color: DS.textMuted }}>Per page</span>
-                                {[10, 25, 50].map(n => (
-                                    <button key={n} onClick={() => { setRowsPerPage(n); setCurrentPage(1); }}
-                                        style={{ ...ghostBtn(n === rowsPerPage), padding: "5px 9px" }}>
-                                        {n}
+                                        {opt.l}
                                     </button>
                                 ))}
-                            </div>}
-                            <span style={{
-                                fontSize: 12, color: DS.textMuted, fontFamily: DS.mono,
-                                fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap"
-                            }}>
-                                {isScreenerMobile ? mobileResultsLabel : `${(safePage - 1) * rowsPerPage + 1}-${Math.min(safePage * rowsPerPage, filtered.length)}`}
-                                {" / "}<strong style={{ color: DS.textSub }}>{filtered.length.toLocaleString("en-IN")}</strong>
-                            </span>
+                            </div>
+                            {/* Density */}
+                            <div style={{ fontSize: 10, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".07em", padding: "8px 6px 4px" }}>Density</div>
+                            <div style={{ display: "flex", gap: 2, background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: 3, border: `1px solid ${DS.border}` }}>
+                                {[["compact", "Compact"], ["comfortable", "Comfortable"]].map(([d, l]) => (
+                                    <button key={d} onClick={() => setDensity(d)}
+                                        style={{
+                                            height: 22, padding: "0 6px", flex: 1, border: "none", borderRadius: 6,
+                                            background: density === d ? DS.accent : "transparent",
+                                            color: density === d ? "#fff" : DS.textSub,
+                                            fontWeight: density === d ? 600 : 400,
+                                            fontSize: 11, fontFamily: DS.sans, cursor: "pointer", transition: ".12s",
+                                        }}>
+                                        {l}
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Columns + Refresh */}
+                            <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                                <button onClick={() => setShowColPicker(v => !v)}
+                                    style={{ ...ghostBtn(showColPicker), flex: 1, justifyContent: "center", padding: "6px 8px", fontSize: 12 }}
+                                    onMouseEnter={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
+                                    onMouseLeave={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; } }}>
+                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                                        <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" /><line x1="1" y1="12" x2="15" y2="12" />
+                                        <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" /><line x1="7" y1="10" x2="7" y2="14" />
+                                    </svg>
+                                    Cols
+                                </button>
+                                <button onClick={() => loadRatios(true)} disabled={loading}
+                                    style={{ ...ghostBtn(false), flex: 1, justifyContent: "center", padding: "6px 8px", fontSize: 12, opacity: loading ? .5 : 1, cursor: loading ? "not-allowed" : "pointer" }}
+                                    onMouseEnter={e => { if (!loading) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+                                        style={{ animation: loading ? "finspin .8s linear infinite" : "none" }}>
+                                        <path d="M13.5 8A5.5 5.5 0 1 1 10.5 3.2" /><path d="M10 1l2.5 2.2L10 5.4" />
+                                    </svg>
+                                    {loading ? "..." : lastRefresh || "↻"}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/*  FOOTER  */}
-                {allRows.length > 0 && !isScreenerMobile && (
-                    <div style={{
-                        padding: isScreenerMobile ? "10px 14px 14px" : "5px 16px", borderTop: `1px solid ${DS.border}`,
-                        fontSize: 11, color: DS.textMuted, flexShrink: 0, background: DS.card,
-                        display: "flex", justifyContent: "space-between",
-                        alignItems: isScreenerMobile ? "flex-start" : "center", gap: 12, fontFamily: DS.sans,
-                        flexDirection: isScreenerMobile ? "column" : "row"
-                    }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                            {/*<span>Ratios pre-computed nightly  Market cap uses latest Bhav Copy  Double-click tab to rename</span>*/}
-                            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <span style={{
-                                    width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
-                                    background: isMarketLive() ? (DS.isDark ? "#34d399" : "#059669") : DS.textMuted,
-                                    display: "inline-block"
-                                }} />
-                                {/*<span style={{ fontFamily:DS.mono }}>*/}
-                                {/*    {isMarketLive()*/}
-                                {/*        ? "Price : live from Yahoo  Bhav Copy shown until fetched"*/}
-                                {/*        : "Price : Bhav Copy (EOD)  Live prices 9:15 AM  7:00 PM IST"}*/}
-                                {/*</span>*/}
-                            </span>
-                            <span style={{
-                                padding: "1px 7px", borderRadius: 4,
-                                background: "rgba(245,158,11,0.07)",
-                                border: "1px solid rgba(245,158,11,0.18)",
-                                color: "#d97706", whiteSpace: "nowrap"
-                            }}>
-                                Screen results do not constitute investment recommendations
-                            </span>
-                        </span>
-                        <span style={{
-                            fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                            flexShrink: 0, whiteSpace: "nowrap"
+                {/* RIGHT: panel content */}
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+
+                    {/* Mobile top nav */}
+                    {isScreenerMobile && (
+                        <div style={{
+                            flexShrink: 0, display: "flex", gap: 0,
+                            borderBottom: `1px solid ${DS.border}`,
+                            background: DS.card,
                         }}>
-                            <strong style={{ color: DS.textSub }}>{filtered.length}</strong>
-                            <span style={{ opacity: .5 }}> / {allRows.length} stocks</span>
-                        </span>
-                    </div>
-                )}
+                            {[
+                                { id: "custom", label: "Custom Filter" },
+                                { id: "myFilters", label: "My Filters" },
+                            ].map(p => (
+                                <button key={p.id} onClick={() => setActivePanel(p.id)}
+                                    style={{
+                                        flex: 1, padding: "11px 0",
+                                        border: "none",
+                                        borderBottom: `2px solid ${activePanel === p.id ? DS.accent : "transparent"}`,
+                                        background: "transparent",
+                                        color: activePanel === p.id ? DS.text : DS.textSub,
+                                        fontWeight: activePanel === p.id ? 600 : 400,
+                                        fontSize: 13, fontFamily: DS.sans, cursor: "pointer",
+                                        transition: "all .12s",
+                                    }}>
+                                    {p.label}
+                                    {p.id === "myFilters" && myFilters.length > 0 && (
+                                        <span style={{ marginLeft: 5, fontSize: 10, background: DS.border, borderRadius: 99, padding: "1px 5px" }}>
+                                            {myFilters.length}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* ========== CUSTOM FILTER PANEL ========== */}
+                    {activePanel === "custom" && (
+                        <>
+                            {/* Filter bar */}
+                            <div style={{
+                                flexShrink: 0, borderBottom: `1px solid ${DS.border}`,
+                                padding: "10px 16px", background: DS.bg,
+                            }}>
+                                {/* Header row */}
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (workingFilters.length > 0 && (!isScreenerMobile || mobileFiltersExpanded)) ? 10 : 0, gap: 8 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: DS.textSub }}>Custom Filter</span>
+                                        {isScreenerMobile && (
+                                            <button onClick={() => setMobileFiltersExpanded(!mobileFiltersExpanded)}
+                                                style={{
+                                                    background: DS.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                                                    border: `1px solid ${DS.border}`, borderRadius: 6,
+                                                    color: DS.accent, fontSize: 11, fontWeight: 700,
+                                                    padding: "2px 10px", cursor: "pointer", transition: "all .12s"
+                                                }}>
+                                                {mobileFiltersExpanded ? "Hide Filters" : "Show Filters"}
+                                            </button>
+                                        )}
+                                        {loadedFilterName && (
+                                            <span style={{
+                                                fontSize: 11, fontWeight: 600,
+                                                background: DS.isDark ? "rgba(99,102,241,0.12)" : "rgba(37,99,235,0.08)",
+                                                color: DS.accent, border: `1px solid ${DS.accent}33`,
+                                                borderRadius: 6, padding: "1px 8px",
+                                            }}>
+                                                {loadedFilterName}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                                        {workingFilters.length > 0 && (!isScreenerMobile || mobileFiltersExpanded) && (
+                                            <button onClick={clearFilters}
+                                                style={{ background: "none", border: "none", cursor: "pointer", color: DS.textMuted, fontSize: 12, fontFamily: DS.sans, padding: "0 2px", transition: "color .12s" }}
+                                                onMouseEnter={e => e.currentTarget.style.color = DS.neg}
+                                                onMouseLeave={e => e.currentTarget.style.color = DS.textMuted}>
+                                                Clear all
+                                            </button>
+                                        )}
+                                        {workingFilters.length > 0 && (!isScreenerMobile || mobileFiltersExpanded) && (
+                                            <>
+                                                <div style={{ width: 1, height: 14, background: DS.border }} />
+                                                <button onClick={openSaveDialog}
+                                                    style={{
+                                                        display: "inline-flex", alignItems: "center", gap: 5,
+                                                        padding: "5px 11px", border: `1px solid ${DS.border}`,
+                                                        borderRadius: 7, background: DS.card,
+                                                        color: DS.textSub, fontSize: 12, fontFamily: DS.sans,
+                                                        cursor: "pointer", transition: "all .13s", whiteSpace: "nowrap",
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M13 2H5L2 5v9h12V2z" /><path d="M5 2v4h6V2" /><path d="M5 10h6" />
+                                                    </svg>
+                                                    Save
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Filter pills + add */}
+                                {(!isScreenerMobile || mobileFiltersExpanded) && (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 7, alignItems: "stretch" }}>
+                                        {workingFilters.map((f, idx) => (
+                                            <FilterPill key={f.id || idx} filter={f} idx={idx}
+                                                onUpdate={updateFilter} onRemove={removeFilter} DS={DS} />
+                                        ))}
+                                        <button onClick={addFilter}
+                                            style={{ ...ghostBtn(false), borderStyle: "dashed", color: DS.textMuted, fontSize: 12 }}
+                                            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
+                                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; }}>
+                                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
+                                            Add Filter
+                                        </button>
+
+                                        {/* Run Screen */}
+                                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+                                            {appliedFilters !== null && !filtersChanged && (
+                                                <span style={{ fontFamily: DS.mono, fontSize: 12, color: DS.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                                                    <strong style={{ color: DS.text, fontWeight: 600 }}>{filtered.length.toLocaleString("en-IN")}</strong>{" results"}
+                                                </span>
+                                            )}
+                                            {filtersChanged && appliedFilters !== null && (
+                                                <span style={{ fontSize: 11, color: DS.textMuted, fontStyle: "italic", whiteSpace: "nowrap" }}>Changed</span>
+                                            )}
+                                            <button
+                                                onClick={runScreen}
+                                                disabled={loading}
+                                                style={{
+                                                    display: "inline-flex", alignItems: "center", gap: 7,
+                                                    padding: "7px 16px",
+                                                    background: filtersChanged ? DS.accent : (DS.isDark ? "rgba(99,102,241,0.12)" : "rgba(37,99,235,0.07)"),
+                                                    border: `1px solid ${filtersChanged ? DS.accent : DS.accent + "44"}`,
+                                                    borderRadius: 8,
+                                                    color: filtersChanged ? "#fff" : DS.accent,
+                                                    cursor: loading ? "not-allowed" : "pointer",
+                                                    fontSize: 13, fontWeight: 600, fontFamily: DS.sans,
+                                                    transition: "all .15s", whiteSpace: "nowrap",
+                                                    opacity: loading ? .5 : 1,
+                                                    boxShadow: filtersChanged ? `0 2px 12px ${DS.accent}33` : "none",
+                                                }}
+                                                onMouseEnter={e => { if (!loading && filtersChanged) { e.currentTarget.style.boxShadow = `0 4px 18px ${DS.accent}44`; } }}
+                                                onMouseLeave={e => { e.currentTarget.style.boxShadow = filtersChanged ? `0 2px 12px ${DS.accent}33` : "none"; }}>
+                                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                                                    <polygon points="5,3 13,8 5,13" fill="currentColor" />
+                                                </svg>
+                                                Run
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* TABLE AREA */}
+                            <div style={{ flex: 1, overflow: "hidden", background: DS.bg, minHeight: 0, display: "flex", flexDirection: "column" }}>
+
+                                {/* Not yet run */}
+                                {!loading && !loadErr && appliedFilters === null && (
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 20, color: DS.textSub }}>
+                                        <div style={{
+                                            width: 52, height: 52, borderRadius: 16,
+                                            background: DS.isDark ? "rgba(99,102,241,0.08)" : "rgba(37,99,235,0.06)",
+                                            border: `1px solid ${DS.accent}22`,
+                                            display: "flex", alignItems: "center", justifyContent: "center",
+                                        }}>
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={DS.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.8">
+                                                <path d="M4 6h16M7 12h10M10 18h4" />
+                                            </svg>
+                                        </div>
+                                        <div style={{ textAlign: "center", maxWidth: 320 }}>
+                                            <div style={{ fontSize: 15, fontWeight: 600, color: DS.text, marginBottom: 6 }}>Build your filter, then run</div>
+                                            <div style={{ fontSize: 13, color: DS.textMuted, lineHeight: 1.6 }}>
+                                                Add conditions above and click{" "}
+                                                <span style={{ color: DS.accent, fontWeight: 600 }}>Run Screen</span>{" "}
+                                                to see matching stocks. Save any combination to{" "}
+                                                <button onClick={() => setActivePanel("myFilters")}
+                                                    style={{ background: "none", border: "none", padding: 0, color: DS.accent, fontWeight: 600, cursor: "pointer", fontSize: 13, fontFamily: DS.sans }}>
+                                                    My Filters
+                                                </button>{" "}for quick access later.
+                                            </div>
+                                        </div>
+                                        <button onClick={runScreen} disabled={loading}
+                                            style={{
+                                                display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 22px",
+                                                background: DS.accent, border: "none", borderRadius: 9,
+                                                color: "#fff", cursor: loading ? "not-allowed" : "pointer",
+                                                fontSize: 13, fontWeight: 600, fontFamily: DS.sans,
+                                                boxShadow: `0 4px 18px ${DS.accent}33`, transition: "all .15s", opacity: loading ? .5 : 1,
+                                            }}
+                                            onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = `0 6px 24px ${DS.accent}55`; e.currentTarget.style.transform = "translateY(-1px)"; } }}
+                                            onMouseLeave={e => { e.currentTarget.style.boxShadow = `0 4px 18px ${DS.accent}33`; e.currentTarget.style.transform = ""; }}>
+                                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><polygon points="5,3 13,8 5,13" fill="currentColor" /></svg>
+                                            Run Screen
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Loading */}
+                                {loading && allRows.length === 0 && (
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12, color: DS.textSub }}>
+                                        <div style={{ width: 20, height: 20, border: `2px solid ${DS.border}`, borderTopColor: DS.accent, borderRadius: "50%", animation: "finspin .7s linear infinite" }} />
+                                        <span style={{ fontSize: 13 }}>Loading</span>
+                                    </div>
+                                )}
+
+                                {/* Error */}
+                                {loadErr && (
+                                    <div style={{ padding: "40px 24px", textAlign: "center" }}>
+                                        <div style={{
+                                            display: "inline-block",
+                                            background: DS.isDark ? "rgba(244,63,94,0.07)" : "rgba(220,38,38,0.05)",
+                                            border: `1px solid ${DS.neg}33`, borderRadius: 10,
+                                            padding: "16px 24px", maxWidth: 480
+                                        }}>
+                                            <div style={{ color: DS.neg, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{loadErr}</div>
+                                            <button onClick={() => loadRatios(true)}
+                                                style={{ padding: "7px 16px", border: `1px solid ${DS.accent}`, borderRadius: 8, background: DS.accentDim, color: DS.accent, fontSize: 13, cursor: "pointer", fontFamily: DS.sans }}>
+                                                Retry
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Empty results */}
+                                {!loading && !loadErr && appliedFilters !== null && filtered.length === 0 && (
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 8, color: DS.textSub }}>
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: .2 }}>
+                                            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+                                        </svg>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub }}>No results</div>
+                                        <div style={{ fontSize: 13, color: DS.textMuted }}>Adjust your filters to find matching stocks</div>
+                                        {workingFilters.length > 0 && (
+                                            <button onClick={clearFilters} style={{ marginTop: 6, ...ghostBtn(false) }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                                                Clear filters
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Table */}
+                                {!loading && !loadErr && filtered.length > 0 && (
+                                    <div style={{ flex: 1, overflow: "auto", scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent` }}>
+                                        <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse", fontFamily: DS.sans }}>
+                                            <thead>
+                                                <tr style={{ position: "sticky", top: 0, zIndex: 10, background: DS.tableHead, borderBottom: `1px solid ${DS.border}` }}>
+                                                    <th style={{ padding: isScreenerMobile ? "7px 0 7px 10px" : "9px 0 9px 16px", textAlign: "left", fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: DS.textMuted, position: "sticky", left: 0, zIndex: 11, background: DS.tableHead, borderRight: `1px solid ${DS.border}`, width: isScreenerMobile ? 28 : 40, whiteSpace: "nowrap" }}>#</th>
+                                                    <th style={{ padding: isScreenerMobile ? "7px 10px 7px 8px" : "9px 16px 9px 10px", textAlign: "left", fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: DS.textMuted, position: "sticky", left: isScreenerMobile ? 28 : 40, zIndex: 11, background: DS.tableHead, borderRight: `1px solid ${DS.border}`, minWidth: isScreenerMobile ? 130 : 200, whiteSpace: "nowrap" }}>Company</th>
+                                                    {activeCols.map(col => (
+                                                        <th key={col.key} onClick={() => handleSort(col.key)}
+                                                            style={{ padding: isScreenerMobile ? "7px 8px" : "9px 14px", textAlign: "right", fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: sortCol === col.key ? DS.accent : DS.textMuted, cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", transition: "color .12s" }}>
+                                                            {col.label}
+                                                            {sortCol === col.key && (
+                                                                <span style={{ marginLeft: 3, opacity: .7 }}>{sortAsc ? "↑" : "↓"}</span>
+                                                            )}
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {pageRows.map((row, ri) => {
+                                                    const globalRank = (safePage - 1) * rowsPerPage + ri + 1;
+                                                    const liveP = _sessionPriceCache.get(row.ticker?.toUpperCase());
+                                                    const displayPrice = liveP ?? row.current_price;
+                                                    const isLive = !!liveP;
+                                                    return (
+                                                        <tr key={row.ticker + row.exchange}
+                                                            style={{ borderBottom: `1px solid ${DS.border}`, background: ri % 2 === 1 ? DS.tableAlt : "transparent", transition: "background .1s", cursor: "pointer" }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = DS.hover}
+                                                            onMouseLeave={e => e.currentTarget.style.background = ri % 2 === 1 ? DS.tableAlt : "transparent"}>
+                                                            <td style={{ padding: isScreenerMobile ? "7px 0 7px 10px" : (compactRow ? "6px 0 6px 16px" : "9px 0 9px 16px"), fontSize: isScreenerMobile ? 10 : 11, color: DS.textMuted, fontFamily: DS.mono, textAlign: "left", position: "sticky", left: 0, background: "inherit", borderRight: `1px solid ${DS.border}`, width: isScreenerMobile ? 28 : 40, fontVariantNumeric: "tabular-nums" }}>{globalRank}</td>
+                                                            <td style={{ padding: isScreenerMobile ? "7px 10px 7px 8px" : (compactRow ? "6px 16px 6px 10px" : "9px 16px 9px 10px"), fontSize: isScreenerMobile ? 11 : 13, position: "sticky", left: isScreenerMobile ? 28 : 40, background: "inherit", borderRight: `1px solid ${DS.border}`, minWidth: isScreenerMobile ? 130 : 200, maxWidth: isScreenerMobile ? 150 : 260 }}>
+                                                                <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: DS.text }}>{row.name || row.ticker}</div>
+                                                                <div style={{ fontSize: isScreenerMobile ? 9 : 11, color: DS.textMuted, marginTop: 1, display: "flex", alignItems: "center", gap: 4 }}>
+                                                                    <span style={{ fontFamily: DS.mono }}>{row.ticker}</span>
+                                                                    {row.exchange && <span style={{ opacity: .55 }}>· {row.exchange}</span>}
+                                                                </div>
+                                                            </td>
+                                                            {activeCols.map(col => {
+                                                                const isPrice = col.key === "current_price";
+                                                                const rawVal = isPrice ? displayPrice : row[col.key];
+                                                                const formatted = col.fmt ? col.fmt(rawVal) : (rawVal == null ? "—" : rawVal);
+                                                                return (
+                                                                    <td key={col.key}
+                                                                        style={{ padding: isScreenerMobile ? "7px 8px" : (compactRow ? "6px 14px" : "9px 14px"), textAlign: "right", fontSize: isScreenerMobile ? 10 : 12, fontFamily: DS.mono, fontVariantNumeric: "tabular-nums", color: cellColor(col.key, rawVal), whiteSpace: "nowrap" }}>
+                                                                        {isPrice && isLive ? (
+                                                                            <span style={{ position: "relative" }}>
+                                                                                {formatted}
+                                                                                <span style={{ position: "absolute", top: -2, right: -6, width: 4, height: 4, borderRadius: "50%", background: DS.isDark ? "#34d399" : "#059669" }} />
+                                                                            </span>
+                                                                        ) : formatted}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* Pagination + footer */}
+                                {!loading && !loadErr && filtered.length > 0 && (
+                                    <div style={{
+                                        flexShrink: 0, padding: isScreenerMobile ? "8px 12px" : "8px 16px",
+                                        borderTop: `1px solid ${DS.border}`,
+                                        display: "flex", justifyContent: "space-between",
+                                        alignItems: isScreenerMobile ? "flex-start" : "center", gap: 12,
+                                        flexDirection: isScreenerMobile ? "column" : "row",
+                                        background: DS.surface,
+                                    }}>
+                                        <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                                <span style={{ width: 5, height: 5, borderRadius: "50%", flexShrink: 0, background: isMarketLive() ? (DS.isDark ? "#34d399" : "#059669") : DS.textMuted, display: "inline-block" }} />
+                                            </span>
+                                            <span style={{ padding: "1px 7px", borderRadius: 4, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.18)", color: "#d97706", whiteSpace: "nowrap", fontSize: 11, fontFamily: DS.sans }}>
+                                                Screen results do not constitute investment recommendations
+                                            </span>
+                                        </span>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+                                            <span style={{ fontFamily: DS.mono, fontVariantNumeric: "tabular-nums", fontSize: 12, whiteSpace: "nowrap" }}>
+                                                <strong style={{ color: DS.textSub }}>{filtered.length}</strong>
+                                                <span style={{ opacity: .5 }}> / {allRows.length}</span>
+                                            </span>
+                                            <div style={{ display: "flex", gap: 2 }}>
+                                                {[10, 25, 50, 100].map(n => (
+                                                    <button key={n} onClick={() => { setRowsPerPage(n); setCurrentPage(1); }}
+                                                        style={{ height: 24, padding: "0 8px", border: `1px solid ${rowsPerPage === n ? DS.accent + "55" : DS.border}`, borderRadius: 6, background: rowsPerPage === n ? DS.accentDim : "transparent", color: rowsPerPage === n ? DS.accent : DS.textSub, fontSize: 11, fontFamily: DS.sans, cursor: "pointer", transition: ".12s" }}>
+                                                        {n}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <div style={{ display: "flex", gap: 3 }}>
+                                                <button onClick={() => setCurrentPage(1)} disabled={safePage === 1}
+                                                    style={{ height: 26, padding: "0 8px", border: `1px solid ${DS.border}`, borderRadius: 6, background: "transparent", color: safePage === 1 ? DS.textMuted : DS.textSub, cursor: safePage === 1 ? "default" : "pointer", fontSize: 12, fontFamily: DS.mono, opacity: safePage === 1 ? .4 : 1 }}>«</button>
+                                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
+                                                    style={{ height: 26, padding: "0 8px", border: `1px solid ${DS.border}`, borderRadius: 6, background: "transparent", color: safePage === 1 ? DS.textMuted : DS.textSub, cursor: safePage === 1 ? "default" : "pointer", fontSize: 12, opacity: safePage === 1 ? .4 : 1 }}>‹</button>
+                                                <span style={{ display: "flex", alignItems: "center", padding: "0 8px", fontSize: 12, color: DS.textSub, fontFamily: DS.mono, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                                                    {safePage} / {totalPages}
+                                                </span>
+                                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
+                                                    style={{ height: 26, padding: "0 8px", border: `1px solid ${DS.border}`, borderRadius: 6, background: "transparent", color: safePage === totalPages ? DS.textMuted : DS.textSub, cursor: safePage === totalPages ? "default" : "pointer", fontSize: 12, opacity: safePage === totalPages ? .4 : 1 }}>›</button>
+                                                <button onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}
+                                                    style={{ height: 26, padding: "0 8px", border: `1px solid ${DS.border}`, borderRadius: 6, background: "transparent", color: safePage === totalPages ? DS.textMuted : DS.textSub, cursor: safePage === totalPages ? "default" : "pointer", fontSize: 12, fontFamily: DS.mono, opacity: safePage === totalPages ? .4 : 1 }}>»</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+
+                    {/* ========== MY FILTERS PANEL ========== */}
+                    {activePanel === "myFilters" && (
+                        <div style={{ flex: 1, overflow: "auto", padding: isScreenerMobile ? "12px" : "20px 24px" }}>
+                            <div style={{ maxWidth: 900 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                                    <div>
+                                        <div style={{ fontSize: 15, fontWeight: 700, color: DS.text, marginBottom: 3 }}>My Filters</div>
+                                        <div style={{ fontSize: 13, color: DS.textMuted }}>
+                                            {myFilters.length === 0
+                                                ? "Save custom filters here for quick access."
+                                                : `${myFilters.length} saved filter${myFilters.length > 1 ? "s" : ""}`}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {myFilters.length === 0 ? (
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 0", gap: 14, color: DS.textSub }}>
+                                        <div style={{ width: 48, height: 48, borderRadius: 14, background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", border: `1px solid ${DS.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke={DS.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M2 2h5l1.5 2H14v9H2z" />
+                                            </svg>
+                                        </div>
+                                        <div style={{ textAlign: "center" }}>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub, marginBottom: 5 }}>No saved filters yet</div>
+                                            <div style={{ fontSize: 13, color: DS.textMuted, lineHeight: 1.6, maxWidth: 280 }}>
+                                                Build a filter in{" "}
+                                                <button onClick={() => setActivePanel("custom")}
+                                                    style={{ background: "none", border: "none", padding: 0, color: DS.accent, fontWeight: 600, cursor: "pointer", fontSize: 13, fontFamily: DS.sans }}>
+                                                    Custom Filter
+                                                </button>
+                                                {" "}and click "Save as My Filter" to create one.
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: "grid", gridTemplateColumns: isScreenerMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+                                        {myFilters.map(mf => (
+                                            <div key={mf.id}
+                                                style={{
+                                                    border: `1px solid ${DS.border}`, borderRadius: 10,
+                                                    background: DS.card, padding: "14px 16px",
+                                                    display: "flex", flexDirection: "column", gap: 10,
+                                                    transition: "border-color .15s, box-shadow .15s",
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "44"; e.currentTarget.style.boxShadow = `0 2px 12px ${DS.shadow}`; }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.boxShadow = "none"; }}>
+                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                                                    <div style={{ fontWeight: 700, fontSize: 14, color: DS.text, lineHeight: 1.3 }}>{mf.name}</div>
+                                                    <button onClick={() => deleteSavedFilter(mf.id)}
+                                                        style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: DS.textMuted, padding: 4, borderRadius: 5, display: "flex", alignItems: "center", transition: "color .12s, background .12s" }}
+                                                        title="Delete filter"
+                                                        onMouseEnter={e => { e.currentTarget.style.color = DS.neg; e.currentTarget.style.background = DS.isDark ? "rgba(244,63,94,0.08)" : "rgba(220,38,38,0.06)"; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
+                                                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                                                            <path d="M1 1l10 10M11 1L1 11" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                                                    {mf.filters.slice(0, 4).map((f, i) => (
+                                                        <span key={i} style={{
+                                                            fontSize: 11, padding: "2px 8px",
+                                                            border: `1px solid ${DS.border}`,
+                                                            borderRadius: 5, color: DS.textSub,
+                                                            background: DS.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                                                            fontFamily: DS.mono, whiteSpace: "nowrap",
+                                                        }}>
+                                                            {summarizeFilter(f)}
+                                                        </span>
+                                                    ))}
+                                                    {mf.filters.length > 4 && (
+                                                        <span style={{ fontSize: 11, padding: "2px 8px", color: DS.textMuted, fontFamily: DS.mono }}>
+                                                            +{mf.filters.length - 4} more
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                    <span style={{ fontSize: 11, color: DS.textMuted }}>
+                                                        {mf.filters.length} condition{mf.filters.length !== 1 ? "s" : ""}
+                                                    </span>
+                                                    <button onClick={() => loadSavedFilter(mf)}
+                                                        style={{
+                                                            display: "inline-flex", alignItems: "center", gap: 5,
+                                                            padding: "6px 14px",
+                                                            background: DS.accent, border: "none",
+                                                            borderRadius: 7,
+                                                            color: "#fff",
+                                                            fontSize: 12, fontWeight: 600,
+                                                            fontFamily: DS.sans, cursor: "pointer",
+                                                            transition: "all .13s",
+                                                        }}
+                                                        onMouseEnter={e => { e.currentTarget.style.opacity = ".85"; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
+                                                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polygon points="5,3 13,8 5,13" fill="currentColor" stroke="none" />
+                                                        </svg>
+                                                        Load
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Column picker */}
@@ -13735,6 +13477,71 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                 <ColPickerPanel visibleCols={visibleCols} onSave={saveVisCols}
                     onClose={() => setShowColPicker(false)}
                     colSearch={colSearch} setColSearch={setColSearch} DS={DS} />,
+                document.body
+            )}
+
+            {/* Save as My Filter dialog */}
+            {showSaveDialog && createPortal(
+                <div style={{
+                    position: "fixed", inset: 0, zIndex: 10000,
+                    background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: 20,
+                }}
+                    onClick={e => { if (e.target === e.currentTarget) setShowSaveDialog(false); }}>
+                    <div style={{
+                        background: DS.card, border: `1px solid ${DS.border}`,
+                        borderRadius: 12, padding: "24px 24px 20px",
+                        width: "100%", maxWidth: 400,
+                        boxShadow: DS.isDark ? "0 24px 64px rgba(0,0,0,0.7)" : "0 12px 40px rgba(0,0,0,0.15)",
+                        fontFamily: DS.sans,
+                    }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: DS.text, marginBottom: 4 }}>Save as My Filter</div>
+                        <div style={{ fontSize: 13, color: DS.textMuted, marginBottom: 16 }}>
+                            Give this filter set a name. You'll be able to load it instantly from My Filters.
+                        </div>
+                        <input
+                            autoFocus
+                            placeholder="e.g. Growth Stocks, High Quality..."
+                            value={saveNameInput}
+                            onChange={e => { setSaveNameInput(e.target.value); setSaveNameError(""); }}
+                            onKeyDown={e => { if (e.key === "Enter") commitSave(); if (e.key === "Escape") setShowSaveDialog(false); }}
+                            style={{
+                                width: "100%", boxSizing: "border-box",
+                                fontFamily: DS.sans, fontSize: 14,
+                                padding: "10px 12px",
+                                border: `1px solid ${saveNameError ? DS.neg : DS.border}`,
+                                borderRadius: 8, background: DS.inputBg,
+                                color: DS.text, outline: "none",
+                                transition: "border-color .15s",
+                            }}
+                            onFocus={e => e.target.style.borderColor = DS.accent + "66"}
+                            onBlur={e => e.target.style.borderColor = saveNameError ? DS.neg : DS.border}
+                        />
+                        {saveNameError && (
+                            <div style={{ fontSize: 12, color: DS.neg, marginTop: 5 }}>{saveNameError}</div>
+                        )}
+                        {saveNameInput.trim() && myFilters.find(mf => mf.name.toLowerCase() === saveNameInput.trim().toLowerCase()) && (
+                            <div style={{ fontSize: 12, color: "#d97706", marginTop: 5 }}>
+                                A filter named "{saveNameInput.trim()}" already exists — saving will overwrite it.
+                            </div>
+                        )}
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+                            <button onClick={() => setShowSaveDialog(false)}
+                                style={{ padding: "8px 16px", border: `1px solid ${DS.border}`, borderRadius: 8, background: "transparent", color: DS.textSub, fontSize: 13, fontFamily: DS.sans, cursor: "pointer", transition: "all .13s" }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "44"; e.currentTarget.style.color = DS.text; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                                Cancel
+                            </button>
+                            <button onClick={commitSave}
+                                style={{ padding: "8px 18px", border: "none", borderRadius: 8, background: DS.accent, color: "#fff", fontSize: 13, fontWeight: 600, fontFamily: DS.sans, cursor: "pointer", transition: "all .13s" }}
+                                onMouseEnter={e => e.currentTarget.style.opacity = ".85"}
+                                onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                                Save Filter
+                            </button>
+                        </div>
+                    </div>
+                </div>,
                 document.body
             )}
         </div>
@@ -14400,33 +14207,14 @@ function FinancialAnalyticsModule({
     //  Market hours helper (IST = UTC+5:30) 
     // NSE market: 9:15 AM  3:30 PM IST = 03:45  10:00 UTC
     const isMarketOpen = () => {
-        const now = new Date();
-        const utcH = now.getUTCHours();
-        const utcM = now.getUTCMinutes();
-        const utcMins = utcH * 60 + utcM;
-        const day = now.getUTCDay(); // 0=Sun, 6=Sat
-        if (day === 0 || day === 6) return false;
-        return utcMins >= 225 && utcMins <= 600; // 03:4510:00 UTC
+        return false; // Yahoo Finance disabled
     };
 
     //  Fetch live price from Yahoo and update livePrice state 
     // bhavRef = the stored bhav_copy price used as a sanity reference.
     // If Yahoo's price deviates >40% from bhav (stale/wrong symbol), we reject it.
     const fetchLivePrice = async (sym, bhavRef) => {
-        if (!sym) return;
-        const q = await fetchYahooQuote(sym);
-        if (!q) return;
-        const price = q.currentPrice;
-        if (!price) return;
-        // Sanity-check against bhav price  reject if deviation > 40%
-        if (bhavRef != null && bhavRef > 0) {
-            const deviation = Math.abs(price - bhavRef) / bhavRef;
-            if (deviation > 0.40) return; // Yahoo price is wrong/stale  keep bhav
-        }
-        const prev = q.prevClose;
-        const chg = q.directChange != null ? q.directChange : (price && prev ? price - prev : null);
-        const chgPct = (chg != null && prev) ? chg / prev * 100 : null;
-        setLivePrice({ price, chg, chgPct, source: "live", ts: Date.now() });
+        return; // Yahoo Finance disabled
     };
 
     //  Start/stop live polling when data changes 
@@ -18475,7 +18263,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         const newOnes = tickers.filter(t => !_sessionPriceCache.has(t.toUpperCase()) && !_sessionPriceFetching.has(t.toUpperCase()));
         if (newOnes.length === 0) return;
         // Stagger fetches in small batches to avoid hammering proxies
-        const BATCH = 5;
+        const BATCH = 1;
         let idx = 0;
         const runBatch = async () => {
             if (cancelled) return;
@@ -18485,7 +18273,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
             await Promise.allSettled(batch.map(t => _fetchAndCachePrice(t, bhavMap[t.toUpperCase()])));
             if (!cancelled) {
                 setLivePriceTick(n => n + 1); // re-render with fresh prices
-                setTimeout(runBatch, 600);    // next batch after short pause
+                setTimeout(runBatch, 2000);   // next batch after short pause
             }
         };
         runBatch();

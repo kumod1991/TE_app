@@ -442,9 +442,22 @@ async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSear
                 apikey: SUPABASE_ANON_KEY,
                 Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
                 "Content-Type": "application/json",
-                Prefer: "count=exact",
+                // NOTE: Prefer: count=exact intentionally omitted — it forces a full
+                // COUNT(*) scan on every request which causes HTTP 500s on large tables
+                // without a matching index. We paginate by page-length heuristic instead.
             },
         });
+        if (!resp.ok) {
+            // Surface the real Supabase/PostgREST error message for easier debugging
+            let errMsg = `Server error ${resp.status}`;
+            try {
+                const errBody = await resp.json();
+                if (errBody?.message) errMsg = errBody.message;
+                else if (errBody?.hint) errMsg = errBody.hint;
+                else if (errBody?.details) errMsg = errBody.details;
+            } catch { /* ignore parse errors */ }
+            throw new Error(errMsg);
+        }
         const data = await resp.json();
         if (!Array.isArray(data)) throw new Error(data?.message || "Unexpected response from server");
         return data;
