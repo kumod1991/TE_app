@@ -12562,13 +12562,20 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     const loadScreenerFilters = async () => {
         try {
             const sess = supabase._session;
-            if (!sess?.access_token) return;
+            if (!sess?.access_token || !sess.user?.id) return;
             const h = supabase._h(sess.access_token);
-            const r = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?select=*&user_id=eq.${sess.user?.id}`, { headers: h });
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?select=*&user_id=eq.${sess.user.id}`, { headers: h });
+            if (!r.ok) {
+                console.error("Filter load failed:", r.statusText);
+                return;
+            }
             const data = await r.json();
-            if (Array.isArray(data) && data.length > 0) {
-                setMyFilters(data);
-                try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
+            if (Array.isArray(data)) {
+                // If filters were found in DB, update state and local storage
+                if (data.length > 0) {
+                    setMyFilters(data);
+                    try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
+                }
             }
         } catch (e) { console.error("Error loading filters:", e); }
     };
