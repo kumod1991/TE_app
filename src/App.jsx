@@ -26516,10 +26516,56 @@ export default function App() {
     });
 
     const loadScreenerFilters = async () => {
-        // ... (function logic)
+        try {
+            const sess = supabase._session;
+            if (!sess?.access_token || !sess.user?.id) return;
+            const h = supabase._h(sess.access_token);
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?select=*&user_id=eq.${sess.user.id}`, { headers: h });
+            if (!r.ok) { console.error("Filter load failed:", r.status, r.statusText); return; }
+            const data = await r.json();
+            if (Array.isArray(data)) {
+                // Map DB record back to local filter state structure
+                const mapped = data.map(row => ({
+                    id: row.id,
+                    name: row.name,
+                    filters: row.filters,
+                    createdAt: new Date(row.created_at).getTime()
+                }));
+                setMyFilters(mapped);
+                try { localStorage.setItem("screener_my_filters_v1", JSON.stringify(mapped)); } catch { }
+            }
+        } catch (e) { console.error("Error loading filters:", e); }
     };
+
     const persistMyFilters = async (next) => {
-        // ... (function logic)
+        setMyFilters(next);
+        
+        const sess = supabase._session;
+        if (sess?.access_token && sess.user?.id) {
+            // LOGGED IN: Persist ONLY to Database
+            try { localStorage.removeItem("screener_my_filters_v1"); } catch { }
+            
+            try {
+                const h = supabase._h(sess.access_token);
+                await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user.id}`, { method: "DELETE", headers: h });
+                
+                if (next.length > 0) {
+                    const payload = next.map(f => ({
+                        user_id: sess.user.id,
+                        name: f.name,
+                        filters: f.filters
+                    }));
+                    await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters`, {
+                        method: "POST",
+                        headers: { ...h, Prefer: "return=minimal", "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                }
+            } catch (e) { console.error("Error syncing filters:", e); }
+        } else {
+            // GUEST: Persist to localStorage only
+            try { localStorage.setItem("screener_my_filters_v1", JSON.stringify(next)); } catch { }
+        }
     };
 
     const [page, setPage] = useState(initialRoute.page || DEFAULT_APP_STATE.page);
