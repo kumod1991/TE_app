@@ -26979,6 +26979,9 @@ export default function App() {
         setIsDemo(false);
         setProductTab(SAFE_PRODUCT_TAB);
         setPage("dashboard");
+        // Clear screener filters on logout
+        setMyFilters([]);
+        try { localStorage.removeItem(LS_MY_FILTERS); } catch { }
         // Restore guest data (if any) after logout
         const guest = loadGuestData();
         if (guest) {
