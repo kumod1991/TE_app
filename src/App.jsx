@@ -12532,14 +12532,10 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             const data = await r.json();
             console.log("Filters loaded from DB:", data);
             
+            // Force use DB data if returned, otherwise stick to what we have (local)
             if (Array.isArray(data)) {
-                // If filters found in DB, use them; otherwise keep existing/default
-                if (data.length > 0) {
-                    setMyFilters(data);
-                    try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
-                } else {
-                    console.log("No saved filters in DB, using defaults.");
-                }
+                setMyFilters(data);
+                try { localStorage.setItem(LS_MY_FILTERS, JSON.stringify(data)); } catch { }
             }
         } catch (e) { console.error("Error loading filters:", e); }
     };
@@ -26612,6 +26608,20 @@ export default function App() {
     const [quotes, setQuotes] = useState({});
     const [funds, setFunds] = useState([]);
     const [dividends, setDividends] = useState([]);
+    const [myFilters, setMyFilters] = useState(() => {
+        try {
+            const s = localStorage.getItem("screener_my_filters_v1");
+            if (s) return JSON.parse(s);
+        } catch { }
+        return [ /* Default seeds... */ ];
+    });
+
+    const loadScreenerFilters = async () => {
+        // ... (function logic)
+    };
+    const persistMyFilters = async (next) => {
+        // ... (function logic)
+    };
 
     const [page, setPage] = useState(initialRoute.page || DEFAULT_APP_STATE.page);
     const [productTab, setProductTab] = useState(initialRoute.productTab || DEFAULT_APP_STATE.productTab);
@@ -27877,6 +27887,10 @@ export default function App() {
                                                         setTechnicalSubPage("screens");
                                                     }
                                                 } : null}
+                                                myFilters={myFilters}
+                                                setMyFilters={setMyFilters}
+                                                loadScreenerFilters={loadScreenerFilters}
+                                                persistMyFilters={persistMyFilters}
                                             />
                                         </div>
                                         <div style={{ display: financialSubPage === "fiidii" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", justifyContent: "center" }}>
