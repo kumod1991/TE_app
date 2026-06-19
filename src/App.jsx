@@ -61,7 +61,7 @@ const APP_ROUTE_MAP = {
     financial: "/fundamentals",
     technical: "/technicals",
     tradevault: "/journal",
-    forum: "/forum", 
+    forum: "/forum",
     disclaimer: "/legal",
 };
 const SITE_NAME = "TradeEdge";
@@ -3663,7 +3663,7 @@ function Dashboard({ trades, isDemo, T }) {
                 kicker="Journals / Dashboard"
                 title="Portfolio command center"
                 subtitle="A premium overview of realized performance, live exposure, and execution quality across your trading book."
-                metrics={dashboardHeroMetrics}
+                metrics={[]}
                 asideTitle="Live posture"
                 asideValue={totalPortfolioValue !== null ? inr(totalPortfolioValue) : "Pending"}
                 asideTone={combinedPnl >= 0 ? "positive" : "negative"}
@@ -3672,8 +3672,9 @@ function Dashboard({ trades, isDemo, T }) {
                     : "Visit Portfolio to hydrate live prices and unrealized performance."}
             />
             {isDemo && <div className="demo-banner" style={{ display: "inline-flex", margin: "0 0 14px" }}> Demo Mode  Sign up to save your real trades.</div>}
-            <div className="stat-cards-grid">
-                <div className="stat-card hero">
+            {/* Row 1: Net P&L + Win/Loss Rate */}
+            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
+                <div className="stat-card hero" style={{ gridColumn: "1" }}>
                     <div className="stat-label">Net P&amp;L from Stocks</div>
                     <div className={`stat-value hero ${combinedPnl >= 0 ? "green" : "red"}`}>{fmtPnl(combinedPnl)}</div>
                     <div className="stat-sub" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -3681,11 +3682,15 @@ function Dashboard({ trades, isDemo, T }) {
                         <span>Unrealized: <span style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</span>{unrealizedPnl !== null ? `  ${openTrades.length} open` : "  visit Portfolio to load"}</span>
                     </div>
                 </div>
-                <div className="stat-card span-2-mobile"><div className="stat-label">Win / Loss Rate</div><div className="stat-value">{stats.winRate.toFixed(2)}%</div><div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div></div>
+                <div className="stat-card"><div className="stat-label">Win / Loss Rate</div><div className="stat-value">{stats.winRate.toFixed(2)}%</div><div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div></div>
+            </div>
+            {/* Row 2: Avg Gain + Avg Loss */}
+            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
                 <div className="stat-card green"><div className="stat-label">Avg Gain</div><div className="stat-value green">+{stats.avgGain.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldWin.toFixed(1)} days</div></div>
                 <div className="stat-card red"><div className="stat-label">Avg Loss</div><div className="stat-value red">{stats.avgLoss.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldLoss.toFixed(1)} days</div></div>
             </div>
-            <div className="stat-cards-grid">
+            {/* Row 3: Reward/Risk + Portfolio Value (Live) */}
+            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
                 <div className="stat-card"><div className="stat-label">Reward / Risk</div><div className="stat-value">{stats.rr.toFixed(2)}</div><div className="stat-sub">Gain vs Loss ratio</div></div>
                 <div className="stat-card">
                     <div className="stat-label">Portfolio Value (Live)</div>
@@ -3700,6 +3705,9 @@ function Dashboard({ trades, isDemo, T }) {
                             : "Visit Portfolio tab to load live prices"}
                     </div>
                 </div>
+            </div>
+            {/* Row 4: Avg Hold Wins + Avg Hold Losses */}
+            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
                 <div className="stat-card"><div className="stat-label">Avg Hold (Wins)</div><div className="stat-value">{stats.avgHoldWin.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div></div>
                 <div className="stat-card"><div className="stat-label">Avg Hold (Losses)</div><div className="stat-value">{stats.avgHoldLoss.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div></div>
             </div>
@@ -3846,12 +3854,6 @@ function Analytics({ trades, T }) {
                 asideValue={`${monthly.length}`}
                 asideBody={monthly.length ? "Tracked months contributing to the current P&L rhythm." : "Add more closed trades to unlock trend analysis."}
             />
-            <div className="stat-cards-grid">
-                <div className="stat-card"><div className="stat-label">Best Trade</div><div className="stat-value green" style={{ fontSize: 16 }}>{stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
-                <div className="stat-card"><div className="stat-label">Worst Trade</div><div className="stat-value red" style={{ fontSize: 16 }}>{stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
-                <div className="stat-card"><div className="stat-label">Closed Trades</div><div className="stat-value">{stats.closed.length}</div></div>
-                <div className="stat-card"><div className="stat-label">Profit Factor</div><div className="stat-value">{pf}</div></div>
-            </div>
             <div className="chart-grid">
                 <div className="chart-card" style={{ gridColumn: "span 2" }}><div className="chart-title">Monthly P&amp;L</div>
                     <div className="bar-chart">{monthly.length === 0 ? <div className="empty" style={{ padding: 16 }}>No data yet</div> : monthly.map(([month, pnl]) => (
@@ -3981,31 +3983,6 @@ function CapitalGains({ trades, T }) {
                 asideValue={curFY}
                 asideBody="Realized gains are bucketed by exit date into Indian financial years from April to March."
             />
-
-            {/* Summary cards */}
-            <div className="stat-cards-grid-3">
-                <div className="stat-card hero">
-                    <div className="stat-label">Total P&amp;L (All Years)</div>
-                    <div className={`stat-value hero ${totalPnl >= 0 ? "green" : "red"}`} style={{ fontSize: 18 }}>
-                        {totalPnl >= 0 ? "+" : ""}{inr(totalPnl)}
-                    </div>
-                    <div className="stat-sub">Short Term + Long Term</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Short Term P&amp;L <span style={{ fontSize: 10, background: "rgba(5,150,105,.15)", color: "#34d399", borderRadius: 4, padding: "2px 6px", marginLeft: 4 }}>STCG</span></div>
-                    <div className="stat-value" style={{ fontSize: 18, color: tot.st.pnl >= 0 ? T.pos : T.neg }}>
-                        {tot.st.pnl >= 0 ? "+" : ""}{inr(tot.st.pnl)}
-                    </div>
-                    <div className="stat-sub">Held 365 days  Tax 20%</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Long Term P&amp;L <span style={{ fontSize: 10, background: "rgba(168,85,247,.15)", color: "#c084fc", borderRadius: 4, padding: "2px 6px", marginLeft: 4 }}>LTCG</span></div>
-                    <div className="stat-value" style={{ fontSize: 18, color: tot.lt.pnl >= 0 ? T.pos : T.neg }}>
-                        {tot.lt.pnl >= 0 ? "+" : ""}{inr(tot.lt.pnl)}
-                    </div>
-                    <div className="stat-sub">Held &gt;365 days  Tax 12.5%</div>
-                </div>
-            </div>
 
             {/* Main table */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: `0 2px 8px ${T.shadow}` }}>
@@ -4847,37 +4824,6 @@ function Portfolio({ trades, T }) {
 
             />
 
-            {/* Summary cards */}
-            <div className="stat-cards-grid">
-                <div className="stat-card hero">
-                    <div className="stat-label">Portfolio Value</div>
-                    <div className="stat-value hero green" style={{ fontSize: 18 }}>{inr(totalCurrent)}</div>
-                    <div className="stat-sub">{openPositions.length} stocks held</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Invested Value</div>
-                    <div className="stat-value" style={{ fontSize: 18, ...mono }}>{inr(totalInvested)}</div>
-                    <div className="stat-sub">Avg cost basis</div>
-                </div>
-                <div className="stat-card" style={{ borderColor: totalUnrealized >= 0 ? T.green + "88" : T.red + "55" }}>
-                    <div className="stat-label">Unrealized P&amp;L</div>
-                    <div className="stat-value" style={{ fontSize: 18, color: pnlColor(totalUnrealized), ...mono }}>
-                        {totalUnrealized >= 0 ? "+" : ""}{inr(totalUnrealized)}
-                    </div>
-                    <div className="stat-sub" style={{ color: pnlColor(totalUnrealized) }}>
-                        {totalInvested > 0 ? ((totalUnrealized / totalInvested) * 100).toFixed(2) : 0}% overall
-                    </div>
-                </div>
-                <div className="stat-card span-2-mobile">
-                    <div className="stat-label">Today's Change</div>
-                    <div className="stat-value" style={{ fontSize: 18, color: pnlColor(totalDayChange), ...mono }}>
-                        {totalDayChange >= 0 ? "+" : ""}{inr(totalDayChange)}
-                    </div>
-                    <div className="stat-sub">Across open positions</div>
-                </div>
-            </div>
-
-
             {/* Failed tickers  with actionable advice */}
             {failed.length > 0 && (
                 <div style={{ background: T.redGlow, border: `1px solid ${T.red}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
@@ -5445,56 +5391,6 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 </div>
             )}
 
-            {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 24 }}>
-                {/* XIRR  hero card */}
-                <div className="stat-card hero" style={{ borderColor: xirrRate == null ? T.border : xirrRate >= 0 ? T.green : T.red + "88" }}>
-                    <div className="stat-label">XIRR (Annualised)</div>
-                    <div className="stat-value" style={{ fontSize: 28, fontWeight: 700, color: xirrColor, ...mono }}>
-                        {xirrPct != null ? `${parseFloat(xirrPct) >= 0 ? "+" : ""}${xirrPct}%` : ""}
-                    </div>
-                    {xirrTerminal != null ? (
-                        <div className="stat-sub" style={{ lineHeight: 1.8 }}>
-                            <span style={{ color: T.text, ...mono }}>{inr(xirrTerminal)}</span> terminal value
-                            <br />
-                            <span style={{ fontSize: 10, color: T.muted }}>
-                                Net invested <span style={{ color: T.text, ...mono }}>{inr(netInvested)}</span>
-                                {"  "}Realised <span style={{ color: xirrResult.realisedPnl >= 0 ? T.pos : T.neg, ...mono }}>{xirrResult.realisedPnl >= 0 ? "+" : ""}{inr(xirrResult.realisedPnl)}</span>
-                                {"  "}Unrealised <span style={{ color: xirrResult.unrealisedPnl >= 0 ? T.pos : T.neg, ...mono }}>{xirrResult.unrealisedPnl >= 0 ? "+" : ""}{inr(xirrResult.unrealisedPnl)}</span>
-                                {"  "}<span style={{ color: xirrUsesLive ? T.greenText : T.muted }}>
-                                    {xirrUsesLive
-                                        ? ` as of ${new Date(cachedUnrealized.ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
-                                        : " visit Portfolio tab to load live prices"}
-                                </span>
-                            </span>
-                        </div>
-                    ) : (
-                        <div className="stat-sub">Add fund entries to compute XIRR</div>
-                    )}
-                </div>
-                <div className="stat-card" style={{ borderColor: xirr3yr == null ? T.border : xirr3yr >= 0 ? T.green + "88" : T.red + "55" }}>
-                    <div className="stat-label">XIRR  Last 3 Years</div>
-                    <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: xirrRateColor(xirr3yr), ...mono }}>
-                        {fmtXirr(xirr3yr)}
-                    </div>
-                    <div className="stat-sub">{xirr3yr == null ? "Not enough data" : "Annualised return  3yr window"}</div>
-                </div>
-                <div className="stat-card" style={{ borderColor: xirr5yr == null ? T.border : xirr5yr >= 0 ? T.green + "88" : T.red + "55" }}>
-                    <div className="stat-label">XIRR  Last 5 Years</div>
-                    <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: xirrRateColor(xirr5yr), ...mono }}>
-                        {fmtXirr(xirr5yr)}
-                    </div>
-                    <div className="stat-sub">{xirr5yr == null ? "Not enough data" : "Annualised return  5yr window"}</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Net Invested</div>
-                    <div className="stat-value" style={{ fontSize: 18, ...mono, color: netInvested >= 0 ? T.greenText : T.redText }}>
-                        {inr(netInvested)}
-                    </div>
-                    <div className="stat-sub">Deposits minus withdrawals</div>
-                </div>
-            </div>
-
             {/* DP Breakdown */}
             {dpBreakdown.length > 0 && (
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px", marginBottom: 20, boxShadow: `0 2px 8px ${T.shadow}` }}>
@@ -5931,30 +5827,6 @@ function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
                 </div>
             )}
 
-            {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 24 }}>
-                <div className="stat-card hero" style={{ borderColor: T.green }}>
-                    <div className="stat-label">Total Dividend Received</div>
-                    <div className="stat-value green" style={{ fontSize: 26, fontWeight: 700, ...mono }}>{inr(totalDividend)}</div>
-                    <div className="stat-sub">{sorted.length} entries across {uniqueFYs.length - 1} financial year{uniqueFYs.length - 1 !== 1 ? "s" : ""}</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">{filterFY === "ALL" ? "This View" : "FY " + filterFY}</div>
-                    <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: T.greenText, ...mono }}>{inr(filteredTotal)}</div>
-                    <div className="stat-sub">{filtered.length} entries</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Best FY</div>
-                    {fyBreakdown.length > 0 ? (() => {
-                        const best = fyBreakdown.reduce((a, b) => b[1] > a[1] ? b : a);
-                        return <>
-                            <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: T.greenText, ...mono }}>{inr(best[1])}</div>
-                            <div className="stat-sub">FY {best[0]}</div>
-                        </>;
-                    })() : <div className="stat-value" style={{ color: T.muted }}></div>}
-                </div>
-            </div>
-
             {/* FY Breakdown bar chart */}
             {fyBreakdown.length > 0 && (
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px", marginBottom: 20, boxShadow: `0 2px 8px ${T.shadow}` }}>
@@ -6181,7 +6053,7 @@ async function fetchAllTickerPages() {
     if (!firstRes.ok) throw new Error(`Ticker index HTTP ${firstRes.status}`);
     const firstPage = await firstRes.json();
     if (!Array.isArray(firstPage) || firstPage.length === 0) return [];
-    
+
     // If first page is already short, it's the only page.
     if (firstPage.length < PAGE) return firstPage;
 
@@ -11784,13 +11656,13 @@ async function _fetchScreenerRows() {
     const MAX_ROWS = 5000;
     const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
     const base = `${SUPABASE_URL}/rest/v1/stock_ratios?select=*&order=market_cap_cr.desc.nullslast&limit=${PAGE}`;
-    
+
     // Page 0 — fetch WITHOUT count=exact to avoid 500 timeouts
     const firstRes = await fetch(`${base}&offset=0`, { headers });
     if (!firstRes.ok) throw new Error(`HTTP ${firstRes.status}`);
     const firstPage = await firstRes.json();
     if (!Array.isArray(firstPage)) throw new Error("Invalid screener response");
-    
+
     // Sequential fetch — prevents connection pool saturation on large tables
     const all = [...firstPage];
     if (firstPage.length >= PAGE) {
@@ -12403,7 +12275,7 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
             height: 34, borderRadius: 8,
             border: `1px solid ${DS.border}`,
             background: DS.card,
-            overflow: "hidden", 
+            overflow: "hidden",
             width: "100%",
             fontSize: 13, fontFamily: DS.sans,
             boxShadow: `0 1px 3px ${DS.shadow}`,
@@ -14425,7 +14297,7 @@ function FinancialAnalyticsModule({
         // Load NSE index via shared deduplicating loader (no duplicate fetch if IIFE is in-flight)
         _ensureTickerIndex().then(index => {
             if (index && index.length > 0) tickerIndexRef.current = index;
-        }).catch(() => {});
+        }).catch(() => { });
         // BSE index intentionally not loaded separately — company_financials is single source of truth
         bseTickerIndexRef.current = [];
     }, []);
@@ -26695,7 +26567,7 @@ export default function App() {
             const s = localStorage.getItem("screener_my_filters_v1");
             if (s) return JSON.parse(s);
         } catch { }
-        return [ /* Default seeds... */ ];
+        return [ /* Default seeds... */];
     });
 
     const loadScreenerFilters = async () => {
@@ -26722,24 +26594,24 @@ export default function App() {
 
     const persistMyFilters = async (next) => {
         setMyFilters(next);
-        
+
         const sess = supabase._session;
         console.log("persistMyFilters called. Session:", sess ? "Active" : "None", "Filters count:", next.length);
-        
+
         if (sess?.access_token && sess.user?.id) {
             // LOGGED IN: Persist ONLY to Database
             try { localStorage.removeItem("screener_my_filters_v1"); } catch { }
-            
+
             try {
                 const h = supabase._h(sess.access_token);
                 console.log("Syncing to DB for user:", sess.user.id);
-                
+
                 const deleteRes = await fetch(`${SUPABASE_URL}/rest/v1/user_screener_filters?user_id=eq.${sess.user.id}`, { method: "DELETE", headers: h });
                 if (!deleteRes.ok) {
                     console.error("Filter sync DELETE failed:", deleteRes.status, deleteRes.statusText);
                     return;
                 }
-                
+
                 if (next.length > 0) {
                     const payload = next.map(f => ({
                         user_id: sess.user.id,
@@ -27989,7 +27861,7 @@ export default function App() {
                                         <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading watchlist" />}>
                                             <WatchlistDashboard
                                                 T={T}
-                                                getToken={getForumToken} 
+                                                getToken={getForumToken}
                                                 session={session}
                                                 darkMode={theme === "dark"}
                                                 onToggleDark={toggleTheme}
@@ -28052,11 +27924,11 @@ export default function App() {
                                                 <AnnouncementsModule T={T} />
                                             </Suspense>
                                         </div>
-                                                <div style={{ display: financialSubPage === "niftyPE" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", flexDirection: "column" }}>
-                                                    <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading Nifty PE Heatmap" />}>
-                                                        <NiftyPEHeatmap T={T} />
-                                                    </Suspense>
-                                                </div>
+                                        <div style={{ display: financialSubPage === "niftyPE" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", flexDirection: "column" }}>
+                                            <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading Nifty PE Heatmap" />}>
+                                                <NiftyPEHeatmap T={T} />
+                                            </Suspense>
+                                        </div>
                                     </div>
                                 )}
 
@@ -28065,26 +27937,26 @@ export default function App() {
                                     <TechnicalAnalyticsModule T={T} subPage={technicalSubPage} onTechnoFundaScan={handleTechnoFundaScan} />
                                 )}
 
-                                        {/* COMMUNITY FORUM */}
-                                        {productTab === "forum" && (
-                                            <ModuleErrorBoundary
+                                {/* COMMUNITY FORUM */}
+                                {productTab === "forum" && (
+                                    <ModuleErrorBoundary
+                                        T={T}
+                                        moduleName="Community Forum"
+                                        resetKey={`forum-${theme}`}
+                                        onRecover={() => setProductTab(SAFE_PRODUCT_TAB)}
+                                    >
+                                        <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading community" />}>
+                                            <ForumModule
                                                 T={T}
-                                                moduleName="Community Forum"
-                                                resetKey={`forum-${theme}`}
-                                                onRecover={() => setProductTab(SAFE_PRODUCT_TAB)}
-                                            >
-                                                <Suspense fallback={<ModuleSuspenseFallback T={T} label="Loading community" />}>
-                                                    <ForumModule
-                                                        T={T}
-                                                        session={session}
-                                                        getToken={getForumToken}
-                                                        onTickerClick={handleForumTickerClick}
-                                                        onLoginRequired={handleForumLoginRequired}
-                                                    />
-                                                </Suspense>
+                                                session={session}
+                                                getToken={getForumToken}
+                                                onTickerClick={handleForumTickerClick}
+                                                onLoginRequired={handleForumLoginRequired}
+                                            />
+                                        </Suspense>
 
-                                            </ModuleErrorBoundary>
-                                        )}
+                                    </ModuleErrorBoundary>
+                                )}
 
                             </>
                         )}
