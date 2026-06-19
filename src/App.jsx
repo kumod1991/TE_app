@@ -3986,7 +3986,7 @@ function CapitalGains({ trades, T }) {
 
             {/* Main table */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: `0 2px 8px ${T.shadow}` }}>
-                <table style={{ ...tableStyle, minWidth: 560 }}>
+                <table style={{ ...tableStyle, minWidth: isMobile ? 760 : 560 }}>
                     <colgroup>
                         <col style={{ width: "10%" }} />
                         <col style={{ width: "15%" }} /><col style={{ width: "15%" }} /><col style={{ width: "15%" }} />
