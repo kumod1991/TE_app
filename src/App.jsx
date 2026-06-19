@@ -1503,11 +1503,6 @@ a:hover { text-decoration: underline; }
 .stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: ${T.text}; letter-spacing: -.03em; }
 .stat-value.hero.green { color: #059669; }
 .stat-sub { font-size: 11px; color: ${T.subtext}; margin-top: 6px; line-height: 1.6; }
-@media (max-width:480px) {
-  .stat-card { padding: 16px 16px; border-radius: 18px; }
-  .stat-value { font-size: 18px; }
-  .stat-value.hero { font-size: 22px; }
-}
 
 .table-shell {
   background: ${T.card}; border: 1px solid ${T.border}; border-radius: 10px;
@@ -2191,6 +2186,62 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
   font-size: 13px; color: ${T.text};
 }
 .table tr:hover td { background: ${T.hover}; }
+
+/* Responsive stat card grid rules for mobile-friendly journals dashboard */
+.stat-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.stat-cards-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .stat-cards-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-cards-grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Premium, minimal mobile layout for Journals stat cards.
+   Single column, generous spacing, calmer typography rhythm
+   instead of a cramped 2-up grid that reads as overlapping/stacked. */
+@media (max-width: 640px) {
+  .stat-cards-grid,
+  .stat-cards-grid-3 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
+  }
+  .stat-cards-grid .stat-card.hero,
+  .stat-cards-grid-3 .stat-card.hero,
+  .span-2-mobile {
+    grid-column: 1 !important;
+  }
+  .stat-card {
+    padding: 16px 18px !important;
+    border-radius: 18px !important;
+  }
+  .stat-label {
+    font-size: 10px !important;
+    letter-spacing: .06em !important;
+    margin-bottom: 5px !important;
+  }
+  .stat-value {
+    font-size: 17px !important;
+  }
+  .stat-value.hero {
+    font-size: 20px !important;
+  }
+  .stat-sub {
+    font-size: 10.5px !important;
+    margin-top: 4px !important;
+    line-height: 1.45 !important;
+  }
+}
 `;
 }
 
@@ -3510,7 +3561,7 @@ function Dashboard({ trades, isDemo, T }) {
                     : "Visit Portfolio to hydrate live prices and unrealized performance."}
             />
             {isDemo && <div className="demo-banner" style={{ display: "inline-flex", margin: "0 0 14px" }}> Demo Mode  Sign up to save your real trades.</div>}
-            <div className="stats-row">
+            <div className="stat-cards-grid">
                 <div className="stat-card hero">
                     <div className="stat-label">Net P&amp;L from Stocks</div>
                     <div className={`stat-value hero ${combinedPnl >= 0 ? "green" : "red"}`}>{fmtPnl(combinedPnl)}</div>
@@ -3519,11 +3570,11 @@ function Dashboard({ trades, isDemo, T }) {
                         <span>Unrealized: <span style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</span>{unrealizedPnl !== null ? `  ${openTrades.length} open` : "  visit Portfolio to load"}</span>
                     </div>
                 </div>
-                <div className="stat-card"><div className="stat-label">Win / Loss Rate</div><div className="stat-value">{stats.winRate.toFixed(2)}%</div><div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div></div>
+                <div className="stat-card span-2-mobile"><div className="stat-label">Win / Loss Rate</div><div className="stat-value">{stats.winRate.toFixed(2)}%</div><div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div></div>
                 <div className="stat-card green"><div className="stat-label">Avg Gain</div><div className="stat-value green">+{stats.avgGain.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldWin.toFixed(1)} days</div></div>
                 <div className="stat-card red"><div className="stat-label">Avg Loss</div><div className="stat-value red">{stats.avgLoss.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldLoss.toFixed(1)} days</div></div>
             </div>
-            <div className="stats-row-2">
+            <div className="stat-cards-grid">
                 <div className="stat-card"><div className="stat-label">Reward / Risk</div><div className="stat-value">{stats.rr.toFixed(2)}</div><div className="stat-sub">Gain vs Loss ratio</div></div>
                 <div className="stat-card">
                     <div className="stat-label">Portfolio Value (Live)</div>
@@ -3684,7 +3735,7 @@ function Analytics({ trades, T }) {
                 asideValue={`${monthly.length}`}
                 asideBody={monthly.length ? "Tracked months contributing to the current P&L rhythm." : "Add more closed trades to unlock trend analysis."}
             />
-            <div className="stats-row" style={{ marginBottom: 24 }}>
+            <div className="stat-cards-grid">
                 <div className="stat-card"><div className="stat-label">Best Trade</div><div className="stat-value green" style={{ fontSize: 16 }}>{stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
                 <div className="stat-card"><div className="stat-label">Worst Trade</div><div className="stat-value red" style={{ fontSize: 16 }}>{stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
                 <div className="stat-card"><div className="stat-label">Closed Trades</div><div className="stat-value">{stats.closed.length}</div></div>
@@ -3821,7 +3872,7 @@ function CapitalGains({ trades, T }) {
             />
 
             {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
+            <div className="stat-cards-grid-3">
                 <div className="stat-card hero">
                     <div className="stat-label">Total P&amp;L (All Years)</div>
                     <div className={`stat-value hero ${totalPnl >= 0 ? "green" : "red"}`} style={{ fontSize: 18 }}>
@@ -4686,7 +4737,7 @@ function Portfolio({ trades, T }) {
             />
 
             {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 24 }}>
+            <div className="stat-cards-grid">
                 <div className="stat-card hero">
                     <div className="stat-label">Portfolio Value</div>
                     <div className="stat-value hero green" style={{ fontSize: 18 }}>{inr(totalCurrent)}</div>
@@ -4706,7 +4757,7 @@ function Portfolio({ trades, T }) {
                         {totalInvested > 0 ? ((totalUnrealized / totalInvested) * 100).toFixed(2) : 0}% overall
                     </div>
                 </div>
-                <div className="stat-card">
+                <div className="stat-card span-2-mobile">
                     <div className="stat-label">Today's Change</div>
                     <div className="stat-value" style={{ fontSize: 18, color: pnlColor(totalDayChange), ...mono }}>
                         {totalDayChange >= 0 ? "+" : ""}{inr(totalDayChange)}
