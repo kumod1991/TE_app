@@ -19,8 +19,8 @@ const warmStockDashboardCaches = (userToken) => import("./StockDashboard").then(
 
 
 
-// ===== GLOBAL QUOTE CONTEXT =====
-export { QuoteContext } from "./QuoteContext";
+import { QuoteContext } from "./QuoteContext";
+export { QuoteContext };
 
 
 
