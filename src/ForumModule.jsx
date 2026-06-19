@@ -11,7 +11,7 @@ import {
   useState, useEffect, useCallback, useMemo, useRef, memo, useContext, createContext, startTransition
 } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { QuoteContext } from "./App";
+import { QuoteContext } from "./QuoteContext";
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;

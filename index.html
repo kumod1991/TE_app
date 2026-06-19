@@ -14,10 +14,11 @@
     <link rel="canonical" href="https://tradeedge.in/" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@600;700;800&display=swap"
-      media="screen and (min-width: 769px)"
     />
 
     <meta property="og:site_name" content="TradeEdge" />
@@ -55,6 +56,11 @@
         }
       }
     </script>
+    <script
+      async
+      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4063180365030716"
+      crossorigin="anonymous"
+    ></script>
   </head>
   <body>
     <noscript>
@@ -62,26 +68,5 @@
     </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      window.addEventListener("load", () => {
-        const loadAds = () => {
-          if (document.getElementById("tradeedge-adsense")) return;
-          const s = document.createElement("script");
-          s.id = "tradeedge-adsense";
-          s.async = true;
-          s.crossOrigin = "anonymous";
-          s.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4063180365030716";
-          document.head.appendChild(s);
-        };
-        const loadAdsWhenIdle = () => {
-          if ("requestIdleCallback" in window) requestIdleCallback(loadAds, { timeout: 3000 });
-          else setTimeout(loadAds, 1);
-        };
-        ["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) => {
-          window.addEventListener(eventName, loadAdsWhenIdle, { once: true, passive: true });
-        });
-        setTimeout(loadAdsWhenIdle, 45000);
-      });
-    </script>
   </body>
 </html>
