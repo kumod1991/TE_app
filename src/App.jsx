@@ -1752,16 +1752,7 @@ a:hover { text-decoration: underline; }
   .journal-toolbar { align-items: stretch; }
   .journal-hero-aside { padding: 14px; border-radius: 16px; }
 }
-@media (max-width: 520px) {
-  .journal-main { padding: 12px 10px 22px; }
-  .journal-hero { padding: 16px 14px; border-radius: 20px; gap: 12px; }
-  .journal-hero-title { font-size: 20px; }
-  .journal-kicker { font-size: 9px; padding: 5px 9px; }
-  .journal-chip-row { grid-template-columns: 1fr 1fr; }
-  .journal-action-row { flex-wrap: wrap; }
-  .journal-action-row > * { flex: 1; min-width: 0; justify-content: center; }
-  .journal-btn-ghost { font-size: 12px; padding: 9px 12px; }
-}
+/* 520px journal rules are consolidated into the 640px mobile block below */
 
 .ann-outer { display:flex; flex-direction:column; height:100%; overflow:hidden; }
 .ann-topbar { background:${T.surface}; border-bottom:1px solid ${T.border}; padding:0 20px; display:flex; align-items:center; height:46px; gap:12px; flex-shrink:0; overflow-x:auto; }
@@ -2206,40 +2197,160 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
   .stat-cards-grid-3 { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Premium, minimal mobile layout for Journals stat cards.
-   Single column, generous spacing, calmer typography rhythm
-   instead of a cramped 2-up grid that reads as overlapping/stacked. */
+/* ─── Premium mobile layout for Journals ───────────────────────────────────
+   Philosophy: hero card = full-width command anchor; secondary cards = 2-up
+   compact grid so data is scannable without a monotonous single-column wall.
+   Typography scales down cleanly; borders and radius stay generous.
+   ─────────────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
+
+  /* 2-column grid for secondary stat cards — scannable, not stacked */
   .stat-cards-grid,
   .stat-cards-grid-3 {
-    grid-template-columns: 1fr !important;
-    gap: 10px !important;
-    margin-bottom: 16px !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 9px !important;
+    margin-bottom: 14px !important;
   }
+
+  /* Hero card (first child) spans full width — acts as command anchor */
+  .stat-cards-grid > .stat-card:first-child,
+  .stat-cards-grid-3 > .stat-card:first-child,
   .stat-cards-grid .stat-card.hero,
   .stat-cards-grid-3 .stat-card.hero,
   .span-2-mobile {
-    grid-column: 1 !important;
+    grid-column: 1 / -1 !important;
   }
+
+  /* Compact secondary cards — generous padding, clear hierarchy */
   .stat-card {
-    padding: 16px 18px !important;
+    padding: 13px 14px 14px !important;
+    border-radius: 16px !important;
+  }
+
+  /* Hero card gets a bit more breathing room */
+  .stat-card.hero,
+  .stat-cards-grid > .stat-card:first-child,
+  .stat-cards-grid-3 > .stat-card:first-child {
+    padding: 16px 18px 17px !important;
     border-radius: 18px !important;
   }
+
   .stat-label {
-    font-size: 10px !important;
-    letter-spacing: .06em !important;
+    font-size: 9.5px !important;
+    letter-spacing: .07em !important;
     margin-bottom: 5px !important;
   }
+
+  /* Secondary card values — compact but readable */
   .stat-value {
-    font-size: 17px !important;
+    font-size: 16px !important;
+    letter-spacing: -.02em !important;
   }
+
+  /* Hero value stays prominent */
   .stat-value.hero {
-    font-size: 20px !important;
+    font-size: 22px !important;
+    letter-spacing: -.04em !important;
   }
+
   .stat-sub {
-    font-size: 10.5px !important;
+    font-size: 10px !important;
     margin-top: 4px !important;
     line-height: 1.45 !important;
+  }
+
+  /* ── Journal hero: restructure as flex column so aside becomes a slim strip */
+  .journal-hero {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 16px 16px 18px !important;
+    border-radius: 20px !important;
+  }
+
+  /* Aside becomes a slim horizontal highlight bar */
+  .journal-hero-aside {
+    margin-top: 14px !important;
+    padding: 12px 14px !important;
+    border-radius: 14px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+  }
+
+  /* Shrink the large aside value on mobile */
+  .journal-hero-aside > div:first-child > div:nth-child(2) {
+    font-size: 20px !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* Hide the aside body text (descriptive sentence) — saves space */
+  .journal-hero-aside > div:first-child > div:nth-child(3) {
+    display: none !important;
+  }
+
+  /* Meta row (Premium journals canvas pill) — push to right */
+  .journal-hero-meta {
+    flex-shrink: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  /* Chip row stays 2-col but with tighter gap */
+  .journal-chip-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 7px !important;
+  }
+
+  .journal-chip {
+    padding: 9px 10px 10px !important;
+    border-radius: 14px !important;
+  }
+
+  .journal-chip-value {
+    font-size: 13px !important;
+  }
+
+  .journal-chip-sub {
+    font-size: 10px !important;
+    margin-top: 3px !important;
+  }
+
+  .journal-hero-title {
+    font-size: 20px !important;
+    margin: 10px 0 7px !important;
+  }
+
+  .journal-hero-subtitle {
+    font-size: 12px !important;
+    line-height: 1.6 !important;
+    margin-bottom: 12px !important;
+  }
+
+  .journal-kicker {
+    font-size: 9px !important;
+    padding: 5px 9px !important;
+  }
+
+  /* Action row buttons stretch on narrow mobile */
+  .journal-action-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .journal-action-row > * {
+    flex: 1 !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+  }
+  .journal-btn-ghost {
+    font-size: 12px !important;
+    padding: 9px 12px !important;
+  }
+
+  /* Main inner gap — tighter on mobile */
+  .journal-main-inner {
+    gap: 12px !important;
   }
 }
 `;
