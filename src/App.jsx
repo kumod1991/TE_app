@@ -3342,7 +3342,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
         if (price) {
             setForm(f => ({ ...f, [leg === "buy" ? "buy_price" : "sell_price"]: String(price) }));
         } else {
-            alert(`No Bhav Copy data found for ${ticker} on ${date}.\nMake sure the Bhav Copy has been fetched for that date.`);
+            alert(``);
         }
         setAutofilling(null);
     };
@@ -3485,7 +3485,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
                                             fontSize: 10, padding: "1px 7px", borderRadius: 4,
                                             border: `1px solid ${buyBorder}`, background: buyGlow,
                                             color: buyColor, cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
-                                        }}>{autofilling === "buy" ? "" : " Bhav"}</button>
+                                        }}>{autofilling === "buy" ? "" : " "}</button>
                                     )}
                                 </label>
                                 <input type="number" step="0.01" value={form.buy_price} onChange={set("buy_price")} placeholder="450.00" style={inputStyle} />
@@ -3521,7 +3521,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
                                             fontSize: 10, padding: "1px 7px", borderRadius: 4,
                                             border: `1px solid ${sellBorder}`, background: sellGlow,
                                             color: sellColor, cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
-                                        }}>{autofilling === "sell" ? "" : " Bhav"}</button>
+                                        }}>{autofilling === "sell" ? "" : " "}</button>
                                     )}
                                 </label>
                                 <input type="number" step="0.01" value={form.sell_price} onChange={set("sell_price")} placeholder="500.00" style={inputStyle} />
@@ -4352,7 +4352,7 @@ async function triggerBhavFetch() {
         body: JSON.stringify({ force: true }),
         signal: AbortSignal.timeout(60000),
     });
-    if (!r.ok) throw new Error(`Bhav fetch failed: ${r.status}`);
+    if (!r.ok) throw new Error(` ${r.status}`);
     return r.json();
 }
 
@@ -4834,7 +4834,7 @@ function Portfolio({ trades, T }) {
                 if (q) {
                     results[p.ticker] = { ...q };
                 } else {
-                    errs.push({ ticker: p.ticker, reason: "Not found in Bhav Copy or Yahoo Finance" });
+                    errs.push({ ticker: p.ticker, reason: "" });
                 }
                 setProgress(prev => ({ ...prev, done: prev.done + 1 }));
             }));
@@ -7322,7 +7322,7 @@ function DetailedComparisonView({ initialStocks, onBack, computeRatiosFn, T }) {
                 padding: "6px 18px", fontSize: 11, color: T.muted,
                 borderTop: `1px solid ${T.border}`, background: T.surface, flexShrink: 0
             }}>
-                Anchor = currently viewed stock  BEST = best value among compared stocks  Prices from Bhav Copy (NSE)  Ratios computed from quarterly financials
+                Anchor = currently viewed stock  BEST = best value among compared stocks  Prices 
             </div>
         </div>
     );
@@ -8042,7 +8042,7 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
                         </div>
                     </div>
                     <div style={{ padding: "8px 20px 14px", fontSize: 11, color: T.muted }}>
-                        Top 8 by market cap  {peers.length} total sector peers  Prices from Bhav Copy (NSE)
+                        Top 8 by market cap  {peers.length} total sector peers  Prices
                     </div>
                 </div>
             )}
@@ -11838,6 +11838,47 @@ async function _fetchScreenerRows() {
         enriched = all;
     }
 
+    // ── Enrich with promoter/FII/DII % from company_shareholding (stock_ratios often has these null) ──
+    try {
+        const csMap = new Map();
+        const CS_PAGE = 1000;
+        for (let offset = 0; offset < 6000; offset += CS_PAGE) {
+            const res = await fetch(
+                `${SUPABASE_URL}/rest/v1/company_shareholding?select=ticker,quarterly&limit=${CS_PAGE}&offset=${offset}`,
+                { headers }
+            );
+            if (!res.ok) break;
+            const page = await res.json();
+            if (!Array.isArray(page) || page.length === 0) break;
+            for (const r of page) {
+                const t = (r.ticker || "").trim().toUpperCase();
+                if (!t) continue;
+                const q = Array.isArray(r.quarterly) ? r.quarterly : null;
+                const latest = q && q.length > 0 ? q[q.length - 1] : null;
+                if (latest) {
+                    csMap.set(t, {
+                        promoter_pct: latest.promoters != null ? Number(latest.promoters) : null,
+                        fii_pct: latest.fiis != null ? Number(latest.fiis) : null,
+                        dii_pct: latest.diis != null ? Number(latest.diis) : null,
+                    });
+                }
+            }
+            if (page.length < CS_PAGE) break;
+        }
+        if (csMap.size > 0) {
+            enriched = enriched.map(row => {
+                const sh = csMap.get((row.ticker || "").trim().toUpperCase());
+                if (!sh) return row;
+                return {
+                    ...row,
+                    promoter_pct: sh.promoter_pct != null ? sh.promoter_pct : row.promoter_pct,
+                    fii_pct: sh.fii_pct != null ? sh.fii_pct : row.fii_pct,
+                    dii_pct: sh.dii_pct != null ? sh.dii_pct : row.dii_pct,
+                };
+            });
+        }
+    } catch (_) { /* non-fatal — keep stock_ratios values if shareholding fetch fails */ }
+
     const filtered = filterRowsByAllowedTickers(enriched, "ticker", allowedSet);
     _writeScreenerCache(filtered);
     return filtered;
@@ -12468,10 +12509,10 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
                     onBlur={commit}
                     onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
                     style={{
-                        width: 62, height: 34, border: "none", outline: "none",
+                        width: 84, minWidth: 84, height: 34, border: "none", outline: "none",
                         background: "transparent", fontFamily: DS.mono,
                         fontSize: 13, fontWeight: 600, color: DS.text,
-                        padding: "0 10px", textAlign: "right",
+                        padding: "0 12px", textAlign: "right",
                         fontVariantNumeric: "tabular-nums"
                     }}
                 />
@@ -12480,10 +12521,10 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
                     <input type="number" value={filter.rhsMul ?? 1}
                         onChange={e => onUpdate(idx, { rhsMul: e.target.value })}
                         style={{
-                            width: 30, height: 34, border: "none", outline: "none",
+                            width: 38, minWidth: 38, height: 34, border: "none", outline: "none",
                             background: "transparent", fontFamily: DS.mono,
                             fontSize: 12, fontWeight: 700, color: DS.isDark ? "#fb923c" : "#c2410c",
-                            padding: "0 2px", textAlign: "right"
+                            padding: "0 4px", textAlign: "right"
                         }} />
                     <span style={{ fontSize: 12, fontWeight: 700, color: DS.isDark ? "#fb923c" : "#c2410c" }}>x</span>
                     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -13178,20 +13219,18 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                 padding: "10px 16px", background: DS.bg,
                             }}>
                                 {/* Header row */}
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (workingFilters.length > 0 && (!isScreenerMobile || mobileFiltersExpanded)) ? 10 : 0, gap: 8 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (workingFilters.length > 0 && mobileFiltersExpanded) ? 10 : 0, gap: 8 }}>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                         <span style={{ fontSize: 12, fontWeight: 600, color: DS.textSub }}>Custom Filter</span>
-                                        {isScreenerMobile && (
-                                            <button onClick={() => setMobileFiltersExpanded(!mobileFiltersExpanded)}
-                                                style={{
-                                                    background: DS.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                                                    border: `1px solid ${DS.border}`, borderRadius: 6,
-                                                    color: DS.accent, fontSize: 11, fontWeight: 700,
-                                                    padding: "2px 10px", cursor: "pointer", transition: "all .12s"
-                                                }}>
-                                                {mobileFiltersExpanded ? "Hide Filters" : "Show Filters"}
-                                            </button>
-                                        )}
+                                        <button onClick={() => setMobileFiltersExpanded(!mobileFiltersExpanded)}
+                                            style={{
+                                                background: DS.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                                                border: `1px solid ${DS.border}`, borderRadius: 6,
+                                                color: DS.accent, fontSize: 11, fontWeight: 700,
+                                                padding: "2px 10px", cursor: "pointer", transition: "all .12s"
+                                            }}>
+                                            {mobileFiltersExpanded ? "Hide Filters" : "Show Filters"}
+                                        </button>
                                         {loadedFilterName && (
                                             <span style={{
                                                 fontSize: 11, fontWeight: 600,
@@ -13204,7 +13243,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                         )}
                                     </div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                                        {workingFilters.length > 0 && (!isScreenerMobile || mobileFiltersExpanded) && (
+                                        {workingFilters.length > 0 && mobileFiltersExpanded && (
                                             <button onClick={clearFilters}
                                                 style={{ background: "none", border: "none", cursor: "pointer", color: DS.textMuted, fontSize: 12, fontFamily: DS.sans, padding: "0 2px", transition: "color .12s" }}
                                                 onMouseEnter={e => e.currentTarget.style.color = DS.neg}
@@ -13212,7 +13251,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                                 Clear all
                                             </button>
                                         )}
-                                        {workingFilters.length > 0 && (!isScreenerMobile || mobileFiltersExpanded) && (
+                                        {workingFilters.length > 0 && mobileFiltersExpanded && (
                                             <>
                                                 <div style={{ width: 1, height: 14, background: DS.border }} />
                                                 <button onClick={openSaveDialog}
@@ -13236,7 +13275,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                 </div>
 
                                 {/* Filter pills + add */}
-                                {(!isScreenerMobile || mobileFiltersExpanded) && (
+                                {mobileFiltersExpanded && (
                                     <div style={{ display: "flex", flexDirection: "column", gap: 7, alignItems: "stretch" }}>
                                         {workingFilters.map((f, idx) => (
                                             <FilterPill key={f.id || idx} filter={f} idx={idx}
@@ -13382,11 +13421,11 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                         <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse", fontFamily: DS.sans }}>
                                             <thead>
                                                 <tr style={{ position: "sticky", top: 0, zIndex: 10, background: DS.tableHead, borderBottom: `1px solid ${DS.border}` }}>
-                                                    <th style={{ padding: isScreenerMobile ? "7px 0 7px 10px" : "9px 0 9px 16px", textAlign: "left", fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: DS.textMuted, position: "sticky", left: 0, zIndex: 11, background: DS.tableHead, borderRight: `1px solid ${DS.border}`, width: isScreenerMobile ? 28 : 40, whiteSpace: "nowrap" }}>#</th>
-                                                    <th style={{ padding: isScreenerMobile ? "7px 10px 7px 8px" : "9px 16px 9px 10px", textAlign: "left", fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: DS.textMuted, position: "sticky", left: isScreenerMobile ? 28 : 40, zIndex: 11, background: DS.tableHead, borderRight: `1px solid ${DS.border}`, minWidth: isScreenerMobile ? 130 : 200, whiteSpace: "nowrap" }}>Company</th>
+                                                    <th style={{ padding: isScreenerMobile ? "8px 0 8px 10px" : "9px 0 9px 16px", textAlign: "left", fontSize: isScreenerMobile ? 10 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: DS.textMuted, position: "sticky", left: 0, zIndex: 11, background: DS.tableHead, borderRight: `1px solid ${DS.border}`, width: isScreenerMobile ? 30 : 40, whiteSpace: "nowrap" }}>#</th>
+                                                    <th style={{ padding: isScreenerMobile ? "8px 10px 8px 8px" : "9px 16px 9px 10px", textAlign: "left", fontSize: isScreenerMobile ? 10 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: DS.textMuted, position: "sticky", left: isScreenerMobile ? 30 : 40, zIndex: 11, background: DS.tableHead, borderRight: `1px solid ${DS.border}`, minWidth: isScreenerMobile ? 132 : 200, whiteSpace: "nowrap" }}>Company</th>
                                                     {activeCols.map(col => (
                                                         <th key={col.key} onClick={() => handleSort(col.key)}
-                                                            style={{ padding: isScreenerMobile ? "7px 8px" : "9px 14px", textAlign: "right", fontSize: isScreenerMobile ? 9 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: sortCol === col.key ? DS.accent : DS.textMuted, cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", transition: "color .12s" }}>
+                                                            style={{ padding: isScreenerMobile ? "8px 10px" : "9px 14px", textAlign: "right", fontSize: isScreenerMobile ? 10 : 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: sortCol === col.key ? DS.accent : DS.textMuted, cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", transition: "color .12s" }}>
                                                             {col.label}
                                                             {sortCol === col.key && (
                                                                 <span style={{ marginLeft: 3, opacity: .7 }}>{sortAsc ? "↑" : "↓"}</span>
@@ -13403,13 +13442,13 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                                     const isLive = !!liveP;
                                                     return (
                                                         <tr key={row.ticker + row.exchange}
-                                                            style={{ borderBottom: `1px solid ${DS.border}`, background: ri % 2 === 1 ? DS.tableAlt : "transparent", transition: "background .1s", cursor: "pointer" }}
+                                                            style={{ borderBottom: `1px solid ${DS.border}`, background: ri % 2 === 1 ? DS.tableAlt : DS.card, transition: "background .1s", cursor: "pointer" }}
                                                             onMouseEnter={e => e.currentTarget.style.background = DS.hover}
-                                                            onMouseLeave={e => e.currentTarget.style.background = ri % 2 === 1 ? DS.tableAlt : "transparent"}>
-                                                            <td style={{ padding: isScreenerMobile ? "7px 0 7px 10px" : (compactRow ? "6px 0 6px 16px" : "9px 0 9px 16px"), fontSize: isScreenerMobile ? 10 : 11, color: DS.textMuted, fontFamily: DS.mono, textAlign: "left", position: "sticky", left: 0, background: "inherit", borderRight: `1px solid ${DS.border}`, width: isScreenerMobile ? 28 : 40, fontVariantNumeric: "tabular-nums" }}>{globalRank}</td>
-                                                            <td style={{ padding: isScreenerMobile ? "7px 10px 7px 8px" : (compactRow ? "6px 16px 6px 10px" : "9px 16px 9px 10px"), fontSize: isScreenerMobile ? 11 : 13, position: "sticky", left: isScreenerMobile ? 28 : 40, background: "inherit", borderRight: `1px solid ${DS.border}`, minWidth: isScreenerMobile ? 130 : 200, maxWidth: isScreenerMobile ? 150 : 260 }}>
+                                                            onMouseLeave={e => e.currentTarget.style.background = ri % 2 === 1 ? DS.tableAlt : DS.card}>
+                                                            <td style={{ padding: isScreenerMobile ? "8px 0 8px 10px" : (compactRow ? "6px 0 6px 16px" : "9px 0 9px 16px"), fontSize: isScreenerMobile ? 11 : 11, color: DS.textMuted, fontFamily: DS.mono, textAlign: "left", position: "sticky", left: 0, zIndex: 2, background: "inherit", borderRight: `1px solid ${DS.border}`, width: isScreenerMobile ? 30 : 40, fontVariantNumeric: "tabular-nums" }}>{globalRank}</td>
+                                                            <td style={{ padding: isScreenerMobile ? "8px 10px 8px 8px" : (compactRow ? "6px 16px 6px 10px" : "9px 16px 9px 10px"), fontSize: isScreenerMobile ? 12 : 13, position: "sticky", left: isScreenerMobile ? 30 : 40, zIndex: 2, background: "inherit", borderRight: `1px solid ${DS.border}`, minWidth: isScreenerMobile ? 132 : 200, maxWidth: isScreenerMobile ? 152 : 260 }}>
                                                                 <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: DS.text }}>{row.name || row.ticker}</div>
-                                                                <div style={{ fontSize: isScreenerMobile ? 9 : 11, color: DS.textMuted, marginTop: 1, display: "flex", alignItems: "center", gap: 4 }}>
+                                                                <div style={{ fontSize: isScreenerMobile ? 10 : 11, color: DS.textMuted, marginTop: 1, display: "flex", alignItems: "center", gap: 4 }}>
                                                                     <span style={{ fontFamily: DS.mono }}>{row.ticker}</span>
                                                                     {row.exchange && <span style={{ opacity: .55 }}>· {row.exchange}</span>}
                                                                 </div>
@@ -13420,7 +13459,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                                                                 const formatted = col.fmt ? col.fmt(rawVal) : (rawVal == null ? "—" : rawVal);
                                                                 return (
                                                                     <td key={col.key}
-                                                                        style={{ padding: isScreenerMobile ? "7px 8px" : (compactRow ? "6px 14px" : "9px 14px"), textAlign: "right", fontSize: isScreenerMobile ? 10 : 12, fontFamily: DS.mono, fontVariantNumeric: "tabular-nums", color: cellColor(col.key, rawVal), whiteSpace: "nowrap" }}>
+                                                                        style={{ padding: isScreenerMobile ? "8px 10px" : (compactRow ? "6px 14px" : "9px 14px"), textAlign: "right", fontSize: isScreenerMobile ? 11 : 12, fontFamily: DS.mono, fontVariantNumeric: "tabular-nums", color: cellColor(col.key, rawVal), whiteSpace: "nowrap" }}>
                                                                         {isPrice && isLive ? (
                                                                             <span style={{ position: "relative" }}>
                                                                                 {formatted}
@@ -17130,7 +17169,7 @@ function MarketBreadthModule({ T, onDataReady }) {
                         }
                     }
                 } catch (bhavErr) {
-                    console.warn("[Breadth] bhav_copy name fetch failed, using company_financials names:", bhavErr.message);
+                    console.warn("", bhavErr.message);
                 }
                 setNameMap(nameMapInit);
                 setIndustryMap(industryMap);
