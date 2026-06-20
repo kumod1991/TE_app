@@ -1490,19 +1490,50 @@ a:hover { text-decoration: underline; }
 
 .stat-card {
   position: relative; overflow: hidden;
-  background: ${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92))"};
-  border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
-  border-radius: 22px; padding: 18px 18px;
-  transition: box-shadow .15s, transform .15s, border-color .15s;
+  background: ${D ? "linear-gradient(165deg, rgba(255,255,255,.045), rgba(255,255,255,.015))" : "linear-gradient(165deg, #ffffff, rgba(248,250,252,.94))"};
+  border: 1px solid ${D ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.07)"};
+  border-radius: 18px; padding: 17px 18px 16px;
+  transition: box-shadow .2s cubic-bezier(.16,1,.3,1), transform .2s cubic-bezier(.16,1,.3,1), border-color .2s;
   animation: slideUp .2s cubic-bezier(.16,1,.3,1);
-  box-shadow: ${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 16px 34px rgba(15,23,42,.05)"};
+  box-shadow: ${D ? "0 12px 28px rgba(2,6,23,.22)" : "0 10px 24px rgba(15,23,42,.045)"};
+  display: flex; flex-direction: column; gap: 0;
 }
-.stat-card:hover { box-shadow: 0 22px 46px ${T.shadow}; transform: translateY(-2px); border-color: ${D ? "rgba(255,255,255,.12)" : "rgba(15,23,42,.12)"}; }
-.stat-card.hero { border-color: rgba(5,150,105,.28); background: ${D ? "linear-gradient(180deg, rgba(16,185,129,.10), rgba(255,255,255,.025))" : "linear-gradient(180deg, rgba(16,185,129,.08), rgba(255,255,255,.96))"}; }
+.stat-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: ${D ? "linear-gradient(90deg, rgba(255,255,255,.14), rgba(255,255,255,0))" : "linear-gradient(90deg, rgba(255,255,255,.9), rgba(255,255,255,0))"};
+  pointer-events: none;
+}
+.stat-card:hover { box-shadow: ${D ? "0 18px 38px rgba(2,6,23,.32)" : "0 18px 36px rgba(15,23,42,.09)"}; transform: translateY(-2px); border-color: ${D ? "rgba(255,255,255,.13)" : "rgba(15,23,42,.13)"}; }
+.stat-card.hero {
+  border-color: ${D ? "rgba(52,211,153,.22)" : "rgba(5,150,105,.20)"};
+  background: ${D ? "linear-gradient(165deg, rgba(16,185,129,.13), rgba(15,26,43,.6))" : "linear-gradient(165deg, rgba(16,185,129,.09), #ffffff)"};
+}
+.stat-card.green { border-left: none; box-shadow: ${D ? "0 12px 28px rgba(2,6,23,.22)" : "0 10px 24px rgba(15,23,42,.045)"}; }
+.stat-card.red { border-left: none; }
+.stat-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
+.stat-icon-badge {
+  width: 28px; height: 28px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; background: ${D ? "rgba(255,255,255,.045)" : "rgba(15,23,42,.04)"};
+  border: 1px solid ${D ? "rgba(255,255,255,.06)" : "rgba(15,23,42,.05)"};
+}
+.stat-icon-badge.positive { background: ${T.greenGlow}; border-color: ${D ? "rgba(52,211,153,.18)" : "rgba(5,150,105,.16)"}; }
+.stat-icon-badge.negative { background: ${T.redGlow}; border-color: ${D ? "rgba(251,113,133,.18)" : "rgba(244,63,94,.16)"}; }
+.stat-trend-pill {
+  display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px 3px 6px; border-radius: 100px;
+  font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; letter-spacing: -.01em;
+  flex-shrink: 0;
+}
+.stat-trend-pill.positive { background: ${T.greenGlow}; color: ${T.greenText}; }
+.stat-trend-pill.negative { background: ${T.redGlow}; color: ${T.negText}; }
+.stat-trend-pill.neutral { background: ${D ? "rgba(255,255,255,.05)" : "rgba(15,23,42,.045)"}; color: ${T.muted}; }
 .stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: ${T.muted}; margin-bottom: 6px; }
-.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: ${T.text}; letter-spacing: -.03em; }
-.stat-value.hero.green { color: #059669; }
-.stat-sub { font-size: 11px; color: ${T.subtext}; margin-top: 6px; line-height: 1.6; }
+.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 21px; font-weight: 700; color: ${T.text}; letter-spacing: -.03em; line-height: 1.15; }
+.stat-value.hero.green { color: ${T.green}; }
+.stat-sub { font-size: 11px; color: ${T.subtext}; margin-top: 7px; line-height: 1.6; }
+.stat-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid ${D ? "rgba(255,255,255,.05)" : "rgba(15,23,42,.05)"}; }
+.stat-foot-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: ${T.subtext}; }
+.stat-foot-row + .stat-foot-row { margin-top: 4px; }
+.stat-foot-row b { font-family: 'IBM Plex Mono', monospace; font-weight: 700; }
 
 .table-shell {
   background: ${T.card}; border: 1px solid ${T.border}; border-radius: 10px;
@@ -2040,11 +2071,22 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
   .chart-grid .chart-card { grid-column:1 !important; }
 }
 .chart-card {
-  background:${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92))"};
-  border:1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"}; border-radius:24px; padding:20px;
-  box-shadow:${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 16px 34px rgba(15,23,42,.05)"};
+  position: relative; overflow: hidden;
+  background:${D ? "linear-gradient(165deg, rgba(255,255,255,.04), rgba(255,255,255,.015))" : "linear-gradient(165deg, #ffffff, rgba(248,250,252,.94))"};
+  border:1px solid ${D ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.07)"}; border-radius:20px; padding:20px 21px;
+  box-shadow:${D ? "0 14px 32px rgba(2,6,23,.22)" : "0 12px 26px rgba(15,23,42,.05)"};
+  transition: box-shadow .2s, border-color .2s;
 }
-.chart-title { font-size:10px; font-weight:700; color:${T.muted}; margin-bottom:14px; text-transform:uppercase; letter-spacing:.07em; }
+.chart-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: ${D ? "linear-gradient(90deg, rgba(255,255,255,.12), rgba(255,255,255,0))" : "linear-gradient(90deg, rgba(255,255,255,.9), rgba(255,255,255,0))"};
+  pointer-events: none;
+}
+.chart-card:hover { border-color: ${D ? "rgba(255,255,255,.11)" : "rgba(15,23,42,.11)"}; }
+.chart-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.chart-title { font-size:10px; font-weight:700; color:${T.muted}; text-transform:uppercase; letter-spacing:.07em; display: flex; align-items: center; gap: 7px; }
+.chart-title-icon { width: 22px; height: 22px; border-radius: 7px; background: ${D ? "rgba(255,255,255,.05)" : "rgba(15,23,42,.04)"}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.chart-title-tag { font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: ${T.subtext}; background: ${D ? "rgba(255,255,255,.05)" : "rgba(15,23,42,.04)"}; padding: 3px 8px; border-radius: 100px; }
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
 .form-divider { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:${T.muted}; margin:16px 0 10px; font-weight:700; display:flex; align-items:center; gap:8px; }
 .form-divider::after { content:''; flex:1; height:1px; background:${T.border}; }
@@ -2100,8 +2142,8 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
 .page-header { margin-bottom:20px; }
 .page-title { font-family:'Inter',sans-serif; font-size:20px; font-weight:700; color:${T.text}; letter-spacing:-.02em; margin-bottom:3px; }
 .page-sub { color:${T.subtext}; font-size:13px; margin-top:3px; }
-.stat-card.green { border-left:3px solid ${T.pos}; }
-.stat-card.red   { border-left:3px solid ${T.neg}; }
+.stat-card.green::before { background: linear-gradient(90deg, ${T.green}, transparent); height: 2px; opacity: .7; }
+.stat-card.red::before   { background: linear-gradient(90deg, ${T.red}, transparent); height: 2px; opacity: .7; }
 .stat-value.green { color:${T.pos}; }
 .stat-value.red   { color:${T.neg}; }
 .stat-value.hero  { color:${T.green}; }
@@ -2191,10 +2233,12 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
   gap: 14px;
   margin-bottom: 24px;
 }
+.stat-cards-grid .stat-card.hero { grid-column: span 2; }
 
 @media (max-width: 900px) {
   .stat-cards-grid { grid-template-columns: repeat(2, 1fr); }
   .stat-cards-grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .stat-cards-grid .stat-card.hero { grid-column: span 2; }
 }
 
 /* ─── Premium mobile layout for Journals ───────────────────────────────────
@@ -2258,6 +2302,19 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
     margin-top: 4px !important;
     line-height: 1.45 !important;
   }
+
+  .stat-card-head { margin-bottom: 8px !important; }
+  .stat-icon-badge { width: 23px !important; height: 23px !important; border-radius: 7px !important; }
+  .stat-icon-badge svg { width: 13px !important; height: 13px !important; }
+  .stat-trend-pill { font-size: 9px !important; padding: 2px 6px 2px 5px !important; }
+  .stat-card-foot { margin-top: 8px !important; padding-top: 8px !important; }
+  .stat-foot-row { font-size: 10px !important; }
+
+  .chart-card { padding: 16px 15px !important; border-radius: 17px !important; }
+  .chart-card-head { margin-bottom: 12px !important; }
+  .chart-title-icon { width: 19px !important; height: 19px !important; }
+  .chart-title-icon svg { width: 11px !important; height: 11px !important; }
+  .chart-title-tag { font-size: 9px !important; padding: 2px 7px !important; }
 
   /* ── Journal hero: restructure as flex column so aside becomes a slim strip */
   .journal-hero {
@@ -3589,6 +3646,80 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
     );
 }
 
+// ─── Metric icon glyphs (Feather-style, stroke currentColor, 24x24 viewBox) ───
+function MetricIcon({ name, size = 14 }) {
+    const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+    switch (name) {
+        case "trending-up":
+            return <svg {...common}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>;
+        case "trending-down":
+            return <svg {...common}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></svg>;
+        case "target":
+            return <svg {...common}><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>;
+        case "scale":
+            return <svg {...common}><line x1="12" y1="3" x2="12" y2="21" /><path d="M5 8 2 13a3 3 0 0 0 6 0L5 8Z" /><path d="M19 8 16 13a3 3 0 0 0 6 0L19 8Z" /><path d="M7 21h10" /><path d="M12 3 7 8h10l-5-5Z" /></svg>;
+        case "wallet":
+            return <svg {...common}><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" /><path d="M4 6v12c0 1.1.9 2 2 2h14v-4" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></svg>;
+        case "clock":
+            return <svg {...common}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
+        case "layers":
+            return <svg {...common}><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>;
+        case "zap":
+            return <svg {...common}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>;
+        case "bar-chart":
+            return <svg {...common}><line x1="12" y1="20" x2="12" y2="10" /><line x1="18" y1="20" x2="18" y2="4" /><line x1="6" y1="20" x2="6" y2="16" /></svg>;
+        case "pie-chart":
+            return <svg {...common}><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></svg>;
+        case "activity":
+            return <svg {...common}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>;
+        case "percent":
+            return <svg {...common}><line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></svg>;
+        case "calendar":
+            return <svg {...common}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>;
+        case "briefcase":
+            return <svg {...common}><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>;
+        case "filter":
+            return <svg {...common}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>;
+        case "list":
+            return <svg {...common}><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>;
+        case "award":
+            return <svg {...common}><circle cx="12" cy="8" r="7" /><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" /></svg>;
+        case "alert":
+            return <svg {...common}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>;
+        case "indian-rupee":
+            return <svg {...common}><path d="M6 3h12" /><path d="M6 8h12" /><path d="M6 13h12a6 4 0 1 1 0 0H6" /><path d="M6 13 14 21" /></svg>;
+        default:
+            return <svg {...common}><circle cx="12" cy="12" r="9" /></svg>;
+    }
+}
+
+// ─── MetricCard: premium stat-card with icon badge, trend pill, optional footer rows ───
+function MetricCard({ T, icon, label, value, sub, tone = "neutral", hero = false, trend = null, foot = null, className = "" }) {
+    const toneClass = tone === "positive" ? "positive" : tone === "negative" ? "negative" : "neutral";
+    const valueColor = tone === "positive" ? T.pos : tone === "negative" ? T.neg : T.text;
+    return (
+        <div className={`stat-card${hero ? " hero" : ""}${className ? " " + className : ""}`}>
+            <div className="stat-card-head">
+                {icon ? (
+                    <div className={`stat-icon-badge ${toneClass}`} style={{ color: tone === "positive" ? T.greenText : tone === "negative" ? T.negText : T.subtext }}>
+                        <MetricIcon name={icon} size={14} />
+                    </div>
+                ) : <span />}
+                {trend ? (
+                    <span className={`stat-trend-pill ${trend.tone || toneClass}`}>
+                        <MetricIcon name={trend.tone === "negative" ? "trending-down" : "trending-up"} size={10} />
+                        {trend.label}
+                    </span>
+                ) : null}
+            </div>
+            <div className="stat-label">{label}</div>
+            <div className={`stat-value${hero ? " hero" : ""}`} style={{ color: valueColor }}>{value}</div>
+            {sub ? <div className="stat-sub">{sub}</div> : null}
+            {foot ? <div className="stat-card-foot">{foot}</div> : null}
+        </div>
+    );
+}
+
 function Dashboard({ trades, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
 
@@ -3650,11 +3781,6 @@ function Dashboard({ trades, isDemo, T }) {
         : stats.totalPnl;
 
     const fmtPnl = (v) => (v >= 0 ? "+" : "") + "" + Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 });
-    const dashboardHeroMetrics = [
-        { label: "Combined P&L", value: fmtPnl(combinedPnl), tone: combinedPnl >= 0 ? "positive" : "negative", sub: `${stats.closed.length} closed trades` },
-        { label: "Win rate", value: `${stats.winRate.toFixed(2)}%`, sub: `${stats.wins.length} wins / ${stats.losses.length} losses` },
-        { label: "Open exposure", value: `${openTrades.length}`, sub: hasLiveData ? `${quotedCount}/${openTickers.length} tickers live` : "Load Portfolio for live prices" },
-    ];
 
     return (
         <div>
@@ -3672,49 +3798,49 @@ function Dashboard({ trades, isDemo, T }) {
                     : "Visit Portfolio to hydrate live prices and unrealized performance."}
             />
             {isDemo && <div className="demo-banner" style={{ display: "inline-flex", margin: "0 0 14px" }}> Demo Mode  Sign up to save your real trades.</div>}
-            {/* Row 1: Net P&L + Win/Loss Rate */}
-            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
-                <div className="stat-card hero" style={{ gridColumn: "1" }}>
-                    <div className="stat-label">Net P&amp;L from Stocks</div>
-                    <div className={`stat-value hero ${combinedPnl >= 0 ? "green" : "red"}`}>{fmtPnl(combinedPnl)}</div>
-                    <div className="stat-sub" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <span>Realized: <span style={{ color: stats.totalPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{fmtPnl(stats.totalPnl)}</span>  {stats.closed.length} closed</span>
-                        <span>Unrealized: <span style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</span>{unrealizedPnl !== null ? `  ${openTrades.length} open` : "  visit Portfolio to load"}</span>
-                    </div>
-                </div>
-                <div className="stat-card"><div className="stat-label">Win / Loss Rate</div><div className="stat-value">{stats.winRate.toFixed(2)}%</div><div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div></div>
-            </div>
-            {/* Row 2: Avg Gain + Avg Loss */}
-            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
-                <div className="stat-card green"><div className="stat-label">Avg Gain</div><div className="stat-value green">+{stats.avgGain.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldWin.toFixed(1)} days</div></div>
-                <div className="stat-card red"><div className="stat-label">Avg Loss</div><div className="stat-value red">{stats.avgLoss.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldLoss.toFixed(1)} days</div></div>
-            </div>
-            {/* Row 3: Reward/Risk + Portfolio Value (Live) */}
-            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
-                <div className="stat-card"><div className="stat-label">Reward / Risk</div><div className="stat-value">{stats.rr.toFixed(2)}</div><div className="stat-sub">Gain vs Loss ratio</div></div>
-                <div className="stat-card">
-                    <div className="stat-label">Portfolio Value (Live)</div>
-                    <div className="stat-value" style={{ fontSize: 18, color: totalPortfolioValue !== null ? T.text : T.muted }}>
-                        {totalPortfolioValue !== null
-                            ? `${totalPortfolioValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
-                            : ""}
-                    </div>
-                    <div className="stat-sub">
-                        {totalPortfolioValue !== null
-                            ? `Live prices  ${quotedCount}/${openTickers.length} tickers`
-                            : "Visit Portfolio tab to load live prices"}
-                    </div>
-                </div>
-            </div>
-            {/* Row 4: Avg Hold Wins + Avg Hold Losses */}
-            <div className="stat-cards-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
-                <div className="stat-card"><div className="stat-label">Avg Hold (Wins)</div><div className="stat-value">{stats.avgHoldWin.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div></div>
-                <div className="stat-card"><div className="stat-label">Avg Hold (Losses)</div><div className="stat-value">{stats.avgHoldLoss.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div></div>
+            <div className="stat-cards-grid">
+                <MetricCard
+                    T={T} hero icon="indian-rupee"
+                    className="span-2-mobile"
+                    label="Net P&L from stocks"
+                    value={fmtPnl(combinedPnl)}
+                    tone={combinedPnl >= 0 ? "positive" : "negative"}
+                    trend={{ label: `${stats.winRate.toFixed(0)}% win rate`, tone: stats.winRate >= 50 ? "positive" : "negative" }}
+                    foot={
+                        <>
+                            <div className="stat-foot-row"><span>Realized</span><b style={{ color: stats.totalPnl >= 0 ? T.pos : T.neg }}>{fmtPnl(stats.totalPnl)}  {stats.closed.length} closed</b></div>
+                            <div className="stat-foot-row"><span>Unrealized</span><b style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.pos : T.neg }}>{unrealizedPnl !== null ? `${fmtPnl(unrealizedPnl)}  ${openTrades.length} open` : "Visit Portfolio to load"}</b></div>
+                        </>
+                    }
+                />
+                <MetricCard T={T} icon="target" label="Win / loss rate" value={`${stats.winRate.toFixed(2)}%`} sub={`${stats.wins.length}W  /  ${stats.losses.length}L`} tone={stats.winRate >= 50 ? "positive" : "neutral"} />
+                <MetricCard T={T} icon="scale" label="Reward / risk" value={stats.rr.toFixed(2)} sub="Gain vs loss ratio" />
+                <MetricCard T={T} icon="wallet" label="Portfolio value (live)" value={totalPortfolioValue !== null ? totalPortfolioValue.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : ""} sub={totalPortfolioValue !== null ? `Live  ${quotedCount}/${openTickers.length} tickers` : "Visit Portfolio to load live prices"} />
+                <MetricCard T={T} icon="trending-up" label="Avg gain" value={`+${stats.avgGain.toFixed(2)}%`} tone="positive" sub={`Avg hold ${stats.avgHoldWin.toFixed(1)} days`} />
+                <MetricCard T={T} icon="trending-down" label="Avg loss" value={`${stats.avgLoss.toFixed(2)}%`} tone="negative" sub={`Avg hold ${stats.avgHoldLoss.toFixed(1)} days`} />
+                <MetricCard T={T} icon="clock" label="Avg hold (wins)" value={<>{stats.avgHoldWin.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></>} />
+                <MetricCard T={T} icon="clock" label="Avg hold (losses)" value={<>{stats.avgHoldLoss.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></>} />
             </div>
             <div className="chart-grid">
-                <div className="chart-card"><div className="chart-title">Cumulative P&amp;L</div><Sparkline data={stats.closed.map(t => t.pnl)} T={T} /></div>
-                <div className="chart-card"><div className="chart-title">Win / Loss Breakdown</div><div style={{ paddingTop: 12 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} /></div></div>
-                <div className="chart-card" style={{ gridColumn: "span 2" }}><div className="chart-title">P&amp;L by Ticker</div><BarChart trades={stats.closed} T={T} /></div>
+                <div className="chart-card">
+                    <div className="chart-card-head">
+                        <div className="chart-title"><span className="chart-title-icon"><MetricIcon name="activity" size={12} /></span>Cumulative P&amp;L</div>
+                    </div>
+                    <Sparkline data={stats.closed.map(t => t.pnl)} T={T} />
+                </div>
+                <div className="chart-card">
+                    <div className="chart-card-head">
+                        <div className="chart-title"><span className="chart-title-icon"><MetricIcon name="pie-chart" size={12} /></span>Win / Loss Breakdown</div>
+                    </div>
+                    <div style={{ paddingTop: 4 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} /></div>
+                </div>
+                <div className="chart-card" style={{ gridColumn: "span 2" }}>
+                    <div className="chart-card-head">
+                        <div className="chart-title"><span className="chart-title-icon"><MetricIcon name="bar-chart" size={12} /></span>P&amp;L by Ticker</div>
+                        <span className="chart-title-tag">Top 8</span>
+                    </div>
+                    <BarChart trades={stats.closed} T={T} />
+                </div>
             </div>
         </div>
     );
@@ -3855,18 +3981,29 @@ function Analytics({ trades, T }) {
                 asideBody={monthly.length ? "Tracked months contributing to the current P&L rhythm." : "Add more closed trades to unlock trend analysis."}
             />
             <div className="chart-grid">
-                <div className="chart-card" style={{ gridColumn: "span 2" }}><div className="chart-title">Monthly P&amp;L</div>
+                <div className="chart-card" style={{ gridColumn: "span 2" }}>
+                    <div className="chart-card-head">
+                        <div className="chart-title"><span className="chart-title-icon"><MetricIcon name="bar-chart" size={12} /></span>Monthly P&amp;L</div>
+                        <span className="chart-title-tag">{monthly.length} months</span>
+                    </div>
                     <div className="bar-chart">{monthly.length === 0 ? <div className="empty" style={{ padding: 16 }}>No data yet</div> : monthly.map(([month, pnl]) => (
                         <div className="bar-row" key={month}><div className="bar-label">{month}</div><div className="bar-track"><div className="bar-fill" style={{ width: `${(Math.abs(pnl) / maxM) * 100}%`, background: pnl >= 0 ? T.green : T.red }}><span className="bar-fill-val">{pnl >= 0 ? "+" : ""}{Math.round(pnl).toLocaleString()}</span></div></div></div>
                     ))}</div>
                 </div>
-                <div className="chart-card"><div className="chart-title">Cumulative P&amp;L Curve</div><Sparkline data={stats.closed.map(t => t.pnl)} T={T} /></div>
                 <div className="chart-card">
-                    <div className="chart-title">Win Rate</div>
-                    <div style={{ paddingTop: 8 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} />
-                        <div style={{ marginTop: 20, borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.subtext, marginBottom: 8 }}><span>Avg Gain / Win</span><span style={{ color: T.pos, fontFamily: "'Space Mono'" }}>+{stats.avgGain.toFixed(2)}%</span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.subtext }}><span>Avg Loss / Loss</span><span style={{ color: T.neg, fontFamily: "'Space Mono'" }}>{stats.avgLoss.toFixed(2)}%</span></div>
+                    <div className="chart-card-head">
+                        <div className="chart-title"><span className="chart-title-icon"><MetricIcon name="activity" size={12} /></span>Cumulative P&amp;L Curve</div>
+                    </div>
+                    <Sparkline data={stats.closed.map(t => t.pnl)} T={T} />
+                </div>
+                <div className="chart-card">
+                    <div className="chart-card-head">
+                        <div className="chart-title"><span className="chart-title-icon"><MetricIcon name="pie-chart" size={12} /></span>Win Rate</div>
+                    </div>
+                    <div style={{ paddingTop: 4 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} />
+                        <div style={{ marginTop: 18, borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.subtext, marginBottom: 8 }}><span>Avg Gain / Win</span><span style={{ color: T.pos, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>+{stats.avgGain.toFixed(2)}%</span></div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.subtext }}><span>Avg Loss / Loss</span><span style={{ color: T.neg, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>{stats.avgLoss.toFixed(2)}%</span></div>
                         </div>
                     </div>
                 </div>
@@ -4826,13 +4963,15 @@ function Portfolio({ trades, T }) {
 
             {/* Failed tickers  with actionable advice */}
             {failed.length > 0 && (
-                <div style={{ background: T.redGlow, border: `1px solid ${T.red}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: T.redText, marginBottom: 8 }}>
-                        {failed.length} ticker{failed.length > 1 ? "s" : ""} could not be fetched:
-                    </div>
+                <div style={{ position: "relative", overflow: "hidden", background: T.redGlow, border: `1px solid ${T.red}33`, borderRadius: 16, padding: "14px 17px", marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 13, color: T.redText, marginBottom: 9 }}>
+                        <span style={{ width: 22, height: 22, borderRadius: 7, background: T.redGlow, border: `1px solid ${T.red}30`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <MetricIcon name="alert" size={12} />
+                        </span>
+                        {failed.length} ticker{failed.length > 1 ? "s" : ""} could not be fetched</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                         {failed.map(f => (
-                            <div key={f.ticker} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 12 }}>
+                            <div key={f.ticker} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "5px 11px", fontSize: 12 }}>
                                 <span style={{ fontWeight: 700, color: T.redText, fontFamily: 'inherit' }}>{f.ticker}</span>
                                 <span style={{ color: T.muted, marginLeft: 6 }}>{f.reason}</span>
                             </div>
