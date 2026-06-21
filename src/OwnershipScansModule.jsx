@@ -352,12 +352,12 @@ function processStock(row, sectorMap) {
 
 // ─── SIGNAL CONFIG ────────────────────────────────────────────────────────────
 const SIG = {
-  "Aggressive Accumulation": { color: "#059669", bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.18)",   label: "Accum. ↑↑" },
-  "Strong Accumulation":     { color: "#059669", bg: "rgba(5,150,105,0.06)",   border: "rgba(5,150,105,0.15)",   label: "Accum. ↑" },
-  "Selective Accumulation":  { color: "#6b7280", bg: "rgba(107,114,128,0.06)", border: "rgba(107,114,128,0.15)", label: "Selective" },
-  "Promoter Led":            { color: "#2563eb", bg: "rgba(37,99,235,0.07)",   border: "rgba(37,99,235,0.18)",   label: "Promoter Led" },
-  "Distribution":            { color: "#dc2626", bg: "rgba(220,38,38,0.06)",   border: "rgba(220,38,38,0.18)",   label: "Distribution" },
-  "Noise":                   { color: "#94a3b8", bg: "transparent",            border: "rgba(148,163,184,0.14)", label: "Neutral" },
+  "Aggressive Accumulation": { color: "#059669", bg: "rgba(5,150,105,0.08)",   border: "rgba(5,150,105,0.18)",   label: "Heavy Buying" },
+  "Strong Accumulation":     { color: "#059669", bg: "rgba(5,150,105,0.06)",   border: "rgba(5,150,105,0.15)",   label: "Buying" },
+  "Selective Accumulation":  { color: "#6b7280", bg: "rgba(107,114,128,0.06)", border: "rgba(107,114,128,0.15)", label: "Mild Buying" },
+  "Promoter Led":            { color: "#2563eb", bg: "rgba(37,99,235,0.07)",   border: "rgba(37,99,235,0.18)",   label: "Promoter Buying" },
+  "Distribution":            { color: "#dc2626", bg: "rgba(220,38,38,0.06)",   border: "rgba(220,38,38,0.18)",   label: "Selling" },
+  "Noise":                   { color: "#94a3b8", bg: "transparent",            border: "rgba(148,163,184,0.14)", label: "No Clear Trend" },
 };
 const PHASE_CFG = {
   "Accumulation Phase": { color: "#10b981", icon: "↗" },
@@ -587,7 +587,7 @@ function DrilldownModal({ stock, T, onClose }) {
           <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, padding: "14px 16px", marginBottom: 12, background: panelBg }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
               <span style={{ fontSize: 9.5, fontWeight: 700, color: cfg.color, letterSpacing: ".1em", textTransform: "uppercase" }}>
-                Flow Summary · {stock.latestDate}
+                Summary · {stock.latestDate}
               </span>
               {stock.anomalies.length > 0 && (
                 <div style={{ display: "flex", gap: 5 }}>
@@ -600,17 +600,17 @@ function DrilldownModal({ stock, T, onClose }) {
             <div style={{ fontSize: 13, color: T.text, lineHeight: 1.65, marginBottom: 12 }}>{stock.insight}</div>
             {stock.inflect && (
               <div style={{ fontSize: 11.5, color: T.subtext, marginBottom: 12 }}>
-                FII inflection: <strong style={{ color: T.text, ...mono }}>{stock.inflect}</strong>
+                Foreign buying turned up in: <strong style={{ color: T.text, ...mono }}>{stock.inflect}</strong>
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: isMobileModal ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 0, borderRadius: 10, overflow: "hidden", border: `1px solid ${borderStyle}` }}>
               {[
                 { label: "Score",    val: fmt(stock.score),              color: stock.score > 3 ? "#059669" : stock.score < -3 ? "#dc2626" : T.text },
-                { label: "Conviction", val: stock.conviction,            color: stock.conviction === "High" ? "#059669" : T.subtext },
-                { label: "Comb. Flow", val: fmt(stock.combinedFlow) + "%", color: stock.combinedFlow > 0 ? "#059669" : "#dc2626" },
-                { label: "Timing",   val: stock.timing,                  color: stock.timing === "Recent" ? "#10b981" : T.subtext },
-                { label: "Dominance", val: stock.dominance,              color: stock.dominance === "Balanced" ? "#8b5cf6" : "#3b82f6" },
-                { label: "FII Accel.", val: fmt(stock.accel.fii) + "%", color: stock.accel.fii > 0 ? "#059669" : "#dc2626" },
+                { label: "Confidence", val: stock.conviction,            color: stock.conviction === "High" ? "#059669" : T.subtext },
+                { label: "Net Flow (4Q)", val: fmt(stock.combinedFlow) + "%", color: stock.combinedFlow > 0 ? "#059669" : "#dc2626" },
+                { label: "How Fresh", val: stock.timing,                  color: stock.timing === "Recent" ? "#10b981" : T.subtext },
+                { label: "Led By", val: stock.dominance,              color: stock.dominance === "Balanced" ? "#8b5cf6" : "#3b82f6" },
+                { label: "Speeding Up?", val: fmt(stock.accel.fii) + "%", color: stock.accel.fii > 0 ? "#059669" : "#dc2626" },
               ].map((c, idx, arr) => (
                 <div key={c.label} style={{
                   padding: "10px 12px",
@@ -636,17 +636,17 @@ function DrilldownModal({ stock, T, onClose }) {
           {/* Position + Flow */}
           <div style={{ display: "grid", gridTemplateColumns: isMobileModal ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 12 }}>
             {[
-              { title: "Ownership (Position)", items: [
+              { title: "Who Owns What (Today)", items: [
                 { label: "Promoter", val: stock.ownPromoter.toFixed(1) + "%", color: "#059669" },
-                { label: "FII",      val: stock.ownFii.toFixed(1) + "%",      color: "#3b82f6" },
-                { label: "DII",      val: stock.ownDii.toFixed(1) + "%",      color: "#8b5cf6" },
+                { label: "Foreign (FII)",      val: stock.ownFii.toFixed(1) + "%",      color: "#3b82f6" },
+                { label: "Domestic (DII)",      val: stock.ownDii.toFixed(1) + "%",      color: "#8b5cf6" },
                 { label: "Public",   val: stock.ownPublic.toFixed(1) + "%",   color: T.subtext },
               ]},
-              { title: "Flow (Decision Variable)", items: [
-                { label: "FII 4Q",    val: fmt(stock.fiiTrend) + "%",      color: stock.fiiTrend  > 0 ? "#059669" : "#dc2626" },
-                { label: "DII 4Q",    val: fmt(stock.diiTrend) + "%",      color: stock.diiTrend  > 0 ? "#059669" : "#dc2626" },
-                { label: "FII QoQ",   val: fmt(stock.deltaFii) + "%",      color: stock.deltaFii  > 0 ? "#059669" : "#dc2626" },
-                { label: "Promo. 4Q", val: fmt(stock.promoterTrend) + "%", color: stock.promoterTrend > 0 ? "#059669" : "#dc2626" },
+              { title: "What Changed (Last 4 Quarters)", items: [
+                { label: "Foreign 4Q",    val: fmt(stock.fiiTrend) + "%",      color: stock.fiiTrend  > 0 ? "#059669" : "#dc2626" },
+                { label: "Domestic 4Q",    val: fmt(stock.diiTrend) + "%",      color: stock.diiTrend  > 0 ? "#059669" : "#dc2626" },
+                { label: "Foreign, Latest Qtr",   val: fmt(stock.deltaFii) + "%",      color: stock.deltaFii  > 0 ? "#059669" : "#dc2626" },
+                { label: "Promoter 4Q", val: fmt(stock.promoterTrend) + "%", color: stock.promoterTrend > 0 ? "#059669" : "#dc2626" },
               ]},
             ].map(panel => (
               <div key={panel.title} style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, overflow: "hidden" }}>
@@ -666,7 +666,7 @@ function DrilldownModal({ stock, T, onClose }) {
           {/* Chart */}
           <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
             <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: panelBg, fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>
-              Shareholding Trend (%)
+              Ownership Trend Over Time (%)
             </div>
             <div style={{ padding: "14px 12px 10px", background: isDark ? "transparent" : "rgba(255,255,255,0.7)" }}>
               <svg width="100%" viewBox={`0 0 ${W} ${H + 22}`} style={{ display: "block" }}>
@@ -748,10 +748,10 @@ function InsightsStrip({ processed, T }) {
     const accelPositive = processed.filter(x => x.accel.fii > 0.5 && x.accel.dii > 0.5).length;
     const promExitInstEntry = processed.filter(x => x.promoterTrend < -1 && x.combinedFlow > 2).length;
     return [
-      accelPositive > 0     && { label: `${accelPositive} stocks`, sub: "with accelerating dual accumulation (FII+DII)", dot: "#d97706" },
-      promExitInstEntry > 0 && { label: `${promExitInstEntry} stocks`, sub: "promoter exit absorbed by institutions", dot: "#6366f1" },
-      topSector             && { label: topSector[0], sub: `${topSector[1]} stocks in strong accumulation — top sector`, dot: "#059669" },
-      fiiPct > 0            && { label: `${fiiPct}%`, sub: "of accumulation cases FII-led", dot: "#3b82f6" },
+      accelPositive > 0     && { label: `${accelPositive} stocks`, sub: "where both foreign and domestic buying is speeding up", dot: "#d97706" },
+      promExitInstEntry > 0 && { label: `${promExitInstEntry} stocks`, sub: "where promoters sold but funds bought the shares up", dot: "#6366f1" },
+      topSector             && { label: topSector[0], sub: `${topSector[1]} stocks with strong buying — top sector`, dot: "#059669" },
+      fiiPct > 0            && { label: `${fiiPct}%`, sub: "of buying activity is foreign-fund led", dot: "#3b82f6" },
     ].filter(Boolean).slice(0, 4);
   }, [processed]);
 
@@ -763,7 +763,7 @@ function InsightsStrip({ processed, T }) {
     <div style={{ display: "flex", gap: 8, padding: "2px 0 8px", overflowX: "auto", flexShrink: 0, alignItems: "stretch" }} className="os-chip-scroll">
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, background: bg, border: `1px solid ${borderColor}`, flexShrink: 0 }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.muted }} />
-        <span style={{ fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: ".12em", textTransform: "uppercase" }}>Intel</span>
+        <span style={{ fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: ".12em", textTransform: "uppercase" }}>Highlights</span>
       </div>
       {stats.map((item, i) => (
         <div key={i} style={{ background: bg, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "8px 14px", display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -956,7 +956,7 @@ function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
         <div style={{ display: "flex", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
           <SignalBadge signal={stock.signal} />
           <span style={{ fontSize: 11, fontWeight: 600, color: T.subtext, padding: "3px 8px", borderRadius: 99, background: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)", border: `1px solid ${T.border}` }}>
-            FII {fmt(stock.fiiTrend)}% · DII {fmt(stock.diiTrend)}%
+            Foreign {fmt(stock.fiiTrend)}% · Domestic {fmt(stock.diiTrend)}%
           </span>
         </div>
 
@@ -1039,6 +1039,13 @@ export default function OwnershipScansModule({ T }) {
   const [fullPageSize, setFullPageSize] = useState(25);
   const [isMobile,   setIsMobile]   = useState(getIsMobile);
   const [mobileVisibleCount, setMobileVisibleCount] = useState(25);
+  const [explainerDismissed, setExplainerDismissedState] = useState(() => {
+    try { return localStorage.getItem("ownership_explainer_dismissed") === "1"; } catch { return false; }
+  });
+  function setExplainerDismissed(v) {
+    setExplainerDismissedState(v);
+    try { localStorage.setItem("ownership_explainer_dismissed", v ? "1" : "0"); } catch {}
+  }
 
   const PREVIEW_SIZE = 8;
   const PAGE_SIZE    = 50;
@@ -1160,34 +1167,34 @@ export default function OwnershipScansModule({ T }) {
   }
 
   const filterOptions = [
-    { id: "all",        label: "All",            col: "#6b7280" },
-    { id: "smart",      label: "Accumulation",   col: "#059669" },
-    { id: "aggressive", label: "Aggressive",     col: "#059669" },
-    { id: "recent",     label: "Recent Entry",   col: "#10b981" },
-    { id: "accel",      label: "Accelerating",   col: "#d97706" },
-    { id: "balanced",   label: "Balanced",       col: "#8b5cf6" },
-    { id: "promoter",   label: "Promoter Led",   col: "#2563eb" },
-    { id: "promout",    label: "Inst. Absorbed", col: "#6366f1" },
-    { id: "exit",       label: "Distribution",   col: "#dc2626" },
+    { id: "all",        label: "All",                        col: "#6b7280" },
+    { id: "smart",      label: "Both Buying",                col: "#059669" },
+    { id: "aggressive", label: "Heavy Buying",                col: "#059669" },
+    { id: "recent",     label: "New Buying",                 col: "#10b981" },
+    { id: "accel",      label: "Speeding Up",                col: "#d97706" },
+    { id: "balanced",   label: "Balanced",                   col: "#8b5cf6" },
+    { id: "promoter",   label: "Promoters Buying",           col: "#2563eb" },
+    { id: "promout",    label: "Promoters Out, Funds In",    col: "#6366f1" },
+    { id: "exit",       label: "Both Selling",               col: "#dc2626" },
   ];
   const sortOptions = [
-    { value: "score",         label: "Score" },
-    { value: "combinedFlow",  label: "Combined Flow" },
-    { value: "fiiTrend",      label: "FII Flow 4Q" },
-    { value: "diiTrend",      label: "DII Flow 4Q" },
-    { value: "promoterTrend", label: "Promoter Flow" },
-    { value: "deltaFii",      label: "FII QoQ" },
-    { value: "accelFii",      label: "FII Acceleration" },
+    { value: "score",         label: "Overall Score" },
+    { value: "combinedFlow",  label: "Combined Buying (4Q)" },
+    { value: "fiiTrend",      label: "Foreign Funds (4Q)" },
+    { value: "diiTrend",      label: "Domestic Funds (4Q)" },
+    { value: "promoterTrend", label: "Promoter Stake (4Q)" },
+    { value: "deltaFii",      label: "Foreign Funds (Latest Qtr)" },
+    { value: "accelFii",      label: "Foreign Fund Acceleration" },
   ];
 
   const activeFilter = filterOptions.find(x => x.id === filter) || filterOptions[0];
   const activeSort   = sortOptions.find(x => x.value === sortKey)?.label || sortKey;
   const fullPageCount = Math.max(1, Math.ceil(filtered.length / fullPageSize));
   const summaryCards = [
-    { label: "Smart Money",     value: summary.smartMoney,   sub: "Aligned institutional accumulation",         color: "#059669" },
-    { label: "Distribution",    value: summary.distribution, sub: "FII and DII selling pressure dominant",      color: "#dc2626" },
-    { label: "Promoter Support",value: summary.promoterUp,   sub: "Promoter stake up over 4 quarters",          color: "#2563eb" },
-    { label: "Universe",        value: processed.length,     sub: summary.label + " — market regime signal",    color: summary.avgInst >= 0 ? "#059669" : "#dc2626" },
+    { label: "Both Buying",     value: summary.smartMoney,   sub: "Foreign + domestic funds both accumulating",  color: "#059669" },
+    { label: "Both Selling",    value: summary.distribution, sub: "Foreign + domestic funds both reducing",      color: "#dc2626" },
+    { label: "Promoters Buying",value: summary.promoterUp,   sub: "Founder/insider stake up over 4 quarters",    color: "#2563eb" },
+    { label: "Universe",        value: processed.length,     sub: summary.label + " overall",                    color: summary.avgInst >= 0 ? "#059669" : "#dc2626" },
   ];
 
   // Tab style matching Announcements module
@@ -1271,12 +1278,12 @@ export default function OwnershipScansModule({ T }) {
             <select value={["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? filter : ""} onChange={e => { if (e.target.value) { setFilter(e.target.value); setFullPage(1); } }}
               style={{ background: T.surface || T.card, border: `1.5px solid ${["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.border}`, color: ["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.subtext, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}>
               <option value="">More filters ⚙</option>
-              <option value="aggressive">Aggressive Accum.</option>
-              <option value="recent">Recent Entry</option>
-              <option value="accel">Accelerating (FII+DII)</option>
+              <option value="aggressive">Heavy Buying</option>
+              <option value="recent">New Buying</option>
+              <option value="accel">Speeding Up (Both Funds)</option>
               <option value="balanced">Balanced Conviction</option>
-              <option value="promoter">Promoter Led</option>
-              <option value="promout">Inst. Absorbed</option>
+              <option value="promoter">Promoters Buying</option>
+              <option value="promout">Promoters Out, Funds In</option>
             </select>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
               {[25,50,100].map(n => (
@@ -1298,16 +1305,16 @@ export default function OwnershipScansModule({ T }) {
                   <tr>
                     <th style={{ ...TH_BASE, width: 44, textAlign: "center" }}>#</th>
                     <Th col="ticker" label="Company" left />
-                    <th style={{ ...TH_BASE, textAlign: "left", minWidth: 160 }}>Industry</th>
-                    <Th col="ownPromoter" label="Promo. %" />
-                    <Th col="ownFii"      label="FII %" />
-                    <Th col="ownDii"      label="DII %" />
-                    <Th col="fiiTrend"    label="FII Flow 4Q" />
-                    <Th col="diiTrend"    label="DII Flow 4Q" />
+                    <th style={{ ...TH_BASE, textAlign: "left", minWidth: 160 }}>Sector</th>
+                    <Th col="ownPromoter" label="Promoter %" />
+                    <Th col="ownFii"      label="Foreign %" />
+                    <Th col="ownDii"      label="Domestic %" />
+                    <Th col="fiiTrend"    label="Foreign 4Q" />
+                    <Th col="diiTrend"    label="Domestic 4Q" />
                     <Th col="score"       label="Score" />
-                    <th style={{ ...TH_BASE, textAlign: "center" }}>Signal</th>
-                    <th style={{ ...TH_BASE, textAlign: "center" }}>Conv.</th>
                     <th style={{ ...TH_BASE, textAlign: "center" }}>Trend</th>
+                    <th style={{ ...TH_BASE, textAlign: "center" }}>Confidence</th>
+                    <th style={{ ...TH_BASE, textAlign: "center" }}>Last 4 Qtrs</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1379,7 +1386,7 @@ export default function OwnershipScansModule({ T }) {
       <div style={{ width: "100%", maxWidth: isMobile ? "100%" : 1400, margin: "0 auto", background: T.shellBg || T.surface, border: isMobile ? "none" : `1px solid ${T.border}`, borderRadius: isMobile ? 0 : 22, boxShadow: T.shadow, overflow: "hidden", padding: isMobile ? "16px" : "28px 32px", boxSizing: "border-box" }}>
 
         {/* ── HEADER (Announcements style) ── */}
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 12, color: T.subtext, marginBottom: 8, display: "flex", gap: 6, letterSpacing: "0.02em" }}>
             <span style={{ color: "#5b5bd6", cursor: "pointer" }}>Fundamentals</span>
             <span>›</span>
@@ -1388,7 +1395,7 @@ export default function OwnershipScansModule({ T }) {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
               <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, color: T.text, letterSpacing: "-0.03em", lineHeight: 1.15 }}>
-                Institutional Ownership
+                Who's Buying, Who's Selling
                 {refreshing && (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 1.2s linear infinite", marginLeft: 10, verticalAlign: "middle" }}>
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
@@ -1396,7 +1403,7 @@ export default function OwnershipScansModule({ T }) {
                 )}
               </h1>
               <p style={{ margin: "8px 0 0", fontSize: 15, color: T.subtext, lineHeight: 1.6 }}>
-                Track FII, DII and promoter flows across the equity universe
+                See which stocks foreign funds, domestic funds, and promoters have been buying or selling over the last 4 quarters.
               </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -1411,6 +1418,15 @@ export default function OwnershipScansModule({ T }) {
               </button>
             </div>
           </div>
+
+          {!explainerDismissed && (
+            <div style={{ marginTop: 18, padding: "14px 16px", borderRadius: 12, background: isDark ? "rgba(99,102,241,0.08)" : "#eef2ff", border: `1px solid ${isDark ? "rgba(99,102,241,0.22)" : "#c7d2fe"}`, display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ flex: 1, fontSize: 13, color: T.text, lineHeight: 1.7 }}>
+                <strong>What you're looking at:</strong> every company has owners — promoters (founders/insiders), <strong>FII</strong> (foreign investors), <strong>DII</strong> (Indian mutual funds &amp; insurers), and the general public. When FII or DII steadily raise their stake over several quarters, it's often a sign of growing institutional conviction in the stock. This page tracks those ownership shifts and flags the stocks where the shift has been strongest.
+              </div>
+              <button onClick={() => setExplainerDismissed(true)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.subtext, cursor: "pointer", fontSize: 16, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            </div>
+          )}
         </div>
 
         {/* ── INTEL STRIP ── */}
@@ -1436,26 +1452,26 @@ export default function OwnershipScansModule({ T }) {
 
         {/* ── FILTER BAR (Announcements style) ── */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.subtext, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.09em" }}>Filters</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.subtext, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.09em" }}>Show me</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "0 0 18px" }}>
-            <button style={tabStyle(filter === "all", "#6b7280")} onClick={() => { setFilter("all"); setPage(1); }}>All</button>
-            <button style={tabStyle(filter === "smart", "#059669")} onClick={() => { setFilter("smart"); setPage(1); }}>Accumulation</button>
-            <button style={tabStyle(filter === "exit", "#dc2626")} onClick={() => { setFilter("exit"); setPage(1); }}>Distribution</button>
-            <button style={tabStyle(filter === "recent", "#10b981")} onClick={() => { setFilter("recent"); setPage(1); }}>Recent Entry</button>
-            <button style={tabStyle(filter === "accel", "#d97706")} onClick={() => { setFilter("accel"); setPage(1); }}>Accelerating</button>
-            <button style={tabStyle(filter === "promoter", "#2563eb")} onClick={() => { setFilter("promoter"); setPage(1); }}>Promoter Led</button>
-            <button style={tabStyle(filter === "promout", "#6366f1")} onClick={() => { setFilter("promout"); setPage(1); }}>Inst. Absorbed</button>
-            <button style={tabStyle(filter === "aggressive", "#059669")} onClick={() => { setFilter("aggressive"); setPage(1); }}>Aggressive</button>
+            <button style={tabStyle(filter === "all", "#6b7280")} onClick={() => { setFilter("all"); setPage(1); }}>All stocks</button>
+            <button style={tabStyle(filter === "smart", "#059669")} onClick={() => { setFilter("smart"); setPage(1); }}>Both buying</button>
+            <button style={tabStyle(filter === "exit", "#dc2626")} onClick={() => { setFilter("exit"); setPage(1); }}>Both selling</button>
+            <button style={tabStyle(filter === "recent", "#10b981")} onClick={() => { setFilter("recent"); setPage(1); }}>New buying</button>
+            <button style={tabStyle(filter === "accel", "#d97706")} onClick={() => { setFilter("accel"); setPage(1); }}>Speeding up</button>
+            <button style={tabStyle(filter === "promoter", "#2563eb")} onClick={() => { setFilter("promoter"); setPage(1); }}>Promoters buying</button>
+            <button style={tabStyle(filter === "promout", "#6366f1")} onClick={() => { setFilter("promout"); setPage(1); }}>Promoters selling, funds buying</button>
+            <button style={tabStyle(filter === "aggressive", "#059669")} onClick={() => { setFilter("aggressive"); setPage(1); }}>Heavy buying</button>
           </div>
           <div style={{ fontSize: 13.5, color: T.subtext, marginBottom: 4, lineHeight: 1.6 }}>
-            {filter === "smart"      && <>Showing stocks with <strong>both FII and DII flows positive</strong> over 4 quarters.</>}
-            {filter === "exit"       && <>Showing stocks where <strong>coordinated institutional selling</strong> is dominant.</>}
-            {filter === "all"        && <>Showing all stocks in the universe.</>}
-            {filter === "recent"     && <>Showing stocks with <strong>recent FII entry</strong> in the last 2 quarters.</>}
-            {filter === "accel"      && <>Showing stocks with <strong>accelerating dual FII+DII flows</strong>.</>}
-            {filter === "promoter"   && <>Showing stocks where <strong>promoter stake is increasing</strong> (&gt;1% over 4Q).</>}
-            {filter === "promout"    && <>Showing stocks where <strong>promoter exit is absorbed by institutions</strong>.</>}
-            {filter === "aggressive" && <>Showing <strong>aggressive accumulation</strong> — FII &gt;5% and DII &gt;5% over 4Q.</>}
+            {filter === "smart"      && <>Stocks where <strong>both foreign and domestic funds</strong> have been buying over the last 4 quarters.</>}
+            {filter === "exit"       && <>Stocks where <strong>both foreign and domestic funds</strong> have been selling together.</>}
+            {filter === "all"        && <>All stocks in the universe, no filter applied.</>}
+            {filter === "recent"     && <>Stocks where <strong>foreign funds started buying</strong> only in the last 2 quarters — a fresh move.</>}
+            {filter === "accel"      && <>Stocks where buying from <strong>both fund types is picking up pace</strong>, not just continuing.</>}
+            {filter === "promoter"   && <>Stocks where <strong>founders/insiders have raised their own stake</strong> by more than 1% over 4 quarters.</>}
+            {filter === "promout"    && <>Stocks where <strong>promoters sold but funds bought the shares up</strong> — a handover, not a warning sign on its own.</>}
+            {filter === "aggressive" && <>Stocks with the <strong>strongest dual buying</strong> — over 5% added by both foreign and domestic funds in 4 quarters.</>}
           </div>
         </div>
 
