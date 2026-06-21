@@ -57,6 +57,14 @@ const TAG_META = {
   Idea:        { color: "#2563eb", bg: "rgba(96,165,250,0.08)" },
 };
 
+// Maps each thesis type to a glyph key in <Icon/> — gives the category rail
+// and badges an at-a-glance shape, not just a color, so the feed stays
+// scannable for colorblind users and reads fine in grayscale screenshots.
+const THESIS_ICON = {
+  Bullish: "trendUp", Bearish: "trendDown", Neutral: "dash",
+  Technical: "pulse", Macro: "globe", Risk: "alert",
+};
+
 // ─── Utilities ───────────────────────────────────────────────────────────────
 function withAlpha(color, alpha) {
   if (!color || typeof color !== "string") return `rgba(15,23,42,${alpha})`;
@@ -228,6 +236,35 @@ function Avatar({ name, size = 32, T, url }) {
   );
 }
 
+// ─── Icons ───────────────────────────────────────────────────────────────────
+// Hand-drawn 16x16 stroke icons — no icon-library dependency. Replaces the
+// emoji glyphs (📌 🎯 ⏳ 💬 👁 🔖) with a flat, monochrome set that reads as
+// "terminal" rather than "forum" and inherits currentColor / T tokens cleanly.
+const ICON_PATHS = {
+  trendUp:   <><polyline points="2,12 6.5,7 9.5,10 14,4" /><polyline points="9.5,4 14,4 14,8.5" /></>,
+  trendDown: <><polyline points="2,4 6.5,9 9.5,6 14,12" /><polyline points="9.5,12 14,12 14,7.5" /></>,
+  dash:      <line x1="3" y1="8" x2="13" y2="8" />,
+  pulse:     <polyline points="1,8 5,8 7,3 9,13 11,8 15,8" />,
+  globe:     <><circle cx="8" cy="8" r="6.3" /><line x1="1.7" y1="8" x2="14.3" y2="8" /><path d="M8,1.7 C10.2,4 10.2,12 8,14.3 C5.8,12 5.8,4 8,1.7 Z" /></>,
+  alert:     <><path d="M8,1.8 L14.7,13.4 L1.3,13.4 Z" /><line x1="8" y1="6.2" x2="8" y2="9.4" /><circle cx="8" cy="11.4" r="0.55" fill="currentColor" stroke="none" /></>,
+  target:    <><circle cx="8" cy="8" r="6.2" /><circle cx="8" cy="8" r="3.1" /><circle cx="8" cy="8" r="0.6" fill="currentColor" stroke="none" /></>,
+  clock:     <><circle cx="8" cy="8" r="6.2" /><polyline points="8,4.4 8,8 11,9.6" /></>,
+  message:   <path d="M2,3 H14 V11 H6.5 L3.2,13.6 V11 H2 Z" />,
+  eye:       <><path d="M1.3,8 C3,4.6 5.3,3 8,3 C10.7,3 13,4.6 14.7,8 C13,11.4 10.7,13 8,13 C5.3,13 3,11.4 1.3,8 Z" /><circle cx="8" cy="8" r="2.1" /></>,
+  bookmark:  <path d="M4,2 H12 V14 L8,11.2 L4,14 Z" />,
+  pin:       <><path d="M9.5,2 L14,6.5 L11,9.5 L11,13.6 L9.6,12.2 L6.2,15.6 L5.2,14.6 L8.6,11.2 L7.2,9.8 L3.2,9.8 L6.5,6.5 Z" /></>,
+  chevronRight: <polyline points="6,3 11,8 6,13" />,
+};
+function Icon({ name, size = 13, color = "currentColor", strokeWidth = 1.7, filled = false }) {
+  const body = ICON_PATHS[name];
+  if (!body) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill={filled ? color : "none"} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, display: "block" }}>
+      {body}
+    </svg>
+  );
+}
+
 function TickerBadge({ ticker, size = "sm", onTickerClick, T }) {
   const { quotes } = useContext(QuoteContext);
   const quote = quotes?.[ticker];
@@ -253,13 +290,16 @@ function TickerBadge({ ticker, size = "sm", onTickerClick, T }) {
   );
 }
 
-function ConvictionBadge({ conviction, T }) {
+function ConvictionBadge({ conviction, T, compact = false }) {
   const meta = CONVICTION_META[conviction] || CONVICTION_META.low;
+  const abbrev = { low: "LOW", medium: "MED", high: "HIGH" }[conviction] || "LOW";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, background: withAlpha(meta.color, 0.1), borderRadius: 6, padding: "3px 8px", border: `1px solid ${withAlpha(meta.color, 0.25)}` }}>
-      <div style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color }} />
-      <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, letterSpacing: "0.06em", textTransform: "uppercase" }}>{meta.label}</span>
-      <span style={{ fontSize: 9, fontWeight: 900, color: meta.color, fontFamily: "'IBM Plex Mono', monospace" }}>{meta.score}</span>
+    <div title={meta.label} style={{ display: "flex", alignItems: "center", gap: 6, background: T.mutedFill, borderRadius: 5, padding: compact ? "2px 6px" : "3px 8px 3px 7px", border: `1px solid ${T.border}` }}>
+      <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, letterSpacing: "0.05em" }}>{abbrev}</span>
+      <div style={{ width: 26, height: 4, borderRadius: 2, background: withAlpha(T.text, 0.1), overflow: "hidden" }}>
+        <div style={{ width: `${meta.score}%`, height: "100%", background: meta.color, borderRadius: 2 }} />
+      </div>
+      <span style={{ fontSize: 9, fontWeight: 800, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{meta.score}</span>
     </div>
   );
 }
@@ -273,12 +313,14 @@ function LevelBadge({ level, T }) {
   );
 }
 
-function ThesisTypeBadge({ type, T }) {
+function ThesisTypeBadge({ type, T, compact = false }) {
   const meta = TAG_META[type];
   const color = meta ? meta.color : T.accent;
   const bg = meta ? meta.bg : withAlpha(T.accent, 0.08);
+  const iconName = THESIS_ICON[type];
   return (
-    <span style={{ fontSize: 9, fontWeight: 800, color, background: bg, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.04em", border: `1px solid ${withAlpha(color, 0.18)}` }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color, background: bg, padding: compact ? "2px 6px" : "2px 7px", borderRadius: 4, letterSpacing: "0.04em", border: `1px solid ${withAlpha(color, 0.22)}` }}>
+      {iconName && <Icon name={iconName} size={10} color={color} strokeWidth={2} />}
       {type}
     </span>
   );
@@ -301,49 +343,49 @@ function SentimentBar({ bullish = 0, bearish = 0, T }) {
 }
 
 function VoteButton({ upvotes, downvotes, userVote, onVote, onLoginRequired, T, compact = false }) {
-  const netVotes = (upvotes || 0) - (downvotes || 0);
-  const p = compact ? "4px 8px" : "6px 12px";
+  const p = compact ? "3px 7px" : "5px 11px";
   return (
-    <div style={{ display: "flex", alignItems: "center", background: T.mutedFill, borderRadius: 8, overflow: "hidden", border: `1px solid ${withAlpha(T.text, 0.07)}` }}>
+    <div style={{ display: "flex", alignItems: "center", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}>
       <button
         onClick={(e) => { e.stopPropagation(); onVote ? onVote(1) : onLoginRequired?.(); }}
-        style={{ display: "flex", alignItems: "center", gap: 4, border: "none", background: userVote === 1 ? withAlpha(T.green, 0.15) : "transparent", color: userVote === 1 ? T.green : T.subtext, padding: p, cursor: "pointer", fontSize: compact ? 11 : 12, fontWeight: 700, transition: "all 0.15s" }}
+        style={{ display: "flex", alignItems: "center", gap: 4, border: "none", background: userVote === 1 ? T.posFill : "transparent", color: userVote === 1 ? T.green : T.subtext, padding: p, cursor: "pointer", fontSize: compact ? 11 : 12, fontWeight: 700, transition: "background 0.12s, color 0.12s" }}
       >
-        ▲ <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{upvotes || 0}</span>
+        <Icon name="trendUp" size={11} strokeWidth={2.2} /> <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{upvotes || 0}</span>
       </button>
-      <div style={{ width: 1, background: withAlpha(T.text, 0.08), alignSelf: "stretch" }} />
+      <div style={{ width: 1, background: T.border, alignSelf: "stretch" }} />
       <button
         onClick={(e) => { e.stopPropagation(); onVote ? onVote(-1) : onLoginRequired?.(); }}
-        style={{ display: "flex", alignItems: "center", gap: 4, border: "none", background: userVote === -1 ? withAlpha(T.red, 0.12) : "transparent", color: userVote === -1 ? T.red : T.subtext, padding: p, cursor: "pointer", fontSize: compact ? 11 : 12, fontWeight: 700, transition: "all 0.15s" }}
+        style={{ display: "flex", alignItems: "center", border: "none", background: userVote === -1 ? T.negFill : "transparent", color: userVote === -1 ? T.red : T.subtext, padding: p, cursor: "pointer", fontSize: compact ? 11 : 12, fontWeight: 700, transition: "background 0.12s, color 0.12s" }}
       >
-        ▼
+        <Icon name="trendDown" size={11} strokeWidth={2.2} />
       </button>
     </div>
   );
 }
 
 function BookmarkButton({ isSaved, onToggle, onLoginRequired, T, compact = false }) {
-  const p = compact ? "4px 10px" : "6px 14px";
+  const p = compact ? "3px 8px" : "5px 12px";
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onToggle ? onToggle() : onLoginRequired?.(); }}
+      title={isSaved ? "Saved" : "Save"}
       style={{
         display: "inline-flex",
         alignItems: "center",
         gap: 5,
         padding: p,
-        background: isSaved ? withAlpha(T.accent, 0.12) : T.mutedFill,
-        border: `1px solid ${isSaved ? withAlpha(T.accent, 0.22) : withAlpha(T.text, 0.07)}`,
-        borderRadius: 8,
+        background: isSaved ? T.accentFill : "transparent",
+        border: `1px solid ${isSaved ? withAlpha(T.accent, 0.3) : T.border}`,
+        borderRadius: 7,
         color: isSaved ? T.accent : T.subtext,
         cursor: "pointer",
         fontSize: compact ? 11 : 12,
         fontWeight: 700,
-        transition: "all 0.15s",
+        transition: "all 0.12s",
       }}
     >
-      <span>🔖</span>
-      <span>{isSaved ? "Saved" : "Save"}</span>
+      <Icon name="bookmark" size={12} strokeWidth={2} filled={isSaved} />
+      {!compact && <span>{isSaved ? "Saved" : "Save"}</span>}
     </button>
   );
 }
@@ -351,7 +393,7 @@ function BookmarkButton({ isSaved, onToggle, onLoginRequired, T, compact = false
 function StatPill({ icon, value, label, T }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4, color: T.subtext }}>
-      <span style={{ fontSize: 12 }}>{icon}</span>
+      {ICON_PATHS[icon] ? <Icon name={icon} size={12} color={T.subtext} /> : <span style={{ fontSize: 12 }}>{icon}</span>}
       <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace" }}>{value}</span>
       {label && <span style={{ fontSize: 11, color: T.muted }}>{label}</span>}
     </div>
@@ -360,7 +402,7 @@ function StatPill({ icon, value, label, T }) {
 
 function SkeletonCard({ T }) {
   return (
-    <div style={{ padding: "20px 24px", background: T.surface, borderRadius: 16, marginBottom: 12, border: `1px solid ${withAlpha(T.text, 0.06)}` }}>
+    <div style={{ padding: "16px 20px", background: T.surface, borderRadius: 10, marginBottom: 10, border: `1px solid ${T.border}` }}>
       <div style={{ display: "flex", gap: 12 }}>
         <div style={{ width: 36, height: 36, borderRadius: "50%", background: T.mutedFill }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -611,8 +653,8 @@ function RightSidebar({ threads, T, onTickerClick }) {
                     <div style={{ width: `${bullPct}%`, background: T.green, borderRadius: 3, transition: "width 0.3s" }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 10, color: T.green, fontWeight: 700 }}>🟢 {bullPct}%</span>
-                    <span style={{ fontSize: 10, color: T.red, fontWeight: 700 }}>🔴 {100 - bullPct}%</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: T.green, fontWeight: 700 }}><Icon name="trendUp" size={9} color={T.green} strokeWidth={2.2} /> {bullPct}%</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: T.red, fontWeight: 700 }}>{100 - bullPct}% <Icon name="trendDown" size={9} color={T.red} strokeWidth={2.2} /></span>
                   </div>
                 </div>
               );
@@ -661,8 +703,8 @@ function RightSidebar({ threads, T, onTickerClick }) {
 
 function SidePanel({ title, children, T }) {
   return (
-    <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.07)}`, borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${withAlpha(T.text, 0.06)}`, fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>{title}</div>
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.borderSubtle}`, fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>{title}</div>
       <div style={{ padding: "12px 14px" }}>{children}</div>
     </div>
   );
@@ -673,8 +715,14 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
   const [hov, setHov] = useState(false);
   const myVote = userVotes?.[thread.id] ?? 0;
   const images = (thread.media_urls || []).filter(m => m.type === "image");
-  const bodyPreview = stripMarkdown(thread.body).slice(0, isMobile ? 90 : 150) + (thread.body?.length > (isMobile ? 90 : 150) ? "…" : "");
-  const convMeta = CONVICTION_META[thread.conviction_score >= 80 ? "high" : thread.conviction_score >= 50 ? "medium" : "low"] || CONVICTION_META.low;
+  const bodyPreview = stripMarkdown(thread.body).slice(0, isMobile ? 100 : 160) + (thread.body?.length > (isMobile ? 100 : 160) ? "…" : "");
+  const convBucket = thread.conviction_score >= 80 ? "high" : thread.conviction_score >= 50 ? "medium" : "low";
+  const railColor = (TAG_META[thread.thesis_type] || {}).color || T.border;
+  const metrics = [
+    thread.target_price ? { icon: "target", label: "Target", value: `₹${Number(thread.target_price).toLocaleString("en-IN")}` } : null,
+    thread.expected_cagr ? { icon: "trendUp", label: "Exp. CAGR", value: `${thread.expected_cagr}%`, color: T.green } : null,
+    thread.time_horizon ? { icon: "clock", label: "Horizon", value: thread.time_horizon } : null,
+  ].filter(Boolean);
 
   return (
     <div
@@ -682,86 +730,102 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        cursor: "pointer", background: T.surface,
-        border: `1px solid ${hov ? withAlpha(T.accent, 0.3) : withAlpha(T.text, 0.07)}`,
-        borderRadius: isMobile ? 14 : 16, marginBottom: 10,
-        transition: "all 0.18s cubic-bezier(0.4,0,0.2,1)",
-        boxShadow: hov ? `0 8px 32px ${withAlpha(T.accent, 0.08)}` : "none",
-        position: "relative", overflow: "hidden",
+        cursor: "pointer", background: T.surface, display: "flex",
+        border: `1px solid ${hov ? T.borderStrong : T.border}`,
+        borderRadius: isMobile ? 10 : 11, marginBottom: 10,
+        transition: "border-color 0.15s, box-shadow 0.15s",
+        boxShadow: hov ? `0 2px 10px ${T.shadow}` : "none",
+        overflow: "hidden",
         fontFamily: "'IBM Plex Sans', sans-serif",
       }}
     >
-      {/* Left accent on hover */}
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: hov ? T.accent : "transparent", borderRadius: "16px 0 0 16px", transition: "background 0.18s" }} />
+      {/* Persistent category rail — always-on color coding so the feed scans like a ledger, not a hover gimmick */}
+      <div style={{ width: 3, flexShrink: 0, background: railColor }} />
 
-      {thread.is_pinned && (
-        <div style={{ position: "absolute", top: 12, right: 14, background: T.amber, color: "#fff", fontSize: 8, fontWeight: 900, padding: "2px 6px", borderRadius: 4, letterSpacing: "0.06em", textTransform: "uppercase" }}>📌 Pinned</div>
-      )}
-
-      <div style={{ padding: isMobile ? "14px 16px" : "18px 24px" }}>
-        {/* Top row: ticker + type + conviction */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "13px 14px" : "16px 20px" }}>
+        {/* Top row: instrument + classification strip */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, flexWrap: "wrap" }}>
           {thread.ticker && <TickerBadge ticker={thread.ticker} T={T} onTickerClick={onTickerClick} />}
           {thread.thesis_type && <ThesisTypeBadge type={thread.thesis_type} T={T} />}
-          {(thread.conviction_score != null) && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4, background: withAlpha(convMeta.color, 0.1), borderRadius: 5, padding: "2px 7px", border: `1px solid ${withAlpha(convMeta.color, 0.2)}` }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: convMeta.color }} />
-              <span style={{ fontSize: 9, fontWeight: 800, color: convMeta.color, letterSpacing: "0.05em", textTransform: "uppercase" }}>{convMeta.label}</span>
-            </div>
-          )}
+          {(thread.conviction_score != null) && <ConvictionBadge conviction={convBucket} T={T} compact />}
           {(thread.tags || []).slice(0, 2).map(tag => {
             const tm = TAG_META[tag] || {};
-            return <span key={tag} style={{ fontSize: 9, fontWeight: 700, color: tm.color || T.subtext, background: tm.bg || T.mutedFill, borderRadius: 4, padding: "2px 7px" }}>{tag}</span>;
+            return <span key={tag} style={{ fontSize: 9, fontWeight: 700, color: tm.color || T.subtext, background: tm.bg || T.mutedFill, borderRadius: 4, padding: "2px 7px", border: `1px solid ${T.border}` }}>{tag}</span>;
           })}
+          {thread.is_pinned && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginLeft: "auto", fontSize: 9, fontWeight: 800, color: T.amber, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              <Icon name="pin" size={10} color={T.amber} /> Pinned
+            </span>
+          )}
         </div>
 
         {/* Main content row */}
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Title */}
-            <div style={{ fontSize: isMobile ? 15 : 17, fontWeight: 800, color: T.text, marginBottom: 5, lineHeight: 1.3, letterSpacing: "-0.01em" }}>{thread.title}</div>
+            <div style={{ fontSize: isMobile ? 14.5 : 16, fontWeight: 800, color: T.text, marginBottom: 6, lineHeight: 1.3, letterSpacing: "-0.01em" }}>{thread.title}</div>
 
-            {/* Structured preview: Bull/Bear case if available */}
+            {/* Structured preview: Bull vs Bear, framed as a two-column research panel */}
             {thread.bull_case ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-                {thread.bull_case && <div style={{ fontSize: 12, color: T.green, display: "flex", gap: 6 }}><span>🟢</span><span style={{ color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bull_case).slice(0, 80)}…</span></div>}
-                {thread.bear_case && <div style={{ fontSize: 12, color: T.red, display: "flex", gap: 6 }}><span>🔴</span><span style={{ color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bear_case).slice(0, 80)}…</span></div>}
+              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden", marginBottom: metrics.length ? 8 : 2 }}>
+                <div style={{ flex: 1, minWidth: 0, padding: "8px 10px", background: T.posFill }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: T.green, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>
+                    <Icon name="trendUp" size={10} color={T.green} strokeWidth={2.2} /> Bull case
+                  </div>
+                  <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bull_case).slice(0, 90)}…</div>
+                </div>
+                {thread.bear_case && (
+                  <>
+                    <div style={{ width: isMobile ? "100%" : 1, height: isMobile ? 1 : "auto", background: T.border }} />
+                    <div style={{ flex: 1, minWidth: 0, padding: "8px 10px", background: T.negFill }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: T.red, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>
+                        <Icon name="trendDown" size={10} color={T.red} strokeWidth={2.2} /> Bear case
+                      </div>
+                      <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bear_case).slice(0, 90)}…</div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55, opacity: 0.85 }}>{bodyPreview}</div>
+              <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55, marginBottom: metrics.length ? 8 : 2 }}>{bodyPreview}</div>
             )}
 
-            {/* Target price / horizon */}
-            {(thread.target_price || thread.time_horizon || thread.expected_cagr) && (
-              <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-                {thread.target_price && <span style={{ fontSize: 10, color: T.subtext, background: T.mutedFill, padding: "2px 8px", borderRadius: 5, fontFamily: "'IBM Plex Mono', monospace" }}>🎯 ₹{Number(thread.target_price).toLocaleString("en-IN")}</span>}
-                {thread.time_horizon && <span style={{ fontSize: 10, color: T.subtext, background: T.mutedFill, padding: "2px 8px", borderRadius: 5 }}>⏳ {thread.time_horizon}</span>}
-                {thread.expected_cagr && <span style={{ fontSize: 10, color: T.green, background: T.posFill, padding: "2px 8px", borderRadius: 5, fontFamily: "'IBM Plex Mono', monospace" }}>~{thread.expected_cagr}% CAGR</span>}
+            {/* Metric strip — Target / CAGR / Horizon as a quote-box, not loose chips */}
+            {metrics.length > 0 && (
+              <div style={{ display: "flex", border: `1px solid ${T.border}`, borderRadius: 8, background: T.mutedFill, overflow: "hidden", width: "fit-content", maxWidth: "100%" }}>
+                {metrics.map((m, i) => (
+                  <div key={m.label} style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 14px", borderLeft: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                      <Icon name={m.icon} size={10} color={T.muted} /> {m.label}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: m.color || T.text, fontFamily: "'IBM Plex Mono', monospace" }}>{m.value}</div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
           {images.length > 0 && !isMobile && (
-            <img src={images[0].url} alt="" style={{ width: 90, height: 68, borderRadius: 10, objectFit: "cover", border: `1px solid ${withAlpha(T.text, 0.07)}`, flexShrink: 0 }} />
+            <img src={images[0].url} alt="" style={{ width: 92, height: 70, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}`, flexShrink: 0 }} />
           )}
         </div>
 
         {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${withAlpha(T.text, 0.05)}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 13, paddingTop: 11, borderTop: `1px solid ${T.borderSubtle}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <Avatar name={thread.author_display_name} size={22} T={T} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{thread.author_display_name || "Anon"}</span>
-            <span style={{ fontSize: 11, color: T.muted }}>· {timeAgo(thread.created_at)}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.author_display_name || "Anon"}</span>
+            <span style={{ fontSize: 11, color: T.muted, flexShrink: 0 }}>· {timeAgo(thread.created_at)}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <div onClick={e => e.stopPropagation()}>
               <VoteButton upvotes={thread.upvotes} downvotes={thread.downvotes} userVote={myVote} onVote={session ? (v) => onVote(thread.id, "thread", v) : null} onLoginRequired={onLoginRequired} T={T} compact />
             </div>
             <div onClick={e => e.stopPropagation()}>
               <BookmarkButton isSaved={!!thread.is_saved} onToggle={session ? () => onToggleBookmark?.(thread.id) : null} onLoginRequired={onLoginRequired} T={T} compact />
             </div>
-            <StatPill icon="💬" value={thread.reply_count || 0} T={T} />
-            {thread.view_count > 0 && <StatPill icon="👁" value={thread.view_count} T={T} />}
+            <StatPill icon="message" value={thread.reply_count || 0} T={T} />
+            {thread.view_count > 0 && <StatPill icon="eye" value={thread.view_count} T={T} />}
           </div>
         </div>
       </div>
@@ -1579,8 +1643,8 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <VoteButton upvotes={thread.upvotes} downvotes={thread.downvotes} userVote={myThreadVote} onVote={session ? (v) => handleVote(thread.id, "thread", v) : null} onLoginRequired={onLoginRequired} T={T} />
                 <BookmarkButton isSaved={!!thread.is_saved} onToggle={session ? handleToggleBookmark : null} onLoginRequired={onLoginRequired} T={T} />
-                <StatPill icon="💬" value={thread.reply_count || 0} T={T} />
-                {thread.view_count > 0 && <StatPill icon="👁" value={thread.view_count} T={T} />}
+                <StatPill icon="message" value={thread.reply_count || 0} T={T} />
+                {thread.view_count > 0 && <StatPill icon="eye" value={thread.view_count} T={T} />}
               </div>
             </div>
           </div>
@@ -2018,9 +2082,10 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
     <div style={{ flex: 1, overflowY: "auto", background: T.bg, fontFamily: "'IBM Plex Sans', sans-serif" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px 16px 100px" : "32px 32px 80px" }}>
         {/* Page header */}
-        <div style={{ marginBottom: isMobile ? 20 : 32 }}>
-          <h1 style={{ fontSize: isMobile ? 28 : 36, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.04em" }}>Discussion Forum</h1>
-          <p style={{ fontSize: 14, color: T.muted, marginTop: 4 }}>High-conviction theses · Professional research · Signal over noise</p>
+        <div style={{ marginBottom: isMobile ? 20 : 28 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: T.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Community Research</div>
+          <h1 style={{ fontSize: isMobile ? 24 : 28, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.03em" }}>Investment theses, screened by conviction</h1>
+          <p style={{ fontSize: 13, color: T.muted, marginTop: 5 }}>High-conviction theses · Professional research · Signal over noise</p>
         </div>
 
         {/* Sticky filter bar */}
