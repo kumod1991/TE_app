@@ -134,6 +134,15 @@ const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact
 const BreadthDataContext = createContext({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], rsAcceleration: [], nameMap: {}, industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
 
+// Namespaces portfolio-cache localStorage keys per logged-in user so that
+// switching accounts (or bouncing through guest/demo mode) on the same
+// browser never shows one user's stale prices/P&L under another user's
+// Dashboard/Portfolio view.
+function _pfCacheKey(base) {
+    const uid = supabase._session?.user?.id;
+    return uid ? `${base}_${uid}` : `${base}_guest`;
+}
+
 const supabase = {
     _session: null,
     _h: (token) => ({
@@ -3724,20 +3733,54 @@ function Dashboard({ trades, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
 
     // Load cached quotes from localStorage on mount so Dashboard shows
-    // last-known live prices without requiring the user to visit Portfolio tab first.
+    // last-known live prices instantly, without waiting on a network round trip.
     useEffect(() => {
         if (Object.keys(quotes).length === 0) {
             try {
-                const cached = localStorage.getItem("tv_portfolio_quotes");
+                const cached = localStorage.getItem(_pfCacheKey("tv_portfolio_quotes"));
                 if (cached) setQuotes(JSON.parse(cached));
             } catch (e) { /* ignore */ }
         }
     }, []);
 
+    // Stale-while-revalidate: Dashboard used to depend entirely on the Portfolio
+    // tab having been visited to populate/refresh tv_portfolio_quotes. On mobile,
+    // where the page reloads far more often (backgrounding/relogin), that gap
+    // meant Dashboard would keep showing whatever was cached from a much earlier
+    // session. So Dashboard now also fetches fresh prices for its own open
+    // tickers in the background and merges them in, independent of Portfolio.
+    useEffect(() => {
+        const openTickersNow = [...new Set(trades.filter(t => !t.exit_date).map(t => t.ticker))];
+        if (!openTickersNow.length) return;
+        let cancelled = false;
+        (async () => {
+            const fresh = {};
+            for (let i = 0; i < openTickersNow.length; i += 3) {
+                const batch = openTickersNow.slice(i, i + 3);
+                await Promise.all(batch.map(async (ticker) => {
+                    const q = await fetchBhavQuote(ticker);
+                    if (q) fresh[ticker] = { ...q };
+                }));
+                if (cancelled) return;
+                if (i + 3 < openTickersNow.length) await new Promise(res => setTimeout(res, 300));
+            }
+            if (cancelled || !Object.keys(fresh).length) return;
+            setQuotes(prev => {
+                const merged = { ...prev, ...fresh };
+                try {
+                    localStorage.setItem(_pfCacheKey("tv_portfolio_quotes"), JSON.stringify(merged));
+                    localStorage.setItem(_pfCacheKey("tv_portfolio_timestamp"), new Date().toISOString());
+                } catch { /* ignore */ }
+                return merged;
+            });
+        })();
+        return () => { cancelled = true; };
+    }, [trades]);
+
     // Read cached unrealized P&L saved by Portfolio tab (fallback when quotes not loaded)
     const cachedUnrealizedDash = (() => {
         try {
-            const s = localStorage.getItem("tv_portfolio_unrealized");
+            const s = localStorage.getItem(_pfCacheKey("tv_portfolio_unrealized"));
             return s ? JSON.parse(s)?.value ?? null : null;
         } catch { return null; }
     })();
@@ -4794,9 +4837,9 @@ function Portfolio({ trades, T }) {
     // ---- Load cached quotes + RS on mount ----
     useEffect(() => {
         try {
-            const q = localStorage.getItem("tv_portfolio_quotes");
-            const r = localStorage.getItem("tv_portfolio_rs");
-            const ts = localStorage.getItem("tv_portfolio_timestamp");
+            const q = localStorage.getItem(_pfCacheKey("tv_portfolio_quotes"));
+            const r = localStorage.getItem(_pfCacheKey("tv_portfolio_rs"));
+            const ts = localStorage.getItem(_pfCacheKey("tv_portfolio_timestamp"));
 
             if (q && ts) {
                 const cacheDate = new Date(ts).toDateString();
@@ -4843,8 +4886,8 @@ function Portfolio({ trades, T }) {
         setQuotes(results); setFailed(errs);
         setLastRefresh(new Date());
         try {
-            localStorage.setItem("tv_portfolio_quotes", JSON.stringify(results));
-            localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
+            localStorage.setItem(_pfCacheKey("tv_portfolio_quotes"), JSON.stringify(results));
+            localStorage.setItem(_pfCacheKey("tv_portfolio_timestamp"), new Date().toISOString());
         } catch { }
         nifty500Cache = null;
         const rsResults = {};
@@ -4858,7 +4901,7 @@ function Portfolio({ trades, T }) {
             if (i + 3 < successTickers.length) await new Promise(r => setTimeout(r, 300));
         }
         setRsScores(rsResults);
-        try { localStorage.setItem("tv_portfolio_rs", JSON.stringify(rsResults)); } catch { }
+        try { localStorage.setItem(_pfCacheKey("tv_portfolio_rs"), JSON.stringify(rsResults)); } catch { }
         setLoading(false);
     };
 
@@ -4910,7 +4953,7 @@ function Portfolio({ trades, T }) {
     // Persist unrealised P&L so Funds/XIRR tab can use it without recomputing
     useEffect(() => {
         if (rows.some(r => r.loaded)) {
-            try { localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() })); } catch { }
+            try { localStorage.setItem(_pfCacheKey("tv_portfolio_unrealized"), JSON.stringify({ value: totalUnrealized, ts: Date.now() })); } catch { }
         }
     }, [totalUnrealized]);
 
@@ -5208,7 +5251,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     const [deleting, setDeleting] = useState(false);
     const [cachedUnrealized, setCachedUnrealized] = useState(() => {
         try {
-            const s = localStorage.getItem("tv_portfolio_unrealized");
+            const s = localStorage.getItem(_pfCacheKey("tv_portfolio_unrealized"));
             return s ? JSON.parse(s) : null;
         } catch { return null; }
     });
@@ -5216,7 +5259,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     // Keep cachedUnrealized in sync whenever Portfolio saves a fresh value
     useEffect(() => {
         const onStorage = (e) => {
-            if (e.key === "tv_portfolio_unrealized") {
+            if (e.key === _pfCacheKey("tv_portfolio_unrealized")) {
                 try { setCachedUnrealized(JSON.parse(e.newValue)); } catch { }
             }
         };
@@ -27182,6 +27225,12 @@ export default function App() {
                 }
             } catch (e) { console.warn("[Guest sync] Upload error:", e); }
             clearGuestData();
+            try {
+                localStorage.removeItem("tv_portfolio_quotes_guest");
+                localStorage.removeItem("tv_portfolio_rs_guest");
+                localStorage.removeItem("tv_portfolio_timestamp_guest");
+                localStorage.removeItem("tv_portfolio_unrealized_guest");
+            } catch { }
         }
 
         loadTrades(sess); loadFunds(sess); loadDividends(sess); loadScreenerFilters();
