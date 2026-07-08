@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment, Suspense, createContext, useContext, Component, memo, lazy } from "react";
 import { createPortal } from "react-dom";
+import { createClient } from "@supabase/supabase-js";
 import { ensureAllowedTickerSet, filterRowsByAllowedTickers, getAllowedTickerSetSync, preloadAllowedTickerSet } from "./marketUniverse";
 
 const ForumModule = lazy(() => import("./ForumModule"));
@@ -26,7 +27,25 @@ export { QuoteContext };
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        flowType: "pkce",
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+    },
+});
 const BRAND_MARK_SRC = "/vite.svg";
+
+function normalizeSession(session) {
+    if (!session?.access_token || !session?.user?.id) return null;
+    return {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        user: session.user,
+    };
+}
 
 function BrandMark({ size = 38, className = "", style = {} }) {
     return (
@@ -166,67 +185,64 @@ const supabase = {
     },
     auth: {
         async signUp(email, password) {
-            const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-                body: JSON.stringify({
-                    email,
-                    password,
-                    options: {
-                        emailRedirectTo: window.location.origin
-                    }
-                })
+            const { data, error } = await supabaseClient.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: window.location.origin,
+                },
             });
-            const data = await r.json();
-            if (data.error) throw new Error(data.error.message || data.msg || "Signup failed");
-            return data;
+            if (error) throw new Error(error.message || "Signup failed");
+            return normalizeSession(data?.session) || { id: data?.user?.id, user: data?.user };
         },
         async signIn(email, password) {
-            const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-                body: JSON.stringify({ email, password })
-            });
-            const data = await r.json();
-            if (data.access_token) {
-                supabase._session = {
-                    access_token: data.access_token,
-                    refresh_token: data.refresh_token,
-                    expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
-                    user: data.user,
-                };
-            }
-            return data;
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) throw new Error(error.message || "Login failed");
+            const session = normalizeSession(data?.session);
+            if (session) supabase._session = session;
+            return session || { id: data?.user?.id, user: data?.user };
         },
         async refreshSession(refresh_token) {
-            const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-                body: JSON.stringify({ refresh_token }),
-            });
-            const data = await r.json();
-            if (data.access_token) {
-                return {
-                    access_token: data.access_token,
-                    refresh_token: data.refresh_token || refresh_token,
-                    expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
-                };
-            }
-            return null;
+            const { data, error } = await supabaseClient.auth.refreshSession({ refresh_token });
+            if (error) throw new Error(error.message || "Refresh failed");
+            const session = normalizeSession(data?.session);
+            return session ? { ...session, refresh_token: session.refresh_token || refresh_token } : null;
         },
         signInWithGoogle() {
-            window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(window.location.origin)}`;
+            return supabaseClient.auth.signInWithOAuth({
+                provider: "google",
+                options: {
+                    redirectTo: window.location.origin,
+                },
+            });
         },
         async getSessionFromHash() {
+            const currentUrl = new URL(window.location.href);
+            const code = currentUrl.searchParams.get("code");
+            if (code) {
+                const { data, error } = await supabaseClient.auth.exchangeCodeForSession(code);
+                window.history.replaceState(null, "", window.location.pathname);
+                if (error) throw new Error(error.message || "OAuth exchange failed");
+                return normalizeSession(data?.session);
+            }
+
+            const { data } = await supabaseClient.auth.getSession();
+            const session = normalizeSession(data?.session);
+            if (session) return session;
+
             const hash = window.location.hash;
             if (!hash) return null;
             const p = new URLSearchParams(hash.replace("#", ""));
             const access_token = p.get("access_token");
             if (!access_token) return null;
-            const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${access_token}` } });
-            const user = await r.json();
+            const refresh_token = p.get("refresh_token") || "";
+            const { data: hashSessionData, error } = await supabaseClient.auth.setSession({
+                access_token,
+                refresh_token,
+            });
             window.history.replaceState(null, "", window.location.pathname);
-            return { access_token, user };
+            if (error) throw new Error(error.message || "Session restore failed");
+            return normalizeSession(hashSessionData?.session) || { access_token, refresh_token, user: hashSessionData?.user };
         },
     },
     async db(table, token) {
