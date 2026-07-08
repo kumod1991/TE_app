@@ -6,8 +6,12 @@ const App = lazy(() => import('./App.jsx'))
 function AppShell() {
   return (
     <div className="app-shell" aria-busy="true" aria-live="polite">
-      <div className="app-shell__card">
+      <div className="app-shell__topbar">
         <div className="app-shell__brand" />
+        <div className="app-shell__search" />
+        <div className="app-shell__avatar" />
+      </div>
+      <div className="app-shell__card">
         <div className="app-shell__title">TradeEdge</div>
         <div className="app-shell__subtitle">Loading market workspace…</div>
         <div className="app-shell__bar" />

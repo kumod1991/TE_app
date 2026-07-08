@@ -27132,12 +27132,33 @@ export default function App() {
     }, [trades, funds, dividends, session, isDemo]);
 
     useEffect(() => {
-        supabase.auth.getSessionFromHash().then(sess => {
-            if (sess?.access_token && sess.user?.id) {
+        let cancelled = false;
+
+        const scheduleWarmups = (sess) => {
+            fundamentalsWarmStartedRef.current = true;
+            marketWarmStartedRef.current = true;
+            const run = () => {
+                if (cancelled) return;
                 prefetchOwnershipData();
                 prefetchFiiDiiData();
                 preloadAllowedTickerSet();
                 _warmMarketAndTechnicalCaches(sess.access_token);
+                loadTrades(sess);
+                loadFunds(sess);
+                loadDividends(sess);
+                loadScreenerFilters();
+            };
+
+            if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+                window.requestIdleCallback(run, { timeout: 3500 });
+            } else {
+                setTimeout(run, 800);
+            }
+        };
+
+        supabase.auth.getSessionFromHash().then(sess => {
+            if (cancelled) return;
+            if (sess?.access_token && sess.user?.id) {
                 supabase._session = {
                     access_token: sess.access_token,
                     refresh_token: sess.refresh_token,
@@ -27145,7 +27166,7 @@ export default function App() {
                     user: sess.user,
                 };
                 setSession(sess);
-                loadTrades(sess); loadFunds(sess); loadDividends(sess); loadScreenerFilters();
+                scheduleWarmups(sess);
             } else {
                 // No session – load any previously saved guest data
                 const guest = loadGuestData();
@@ -27157,6 +27178,8 @@ export default function App() {
             }
             setChecking(false);
         });
+
+        return () => { cancelled = true; };
     }, []);
 
     useEffect(() => {
@@ -27181,13 +27204,23 @@ export default function App() {
     useEffect(() => {
         if (checking || fundamentalsWarmStartedRef.current) return;
         fundamentalsWarmStartedRef.current = true;
-        _warmFundamentalsCaches();
+        const run = () => _warmFundamentalsCaches();
+        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+            window.requestIdleCallback(run, { timeout: 4000 });
+        } else {
+            setTimeout(run, 1200);
+        }
     }, [checking]);
 
     useEffect(() => {
         if (checking || marketWarmStartedRef.current) return;
         marketWarmStartedRef.current = true;
-        _warmMarketAndTechnicalCaches(session?.access_token || null);
+        const run = () => _warmMarketAndTechnicalCaches(session?.access_token || null);
+        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+            window.requestIdleCallback(run, { timeout: 5000 });
+        } else {
+            setTimeout(run, 1600);
+        }
     }, [checking, session?.access_token]);
 
     const handleLogin = async (sess) => {
@@ -27629,10 +27662,19 @@ export default function App() {
     };
 
     if (checking) return (
-        <>
-            <style>{`body{background:${T.bg};display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:'DM Sans',sans-serif;color:${T.subtext};font-size:14px}`}</style>
-            <div>Loading...</div>
-        </>
+        <div className="app-shell" aria-busy="true" aria-live="polite">
+            <div className="app-shell__topbar">
+                <div className="app-shell__brand" />
+                <div className="app-shell__search" />
+                <div className="app-shell__avatar" />
+            </div>
+            <div className="app-shell__card">
+                <div className="app-shell__title">TradeEdge</div>
+                <div className="app-shell__subtitle">Loading market workspace…</div>
+                <div className="app-shell__bar" />
+                <div className="app-shell__bar app-shell__bar--short" />
+            </div>
+        </div>
     );
 
     // Dashboard always renders; login is triggered via modal from the top-nav Login button
