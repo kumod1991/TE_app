@@ -807,16 +807,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   }, []);
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (document.getElementById("fiidii-module-fonts")) return;
-    const link = document.createElement("link");
-    link.id = "fiidii-module-fonts";
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap";
-    document.head.appendChild(link);
-  }, []);
-
-  useEffect(() => {
     const cached = initialCache;
     if (cached.data) {
       setCashData(cached.data.cashData || []);

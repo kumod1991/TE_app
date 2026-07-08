@@ -2197,7 +2197,6 @@ export default function ForumModule({ T, session, getToken: getTokenProp, onTick
           from { opacity: 0; transform: translateY(16px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600;700;800;900&display=swap');
       `}</style>
       <div style={{ display: "flex", flexDirection: "column", flex: 1, background: T.bg, minHeight: "100vh", position: "relative", fontFamily: "'IBM Plex Sans', sans-serif" }}>
         {view === "feed" && (
