@@ -3028,13 +3028,16 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [activeMobilePanel, setActiveMobilePanel] = useState("pulse");
 
     // ── RS stocks – seed from cache ──────────────────────────────────────────
+    const deferHeavyCompact = isCompact && activeMobilePanel === "pulse";
+
     const _cachedRs = useMemo(() => {
+        if (isCompact) return [];
         const hit = cacheGet(TIRS_RS85_PATH, RS_TTL);
         return hit ? hit.data || [] : cacheGetAllPages(TIRS_RS85_PATH, RS_TTL);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isCompact]);
 
     const [rsStocks, setRsStocks] = useState(() => {
-        if (!_cachedRs) return [];
+        if (isCompact || !_cachedRs) return [];
         const retHit = cacheGet(RETURNS_PATH, RETURNS_TTL);
         const retRows = retHit ? retHit.data || [] : (cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || []);
         const retMap = buildReturnsMap(retRows);
@@ -3091,6 +3094,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // FETCH MARKET MOVERS
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
+        if (deferHeavyCompact) return;
         // applyMovers: takes raw API rows and updates all mover state slices.
         function applyMovers(moversData, stock52wRows, allowedSet) {
             const derived = deriveMovers(moversData, stock52wRows, allowedSet);
@@ -3167,12 +3171,13 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userToken]);
+    }, [userToken, deferHeavyCompact]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // FETCH VOLUME SHOCKERS
     // ─────────────────────────────────────────────────────────────────────────
     useEffect(() => {
+        if (deferHeavyCompact) return;
         const VOLUME_SHOCKERS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
         const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
         (async () => {
@@ -3238,11 +3243,12 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userToken]);
+    }, [userToken, deferHeavyCompact]);
 
 
     // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     useEffect(() => {
+        if (deferHeavyCompact) return;
         (async () => {
             try {
                 const rows = await sbFetch(BREADTH_LATEST_PATH, userToken, {
@@ -3255,7 +3261,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userToken]);
+    }, [userToken, deferHeavyCompact]);
 
 
     // ── FII / DII fetch ──────────────────────────────────────────────────────
@@ -3445,6 +3451,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // PREFETCH adjacent industries
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
+        if (isCompact && activeMobilePanel !== "leaders" && activeMobilePanel !== "movers") return;
         if (!industry || !industries.length) return;
         if (prefetchRef.current) clearTimeout(prefetchRef.current);
         prefetchRef.current = setTimeout(() => {
@@ -3454,7 +3461,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             });
         }, 800);
         return () => clearTimeout(prefetchRef.current);
-    }, [industry, industries, userToken]);
+    }, [industry, industries, userToken, isCompact, activeMobilePanel]);
 
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -3462,6 +3469,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // (returns are already populated at startup from the full stock_returns fetch)
     // ────────────────────────────────────────────────────────────────────────────
     useEffect(() => {
+        if (isCompact && activeMobilePanel !== "leaders") return;
         if (!industry) return;
         (async () => {
             try {
@@ -3478,7 +3486,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 console.error("Error fetching industry names:", e);
             }
         })();
-    }, [industry, userToken]);
+    }, [industry, userToken, isCompact, activeMobilePanel]);
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // RENDER
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

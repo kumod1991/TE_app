@@ -26775,6 +26775,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
 
 export default function App() {
     const initialRoute = parseAppRoute(typeof window !== "undefined" ? window.location.pathname : "/");
+    const isMobileViewport = useViewportBelow(768);
     const restoringHistoryRef = useRef(false);
     const [session, setSession] = useState(null);
     const [openDropdown, setOpenDropdown] = useState(null);
@@ -27166,7 +27167,9 @@ export default function App() {
                     user: sess.user,
                 };
                 setSession(sess);
-                scheduleWarmups(sess);
+                if (!isMobileViewport) {
+                    scheduleWarmups(sess);
+                }
             } else {
                 // No session – load any previously saved guest data
                 const guest = loadGuestData();
@@ -27180,7 +27183,7 @@ export default function App() {
         });
 
         return () => { cancelled = true; };
-    }, []);
+    }, [isMobileViewport]);
 
     useEffect(() => {
         const handleVisibility = async () => {
@@ -27202,7 +27205,7 @@ export default function App() {
 
 
     useEffect(() => {
-        if (checking || fundamentalsWarmStartedRef.current) return;
+        if (checking || isMobileViewport || fundamentalsWarmStartedRef.current) return;
         fundamentalsWarmStartedRef.current = true;
         const run = () => _warmFundamentalsCaches();
         if (typeof window !== "undefined" && "requestIdleCallback" in window) {
@@ -27210,10 +27213,10 @@ export default function App() {
         } else {
             setTimeout(run, 1200);
         }
-    }, [checking]);
+    }, [checking, isMobileViewport]);
 
     useEffect(() => {
-        if (checking || marketWarmStartedRef.current) return;
+        if (checking || isMobileViewport || marketWarmStartedRef.current) return;
         marketWarmStartedRef.current = true;
         const run = () => _warmMarketAndTechnicalCaches(session?.access_token || null);
         if (typeof window !== "undefined" && "requestIdleCallback" in window) {
@@ -27221,14 +27224,16 @@ export default function App() {
         } else {
             setTimeout(run, 1600);
         }
-    }, [checking, session?.access_token]);
+    }, [checking, isMobileViewport, session?.access_token]);
 
     const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
-        prefetchOwnershipData();
-        prefetchFiiDiiData();
-        preloadAllowedTickerSet();
-        _warmMarketAndTechnicalCaches(sess.access_token);
+        if (!isMobileViewport) {
+            prefetchOwnershipData();
+            prefetchFiiDiiData();
+            preloadAllowedTickerSet();
+            _warmMarketAndTechnicalCaches(sess.access_token);
+        }
         // Keep supabase._session in sync so getValidToken() can refresh when needed
         supabase._session = {
             access_token: sess.access_token,
