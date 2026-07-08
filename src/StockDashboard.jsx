@@ -937,7 +937,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 
     if (isCompact) {
         return (
-            <SectionCard D={D} style={{ marginBottom: 14, padding: 16 }}>
+            <SectionCard T={D} style={{ marginBottom: 14, padding: 16 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
                     <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 10, color: D.subtext, textTransform: "uppercase", letterSpacing: ".14em", fontWeight: 700, marginBottom: 4 }}>
