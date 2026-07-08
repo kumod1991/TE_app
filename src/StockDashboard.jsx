@@ -730,74 +730,6 @@ function SectionCard({ T, children, style = {}, className = "" }) {
     );
 }
 
-function CompactPulseSummary({ D, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData }) {
-    const cards = [
-        {
-            label: "Breadth",
-            value: breadthSnapshot?.near_52w_high != null
-                ? `${Number(breadthSnapshot.near_52w_high).toFixed(1)}%`
-                : "--",
-            meta: breadthSnapshot?.date || "Market internals",
-        },
-        {
-            label: "Gainers",
-            value: String(gainers?.length ?? 0),
-            meta: "Top movers cached",
-        },
-        {
-            label: "RS Leaders",
-            value: String(allHighRsStocks?.length ?? 0),
-            meta: "High RS stocks",
-        },
-        {
-            label: "FII / DII",
-            value: (Array.isArray(fiiDiiData) && fiiDiiData.length)
-                ? `${Math.round(Number(fiiDiiData[0]?.fii_net ?? 0) / 100)} / ${Math.round(Number(fiiDiiData[0]?.dii_net ?? 0) / 100)}`
-                : "--",
-            meta: "Latest flow",
-        },
-    ];
-
-    return (
-        <SectionCard T={D} style={{ marginBottom: 0 }}>
-            <CardHeader
-                T={D}
-                title="Market Pulse"
-                count={rsIndustrySummary?.length || 0}
-                style={{ marginBottom: 14 }}
-            />
-            <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 10,
-            }}>
-                {cards.map(card => (
-                    <div
-                        key={card.label}
-                        style={{
-                            borderRadius: 16,
-                            padding: 14,
-                            border: `1px solid ${D.panelBorder}`,
-                            background: D.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.95)",
-                            minWidth: 0,
-                        }}
-                    >
-                        <div style={{ fontSize: 10, color: D.muted, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 700, marginBottom: 6 }}>
-                            {card.label}
-                        </div>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: D.text, lineHeight: 1, fontFamily: "'IBM Plex Mono', monospace" }}>
-                            {card.value}
-                        </div>
-                        <div style={{ marginTop: 6, fontSize: 11, color: D.subtext, lineHeight: 1.35 }}>
-                            {card.meta}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </SectionCard>
-    );
-}
-
 function DashboardLensIcon({ type, size = 16 }) {
     const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
     if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
@@ -934,39 +866,6 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
             : "Selective";
     const toneColor = tone === "Constructive" ? D.pos : tone === "Defensive" ? D.neg : D.accent;
     const toneBg = tone === "Constructive" ? D.posSoft : tone === "Defensive" ? D.negSoft : withAlpha(D.accent, D.isDark ? 0.16 : 0.09);
-
-    if (isCompact) {
-        return (
-            <SectionCard T={D} style={{ marginBottom: 14, padding: 16 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
-                    <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 10, color: D.subtext, textTransform: "uppercase", letterSpacing: ".14em", fontWeight: 700, marginBottom: 4 }}>
-                            Market Pulse
-                        </div>
-                        <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-.03em", color: D.text, lineHeight: 1.05 }}>
-                            {tone}
-                        </div>
-                    </div>
-                    <div style={{ padding: "6px 10px", borderRadius: 999, background: toneBg, border: `1px solid ${withAlpha(toneColor, 0.22)}`, color: toneColor, fontSize: 11, fontWeight: 700 }}>
-                        {leadershipCount} leaders
-                    </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                    {[
-                        { label: "Breadth", value: Number.isFinite(highPct) ? `${highPct.toFixed(1)}%` : EMPTY_VALUE },
-                        { label: "Leaders", value: String(leadershipCount) },
-                        { label: "Gainers", value: String(gainerCount) },
-                        { label: "Losers", value: String(loserCount) },
-                    ].map(item => (
-                        <div key={item.label} style={{ borderRadius: 14, padding: 12, background: D.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.95)", border: `1px solid ${D.panelBorder}` }}>
-                            <div style={{ fontSize: 10, color: D.muted, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 700, marginBottom: 6 }}>{item.label}</div>
-                            <div style={{ fontSize: 20, fontWeight: 800, color: D.text, lineHeight: 1, fontFamily: "'IBM Plex Mono', monospace" }}>{item.value}</div>
-                        </div>
-                    ))}
-                </div>
-            </SectionCard>
-        );
-    }
 
     const heroMetrics = [
         {
@@ -3130,16 +3029,13 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [activeMobilePanel, setActiveMobilePanel] = useState("pulse");
 
     // ── RS stocks – seed from cache ──────────────────────────────────────────
-    const deferHeavyCompact = isCompact && activeMobilePanel === "pulse";
-
     const _cachedRs = useMemo(() => {
-        if (isCompact) return [];
         const hit = cacheGet(TIRS_RS85_PATH, RS_TTL);
         return hit ? hit.data || [] : cacheGetAllPages(TIRS_RS85_PATH, RS_TTL);
-    }, [isCompact]);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const [rsStocks, setRsStocks] = useState(() => {
-        if (isCompact || !_cachedRs) return [];
+        if (!_cachedRs) return [];
         const retHit = cacheGet(RETURNS_PATH, RETURNS_TTL);
         const retRows = retHit ? retHit.data || [] : (cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || []);
         const retMap = buildReturnsMap(retRows);
@@ -3196,7 +3092,6 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // FETCH MARKET MOVERS
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
-        if (deferHeavyCompact) return;
         // applyMovers: takes raw API rows and updates all mover state slices.
         function applyMovers(moversData, stock52wRows, allowedSet) {
             const derived = deriveMovers(moversData, stock52wRows, allowedSet);
@@ -3273,13 +3168,12 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userToken, deferHeavyCompact]);
+    }, [userToken]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // FETCH VOLUME SHOCKERS
     // ─────────────────────────────────────────────────────────────────────────
     useEffect(() => {
-        if (deferHeavyCompact) return;
         const VOLUME_SHOCKERS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
         const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
         (async () => {
@@ -3345,12 +3239,11 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userToken, deferHeavyCompact]);
+    }, [userToken]);
 
 
     // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     useEffect(() => {
-        if (deferHeavyCompact) return;
         (async () => {
             try {
                 const rows = await sbFetch(BREADTH_LATEST_PATH, userToken, {
@@ -3363,7 +3256,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userToken, deferHeavyCompact]);
+    }, [userToken]);
 
 
     // ── FII / DII fetch ──────────────────────────────────────────────────────
@@ -3795,19 +3688,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     {/* Market Pulse */}
                     {(!isCompact || activeMobilePanel === "pulse") && (
                         <div style={{ display: "flex", flexDirection: "column" }}>
-                            {isCompact ? (
-                                <CompactPulseSummary
-                                    D={D}
-                                    breadthSnapshot={breadthSnapshot}
-                                    gainers={gainers}
-                                    losers={losers}
-                                    allHighRsStocks={allHighRsStocks}
-                                    rsIndustrySummary={rsIndustrySummary}
-                                    fiiDiiData={fiiDiiData}
-                                />
-                            ) : (
-                                <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} isSideBySide={!isCompact} style={{ flex: 1 }} />
-                            )}
+                            <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} isSideBySide={!isCompact} style={{ flex: 1 }} />
                         </div>
                     )}
 
