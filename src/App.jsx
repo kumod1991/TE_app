@@ -123,7 +123,7 @@ const SUB_ROUTE_SEO = {
 };
 const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements"]);
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "heatmap", "rotation"]);
-const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "portfolio", "funds", "dividends"]);
+const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "funds", "dividends"]);
 const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact"]);
 const BreadthDataContext = createContext({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], rsAcceleration: [], nameMap: {}, industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
@@ -3363,14 +3363,7 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
                         </div>
                         <div style={{ fontSize: 12.5, lineHeight: 1.7, color: T.subtext }}>{asideBody}</div>
                     </div>
-                    <div className="journal-hero-meta">
-                        <div style={{
-                            display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 11px",
-                            borderRadius: 999, background: T.pill, border: `1px solid ${T.border}`, color: T.subtext, fontSize: 11.5, fontWeight: 600,
-                        }}>
-                            Premium journals canvas
-                        </div>
-                    </div>
+                    
                 </div>
             )}
         </section>
@@ -3381,7 +3374,7 @@ function Dashboard({ trades, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
 
     // Load cached quotes from localStorage on mount so Dashboard shows
-    // last-known live prices without requiring the user to visit Portfolio tab first.
+    // last-known live prices without requiring the user to visit the holdings section first.
     useEffect(() => {
         if (Object.keys(quotes).length === 0) {
             try {
@@ -3391,7 +3384,7 @@ function Dashboard({ trades, isDemo, T }) {
         }
     }, []);
 
-    // Read cached unrealized P&L saved by Portfolio tab (fallback when quotes not loaded)
+    // Read cached unrealized P&L saved by the holdings section (fallback when quotes not loaded)
     const cachedUnrealizedDash = (() => {
         try {
             const s = localStorage.getItem("tv_portfolio_unrealized");
@@ -3421,7 +3414,7 @@ function Dashboard({ trades, isDemo, T }) {
 
     const totalBuy = trades.reduce((s, t) => s + t.buy_qty * t.buy_price, 0);
 
-    // Unrealized P&L: compute from live/cached quotes, fallback to Portfolio tab's saved value
+    // Unrealized P&L: compute from live/cached quotes, fallback to the holdings section's saved value
     const computedUnrealized = hasLiveData
         ? openTrades.reduce((sum, t) => {
             const live = quotes[t.ticker]?.currentPrice;
@@ -3430,7 +3423,7 @@ function Dashboard({ trades, isDemo, T }) {
         }, 0)
         : null;
 
-    // Use computed (from quotes) if available, else use value saved by Portfolio tab
+    // Use computed (from quotes) if available, else use value saved by the holdings section
     const unrealizedPnl = computedUnrealized !== null ? computedUnrealized : cachedUnrealizedDash;
 
     const combinedPnl = unrealizedPnl !== null
@@ -3441,7 +3434,7 @@ function Dashboard({ trades, isDemo, T }) {
     const dashboardHeroMetrics = [
         { label: "Combined P&L", value: fmtPnl(combinedPnl), tone: combinedPnl >= 0 ? "positive" : "negative", sub: `${stats.closed.length} closed trades` },
         { label: "Win rate", value: `${stats.winRate.toFixed(2)}%`, sub: `${stats.wins.length} wins / ${stats.losses.length} losses` },
-        { label: "Open exposure", value: `${openTrades.length}`, sub: hasLiveData ? `${quotedCount}/${openTickers.length} tickers live` : "Load Portfolio for live prices" },
+        { label: "Open exposure", value: `${openTrades.length}`, sub: hasLiveData ? `${quotedCount}/${openTickers.length} tickers live` : "Refresh holdings section for live prices" },
     ];
 
     return (
@@ -3449,15 +3442,15 @@ function Dashboard({ trades, isDemo, T }) {
             <JournalHero
                 T={T}
                 kicker="Journals / Dashboard"
-                title="Portfolio command center"
-                subtitle="A premium overview of realized performance, live exposure, and execution quality across your trading book."
+                title="My Trading Edge"
+                subtitle=""
                 metrics={dashboardHeroMetrics}
                 asideTitle="Live posture"
                 asideValue={totalPortfolioValue !== null ? inr(totalPortfolioValue) : "Pending"}
                 asideTone={combinedPnl >= 0 ? "positive" : "negative"}
                 asideBody={totalPortfolioValue !== null
                     ? `${quotedCount}/${openTickers.length} open tickers are feeding the current valuation.`
-                    : "Visit Portfolio to hydrate live prices and unrealized performance."}
+                    : "Refresh the holdings section below to hydrate live prices and unrealized performance."}
             />
             {isDemo && <div className="demo-banner" style={{ display: "inline-flex", margin: "0 0 14px" }}> Demo Mode  Sign up to save your real trades.</div>}
             <div className="stats-row">
@@ -3466,7 +3459,7 @@ function Dashboard({ trades, isDemo, T }) {
                     <div className={`stat-value hero ${combinedPnl >= 0 ? "green" : "red"}`}>{fmtPnl(combinedPnl)}</div>
                     <div className="stat-sub" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         <span>Realized: <span style={{ color: stats.totalPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{fmtPnl(stats.totalPnl)}</span>  {stats.closed.length} closed</span>
-                        <span>Unrealized: <span style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</span>{unrealizedPnl !== null ? `  ${openTrades.length} open` : "  visit Portfolio to load"}</span>
+                        <span>Unrealized: <span style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</span>{unrealizedPnl !== null ? `  ${openTrades.length} open` : "  refresh holdings section to load"}</span>
                     </div>
                 </div>
                 <div className="stat-card"><div className="stat-label">Win / Loss Rate</div><div className="stat-value">{stats.winRate.toFixed(2)}%</div><div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div></div>
@@ -3485,7 +3478,7 @@ function Dashboard({ trades, isDemo, T }) {
                     <div className="stat-sub">
                         {totalPortfolioValue !== null
                             ? `Live prices  ${quotedCount}/${openTickers.length} tickers`
-                            : "Visit Portfolio tab to load live prices"}
+                            : "Refresh holdings section below to load live prices"}
                     </div>
                 </div>
                 <div className="stat-card"><div className="stat-label">Avg Hold (Wins)</div><div className="stat-value">{stats.avgHoldWin.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div></div>
@@ -3496,6 +3489,7 @@ function Dashboard({ trades, isDemo, T }) {
                 <div className="chart-card"><div className="chart-title">Win / Loss Breakdown</div><div style={{ paddingTop: 12 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} /></div></div>
                 <div className="chart-card" style={{ gridColumn: "span 2" }}><div className="chart-title">P&amp;L by Ticker</div><BarChart trades={stats.closed} T={T} /></div>
             </div>
+            <Portfolio trades={trades} T={T} embedded />
         </div>
     );
 }
@@ -4719,7 +4713,7 @@ async function triggerBseFinancials(ticker) {
 }
 
 
-function Portfolio({ trades, T }) {
+function Portfolio({ trades, T, embedded = false }) {
     const openPositions = useMemo(() => {
         // Group trades by ticker
         const map = {};
@@ -4847,7 +4841,9 @@ function Portfolio({ trades, T }) {
     };
 
 
-    useEffect(() => { if (openPositions.length) fetchAll(); }, [openPositions.length]);
+    useEffect(() => {
+        if (openPositions.length) fetchAll();
+    }, [openPositions.length]);
 
     const rows = useMemo(() => {
         const totalPortVal = openPositions.reduce((sum, p) => {
@@ -4929,6 +4925,169 @@ function Portfolio({ trades, T }) {
             {v >= 0 ? "+" : ""}{v.toFixed(2)}{suffix}
         </span>
     );
+
+    if (embedded) {
+        return (
+            <div style={{ marginTop: 28 }}>
+                <div style={{
+                    display: "flex",
+                    alignItems: "end",
+                    justifyContent: "space-between",
+                    gap: 16,
+                    marginBottom: 14,
+                }}>
+                    <div>
+                        <div style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            letterSpacing: ".14em",
+                            textTransform: "uppercase",
+                            color: T.subtext,
+                            marginBottom: 6,
+                        }}>
+                            Portfolio Snapshot
+                        </div>
+                        <div style={{
+                            fontSize: 20,
+                            fontWeight: 800,
+                            letterSpacing: "-.04em",
+                            color: T.text,
+                        }}>
+                            Current Holding
+                        </div>
+                    </div>
+                    <button className="btn-add" onClick={fetchAll} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
+                        {loading ? " Refreshing" : " Refresh Prices"}
+                    </button>
+                </div>
+
+                {failed.length > 0 && (
+                    <div style={{ background: T.redGlow, border: `1px solid ${T.red}22`, borderRadius: 14, padding: "12px 16px", marginBottom: 16 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: T.redText, marginBottom: 8 }}>
+                            {failed.length} ticker{failed.length > 1 ? "s" : ""} could not be fetched:
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                            {failed.map(f => (
+                                <div key={f.ticker} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 999, padding: "4px 10px", fontSize: 12 }}>
+                                    <span style={{ fontWeight: 700, color: T.redText, fontFamily: 'inherit' }}>{f.ticker}</span>
+                                    <span style={{ color: T.muted, marginLeft: 6 }}>{f.reason}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {openPositions.length === 0 ? (
+                    <div className="empty">
+                        <div className="empty-icon"></div>
+                        <div className="empty-text">No open positions</div>
+                        <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>All trades are closed. Add open trades in the Trade Journal tab.</div>
+                    </div>
+                ) : (
+                    <div style={{
+                        background: T.card,
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 18,
+                        overflow: "hidden",
+                        boxShadow: `0 10px 30px ${T.shadow}`,
+                        backdropFilter: "blur(10px)",
+                    }}>
+                        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 920 }}>
+                            <thead>
+                                <tr>
+                                    {["Symbol", "Stock Name", "Cur Price", "Buy Price", "Shares", "Cur Value", "Apprc %", "Alloc %"].map((label, idx) => (
+                                        <th
+                                            key={label}
+                                            style={{
+                                                padding: "13px 16px",
+                                                fontSize: 10,
+                                                letterSpacing: ".12em",
+                                                textTransform: "uppercase",
+                                                color: T.subtext,
+                                                fontWeight: 800,
+                                                textAlign: idx < 2 ? "left" : "right",
+                                                background: "rgba(255,255,255,0.55)",
+                                                borderBottom: `1px solid ${T.border}`,
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
+                                            {label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sorted.map((r, i) => {
+                                    const rowBg = i % 2 === 0 ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.38)";
+                                    return (
+                                        <tr key={r.ticker} style={{ background: rowBg, transition: "transform .12s ease, background .12s ease" }}
+                                            onMouseOver={e => {
+                                                e.currentTarget.style.transform = "translateY(-1px)";
+                                                e.currentTarget.style.background = "rgba(255,255,255,0.82)";
+                                            }}
+                                            onMouseOut={e => e.currentTarget.style.background = rowBg}>
+                                            <td style={td({ textAlign: "left", padding: "14px 16px" })}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                    <span style={{
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius: 999,
+                                                        background: T.green,
+                                                        boxShadow: `0 0 0 4px ${T.greenGlow}`,
+                                                        flexShrink: 0,
+                                                    }} />
+                                                    <span style={{ fontWeight: 800, color: T.greenText, ...mono, fontSize: 12.5, letterSpacing: ".02em" }}>{r.ticker}</span>
+                                                </div>
+                                            </td>
+                                            <td style={td({ textAlign: "left", padding: "14px 16px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5, color: T.text, fontWeight: 600 })}>{r.name}</td>
+                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, fontWeight: 800, color: r.currentPrice != null ? T.text : T.muted })}>
+                                                {r.currentPrice != null ? r.currentPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "--"}
+                                            </td>
+                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, color: T.subtext })}>
+                                                {r.avgBuyPrice != null ? r.avgBuyPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "--"}
+                                            </td>
+                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono })}>
+                                                {r.openQty != null ? r.openQty.toLocaleString("en-IN") : "--"}
+                                            </td>
+                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, fontWeight: 800 })}>{r.curVal != null ? inr(r.curVal) : "--"}</td>
+                                            <td style={td({ textAlign: "right", padding: "14px 16px" })}>
+                                                {r.apprc == null ? (
+                                                    <span style={{ color: T.muted, fontSize: 11 }}>--</span>
+                                                ) : (
+                                                    <span style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        padding: "4px 10px",
+                                                        borderRadius: 999,
+                                                        background: r.apprc >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.10)",
+                                                        color: r.apprc >= 0 ? T.greenText : T.redText,
+                                                        fontSize: 11,
+                                                        fontWeight: 800,
+                                                        letterSpacing: ".01em",
+                                                    }}>
+                                                        {r.apprc >= 0 ? "+" : ""}{r.apprc.toFixed(2)}%
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td style={td({ textAlign: "right", padding: "14px 16px" })}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                                                    <div style={{ width: 46, height: 5, background: "rgba(148,163,184,0.25)", borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+                                                        <div style={{ width: `${Math.min(Math.max(r.alloc ?? 0, 0), 100)}%`, height: "100%", background: "linear-gradient(90deg,#059669,#10b981)", borderRadius: 999 }} />
+                                                    </div>
+                                                    <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 38, textAlign: "right" }}>{r.alloc != null ? `${r.alloc.toFixed(1)}%` : "--"}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div>
@@ -5287,7 +5446,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
             .filter(t => t.exit_date)
             .reduce((s, t) => s + ((t.sell_qty || 0) * (t.sell_price || 0)) - (t.buy_qty * t.buy_price), 0);
 
-        // Unrealised P&L  use value last saved by Portfolio tab (live prices already applied there)
+        // Unrealised P&L  use value last saved by the holdings section (live prices already applied there)
         const unrealisedPnl = cachedUnrealized?.value ?? 0;
         const usingLivePrices = cachedUnrealized != null;
 
@@ -5576,7 +5735,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                                 {"  "}<span style={{ color: xirrUsesLive ? T.greenText : T.muted }}>
                                     {xirrUsesLive
                                         ? ` as of ${new Date(cachedUnrealized.ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
-                                        : " visit Portfolio tab to load live prices"}
+                                        : " refresh holdings section to load live prices"}
                                 </span>
                             </span>
                         </div>
@@ -5778,7 +5937,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
 
             {/* XIRR explanation */}
             <div style={{ marginTop: 14, padding: "12px 16px", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, color: T.subtext, lineHeight: 1.7 }}>
-                <strong style={{ color: T.text }}>How XIRR is calculated:</strong> Each deposit is a negative cashflow and each withdrawal is positive. The terminal cashflow is <em>Net Invested + Realised P&L (Dashboard) + Unrealised P&L (Portfolio)</em>  i.e. what you put in, plus everything you've made. Live prices from the Portfolio tab are used for unrealised P&L when available, otherwise cost basis is used. The rate is solved identically to Excel's <code style={{ background: T.surface, padding: "1px 5px", borderRadius: 4 }}>=XIRR()</code>.
+                <strong style={{ color: T.text }}>How XIRR is calculated:</strong> Each deposit is a negative cashflow and each withdrawal is positive. The terminal cashflow is <em>Net Invested + Realised P&L (Dashboard) + Unrealised P&L (holdings section)</em>  i.e. what you put in, plus everything you've made. Live prices from the holdings section are used for unrealised P&L when available, otherwise cost basis is used. The rate is solved identically to Excel's <code style={{ background: T.surface, padding: "1px 5px", borderRadius: 4 }}>=XIRR()</code>.
             </div>
 
             {showModal && (
@@ -26921,29 +27080,6 @@ export default function App() {
         });
     }, []);
 
-    useEffect(() => {
-        const readyForJournalRefresh = !!(session?.access_token || isDemo) && Array.isArray(trades) && page !== "portfolio";
-        if (!readyForJournalRefresh) return;
-
-        const requestId = ++journalPortfolioRefreshIdRef.current;
-        (async () => {
-            try {
-                const { results, rsResults, totalUnrealized } = await refreshJournalPortfolioCache(trades);
-                if (requestId !== journalPortfolioRefreshIdRef.current) return;
-                setQuotes(results);
-                try {
-                    localStorage.setItem("tv_portfolio_quotes", JSON.stringify(results));
-                    localStorage.setItem("tv_portfolio_rs", JSON.stringify(rsResults));
-                    localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
-                    localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() }));
-                    window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized } }));
-                } catch { }
-            } catch (e) {
-                console.warn("[Journal cache] refresh failed:", e);
-            }
-        })();
-    }, [session?.access_token, isDemo, page, trades, setQuotes]);
-
     const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
         supabase._session = sess;
@@ -27220,7 +27356,6 @@ export default function App() {
                 { id: "trades", label: "Trade Journal", description: "Record entries, exits, and execution notes." },
                 { id: "analytics", label: "Analytics", description: "Review win rate, expectancy, and trading patterns." },
                 { id: "capital-gains", label: "Capital Gains", description: "Inspect realized P&L across Indian financial years." },
-                { id: "portfolio", label: "Portfolio", description: "Monitor holdings, exposure, and allocation snapshots." },
                 { id: "funds", label: "Funds & XIRR", description: "Track capital flows, cash, and return efficiency." },
                 { id: "dividends", label: "Dividends", description: "Audit dividend receipts and income history." },
             ]
@@ -27729,7 +27864,6 @@ export default function App() {
                                                     {page === "trades" && <Trades trades={trades} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
                                                     {page === "analytics" && <Analytics trades={trades} T={T} />}
                                                     {page === "capital-gains" && <CapitalGains trades={trades} T={T} />}
-                                                    {page === "portfolio" && <Portfolio trades={trades} T={T} />}
                                                     {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} />}
                                                     {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
                                                 </div>
