@@ -1717,6 +1717,11 @@ a:hover { text-decoration: underline; }
   .journal-action-row { flex-wrap: wrap; }
   .journal-action-row > * { flex: 1; min-width: 0; justify-content: center; }
   .journal-btn-ghost { font-size: 12px; padding: 9px 12px; }
+  .stats-row .stat-card.hero,
+  .stats-row-2 .stat-card.hero { grid-column: span 1; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .chart-grid .chart-card[style*="span 2"] { grid-column: 1 !important; }
+  .chart-card { padding: 16px; border-radius: 18px; }
 }
 
 .ann-outer { display:flex; flex-direction:column; height:100%; overflow:hidden; }
