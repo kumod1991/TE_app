@@ -1619,10 +1619,10 @@ a:hover { text-decoration: underline; }
 .journal-hero {
   position: relative; overflow: hidden; isolation: isolate;
   display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(290px, .95fr); gap: 18px;
-  padding: 24px 24px 22px; border-radius: 28px;
+  padding: 22px 22px 20px; border-radius: 24px;
   border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
-  background: ${D ? "linear-gradient(180deg, rgba(9,15,26,.94), rgba(7,12,22,.92))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(247,250,252,.94))"};
-  box-shadow: ${D ? "0 24px 56px rgba(2,6,23,.34)" : "0 22px 50px rgba(15,23,42,.08)"};
+  background: ${D ? "linear-gradient(180deg, rgba(9,15,26,.92), rgba(7,12,22,.90))" : "linear-gradient(180deg, rgba(255,255,255,.985), rgba(247,250,252,.96))"};
+  box-shadow: ${D ? "0 18px 42px rgba(2,6,23,.28)" : "0 18px 40px rgba(15,23,42,.06)"};
 }
 .journal-hero::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -1636,9 +1636,9 @@ a:hover { text-decoration: underline; }
 .journal-hero-copy { min-width: 0; }
 .journal-hero-aside {
   display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
-  padding: 18px; border-radius: 22px;
+  padding: 16px; border-radius: 18px;
   border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
-  background: ${D ? "rgba(255,255,255,.035)" : "rgba(255,255,255,.72)"};
+  background: ${D ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.76)"};
   box-shadow: inset 0 1px 0 ${D ? "rgba(255,255,255,.04)" : "rgba(255,255,255,.85)"};
 }
 .journal-kicker-row, .journal-chip-row, .journal-action-row, .journal-hero-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1655,15 +1655,15 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 4px ${D ? "rgba(255,255,255,.03)" : "rgba(15,23,42,.04)"};
 }
 .journal-hero-title {
-  font-size: clamp(28px, 4vw, 38px); line-height: 1.02; letter-spacing: -.05em;
-  font-weight: 800; color: ${T.text}; max-width: 760px; margin: 16px 0 10px;
+  font-size: clamp(26px, 3.7vw, 34px); line-height: 1.02; letter-spacing: -.05em;
+  font-weight: 800; color: ${T.text}; max-width: 760px; margin: 14px 0 8px;
   font-family: 'Inter', sans-serif;
 }
 .journal-hero-subtitle {
-  max-width: 760px; color: ${T.subtext}; font-size: 13.5px; line-height: 1.72; margin-bottom: 18px;
+  max-width: 760px; color: ${T.subtext}; font-size: 13.2px; line-height: 1.68; margin-bottom: 16px;
 }
 .journal-chip {
-  min-width: 0; padding: 10px 12px 11px; border-radius: 18px;
+  min-width: 0; padding: 9px 11px 10px; border-radius: 16px;
   border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
   background: ${D ? "rgba(255,255,255,.04)" : "rgba(255,255,255,.78)"};
   box-shadow: inset 0 1px 0 ${D ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.8)"};
@@ -1964,15 +1964,10 @@ box-shadow:0 22px 48px ${T.shadow}; }
 
 .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
 .stats-row-2 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
-@media (max-width:900px) {
-  .stats-row { grid-template-columns:repeat(2,1fr); }
-  .stats-row-2 { grid-template-columns:repeat(2,1fr); }
-}
-@media (max-width:480px) {
-  .stats-row { grid-template-columns:1fr; gap:10px; margin-bottom:12px; }
-  .stats-row-2 { grid-template-columns:1fr; gap:10px; margin-bottom:14px; }
-  .stats-row .stat-card.hero { grid-column:1; }
-}
+.stats-row,
+.stats-row-2 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: stretch; }
+.stats-row .stat-card.hero,
+.stats-row-2 .stat-card.hero { grid-column: span 2; }
 .table-wrap {
   background:${D ? "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.94))"};
   border:1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"}; border-radius:24px; overflow:auto;
@@ -1998,16 +1993,13 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
   transition:opacity .15s, transform .15s, box-shadow .15s; box-shadow:0 12px 26px rgba(5,150,105,.24);
 }
 .btn-add:hover { opacity:.94; transform: translateY(-1px); box-shadow:0 16px 30px rgba(5,150,105,.28); }
-.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
-@media (max-width:640px) {
-  .chart-grid { grid-template-columns:1fr; }
-  .chart-grid .chart-card[style*="span 2"],
-  .chart-grid .chart-card { grid-column:1 !important; }
-}
+.chart-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:20px; grid-auto-flow: dense; }
+.chart-grid .chart-card[style*="span 2"] { grid-column: span 2; }
+.chart-grid .chart-card { min-width: 0; }
 .chart-card {
   background:${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92))"};
-  border:1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"}; border-radius:24px; padding:20px;
-  box-shadow:${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 16px 34px rgba(15,23,42,.05)"};
+  border:1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"}; border-radius:20px; padding:18px;
+  box-shadow:${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 14px 28px rgba(15,23,42,.05)"};
 }
 .chart-title { font-size:10px; font-weight:700; color:${T.muted}; margin-bottom:14px; text-transform:uppercase; letter-spacing:.07em; }
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
@@ -3340,7 +3332,7 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
                     <span className="journal-kicker">{kicker}</span>
                 </div>
                 <div className="journal-hero-title">{title}</div>
-                <div className="journal-hero-subtitle">{subtitle}</div>
+                {subtitle ? <div className="journal-hero-subtitle">{subtitle}</div> : null}
                 {metrics.length > 0 && (
                     <div className="journal-chip-row">
                         {metrics.map((metric) => (
@@ -3363,7 +3355,6 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
                         </div>
                         <div style={{ fontSize: 12.5, lineHeight: 1.7, color: T.subtext }}>{asideBody}</div>
                     </div>
-                    
                 </div>
             )}
         </section>
@@ -3443,7 +3434,6 @@ function Dashboard({ trades, isDemo, T }) {
                 T={T}
                 kicker="Journals / Dashboard"
                 title="My Trading Edge"
-                subtitle=""
                 metrics={dashboardHeroMetrics}
                 asideTitle="Live posture"
                 asideValue={totalPortfolioValue !== null ? inr(totalPortfolioValue) : "Pending"}
@@ -4992,7 +4982,8 @@ function Portfolio({ trades, T, embedded = false }) {
                         boxShadow: `0 10px 30px ${T.shadow}`,
                         backdropFilter: "blur(10px)",
                     }}>
-                        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 920 }}>
+                        <div style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-x" }}>
+                            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 920 }}>
                             <thead>
                                 <tr>
                                     {["Symbol", "Stock Name", "Cur Price", "Buy Price", "Shares", "Cur Value", "Apprc %", "Alloc %"].map((label, idx) => (
@@ -5082,7 +5073,8 @@ function Portfolio({ trades, T, embedded = false }) {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>
@@ -5162,7 +5154,8 @@ function Portfolio({ trades, T, embedded = false }) {
                     <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>All trades are closed. Add open trades in the Trade Journal tab.</div>
                 </div>
             ) : (
-                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", boxShadow: `0 2px 8px ${T.shadow}` }}>
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", boxShadow: `0 2px 8px ${T.shadow}` }}>
+                    <div style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-x" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}>
                         <thead>
                             <tr>
@@ -5254,6 +5247,7 @@ function Portfolio({ trades, T, embedded = false }) {
                             })}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             )}
 
