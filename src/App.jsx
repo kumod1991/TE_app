@@ -4247,6 +4247,85 @@ async function fetchBhavQuote(ticker) {
     return null;
 }
 
+function buildOpenPositionsFromTrades(trades) {
+    const map = {};
+    trades.forEach(t => {
+        const key = t.ticker;
+        if (!map[key]) map[key] = { ticker: key, buys: [], sells: [] };
+        map[key].buys.push({ qty: Number(t.buy_qty), price: Number(t.buy_price), date: t.entry_date });
+        if (t.exit_date && t.sell_qty) {
+            map[key].sells.push({ qty: Number(t.sell_qty), date: t.exit_date });
+        }
+    });
+
+    return Object.values(map).map(({ ticker, buys, sells }) => {
+        let remainingSold = sells.reduce((s, x) => s + x.qty, 0);
+        const openLots = [];
+        const sortedBuys = [...buys].sort((a, b) => new Date(a.date) - new Date(b.date));
+        for (const lot of sortedBuys) {
+            if (remainingSold <= 0) {
+                openLots.push({ qty: lot.qty, price: lot.price });
+            } else if (remainingSold >= lot.qty) {
+                remainingSold -= lot.qty;
+            } else {
+                openLots.push({ qty: lot.qty - remainingSold, price: lot.price });
+                remainingSold = 0;
+            }
+        }
+
+        const openQty = openLots.reduce((s, l) => s + l.qty, 0);
+        const openAmt = openLots.reduce((s, l) => s + l.qty * l.price, 0);
+        const avgBuyPrice = openQty > 0 ? openAmt / openQty : 0;
+
+        return { ticker, openQty, totalBuyAmt: openAmt, avgBuyPrice };
+    }).filter(p => p.openQty > 0);
+}
+
+async function refreshJournalPortfolioCache(trades) {
+    const openPositions = buildOpenPositionsFromTrades(trades);
+    if (!openPositions.length) {
+        return { results: {}, rsResults: {}, totalUnrealized: 0, failed: [] };
+    }
+
+    const results = {};
+    const failed = [];
+
+    for (let i = 0; i < openPositions.length; i += 3) {
+        const batch = openPositions.slice(i, i + 3);
+        await Promise.all(batch.map(async p => {
+            const q = await fetchBhavQuote(p.ticker);
+            if (q) results[p.ticker] = { ...q };
+            else failed.push({ ticker: p.ticker, reason: "Not found in Bhav Copy or Yahoo Finance" });
+        }));
+        if (i + 3 < openPositions.length) await new Promise(r => setTimeout(r, 300));
+    }
+
+    nifty500Cache = null;
+    const rsResults = {};
+    const successTickers = Object.entries(results);
+    for (let i = 0; i < successTickers.length; i += 3) {
+        const batch = successTickers.slice(i, i + 3);
+        await Promise.all(batch.map(async ([ticker, q]) => {
+            const rs = await fetchRS(q.usedTicker || ticker + ".NS");
+            if (rs !== null) rsResults[ticker] = rs;
+        }));
+        if (i + 3 < successTickers.length) await new Promise(r => setTimeout(r, 300));
+    }
+
+    const totalInvested = openPositions.reduce((sum, p) => sum + p.totalBuyAmt, 0);
+    const totalCurrent = openPositions.reduce((sum, p) => {
+        const q = results[p.ticker];
+        return sum + (q?.currentPrice || p.avgBuyPrice) * p.openQty;
+    }, 0);
+
+    return {
+        results,
+        rsResults,
+        totalUnrealized: totalCurrent - totalInvested,
+        failed,
+    };
+}
+
 // Manual trigger: force=true bypasses the "already have rows" skip check
 async function triggerBhavFetch() {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/fetch-bhav-copy`, {
@@ -4748,6 +4827,8 @@ function Portfolio({ trades, T }) {
         try {
             localStorage.setItem("tv_portfolio_quotes", JSON.stringify(results));
             localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
+            localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() }));
+            window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized } }));
         } catch { }
         nifty500Cache = null;
         const rsResults = {};
@@ -5152,8 +5233,22 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 try { setCachedUnrealized(JSON.parse(e.newValue)); } catch { }
             }
         };
+        const onPortfolioUpdate = (e) => {
+            if (e?.detail?.totalUnrealized !== undefined) {
+                setCachedUnrealized({ value: e.detail.totalUnrealized, ts: Date.now() });
+            } else {
+                try {
+                    const s = localStorage.getItem("tv_portfolio_unrealized");
+                    if (s) setCachedUnrealized(JSON.parse(s));
+                } catch { }
+            }
+        };
         window.addEventListener("storage", onStorage);
-        return () => window.removeEventListener("storage", onStorage);
+        window.addEventListener("tv-portfolio-updated", onPortfolioUpdate);
+        return () => {
+            window.removeEventListener("storage", onStorage);
+            window.removeEventListener("tv-portfolio-updated", onPortfolioUpdate);
+        };
     }, []);
 
     //  Sorted fund entries 
@@ -26626,6 +26721,7 @@ export default function App() {
     const [railCollapsed, setRailCollapsed] = useState(true);   //  changed to true
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
+    const journalPortfolioRefreshIdRef = useRef(0);
 
     //  NSE Bhav Copy 
 
@@ -26824,6 +26920,29 @@ export default function App() {
             setChecking(false);
         });
     }, []);
+
+    useEffect(() => {
+        const readyForJournalRefresh = !!(session?.access_token || isDemo) && Array.isArray(trades) && page !== "portfolio";
+        if (!readyForJournalRefresh) return;
+
+        const requestId = ++journalPortfolioRefreshIdRef.current;
+        (async () => {
+            try {
+                const { results, rsResults, totalUnrealized } = await refreshJournalPortfolioCache(trades);
+                if (requestId !== journalPortfolioRefreshIdRef.current) return;
+                setQuotes(results);
+                try {
+                    localStorage.setItem("tv_portfolio_quotes", JSON.stringify(results));
+                    localStorage.setItem("tv_portfolio_rs", JSON.stringify(rsResults));
+                    localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
+                    localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() }));
+                    window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized } }));
+                } catch { }
+            } catch (e) {
+                console.warn("[Journal cache] refresh failed:", e);
+            }
+        })();
+    }, [session?.access_token, isDemo, page, trades, setQuotes]);
 
     const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
