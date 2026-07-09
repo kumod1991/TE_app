@@ -134,15 +134,6 @@ const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact
 const BreadthDataContext = createContext({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], rsAcceleration: [], nameMap: {}, industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
 
-// Namespaces portfolio-cache localStorage keys per logged-in user so that
-// switching accounts (or bouncing through guest/demo mode) on the same
-// browser never shows one user's stale prices/P&L under another user's
-// Dashboard/Portfolio view.
-function _pfCacheKey(base) {
-    const uid = supabase._session?.user?.id;
-    return uid ? `${base}_${uid}` : `${base}_guest`;
-}
-
 const supabase = {
     _session: null,
     _h: (token) => ({
@@ -3733,54 +3724,20 @@ function Dashboard({ trades, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
 
     // Load cached quotes from localStorage on mount so Dashboard shows
-    // last-known live prices instantly, without waiting on a network round trip.
+    // last-known live prices without requiring the user to visit Portfolio tab first.
     useEffect(() => {
         if (Object.keys(quotes).length === 0) {
             try {
-                const cached = localStorage.getItem(_pfCacheKey("tv_portfolio_quotes"));
+                const cached = localStorage.getItem("tv_portfolio_quotes");
                 if (cached) setQuotes(JSON.parse(cached));
             } catch (e) { /* ignore */ }
         }
     }, []);
 
-    // Stale-while-revalidate: Dashboard used to depend entirely on the Portfolio
-    // tab having been visited to populate/refresh tv_portfolio_quotes. On mobile,
-    // where the page reloads far more often (backgrounding/relogin), that gap
-    // meant Dashboard would keep showing whatever was cached from a much earlier
-    // session. So Dashboard now also fetches fresh prices for its own open
-    // tickers in the background and merges them in, independent of Portfolio.
-    useEffect(() => {
-        const openTickersNow = [...new Set(trades.filter(t => !t.exit_date).map(t => t.ticker))];
-        if (!openTickersNow.length) return;
-        let cancelled = false;
-        (async () => {
-            const fresh = {};
-            for (let i = 0; i < openTickersNow.length; i += 3) {
-                const batch = openTickersNow.slice(i, i + 3);
-                await Promise.all(batch.map(async (ticker) => {
-                    const q = await fetchBhavQuote(ticker);
-                    if (q) fresh[ticker] = { ...q };
-                }));
-                if (cancelled) return;
-                if (i + 3 < openTickersNow.length) await new Promise(res => setTimeout(res, 300));
-            }
-            if (cancelled || !Object.keys(fresh).length) return;
-            setQuotes(prev => {
-                const merged = { ...prev, ...fresh };
-                try {
-                    localStorage.setItem(_pfCacheKey("tv_portfolio_quotes"), JSON.stringify(merged));
-                    localStorage.setItem(_pfCacheKey("tv_portfolio_timestamp"), new Date().toISOString());
-                } catch { /* ignore */ }
-                return merged;
-            });
-        })();
-        return () => { cancelled = true; };
-    }, [trades]);
-
     // Read cached unrealized P&L saved by Portfolio tab (fallback when quotes not loaded)
     const cachedUnrealizedDash = (() => {
         try {
-            const s = localStorage.getItem(_pfCacheKey("tv_portfolio_unrealized"));
+            const s = localStorage.getItem("tv_portfolio_unrealized");
             return s ? JSON.parse(s)?.value ?? null : null;
         } catch { return null; }
     })();
@@ -4837,9 +4794,9 @@ function Portfolio({ trades, T }) {
     // ---- Load cached quotes + RS on mount ----
     useEffect(() => {
         try {
-            const q = localStorage.getItem(_pfCacheKey("tv_portfolio_quotes"));
-            const r = localStorage.getItem(_pfCacheKey("tv_portfolio_rs"));
-            const ts = localStorage.getItem(_pfCacheKey("tv_portfolio_timestamp"));
+            const q = localStorage.getItem("tv_portfolio_quotes");
+            const r = localStorage.getItem("tv_portfolio_rs");
+            const ts = localStorage.getItem("tv_portfolio_timestamp");
 
             if (q && ts) {
                 const cacheDate = new Date(ts).toDateString();
@@ -4886,8 +4843,8 @@ function Portfolio({ trades, T }) {
         setQuotes(results); setFailed(errs);
         setLastRefresh(new Date());
         try {
-            localStorage.setItem(_pfCacheKey("tv_portfolio_quotes"), JSON.stringify(results));
-            localStorage.setItem(_pfCacheKey("tv_portfolio_timestamp"), new Date().toISOString());
+            localStorage.setItem("tv_portfolio_quotes", JSON.stringify(results));
+            localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
         } catch { }
         nifty500Cache = null;
         const rsResults = {};
@@ -4901,7 +4858,7 @@ function Portfolio({ trades, T }) {
             if (i + 3 < successTickers.length) await new Promise(r => setTimeout(r, 300));
         }
         setRsScores(rsResults);
-        try { localStorage.setItem(_pfCacheKey("tv_portfolio_rs"), JSON.stringify(rsResults)); } catch { }
+        try { localStorage.setItem("tv_portfolio_rs", JSON.stringify(rsResults)); } catch { }
         setLoading(false);
     };
 
@@ -4953,7 +4910,7 @@ function Portfolio({ trades, T }) {
     // Persist unrealised P&L so Funds/XIRR tab can use it without recomputing
     useEffect(() => {
         if (rows.some(r => r.loaded)) {
-            try { localStorage.setItem(_pfCacheKey("tv_portfolio_unrealized"), JSON.stringify({ value: totalUnrealized, ts: Date.now() })); } catch { }
+            try { localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() })); } catch { }
         }
     }, [totalUnrealized]);
 
@@ -5251,7 +5208,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     const [deleting, setDeleting] = useState(false);
     const [cachedUnrealized, setCachedUnrealized] = useState(() => {
         try {
-            const s = localStorage.getItem(_pfCacheKey("tv_portfolio_unrealized"));
+            const s = localStorage.getItem("tv_portfolio_unrealized");
             return s ? JSON.parse(s) : null;
         } catch { return null; }
     });
@@ -5259,7 +5216,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     // Keep cachedUnrealized in sync whenever Portfolio saves a fresh value
     useEffect(() => {
         const onStorage = (e) => {
-            if (e.key === _pfCacheKey("tv_portfolio_unrealized")) {
+            if (e.key === "tv_portfolio_unrealized") {
                 try { setCachedUnrealized(JSON.parse(e.newValue)); } catch { }
             }
         };
@@ -26775,7 +26732,6 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
 
 export default function App() {
     const initialRoute = parseAppRoute(typeof window !== "undefined" ? window.location.pathname : "/");
-    const isMobileViewport = useViewportBelow(768);
     const restoringHistoryRef = useRef(false);
     const [session, setSession] = useState(null);
     const [openDropdown, setOpenDropdown] = useState(null);
@@ -27133,33 +27089,12 @@ export default function App() {
     }, [trades, funds, dividends, session, isDemo]);
 
     useEffect(() => {
-        let cancelled = false;
-
-        const scheduleWarmups = (sess) => {
-            fundamentalsWarmStartedRef.current = true;
-            marketWarmStartedRef.current = true;
-            const run = () => {
-                if (cancelled) return;
+        supabase.auth.getSessionFromHash().then(sess => {
+            if (sess?.access_token && sess.user?.id) {
                 prefetchOwnershipData();
                 prefetchFiiDiiData();
                 preloadAllowedTickerSet();
                 _warmMarketAndTechnicalCaches(sess.access_token);
-                loadTrades(sess);
-                loadFunds(sess);
-                loadDividends(sess);
-                loadScreenerFilters();
-            };
-
-            if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-                window.requestIdleCallback(run, { timeout: 3500 });
-            } else {
-                setTimeout(run, 800);
-            }
-        };
-
-        supabase.auth.getSessionFromHash().then(sess => {
-            if (cancelled) return;
-            if (sess?.access_token && sess.user?.id) {
                 supabase._session = {
                     access_token: sess.access_token,
                     refresh_token: sess.refresh_token,
@@ -27167,9 +27102,7 @@ export default function App() {
                     user: sess.user,
                 };
                 setSession(sess);
-                if (!isMobileViewport) {
-                    scheduleWarmups(sess);
-                }
+                loadTrades(sess); loadFunds(sess); loadDividends(sess); loadScreenerFilters();
             } else {
                 // No session – load any previously saved guest data
                 const guest = loadGuestData();
@@ -27181,9 +27114,7 @@ export default function App() {
             }
             setChecking(false);
         });
-
-        return () => { cancelled = true; };
-    }, [isMobileViewport]);
+    }, []);
 
     useEffect(() => {
         const handleVisibility = async () => {
@@ -27205,35 +27136,23 @@ export default function App() {
 
 
     useEffect(() => {
-        if (checking || isMobileViewport || fundamentalsWarmStartedRef.current) return;
+        if (checking || fundamentalsWarmStartedRef.current) return;
         fundamentalsWarmStartedRef.current = true;
-        const run = () => _warmFundamentalsCaches();
-        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-            window.requestIdleCallback(run, { timeout: 4000 });
-        } else {
-            setTimeout(run, 1200);
-        }
-    }, [checking, isMobileViewport]);
+        _warmFundamentalsCaches();
+    }, [checking]);
 
     useEffect(() => {
-        if (checking || isMobileViewport || marketWarmStartedRef.current) return;
+        if (checking || marketWarmStartedRef.current) return;
         marketWarmStartedRef.current = true;
-        const run = () => _warmMarketAndTechnicalCaches(session?.access_token || null);
-        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-            window.requestIdleCallback(run, { timeout: 5000 });
-        } else {
-            setTimeout(run, 1600);
-        }
-    }, [checking, isMobileViewport, session?.access_token]);
+        _warmMarketAndTechnicalCaches(session?.access_token || null);
+    }, [checking, session?.access_token]);
 
     const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
-        if (!isMobileViewport) {
-            prefetchOwnershipData();
-            prefetchFiiDiiData();
-            preloadAllowedTickerSet();
-            _warmMarketAndTechnicalCaches(sess.access_token);
-        }
+        prefetchOwnershipData();
+        prefetchFiiDiiData();
+        preloadAllowedTickerSet();
+        _warmMarketAndTechnicalCaches(sess.access_token);
         // Keep supabase._session in sync so getValidToken() can refresh when needed
         supabase._session = {
             access_token: sess.access_token,
@@ -27263,12 +27182,6 @@ export default function App() {
                 }
             } catch (e) { console.warn("[Guest sync] Upload error:", e); }
             clearGuestData();
-            try {
-                localStorage.removeItem("tv_portfolio_quotes_guest");
-                localStorage.removeItem("tv_portfolio_rs_guest");
-                localStorage.removeItem("tv_portfolio_timestamp_guest");
-                localStorage.removeItem("tv_portfolio_unrealized_guest");
-            } catch { }
         }
 
         loadTrades(sess); loadFunds(sess); loadDividends(sess); loadScreenerFilters();
@@ -27667,19 +27580,10 @@ export default function App() {
     };
 
     if (checking) return (
-        <div className="app-shell" aria-busy="true" aria-live="polite">
-            <div className="app-shell__topbar">
-                <div className="app-shell__brand" />
-                <div className="app-shell__search" />
-                <div className="app-shell__avatar" />
-            </div>
-            <div className="app-shell__card">
-                <div className="app-shell__title">TradeEdge</div>
-                <div className="app-shell__subtitle">Loading market workspace…</div>
-                <div className="app-shell__bar" />
-                <div className="app-shell__bar app-shell__bar--short" />
-            </div>
-        </div>
+        <>
+            <style>{`body{background:${T.bg};display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:'DM Sans',sans-serif;color:${T.subtext};font-size:14px}`}</style>
+            <div>Loading...</div>
+        </>
     );
 
     // Dashboard always renders; login is triggered via modal from the top-nav Login button
