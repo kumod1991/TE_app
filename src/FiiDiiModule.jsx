@@ -9,14 +9,37 @@ const SB_H = {
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 };
 
+const FIIDII_RPC_TIMEOUT_MS = 15000;
+
+function isTimeoutLikeError(err) {
+  const msg = String(err?.message || err || "");
+  return err?.code === "57014" || /statement timeout|cancelling statement|timeout|retry/i.test(msg);
+}
+
 async function RPC(fn, params = {}) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: SB_H,
-    body: JSON.stringify(params),
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FIIDII_RPC_TIMEOUT_MS);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: SB_H,
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    });
+    if (!r.ok) {
+      const text = await r.text();
+      if (isTimeoutLikeError(text)) throw new Error("Institutional flow data is still loading.");
+      throw new Error(text);
+    }
+    return r.json();
+  } catch (e) {
+    if (e?.name === "AbortError" || isTimeoutLikeError(e)) {
+      throw new Error("Institutional flow data is still loading.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Paginated fetch — Supabase PostgREST caps responses at 1000 rows by default.
@@ -321,7 +344,13 @@ async function refreshModuleData() {
       RPC("get_fii_dii_bundle", { p_limit: 5000 }),
       sbFetchAll("fii_sector_flows", { select: "*", order: "date.desc" }),
     ]);
-    if (bundleResult.status !== "fulfilled") throw bundleResult.reason;
+    if (bundleResult.status !== "fulfilled") {
+      if (isTimeoutLikeError(bundleResult.reason)) {
+        const cached = readModuleCache();
+        if (cached.data) return cached.data;
+      }
+      throw bundleResult.reason;
+    }
     if (sectorResult.status === "rejected") console.warn("[FIIDII] Sector flow data unavailable; loading without sector tab data.", sectorResult.reason);
     const bundle = bundleResult.value || {};
     const cash = Array.isArray(bundle.cash) ? bundle.cash : [];
@@ -823,7 +852,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             console.warn("[FIIDII] Refresh failed; keeping cached module data.", e);
             setError(null);
           } else {
-            setError(e.message);
+            setError(isTimeoutLikeError(e) ? null : e.message);
           }
         }
       } finally {

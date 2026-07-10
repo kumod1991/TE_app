@@ -3,19 +3,41 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const ANNOUNCEMENTS_SELECT = "seq_id,symbol,company_name,category,announcement_text,announcement_datetime,attachment_url,industry,tags,priority";
+const ANNOUNCEMENTS_RPC_TIMEOUT_MS = 15000;
+
+function isTimeoutLikeError(err) {
+    const msg = String(err?.message || err || "");
+    return err?.code === "57014" || /statement timeout|cancelling statement|timeout|retry/i.test(msg);
+}
 
 async function RPC(fn, params) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify(params),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ANNOUNCEMENTS_RPC_TIMEOUT_MS);
+    try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify(params),
+            signal: controller.signal,
+        });
+        if (!r.ok) {
+            const text = await r.text();
+            if (isTimeoutLikeError(text)) throw new Error("Announcements are still loading.");
+            throw new Error(text);
+        }
+        return r.json();
+    } catch (err) {
+        if (err?.name === "AbortError" || isTimeoutLikeError(err)) {
+            throw new Error("Announcements are still loading.");
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 function groupByDate(items) {
@@ -607,10 +629,15 @@ export default function AnnouncementsModule({ T }) {
                 setHasMore(data.length === PAGE_SIZE);
             }
         } catch (e) {
-            const msg = e?.name === "AbortError"
-                ? "Request timed out (15s). Your network may be blocking access to the data server."
-                : (e.message || "Failed to load announcements");
-            setError(msg);
+            if (isTimeoutLikeError(e)) {
+                if (cached) {
+                    setError(null);
+                } else {
+                    setError("Announcements are still loading.");
+                }
+            } else {
+                setError(e.message || "Failed to load announcements");
+            }
         } finally {
             setLoading(false);
             setRevalidating(false);
