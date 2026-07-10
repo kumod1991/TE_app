@@ -23,8 +23,21 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
+async function rpcFetch(fn, body = {}, timeoutMs = 20000) {
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: sbH(),
+    body: JSON.stringify(body),
+  }, timeoutMs);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `HTTP ${res.status} on rpc/${fn}`);
+  }
+  return res.json();
+}
+
 // ─── CACHE (7-day localStorage TTL) ──────────────────────────────────────────
-const CACHE_KEY    = "ownership_processed_v9";
+const CACHE_KEY    = "ownership_processed_v10";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_EXPECTED_UNIVERSE = 500;
 
@@ -61,6 +74,26 @@ function cacheInvalidate() {
   _prefetchPromise = null;
 }
 
+function initFromCacheIfPossible() {
+  if (window.__ownershipInit) return window.__ownershipInit;
+  const cached = cacheRead();
+  if (!cached) return null;
+  const age = Date.now() - cached.ts;
+  window.__ownershipInit = {
+    processed: cached.processed,
+    loading: false,
+    refreshing: age > FRESH_MS,
+    cacheAge: age,
+    fetchedAt: cached.ts,
+  };
+  return window.__ownershipInit;
+}
+
+function isTimeoutLikeError(e) {
+  const msg = String(e?.message || "");
+  return e?.code === "57014" || /timeout|statement timeout|cancelling statement/i.test(msg);
+}
+
 // ─── BACKGROUND PREFETCH ─────────────────────────────────────────────────────
 let _prefetchPromise = null;
 const FRESH_MS = 5 * 60 * 1000;
@@ -70,19 +103,7 @@ export function prefetchOwnershipData() {
     return Promise.resolve();
   }
 
-  if (!window.__ownershipInit) {
-    const cached = cacheRead();
-    if (cached) {
-      const age = Date.now() - cached.ts;
-      window.__ownershipInit = {
-        processed: cached.processed,
-        loading:   false,
-        refreshing: age > FRESH_MS,
-        cacheAge:  age,
-        fetchedAt: cached.ts,
-      };
-    }
-  }
+  initFromCacheIfPossible();
 
   if (window.__ownershipInit && !window.__ownershipInit.loading && !window.__ownershipInit.refreshing) {
     return Promise.resolve();
@@ -94,15 +115,8 @@ export function prefetchOwnershipData() {
     window.__ownershipInit = { processed: [], loading: true, refreshing: false, cacheAge: null, fetchedAt: null };
   }
 
-  _prefetchPromise = Promise.all([
-    fetchShareholding(),
-    fetchCompanyFinancialsMapping(),
-  ]).then(async ([sh, mp]) => {
-    const sectorMap = buildSectorMap(mp);
-    const cfNames   = buildCfNameMap(mp);
-    const rawData   = buildRawData(sh, mp, cfNames);
-    const processed = await buildProcessedAsync(rawData, sectorMap);
-    assertCompleteUniverse(processed, sh.length);
+  _prefetchPromise = fetchOwnershipUniverse().then((processed) => {
+    assertCompleteUniverse(processed, processed.length);
     cacheWrite(processed);
     window.__ownershipInit = {
       processed,
@@ -110,6 +124,7 @@ export function prefetchOwnershipData() {
       fetchedAt: Date.now(),
     };
   }).catch(() => {
+    initFromCacheIfPossible();
     _prefetchPromise = null;
   });
   return _prefetchPromise;
@@ -156,6 +171,33 @@ async function fetchShareholding() {
   throw lastError || new Error("Failed to fetch company_shareholding");
 }
 
+const OWNERSHIP_RPC_LIMIT = 5000;
+const OWNERSHIP_RPC_TIMEOUT_MS = 12000;
+
+async function fetchOwnershipScans({ limit = OWNERSHIP_RPC_LIMIT, timeoutMs = OWNERSHIP_RPC_TIMEOUT_MS } = {}) {
+  const rows = await rpcFetch("get_company_shareholding_scans", { p_limit: limit }, timeoutMs);
+  return normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
+}
+
+async function fetchLegacyOwnershipProcessed() {
+  const [sh, mp] = await Promise.all([
+    fetchShareholding(),
+    fetchCompanyFinancialsMapping(),
+  ]);
+  const sectorMap = buildSectorMap(mp);
+  const cfNames = buildCfNameMap(mp);
+  const rawData = buildRawData(sh, mp, cfNames);
+  const processed = await buildProcessedAsync(rawData, sectorMap);
+  assertCompleteUniverse(processed, sh.length);
+  return processed;
+}
+
+async function fetchOwnershipUniverse() {
+  const rpc = await fetchOwnershipScans();
+  if (Array.isArray(rpc) && rpc.length > 0) return rpc;
+  return fetchLegacyOwnershipProcessed();
+}
+
 async function fetchCompanyFinancialsMapping() {
   const variants = [
     "company_financials?select=nse_code,bse_code,sector,ticker,name",
@@ -180,6 +222,69 @@ async function fetchCompanyFinancialsMapping() {
 const safeNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 const fmt     = (v, d = 2) => (v >= 0 ? "+" : "") + Number(v).toFixed(d);
 const mono    = { fontFamily: "'IBM Plex Mono', monospace" };
+
+function normalizeOwnershipSeriesEntry(entry) {
+  if (!entry) return null;
+  const period = entry.period ?? entry.period_date ?? entry.date ?? entry.latest_period_date ?? null;
+  const label = entry.period_label ?? entry.fy_label ?? entry.label ?? (period ? String(period).slice(0, 10) : "");
+  return {
+    period: period ? String(period).slice(0, 10) : null,
+    period_label: label,
+    date: period ? String(period).slice(0, 10) : null,
+    promoters: entry.promoters ?? entry.promoter ?? null,
+    fiis: entry.fiis ?? entry.fii ?? null,
+    diis: entry.diis ?? entry.dii ?? null,
+    public: entry.public ?? entry.public_retail ?? null,
+  };
+}
+
+function normalizeOwnershipRow(row) {
+  if (!row) return null;
+  const last4Source = Array.isArray(row.last4) ? row.last4 : [];
+  const allQuarterlySource = Array.isArray(row.allQuarterly)
+    ? row.allQuarterly
+    : Array.isArray(row.all_quarterly)
+      ? row.all_quarterly
+      : [];
+  return {
+    ...row,
+    ownPromoter: safeNum(row.ownPromoter ?? row.own_promoter ?? row.promoter_pct ?? row.promoter),
+    ownFii: safeNum(row.ownFii ?? row.own_fii ?? row.fii_pct ?? row.fii),
+    ownDii: safeNum(row.ownDii ?? row.own_dii ?? row.dii_pct ?? row.dii),
+    ownPublic: safeNum(row.ownPublic ?? row.own_public ?? row.public_pct ?? row.public_retail ?? row.public),
+    deltaFii: safeNum(row.deltaFii ?? row.delta_fii),
+    deltaDii: safeNum(row.deltaDii ?? row.delta_dii),
+    deltaPromoter: safeNum(row.deltaPromoter ?? row.delta_promoter),
+    deltaPublic: safeNum(row.deltaPublic ?? row.delta_public),
+    fiiTrend: safeNum(row.fiiTrend ?? row.fii_trend),
+    diiTrend: safeNum(row.diiTrend ?? row.dii_trend),
+    promoterTrend: safeNum(row.promoterTrend ?? row.promoter_trend),
+    publicTrend: safeNum(row.publicTrend ?? row.public_trend),
+    combinedFlow: safeNum(row.combinedFlow ?? row.combined_flow),
+    score: safeNum(row.score),
+    accel: row.accel && typeof row.accel === "object"
+      ? { fii: safeNum(row.accel.fii), dii: safeNum(row.accel.dii) }
+      : { fii: 0, dii: 0 },
+    anomalies: Array.isArray(row.anomalies) ? row.anomalies : [],
+    last4: last4Source.map(normalizeOwnershipSeriesEntry).filter(Boolean),
+    allQuarterly: allQuarterlySource.map(normalizeOwnershipSeriesEntry).filter(Boolean),
+    latestDate: row.latestDate ?? row.latest_date ?? row.latest_period_date ?? row.latest_period ?? null,
+    inflect: row.inflect ?? null,
+    sector: row.sector ?? "",
+    name: row.name ?? row.ticker ?? "",
+    ticker: row.ticker ?? "",
+    signal: row.signal ?? "Noise",
+    conviction: row.conviction ?? "Low",
+    phase: row.phase ?? "Insufficient Data",
+    timing: row.timing ?? "Early",
+    dominance: row.dominance ?? "Balanced",
+    insight: row.insight ?? row.story ?? null,
+  };
+}
+
+function normalizeOwnershipRows(rows) {
+  return (rows || []).map(normalizeOwnershipRow).filter(Boolean);
+}
 
 function dateKey(d) {
   if (!d) return "";
@@ -477,7 +582,7 @@ function TrendSparklines({ stock, T }) {
 // ─── DRILLDOWN MODAL ──────────────────────────────────────────────────────────
 function DrilldownModal({ stock, T, onClose }) {
   const isDark = (T?.bg || "").toLowerCase() === "#060d1a";
-  const qs = stock.allQuarterly;
+  const qs = (stock.allQuarterly || []).filter(Boolean);
   const W = 520, H = 160;
   const series = [
     { key: "fiis",      label: "FII",      color: "#3b82f6" },
@@ -491,7 +596,11 @@ function DrilldownModal({ stock, T, onClose }) {
   const gX = i => (i / (qs.length - 1 || 1)) * (W - 40) + 20;
   const cfg = SIG[stock.signal] || SIG["Noise"];
   const pCfg = PHASE_CFG[stock.phase] || PHASE_CFG["Consolidation"];
-  const inflectIdx = stock.inflect ? qs.findIndex(q => q.date === stock.inflect) : -1;
+  const quarterLabel = (q) => q?.period_label || q?.fy_label || q?.period || q?.date || "";
+  const quarterKey = (q) => String(q?.period || q?.date || q?.period_label || "");
+  const inflectIdx = stock.inflect ? qs.findIndex(q => quarterKey(q) === quarterKey({ period: stock.inflect })) : -1;
+  const latestQuarterLabel = quarterLabel(qs[qs.length - 1]);
+  const firstQuarterLabel = quarterLabel(qs[0]);
 
   const [isMobileModal, setIsMobileModal] = useState(
     typeof window !== "undefined" ? window.innerWidth <= 768 : false
@@ -554,13 +663,14 @@ function DrilldownModal({ stock, T, onClose }) {
           <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
             <div style={{
               width: 46, height: 46, borderRadius: 12, flexShrink: 0,
-              background: `${chipColor}15`, border: `1.5px solid ${chipColor}30`,
+              background: `linear-gradient(180deg, ${chipColor}18 0%, ${chipColor}08 100%)`,
+              border: `1px solid ${chipColor}28`,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               <span style={{ fontSize: 10, fontWeight: 800, color: chipColor, ...mono }}>{stock.ticker.slice(0,4)}</span>
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: isMobileModal ? 17 : 20, fontWeight: 700, color: T.text, letterSpacing: "-0.02em", marginBottom: 3 }}>
+              <div style={{ fontSize: isMobileModal ? 17 : 20, fontWeight: 700, color: T.text, letterSpacing: "-0.025em", marginBottom: 3 }}>
                 {stock.name || stock.ticker}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -568,6 +678,23 @@ function DrilldownModal({ stock, T, onClose }) {
                 {stock.sector && <span style={{ fontSize: 12, color: T.muted }}>· {stock.sector}</span>}
                 <SignalBadge signal={stock.signal} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: pCfg.color }}>{pCfg.icon} {stock.phase}</span>
+              </div>
+              <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase",
+                  color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 999, padding: "4px 10px"
+                }}>
+                  {qs.length ? `${qs.length} quarters` : "No quarterly data"}
+                </span>
+                {latestQuarterLabel && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: T.subtext,
+                    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.04)",
+                    border: `1px solid ${borderStyle}`, borderRadius: 999, padding: "4px 10px"
+                  }}>
+                    Latest: {latestQuarterLabel}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -584,15 +711,15 @@ function DrilldownModal({ stock, T, onClose }) {
         <div style={{ flex: 1, overflow: "auto", padding: isMobileModal ? "14px 16px 24px" : "20px 28px 28px" }}>
 
           {/* Flow Summary */}
-          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, padding: "14px 16px", marginBottom: 12, background: panelBg }}>
+          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12, background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.12)" : "0 10px 28px rgba(15,23,42,0.05)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
               <span style={{ fontSize: 9.5, fontWeight: 700, color: cfg.color, letterSpacing: ".1em", textTransform: "uppercase" }}>
-                Summary · {stock.latestDate}
+                Summary · {latestQuarterLabel || stock.latestDate}
               </span>
               {stock.anomalies.length > 0 && (
-                <div style={{ display: "flex", gap: 5 }}>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                   {stock.anomalies.map(a => (
-                    <span key={a} style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 4, background: "rgba(220,38,38,0.07)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.18)" }}>⚠ {a}</span>
+                    <span key={a} style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: "rgba(220,38,38,0.07)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.18)", letterSpacing: ".02em" }}>⚠ {a}</span>
                   ))}
                 </div>
               )}
@@ -600,10 +727,10 @@ function DrilldownModal({ stock, T, onClose }) {
             <div style={{ fontSize: 13, color: T.text, lineHeight: 1.65, marginBottom: 12 }}>{stock.insight}</div>
             {stock.inflect && (
               <div style={{ fontSize: 11.5, color: T.subtext, marginBottom: 12 }}>
-                Foreign buying turned up in: <strong style={{ color: T.text, ...mono }}>{stock.inflect}</strong>
+                Trend shift noted in: <strong style={{ color: T.text, ...mono }}>{stock.inflect}</strong>
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: isMobileModal ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 0, borderRadius: 10, overflow: "hidden", border: `1px solid ${borderStyle}` }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobileModal ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 0, borderRadius: 12, overflow: "hidden", border: `1px solid ${borderStyle}` }}>
               {[
                 { label: "Score",    val: fmt(stock.score),              color: stock.score > 3 ? "#059669" : stock.score < -3 ? "#dc2626" : T.text },
                 { label: "Confidence", val: stock.conviction,            color: stock.conviction === "High" ? "#059669" : T.subtext },
@@ -613,7 +740,7 @@ function DrilldownModal({ stock, T, onClose }) {
                 { label: "Speeding Up?", val: fmt(stock.accel.fii) + "%", color: stock.accel.fii > 0 ? "#059669" : "#dc2626" },
               ].map((c, idx, arr) => (
                 <div key={c.label} style={{
-                  padding: "10px 12px",
+                  padding: "11px 12px",
                   background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.7)",
                   borderRight: idx < arr.length - 1 ? `1px solid ${borderStyle}` : "none",
                   borderBottom: isMobileModal && idx < 3 ? `1px solid ${borderStyle}` : "none",
@@ -627,7 +754,7 @@ function DrilldownModal({ stock, T, onClose }) {
 
           {/* Story */}
           {stock.story && (
-            <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, padding: "14px 16px", marginBottom: 12, background: panelBg }}>
+            <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12, background: panelBg }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase", marginBottom: 8 }}>Ownership Story</div>
               <div style={{ fontSize: 13, color: T.text, lineHeight: 1.7 }}>{stock.story}</div>
             </div>
@@ -649,11 +776,11 @@ function DrilldownModal({ stock, T, onClose }) {
                 { label: "Promoter 4Q", val: fmt(stock.promoterTrend) + "%", color: stock.promoterTrend > 0 ? "#059669" : "#dc2626" },
               ]},
             ].map(panel => (
-              <div key={panel.title} style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, overflow: "hidden" }}>
-                <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: panelBg, fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>{panel.title}</div>
+              <div key={panel.title} style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, overflow: "hidden", background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.10)" : "0 10px 28px rgba(15,23,42,0.04)" }}>
+                <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.78)", fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>{panel.title}</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
                   {panel.items.map((c, idx, arr) => (
-                    <div key={c.label} style={{ padding: "12px 10px 10px", borderRight: idx < arr.length - 1 ? `1px solid ${borderStyle}` : "none", background: isDark ? "transparent" : "rgba(255,255,255,0.7)" }}>
+                    <div key={c.label} style={{ padding: "12px 10px 10px", borderRight: idx < arr.length - 1 ? `1px solid ${borderStyle}` : "none", background: isDark ? "transparent" : "rgba(255,255,255,0.62)" }}>
                       <div style={{ fontSize: 8.5, color: T.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: ".05em" }}>{c.label}</div>
                       <div style={{ fontSize: isMobileModal ? 14 : 17, fontWeight: 700, color: c.color, ...mono }}>{c.val}</div>
                     </div>
@@ -664,9 +791,14 @@ function DrilldownModal({ stock, T, onClose }) {
           </div>
 
           {/* Chart */}
-          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
-            <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: panelBg, fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>
-              Ownership Trend Over Time (%)
+          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, overflow: "hidden", marginBottom: 12, background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.10)" : "0 10px 28px rgba(15,23,42,0.04)" }}>
+            <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.78)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>
+                Ownership Trend Over Time
+              </div>
+              <div style={{ fontSize: 11, color: T.subtext, ...mono }}>
+                {firstQuarterLabel && latestQuarterLabel ? `${firstQuarterLabel} → ${latestQuarterLabel}` : latestQuarterLabel || firstQuarterLabel || ""}
+              </div>
             </div>
             <div style={{ padding: "14px 12px 10px", background: isDark ? "transparent" : "rgba(255,255,255,0.7)" }}>
               <svg width="100%" viewBox={`0 0 ${W} ${H + 22}`} style={{ display: "block" }}>
@@ -687,7 +819,7 @@ function DrilldownModal({ stock, T, onClose }) {
                 )}
                 {qs.map((q, i) => i % Math.max(1, Math.floor(qs.length / 5)) === 0 && (
                   <text key={i} x={gX(i)} y={H + 18} textAnchor="middle" fontSize="8" fill={T.muted}>
-                    {dateKey(q.date).slice(2)}
+                    {quarterLabel(q)}
                   </text>
                 ))}
               </svg>
@@ -703,10 +835,13 @@ function DrilldownModal({ stock, T, onClose }) {
           </div>
 
           {/* Quarterly table */}
-          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 14, overflow: "hidden" }}>
-            <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: panelBg, fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>Quarterly Breakdown</div>
+          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, overflow: "hidden", background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.10)" : "0 10px 28px rgba(15,23,42,0.04)" }}>
+            <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.78)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>Quarterly Breakdown</div>
+              <div style={{ fontSize: 11, color: T.subtext, ...mono }}>Latest first</div>
+            </div>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 440 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
                 <thead>
                   <tr>
                     {["Quarter","Promoter","FII","DII","Public"].map(h => (
@@ -716,10 +851,13 @@ function DrilldownModal({ stock, T, onClose }) {
                 </thead>
                 <tbody>
                   {[...qs].reverse().slice(0, 8).map((q, i) => (
-                    <tr key={i}>
-                      <td style={{ padding: "9px 14px", fontSize: 12, borderTop: `1px solid ${borderStyle}`, ...mono, color: T.subtext }}>{dateKey(q.date)}</td>
+                    <tr key={i} style={{ background: i % 2 === 0 ? "transparent" : (isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.45)") }}>
+                      <td style={{ padding: "10px 14px", fontSize: 12, borderTop: `1px solid ${borderStyle}`, color: T.text }}>
+                        <div style={{ fontWeight: 700, ...mono }}>{quarterLabel(q)}</div>
+                        <div style={{ fontSize: 10, color: T.muted, marginTop: 2, ...mono }}>{q.date || q.period || ""}</div>
+                      </td>
                       {["promoters","fiis","diis","public"].map(k => (
-                        <td key={k} style={{ padding: "9px 14px", fontSize: 12, borderTop: `1px solid ${borderStyle}`, textAlign: "right", ...mono, color: T.text }}>{safeNum(q[k]).toFixed(1)}%</td>
+                        <td key={k} style={{ padding: "10px 14px", fontSize: 12, borderTop: `1px solid ${borderStyle}`, textAlign: "right", ...mono, color: T.text }}>{safeNum(q[k]).toFixed(1)}%</td>
                       ))}
                     </tr>
                   ))}
@@ -1058,20 +1196,10 @@ export default function OwnershipScansModule({ T }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  async function applyData(shareholding, mapping, cfNames = {}) {
-    const sMap = buildSectorMap(mapping);
-    const raw  = buildRawData(shareholding, mapping, cfNames);
-    const proc = await buildProcessedAsync(raw, sMap);
-    assertCompleteUniverse(proc, shareholding.length);
-    cacheWrite(proc);
-    window.__ownershipInit = { processed: proc, loading: false, refreshing: false, cacheAge: 0, fetchedAt: Date.now() };
-    setProcessed(proc);
-  }
-
   useEffect(() => {
     async function load() {
       setError(null);
-      const w = window.__ownershipInit;
+      const w = initFromCacheIfPossible() || window.__ownershipInit;
 
       if (w && !w.loading && !w.refreshing) {
         setProcessed(w.processed);
@@ -1097,17 +1225,45 @@ export default function OwnershipScansModule({ T }) {
       try {
         if (_prefetchPromise) {
           await _prefetchPromise;
-          const fresh = window.__ownershipInit;
-          if (fresh) setProcessed(fresh.processed);
+          const fresh = window.__ownershipInit || initFromCacheIfPossible();
+          if (fresh?.processed) setProcessed(fresh.processed);
         } else {
-          // BUG FIX: use fetchShareholding() with fallback instead of fetchAllPages() directly
-          const [sh, mp] = await Promise.all([
-            fetchShareholding(),
-            fetchCompanyFinancialsMapping(),
-          ]);
-          await applyData(sh, mp, buildCfNameMap(mp));
+          const processed = await fetchOwnershipUniverse();
+          assertCompleteUniverse(processed, processed.length);
+          cacheWrite(processed);
+          window.__ownershipInit = {
+            processed,
+            loading: false,
+            refreshing: false,
+            cacheAge: 0,
+            fetchedAt: Date.now(),
+          };
+          setProcessed(processed);
         }
-      } catch (e) { setError(e.message); }
+      } catch (e) {
+        const cached = initFromCacheIfPossible();
+        if (cached?.processed?.length) {
+          setProcessed(cached.processed);
+          setRefreshing(true);
+          setError(null);
+        } else {
+          try {
+            const processed = await fetchLegacyOwnershipProcessed();
+            cacheWrite(processed);
+            window.__ownershipInit = {
+              processed,
+              loading: false,
+              refreshing: false,
+              cacheAge: 0,
+              fetchedAt: Date.now(),
+            };
+            setProcessed(processed);
+            setError(null);
+          } catch (legacyErr) {
+            setError(!isTimeoutLikeError(legacyErr) ? (legacyErr?.message || e.message || "Failed to load ownership data") : "Failed to load ownership data");
+          }
+        }
+      }
       finally { setLoading(false); }
     }
     load();
@@ -1158,11 +1314,38 @@ export default function OwnershipScansModule({ T }) {
 
   function handleRefresh() {
     cacheInvalidate();
-    setProcessed([]);
     setLoading(true);
-    Promise.all([fetchShareholding(), fetchCompanyFinancialsMapping()])
-      .then(([sh, mp]) => applyData(sh, mp, buildCfNameMap(mp)))
-      .catch(e => setError(e.message))
+    const cached = initFromCacheIfPossible();
+    if (cached?.processed?.length) {
+      setProcessed(cached.processed);
+      setRefreshing(true);
+    }
+    fetchOwnershipUniverse()
+      .then((processed) => {
+        assertCompleteUniverse(processed, processed.length);
+        cacheWrite(processed);
+        window.__ownershipInit = {
+          processed,
+          loading: false,
+          refreshing: false,
+          cacheAge: 0,
+          fetchedAt: Date.now(),
+        };
+        setProcessed(processed);
+        setRefreshing(false);
+      })
+      .catch((e) => {
+        const fallback = initFromCacheIfPossible();
+        if (fallback?.processed?.length) {
+          window.__ownershipInit = { ...fallback, loading: false, refreshing: false };
+          setProcessed(fallback.processed);
+          setRefreshing(false);
+          setError(null);
+          return;
+        }
+        setError("Failed to load ownership data");
+        setRefreshing(false);
+      })
       .finally(() => setLoading(false));
   }
 

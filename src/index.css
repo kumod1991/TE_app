@@ -78,6 +78,10 @@ button {
   backdrop-filter: blur(10px);
 }
 
+.app-shell__topbar--compact {
+  height: 60px;
+}
+
 .app-shell__search {
   flex: 1;
   max-width: 520px;
@@ -106,13 +110,27 @@ button {
   backdrop-filter: blur(10px);
 }
 
+.app-shell__card--compact {
+  min-height: min(56vh, 620px);
+}
+
 .app-shell__brand {
   width: 52px;
   height: 52px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #0f172a 0%, #0ea5e9 100%);
+  object-fit: cover;
+  display: block;
   box-shadow: 0 16px 28px rgba(14, 165, 233, 0.24);
-  margin-bottom: 18px;
+}
+
+.app-shell__brand--compact {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(52, 211, 153, 0.25), transparent 50%),
+    linear-gradient(180deg, #010f25 0%, #010f25 100%);
+  box-shadow: 0 10px 18px rgba(1, 15, 37, 0.18);
 }
 
 .app-shell__title {
@@ -125,6 +143,23 @@ button {
   margin-top: 6px;
   color: #475569;
   font-size: 0.95rem;
+}
+
+.app-shell__grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.app-shell__panel {
+  height: 150px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.14), rgba(255, 255, 255, 0.72));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  animation: shimmer 1.2s ease-in-out infinite;
+  background-size: 200% 100%;
 }
 
 .app-shell__bar {
@@ -151,7 +186,8 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-shell__bar {
+  .app-shell__bar,
+  .app-shell__panel {
     animation: none;
   }
 }

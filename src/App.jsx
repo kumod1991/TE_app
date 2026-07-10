@@ -5,7 +5,7 @@ import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule from "./FiiDiiModule";
 import OwnershipScansModule from "./OwnershipScansModule";
 import AnnouncementsModule from "./AnnouncementsModule";
-import StockDashboard from "./StockDashboard";
+import StockDashboard, { warmStockDashboardCaches } from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 
 
@@ -22,6 +22,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://munqjcjvzgqyx
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q";
 const PUBLIC_SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://tradeedge.in");
 const AUTH_SESSION_KEY = "te_supabase_session";
+const BRAND_LOGO_SRC = "/tradeedge_logo.png";
 
 function loadPersistedSession() {
     try {
@@ -251,11 +252,12 @@ function calcTrade(t) {
     const days = t.exit_date ? Math.round((new Date(t.exit_date) - new Date(t.entry_date)) / 86400000) : null;
     return { ...t, buyAmt, sellAmt, pnl, days };
 }
-function calcStats(trades) {
+function buildTradeRows(trades) {
+    return trades.map(calcTrade);
+}
+function calcStatsFromRows(tradeRows) {
     // PREPARE CLOSED TRADES
-    const closed = trades
-        .map(calcTrade)
-        .filter(t => t.exit_date);
+    const closed = tradeRows.filter(t => t.exit_date);
 
     const wins = closed.filter(t => t.pnl > 0);
     const losses = closed.filter(t => t.pnl <= 0);
@@ -308,6 +310,9 @@ function calcStats(trades) {
         wins,
         losses
     };
+}
+function calcStats(trades) {
+    return calcStatsFromRows(buildTradeRows(trades));
 }
 function useViewportBelow(maxWidth) {
     const getMatch = () =>
@@ -636,8 +641,8 @@ a:hover { text-decoration: underline; }
 
 .top-nav {
   flex-shrink: 0;
-  background: linear-gradient(180deg, ${D ? '#0b1830' : '#102441'}, ${D ? '#0a1730' : '#112848'});
-  border-bottom: 1px solid ${D ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.14)'};
+  background: linear-gradient(180deg, #010f25 0%, #010f25 100%);
+  border-bottom: 1px solid rgba(98, 158, 255, 0.14);
   display: flex; align-items: center;
   min-height: 60px; padding: 8px 18px;
   gap: 18px; position: relative; z-index: 50;
@@ -3366,7 +3371,7 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
     );
 }
 
-function Dashboard({ trades, isDemo, T }) {
+function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
 
     // Load cached quotes from localStorage on mount so Dashboard shows
@@ -3388,7 +3393,7 @@ function Dashboard({ trades, isDemo, T }) {
         } catch { return null; }
     })();
 
-    const stats = useMemo(() => calcStats(trades), [trades]);
+    const stats = providedStats || calcStatsFromRows(tradeRows || buildTradeRows(trades));
 
     // Only count open positions (not fully closed trades)
     const openTrades = trades.filter(t => !t.exit_date);
@@ -3489,16 +3494,16 @@ function Dashboard({ trades, isDemo, T }) {
     );
 }
 
-function Trades({ trades, onAdd, onEdit, onDelete, onImportCSV, T }) {
+function Trades({ trades, tradeRows, onAdd, onEdit, onDelete, onImportCSV, T }) {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
     const [showImport, setShowImport] = useState(false);
-    const tradeRows = useMemo(() => trades.map(calcTrade), [trades]);
-    const filtered = useMemo(() => tradeRows.filter(t => {
+    const resolvedTradeRows = tradeRows || buildTradeRows(trades);
+    const filtered = useMemo(() => resolvedTradeRows.filter(t => {
         const ms = t.ticker.toLowerCase().includes(search.toLowerCase());
         const mf = filter === "all" || (filter === "open" && !t.exit_date) || (filter === "closed" && t.exit_date) || (filter === "win" && t.pnl > 0) || (filter === "loss" && t.pnl < 0);
         return ms && mf;
-    }), [tradeRows, search, filter]);
+    }), [resolvedTradeRows, search, filter]);
 
     const handleExportCSV = () => {
         const headers = ["Ticker", "Entry Date", "Buy Qty", "Buy Price", "Buy Amount", "Exit Date", "Sell Qty", "Sell Price", "Sell Amount", "P&L", "Days", "Status"];
@@ -3530,9 +3535,9 @@ function Trades({ trades, onAdd, onEdit, onDelete, onImportCSV, T }) {
         URL.revokeObjectURL(url);
     };
 
-    const closedTrades = tradeRows.filter(t => t.exit_date).length;
-    const openTrades = tradeRows.length - closedTrades;
-    const winningTrades = tradeRows.filter(t => t.exit_date && t.pnl > 0).length;
+    const closedTrades = resolvedTradeRows.filter(t => t.exit_date).length;
+    const openTrades = resolvedTradeRows.length - closedTrades;
+    const winningTrades = resolvedTradeRows.filter(t => t.exit_date && t.pnl > 0).length;
     const heroActions = (
         <>
             <button className="journal-btn-ghost" onClick={() => setShowImport(true)}>Import CSV</button>
@@ -3599,8 +3604,8 @@ function Trades({ trades, onAdd, onEdit, onDelete, onImportCSV, T }) {
     );
 }
 
-function Analytics({ trades, T }) {
-    const stats = useMemo(() => calcStats(trades), [trades]);
+function Analytics({ trades, tradeRows, stats: providedStats, T }) {
+    const stats = providedStats || calcStatsFromRows(tradeRows || buildTradeRows(trades));
     const monthly = useMemo(() => {
         const m = {};
         stats.closed.forEach(t => { const k = t.entry_date.slice(0, 7); m[k] = (m[k] || 0) + t.pnl; });
@@ -3676,15 +3681,17 @@ function inr(v) {
 }
 
 function calcCapitalGains(trades) {
-    const closed = trades.filter(t => t.exit_date);
+    return calcCapitalGainsFromRows(buildTradeRows(trades));
+}
+function calcCapitalGainsFromRows(tradeRows) {
+    const closed = tradeRows.filter(t => t.exit_date);
     const fyMap = {};
     closed.forEach(t => {
-        const ct = calcTrade(t);
         const fy = getFY(t.exit_date);
-        const isLT = (ct.days || 0) > 365;
+        const isLT = (t.days || 0) > 365;
         if (!fyMap[fy]) fyMap[fy] = { st: { buy: 0, sell: 0 }, lt: { buy: 0, sell: 0 } };
-        if (isLT) { fyMap[fy].lt.buy += ct.buyAmt; fyMap[fy].lt.sell += ct.sellAmt; }
-        else { fyMap[fy].st.buy += ct.buyAmt; fyMap[fy].st.sell += ct.sellAmt; }
+        if (isLT) { fyMap[fy].lt.buy += t.buyAmt; fyMap[fy].lt.sell += t.sellAmt; }
+        else { fyMap[fy].st.buy += t.buyAmt; fyMap[fy].st.sell += t.sellAmt; }
     });
     const FYS = ["2017-18", "2018-19", "2019-20", "2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27", "2027-28", "2028-29"];
     return FYS.map(fy => {
@@ -3697,8 +3704,8 @@ function calcCapitalGains(trades) {
     });
 }
 
-function CapitalGains({ trades, T }) {
-    const rows = useMemo(() => calcCapitalGains(trades), [trades]);
+function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
+    const rows = providedRows || calcCapitalGainsFromRows(tradeRows || buildTradeRows(trades));
     const tot = rows.reduce((a, r) => ({
         st: { buy: a.st.buy + r.st.buy, sell: a.st.sell + r.st.sell, pnl: a.st.pnl + r.st.pnl },
         lt: { buy: a.lt.buy + r.lt.buy, sell: a.lt.sell + r.lt.sell, pnl: a.lt.pnl + r.lt.pnl },
@@ -8257,59 +8264,38 @@ function ShareholdingTab({ sym, T }) {
         setShLoading(true); setShError(""); setShData(null);
         (async () => {
             try {
-                //  Helper: normalise a company_shareholding JSON entry into a flat row 
-                // The table stores: { date:"Mar 2023", promoters:44.83, fiis:0.93, diis:0, public:54.23, ... }
-                // We need:          { period:"2023-03-31", period_label:"Mar 2023", promoter, fii, dii, public_retail }
-                const MONTHS = {
-                    jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
-                    jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"
-                };
-                const dateToISO = (label) => {
-                    if (!label) return null;
-                    const m = String(label).match(/([a-zA-Z]+)[\s-]+(\d{4})/);
-                    if (!m) return null;
-                    const mm = MONTHS[m[1].toLowerCase().slice(0, 3)];
-                    if (!mm) return null;
-                    const yr = m[2];
-                    const lastDay = new Date(parseInt(yr), parseInt(mm), 0).getDate();
-                    return `${yr}-${mm}-${String(lastDay).padStart(2, "0")}`;
-                };
-                const normaliseEntries = (arr) =>
-                    (arr || []).reduce((acc, e) => {
-                        const period = dateToISO(e.date);
-                        if (!period) return acc;
-                        acc.push({
-                            period,
-                            period_label: e.date || period.slice(0, 7),
-                            promoter: e.promoters != null ? Number(e.promoters) : null,
-                            fii: e.fiis != null ? Number(e.fiis) : null,
-                            dii: e.diis != null ? Number(e.diis) : null,
-                            public_retail: e.public != null ? Number(e.public) : null,
-                        });
-                        return acc;
-                    }, []);
-
-                //  Step 1: company_shareholding table (primary source) 
-                const csUrl = `${SUPABASE_URL}/rest/v1/company_shareholding`
-                    + `?ticker=eq.${encodeURIComponent(sym)}&select=quarterly,yearly&limit=1`;
-                const csRes = await fetch(csUrl, {
-                    headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-                    signal: AbortSignal.timeout(5000),
+                const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/get_company_shareholding_ticker`;
+                const rpcRes = await fetch(rpcUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
+                    body: JSON.stringify({ p_ticker: sym }),
+                    signal: AbortSignal.timeout(8000),
                 });
-                if (csRes.ok) {
-                    const csRows = await csRes.json();
-                    const row = Array.isArray(csRows) ? csRows[0] : null;
+                if (rpcRes.ok) {
+                    const payload = await rpcRes.json();
+                    const row = Array.isArray(payload) ? payload[0] : payload;
                     if (row) {
-                        // Merge yearly (older gaps) then quarterly (overwrites with higher granularity)
+                        const normalize = (entry) => {
+                            const period = entry?.period || entry?.period_date || entry?.date || entry?.fy_label || null;
+                            if (!period) return null;
+                            return {
+                                period: String(period).slice(0, 10),
+                                period_label: entry?.period_label || entry?.fy_label || String(period).slice(0, 7),
+                                promoter: entry?.promoter != null ? Number(entry.promoter) : null,
+                                fii: entry?.fii != null ? Number(entry.fii) : null,
+                                dii: entry?.dii != null ? Number(entry.dii) : null,
+                                public_retail: entry?.public_retail != null ? Number(entry.public_retail) : null,
+                            };
+                        };
                         const merged = new Map();
-                        for (const r of normaliseEntries(row.yearly)) merged.set(r.period, r);
-                        for (const r of normaliseEntries(row.quarterly)) merged.set(r.period, r);
+                        for (const r of (row.yearly_history || []).map(normalize).filter(Boolean)) merged.set(r.period, r);
+                        for (const r of (row.quarterly_history || []).map(normalize).filter(Boolean)) merged.set(r.period, r);
                         const rows = [...merged.values()].sort((a, b) => String(a.period).localeCompare(String(b.period)));
                         if (rows.length > 0) {
                             setShData(rows);
-                            setShAge(0); // data is from our DB  treat as fresh
+                            setShAge(0);
                             setShLoading(false);
-                            return; //  done  no API call needed
+                            return;
                         }
                     }
                 }
@@ -24901,14 +24887,11 @@ function AuthScreen({ onLogin, onDemo, theme, toggleTheme }) {
             <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 32 }}>
                 <div style={{
                     width: 34, height: 34, borderRadius: 8,
-                    background: "linear-gradient(135deg,#059669,#1d4ed8)",
+                    overflow: "hidden",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     boxShadow: "0 4px 12px rgba(5,150,105,0.35)",
                 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                        <polyline points="16 7 22 7 22 13" />
-                    </svg>
+                    <img src={BRAND_LOGO_SRC} alt="" aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                 </div>
                 <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 17, fontWeight: 800, color: R.logoText, letterSpacing: "-.03em" }}>
                     TRADE<span style={{ color: "#059669" }}>EDGE</span>
@@ -26074,19 +26057,11 @@ function LoginModal({ onClose, onLogin, theme }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 24 }}>
                     <div style={{
                         width: 38, height: 38, borderRadius: 8,
-                        background: "#0B1F3A",
-                        border: "1.5px solid #1A3355",
+                        overflow: "hidden",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         flexShrink: 0,
                     }}>
-                        <svg width="22" height="22" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <line x1="3" y1="22" x2="31" y2="22" stroke="#4A6A8A" strokeWidth="2" strokeLinecap="square" />
-                            <line x1="8" y1="22" x2="8" y2="30" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                            <line x1="16" y1="22" x2="16" y2="27" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                            <polyline points="8,30 16,27 22,22 32,8" fill="none" stroke="#22C55E" strokeWidth="2.4" strokeLinecap="square" strokeLinejoin="miter" />
-                            <polygon points="32,8 24,8 28,16" fill="#22C55E" />
-                            <line x1="22" y1="17" x2="22" y2="27" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="square" opacity="0.55" />
-                        </svg>
+                        <img src={BRAND_LOGO_SRC} alt="" aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     </div>
                     <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 16, letterSpacing: ".16em", textTransform: "uppercase", lineHeight: 1 }}>
                         <span style={{ fontWeight: 500, color: isLight ? "#1E3A5F" : "#C9D1D9" }}>TRADE</span><span style={{ fontWeight: 700, color: "#22C55E" }}>EDGE</span>
@@ -26880,6 +26855,7 @@ export default function App() {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const journalPortfolioRefreshIdRef = useRef(0);
+    const moversWarmupRef = useRef(false);
 
     //  NSE Bhav Copy 
 
@@ -26926,6 +26902,18 @@ export default function App() {
         else clearPersistedSession();
     }, [session]);
     const T = THEMES[theme];
+    const journalTradeRows = useMemo(() => buildTradeRows(trades), [trades]);
+    const journalStats = useMemo(() => calcStatsFromRows(journalTradeRows), [journalTradeRows]);
+    const journalCapitalGainsRows = useMemo(() => calcCapitalGainsFromRows(journalTradeRows), [journalTradeRows]);
+
+    useEffect(() => {
+        if (checking) return;
+        if (moversWarmupRef.current) return;
+        moversWarmupRef.current = true;
+        void warmStockDashboardCaches(session?.access_token || null).catch(err => {
+            console.warn("[StockDashboard warmup] failed:", err?.message || err);
+        });
+    }, [checking, session?.access_token]);
 
     const toggleTheme = () => {
         const next = theme === "dark" ? "light" : "dark";
@@ -27529,20 +27517,7 @@ export default function App() {
                     <div className="top-nav-brand">
                         <div className="top-nav-logo">
                             <div className="top-nav-logo-mark">
-                                <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    {/* Horizontal resistance line */}
-                                    <line x1="3" y1="22" x2="31" y2="22" stroke="#4A6A8A" strokeWidth="2" strokeLinecap="square" />
-                                    {/* Candlestick base left */}
-                                    <line x1="8" y1="22" x2="8" y2="30" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                                    {/* Candlestick base mid */}
-                                    <line x1="16" y1="22" x2="16" y2="27" stroke="#4A6A8A" strokeWidth="2.2" strokeLinecap="square" />
-                                    {/* Breakout line piercing resistance */}
-                                    <polyline points="8,30 16,27 22,22 32,8" fill="none" stroke="#22C55E" strokeWidth="2.4" strokeLinecap="square" strokeLinejoin="miter" />
-                                    {/* Arrowhead */}
-                                    <polygon points="32,8 24,8 28,16" fill="#22C55E" />
-                                    {/* Breakout tick at resistance pierce point */}
-                                    <line x1="22" y1="17" x2="22" y2="27" stroke="#22C55E" strokeWidth="1.6" strokeLinecap="square" opacity="0.55" />
-                                </svg>
+                                <img src={BRAND_LOGO_SRC} alt="" aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                             </div>
                             <div className="top-nav-logo-copy">
                                 <span className="top-nav-logo-text"><span className="logo-trade">TRADE</span><span className="logo-edge">EDGE</span></span>
@@ -27859,10 +27834,10 @@ export default function App() {
                                         <QuoteContext.Provider value={{ quotes, setQuotes }}>
                                             <main className="journal-main">
                                                 <div className="journal-main-inner">
-                                                    {page === "dashboard" && <Dashboard trades={trades} isDemo={isDemo} T={T} />}
-                                                    {page === "trades" && <Trades trades={trades} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
-                                                    {page === "analytics" && <Analytics trades={trades} T={T} />}
-                                                    {page === "capital-gains" && <CapitalGains trades={trades} T={T} />}
+                                                    {page === "dashboard" && <Dashboard trades={trades} tradeRows={journalTradeRows} stats={journalStats} isDemo={isDemo} T={T} />}
+                                                    {page === "trades" && <Trades trades={trades} tradeRows={journalTradeRows} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
+                                                    {page === "analytics" && <Analytics trades={trades} tradeRows={journalTradeRows} stats={journalStats} T={T} />}
+                                                    {page === "capital-gains" && <CapitalGains trades={trades} tradeRows={journalTradeRows} rows={journalCapitalGainsRows} T={T} />}
                                                     {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} />}
                                                     {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
                                                 </div>

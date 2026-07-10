@@ -9,6 +9,16 @@ const SB_H = {
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 };
 
+async function RPC(fn, params = {}) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: SB_H,
+    body: JSON.stringify(params),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
 // Paginated fetch — Supabase PostgREST caps responses at 1000 rows by default.
 // We use the HTTP Range header (PostgREST standard) to page through all rows.
 const PAGE_SIZE = 1000;
@@ -54,7 +64,7 @@ async function sbFetchAll(table, params = {}) {
   return allRows;
 }
 
-const MODULE_CACHE_KEY = "fiidii-module-cache-v1";
+const MODULE_CACHE_KEY = "fiidii-module-cache-v2";
 const MODULE_CACHE_TTL_MS = 15 * 60 * 1000;
 let fiidiiMemoryCache = null;
 let fiidiiMemoryCacheTs = 0;
@@ -304,37 +314,24 @@ function writeModuleCache(data) {
   } catch {}
 }
 
-function latestCashDate(data) {
-  return data?.cashData?.[data.cashData.length - 1]?.date || null;
-}
-
-async function fetchLatestCashDate() {
-  const rows = await sbFetchAll("fii_dii_activity", {
-    select: "date",
-    order: "date.desc",
-    limit: 1,
-  });
-  return rows?.[0]?.date || null;
-}
-
 async function refreshModuleData() {
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
-    const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
-      sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc" }),
-      sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc" }),
+    const [bundleResult, sectorResult] = await Promise.allSettled([
+      RPC("get_fii_dii_bundle", { p_limit: 5000 }),
       sbFetchAll("fii_sector_flows", { select: "*", order: "date.desc" }),
     ]);
-    if (cashResult.status !== "fulfilled") throw cashResult.reason;
-    if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", derivResult.reason);
+    if (bundleResult.status !== "fulfilled") throw bundleResult.reason;
     if (sectorResult.status === "rejected") console.warn("[FIIDII] Sector flow data unavailable; loading without sector tab data.", sectorResult.reason);
-    const cash = cashResult.value || [];
-    const derivRaw = derivResult.status === "fulfilled" ? derivResult.value || [] : [];
+    const bundle = bundleResult.value || {};
+    const cash = Array.isArray(bundle.cash) ? bundle.cash : [];
+    const deriv = Array.isArray(bundle.fo) ? bundle.fo : [];
     const sector = sectorResult.status === "fulfilled" ? sectorResult.value || [] : [];
     const data = {
       cashData: [...cash].sort((a, b) => new Date(a.date) - new Date(b.date)),
-      derivData: pivotDerivData(derivRaw),
+      derivData: [...deriv].sort((a, b) => new Date(a.date) - new Date(b.date)),
       sectorData: sector,
+      latestSnapshot: bundle.latest || null,
     };
     writeModuleCache(data);
     return data;
@@ -345,11 +342,6 @@ async function refreshModuleData() {
 async function fetchModuleData({ preferCache = true } = {}) {
   const cached = readModuleCache();
   if (preferCache && cached.data && !cached.stale) {
-    fetchLatestCashDate()
-      .then(remoteLatest => {
-        if (remoteLatest && remoteLatest > latestCashDate(cached.data)) refreshModuleData().catch(() => null);
-      })
-      .catch(() => null);
     return cached.data;
   }
   if (preferCache && cached.data && cached.stale) {
@@ -849,19 +841,23 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const last   = (n) => cashData.slice(-n);
     const S      = (arr, k) => sum(arr.map(d => +d[k] || 0));
     const fii1 = +latest.fii_net || 0, dii1 = +latest.dii_net || 0;
-    const fii5  = S(last(5),  "fii_net"), dii5  = S(last(5),  "dii_net");
-    const fii20 = S(last(20), "fii_net"), dii20 = S(last(20), "dii_net");
-    const z     = zScore(fii1, last(20).map(d => +d.fii_net || 0));
+    const fii5  = latest.fii_net_5d  != null ? +latest.fii_net_5d  : S(last(5),  "fii_net");
+    const dii5  = latest.dii_net_5d  != null ? +latest.dii_net_5d  : S(last(5),  "dii_net");
+    const fii20 = latest.fii_net_20d != null ? +latest.fii_net_20d : S(last(20), "fii_net");
+    const dii20 = latest.dii_net_20d != null ? +latest.dii_net_20d : S(last(20), "dii_net");
+    const z     = latest.fii_zscore_20d != null ? +latest.fii_zscore_20d : zScore(fii1, last(20).map(d => +d.fii_net || 0));
 
     // Full-history daily + rolling arrays (ASC order, date field preserved)
     const daily = cashData.map(d => ({
       date: d.date, label: fmtDateShort(d.date),
       fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
     }));
-    const rolling = cashData.map((d, i) => {
-      const slice = cashData.slice(Math.max(0, i - 19), i + 1);
-      return { date: d.date, label: fmtDateShort(d.date), fiiRoll: S(slice, "fii_net"), diiRoll: S(slice, "dii_net") };
-    });
+    const rolling = cashData.map((d) => ({
+      date: d.date,
+      label: fmtDateShort(d.date),
+      fiiRoll: d.fii_net_20d != null ? +d.fii_net_20d : (+d.fii_net || 0),
+      diiRoll: d.dii_net_20d != null ? +d.dii_net_20d : (+d.dii_net || 0),
+    }));
 
     const participation = (fii1 === 0 && dii1 === 0) ? 0.5 : Math.abs(fii1) / (Math.abs(fii1) + Math.abs(dii1));
     let absorption = "Mixed";

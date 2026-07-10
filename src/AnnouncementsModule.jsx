@@ -2,6 +2,21 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const ANNOUNCEMENTS_SELECT = "seq_id,symbol,company_name,category,announcement_text,announcement_datetime,attachment_url,industry,tags,priority";
+
+async function RPC(fn, params) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify(params),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+}
 
 function groupByDate(items) {
     const today = new Date();
@@ -80,6 +95,16 @@ const EXAMPLE_QUERIES = [
     "QIP",
     "Buyback",
 ];
+
+const ADVANCED_QUERY_TOKEN_RE = /(^|\s)OR(\s|$)|(^|\s)-\S+|"/i;
+
+function normalizeAnnouncementQuery(query) {
+    return (query || "").trim().replace(/\s+/g, " ");
+}
+
+function isAdvancedAnnouncementQuery(query) {
+    return ADVANCED_QUERY_TOKEN_RE.test(normalizeAnnouncementQuery(query));
+}
 
 function FilterModal({ existing, onSave, onClose, T }) {
     const [query, setQuery] = useState(existing || "");
@@ -333,7 +358,7 @@ const RESULTS_CATEGORY_KEYWORDS = ["Financial Results", "Quarterly Results", "An
  */
 function buildServerParams(activeFilter, customFilters, debouncedSearch) {
     const base = {
-        select: "seq_id,symbol,company_name,category,announcement_text,announcement_datetime,attachment_url,industry,tags,priority",
+        select: ANNOUNCEMENTS_SELECT,
         order: "announcement_datetime.desc",
     };
 
@@ -390,16 +415,29 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
     return { ...base, _filterPairs: filterPairs };
 }
 
+function buildSimpleAnnouncementQuery(activeFilter, customFilters, debouncedSearch) {
+    const parts = [];
+    const filterQuery = typeof activeFilter === "number" ? normalizeAnnouncementQuery(customFilters[activeFilter]) : "";
+    const searchQuery = normalizeAnnouncementQuery(debouncedSearch);
+
+    if (filterQuery && !isAdvancedAnnouncementQuery(filterQuery)) parts.push(filterQuery);
+    if (searchQuery) parts.push(searchQuery);
+
+    const combined = parts.join(" ");
+    return combined || null;
+}
+
 // ─── Module-level cache (persists across tab navigations) ────────────────────
-// Key: stringified {activeFilter, debouncedSearch}
+// Key: stringified {activeFilter, debouncedSearch, customFilter}
 // Value: { announcements: [], offset: number, hasMore: boolean }
 const announcementsCache = new Map();
 const ANNOUNCEMENTS_LS_KEY = "te_announcements_cache_v1";
 const ANNOUNCEMENTS_LS_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const PAGE_SIZE = 25;
 
-function getCacheKey(activeFilter, debouncedSearch) {
-    return JSON.stringify({ activeFilter, debouncedSearch });
+function getCacheKey(activeFilter, debouncedSearch, customFilters = []) {
+    const customFilter = typeof activeFilter === "number" ? (customFilters[activeFilter] || "") : "";
+    return JSON.stringify({ activeFilter, debouncedSearch, customFilter });
 }
 
 function readStoredAnnouncementsCache() {
@@ -427,6 +465,16 @@ function writeStoredAnnouncementsCache() {
 readStoredAnnouncementsCache();
 
 async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSearch, pageOffset = 0) {
+    const simpleQuery = buildSimpleAnnouncementQuery(activeFilter, customFilters, debouncedSearch);
+
+    if (activeFilter === "all" || (typeof activeFilter === "number" && simpleQuery && !isAdvancedAnnouncementQuery(customFilters[activeFilter]))) {
+        return RPC("search_announcements", {
+            p_query: simpleQuery,
+            p_limit: PAGE_SIZE,
+            p_offset: pageOffset,
+        });
+    }
+
     const { _filterPairs, ...baseParams } = buildServerParams(activeFilter, customFilters, debouncedSearch);
     const url = new URL(`${SUPABASE_URL}/rest/v1/corporate_announcements`);
     Object.entries({ ...baseParams, limit: PAGE_SIZE, offset: pageOffset })
@@ -467,7 +515,7 @@ async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSear
 }
 
 export function prefetchAnnouncementsData() {
-    const cacheKey = getCacheKey("important", "");
+    const cacheKey = getCacheKey("important", "", []);
     if (announcementsCache.has(cacheKey)) return Promise.resolve(announcementsCache.get(cacheKey));
     return fetchAnnouncementsPage("important", [], "", 0)
         .then(data => {
@@ -518,7 +566,7 @@ export default function AnnouncementsModule({ T }) {
     }, [activeFilter, debouncedSearch]);
 
     const fetchPage = useCallback(async (pageOffset, reset = false) => {
-        const cacheKey = getCacheKey(activeFilter, debouncedSearch);
+        const cacheKey = getCacheKey(activeFilter, debouncedSearch, customFilters);
 
         if (reset) {
             setError(null);

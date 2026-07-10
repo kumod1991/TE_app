@@ -2275,22 +2275,12 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                                         </div>
                                     )}
                                     <div>
-                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.volume)}</div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>52W High</div>
+                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{row.high_52w != null ? fmt(row.high_52w) : EMPTY_VALUE}</div>
                                     </div>
                                     <div>
-                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
-                                        <div style={{
-                                            marginTop: 4,
-                                            fontFamily: "'IBM Plex Mono', monospace",
-                                            fontWeight: 600,
-                                            color: row.rel_volume == null ? T.muted
-                                                : row.rel_volume >= 2 ? (T.pos || "#10b981")
-                                                    : row.rel_volume >= 1.5 ? "#f59e0b"
-                                                        : T.text,
-                                        }}>
-                                            {row.rel_volume != null ? `${row.rel_volume.toFixed(2)}x` : EMPTY_VALUE}
-                                        </div>
+                                        <div style={{ color: T.muted, fontSize: 10, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>52W Low</div>
+                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{row.low_52w != null ? fmt(row.low_52w) : EMPTY_VALUE}</div>
                                     </div>
                                 </div>
                             </div>
@@ -2333,15 +2323,15 @@ function MoversTable({ T, data, loading, type, isCompact }) {
 
     return (
         <>
-        <PremiumTableShell T={T} minWidth={showDist ? 820 : 680} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={showDist ? 980 : 840} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <MTh k="name" label="Name" />
                     <MTh k="ltp" label="LTP" />
                     <MTh k="change_pct" label="Chg %" />
                     {showDist && <MTh k="dist_pct" label={type === "near_high" ? "From High" : "From Low"} />}
-                    <MTh k="volume" label="Volume" />
-                    <MTh k="rel_volume" label="Rel Vol" />
+                    <MTh k="high_52w" label="52W High" />
+                    <MTh k="low_52w" label="52W Low" />
                 </tr>
             </thead>
             <tbody>
@@ -2350,11 +2340,6 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                     const isPos = chg != null && chg > 0;
                     const isNeg = chg != null && chg < 0;
                     const chgColor = isPos ? (T.pos || "#0ea67a") : isNeg ? (T.neg || "#ef4444") : T.muted;
-                    const relVol = row.rel_volume;
-                    const relVolColor = relVol == null ? T.muted
-                        : relVol >= 2 ? (T.pos || "#10b981")
-                            : relVol >= 1.5 ? "#f59e0b"
-                                : T.text;
 
                     return (
                         <tr
@@ -2430,25 +2415,24 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                                     fontSize: 13,
                                 }}>{row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}</td>
                             )}
-                            {/* Volume */}
+                            {/* 52W High */}
                             <td style={{
                                 padding: "12px 16px",
                                 textAlign: "right",
-                                color: T.subtext,
+                                color: T.text,
                                 fontFamily: "'IBM Plex Mono', monospace",
                                 fontSize: 13,
-                            }}>{fmtVol(row.volume)}</td>
-                            {/* Rel Vol */}
+                                fontVariantNumeric: "tabular-nums",
+                            }}>{row.high_52w != null ? fmt(row.high_52w) : EMPTY_VALUE}</td>
+                            {/* 52W Low */}
                             <td style={{
                                 padding: "12px 16px",
                                 textAlign: "right",
                                 fontFamily: "'IBM Plex Mono', monospace",
-                                fontWeight: 600,
                                 fontSize: 13,
-                                color: relVolColor,
-                            }}>
-                                {relVol != null ? `${relVol.toFixed(2)}x` : EMPTY_VALUE}
-                            </td>
+                                color: T.text,
+                                fontVariantNumeric: "tabular-nums",
+                            }}>{row.low_52w != null ? fmt(row.low_52w) : EMPTY_VALUE}</td>
                         </tr>
                     );
                 })}
@@ -2777,20 +2761,16 @@ function isETF(r) {
     return etfRe.test(r.ticker || "") || etfRe.test(r.name || "");
 }
 
-/** Build the four mover lists from raw market_movers + stock_52w rows. */
-function deriveMovers(moversData, stock52wRows, allowedSet = getAllowedTickerSetSync()) {
-    const volMa20Map = new Map((stock52wRows || []).map(r => [r.ticker, Number(r.volume_ma20) || null]));
+/** Build the four mover lists directly from raw market_movers rows. */
+function deriveMovers(moversData, allowedSet = getAllowedTickerSetSync()) {
     const enriched = (moversData || []).map(p => {
-        const vol = p.volume != null ? Number(p.volume) : null;
-        const ma20 = volMa20Map.get(p.symbol) || null;
-        const rel_volume = vol != null && ma20 != null && ma20 > 0 ? vol / ma20 : null;
         return {
             ticker: p.symbol,
             name: _nameMap.get(p.symbol) || null,
             ltp: Number(p.ltp) || 0,
-            volume: p.volume,
-            rel_volume,
             change_pct: Number(p.pchange) ?? null,
+            high_52w: Number(p.high_52w) ?? null,
+            low_52w: Number(p.low_52w) ?? null,
             dist_high: Number(p.pct_from_high) ?? null,
             dist_low: Number(p.pct_from_low) ?? null,
             dist_pct: Number(p.pct_from_high) ?? null,
@@ -2840,11 +2820,10 @@ function enrichRsStocks(tirsData, returnsMap, allowedSet = getAllowedTickerSetSy
     });
 }
 
-async function warmStockDashboardCaches(userToken) {
+export async function warmStockDashboardCaches(userToken) {
     if (_stockDashboardWarmPromise) return _stockDashboardWarmPromise;
 
-    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
-    const STOCK52W_PATH = "stock_52w?select=ticker,volume_ma20";
+    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
     const MOVERS_TTL = 5 * 60 * 1000;
 
     const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
@@ -2863,15 +2842,13 @@ async function warmStockDashboardCaches(userToken) {
         try {
             const allowedSetPromise = ensureAllowedTickerSet();
             const moversPromise = sbFetch(MOVERS_PATH, headers, { ttl: MOVERS_TTL }).catch(() => null);
-            const stock52wPromise = sbFetchAll(STOCK52W_PATH, headers, { ttl: RETURNS_TTL }).catch(() => []);
             const tirsRsPromise = sbFetchAll(TIRS_RS85_PATH, headers, { ttl: RS_TTL }).catch(() => []);
             const tirsAllPromise = sbFetchAll(TIRS_ALL_PATH, headers, { ttl: RS_TTL }).catch(() => []);
             const returnsPromise = sbFetchAll(RETURNS_PATH, headers, { ttl: RETURNS_TTL }).catch(() => []);
             const latestDatePromise = sbFetch(ALL_RS_LATEST_DATE_PATH, headers, { ttl: ALL_RS_TTL }).catch(() => []);
 
-            const [moversData, stock52wRows, tirsRsRows, tirsAllRows, returnsRows, latestDateRows] = await Promise.all([
+            const [moversData, tirsRsRows, tirsAllRows, returnsRows, latestDateRows] = await Promise.all([
                 moversPromise,
-                stock52wPromise,
                 tirsRsPromise,
                 tirsAllPromise,
                 returnsPromise,
@@ -2879,10 +2856,9 @@ async function warmStockDashboardCaches(userToken) {
             ]);
             const allowedSet = await allowedSetPromise;
 
-            if (Array.isArray(moversData) && moversData.length > 0 && Array.isArray(stock52wRows) && stock52wRows.length > 0) {
-                const derived = deriveMovers(moversData, stock52wRows, allowedSet);
+            if (Array.isArray(moversData) && moversData.length > 0) {
+                const derived = deriveMovers(moversData, allowedSet);
                 cacheSet(MOVERS_PATH, moversData, MOVERS_TTL);
-                cacheSet(STOCK52W_PATH, stock52wRows, RETURNS_TTL);
                 void derived;
             }
 
@@ -2958,7 +2934,6 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
 
     // ── Cache-key constants (same paths used in sbFetch calls below) ──────────
     const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
-    const STOCK52W_PATH = "stock_52w?select=ticker,volume_ma20";
     const MOVERS_TTL = 5 * 60 * 1000;
 
     const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
@@ -2983,9 +2958,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
 
     const _derivedMovers = useMemo(() => {
         if (!_cachedMovers) return null;
-        const s52Hit = cacheGet(STOCK52W_PATH, RETURNS_TTL);
-        const s52Rows = s52Hit ? s52Hit.data || [] : (cacheGetAllPages(STOCK52W_PATH, RETURNS_TTL) || []);
-        return deriveMovers(_cachedMovers, s52Rows);
+        return deriveMovers(_cachedMovers);
     }, [_cachedMovers]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Apply names from the global map at init – if map is warm (revisit), names appear instantly.
@@ -3093,8 +3066,8 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
         // applyMovers: takes raw API rows and updates all mover state slices.
-        function applyMovers(moversData, stock52wRows, allowedSet) {
-            const derived = deriveMovers(moversData, stock52wRows, allowedSet);
+        function applyMovers(moversData, allowedSet) {
+            const derived = deriveMovers(moversData, allowedSet);
             // applyNamesFromMap fills names for tickers already in the global map (instant on revisit)
             setGainers(applyNamesFromMap(derived.gainers));
             setLosers(applyNamesFromMap(derived.losers));
@@ -3113,33 +3086,20 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             setError(null);
             try {
                 const allowedSet = await ensureAllowedTickerSet();
-                // Both calls respect SWR: they return stale cache immediately
-                // and call onStale when a background refresh completes.
                 let latestMovers = _cachedMovers || null;
-                let latestS52 = cacheGetAllPages(STOCK52W_PATH, RETURNS_TTL) || [];
 
-                const [moversData, stock52wData] = await Promise.all([
-                    sbFetch(MOVERS_PATH, userToken, {
-                        ttl: MOVERS_TTL,
-                        onStale: fresh => {
-                            latestMovers = fresh;
-                            applyMovers(latestMovers, latestS52, allowedSet);
-                        },
-                    }),
-                    sbFetchAll(STOCK52W_PATH, userToken, {
-                        ttl: RETURNS_TTL,
-                        onStale: fresh => {
-                            latestS52 = fresh || [];
-                            if (latestMovers) applyMovers(latestMovers, latestS52, allowedSet);
-                        },
-                    }),
-                ]);
+                const moversData = await sbFetch(MOVERS_PATH, userToken, {
+                    ttl: MOVERS_TTL,
+                    onStale: fresh => {
+                        latestMovers = fresh;
+                        applyMovers(latestMovers, allowedSet);
+                    },
+                });
 
                 // If we got a stale SWR hit, the onStale cb fires later.
                 // The synchronous return here is used for the initial render.
                 latestMovers = moversData;
-                latestS52 = stock52wData || [];
-                applyMovers(moversData, stock52wData, allowedSet);
+                applyMovers(moversData, allowedSet);
 
                 // ── Enrich mover rows with names (background, non-blocking) ────────
                 // Names already present from _nameMap for cached tickers.
