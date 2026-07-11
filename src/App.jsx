@@ -12872,6 +12872,9 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     // Live price overlay  incremented whenever _sessionPriceCache gains new entries
     const [livePriceTick, setLivePriceTick] = useState(0);
     const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
+    // On mobile, the table stays hidden until the person explicitly taps "Apply Filters".
+    // Any change to the active screen or its filters re-locks it until they apply again.
+    const [mobileResultsApplied, setMobileResultsApplied] = useState(false);
     const [screensSyncing, setScreensSyncing] = useState(!!(session?.user?.id));
 
     const saveScreens = next => {
@@ -12959,6 +12962,15 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
     const activeScreen = screens.find(s => s.id === activeScreenId) || screens[0];
     const filters = activeScreen?.filters || [];
+
+    const mobileFilterSig = activeScreenId + "|" + JSON.stringify(filters);
+    const prevMobileFilterSig = useRef(mobileFilterSig);
+    useEffect(() => {
+        if (mobileFilterSig !== prevMobileFilterSig.current) {
+            prevMobileFilterSig.current = mobileFilterSig;
+            setMobileResultsApplied(false);
+        }
+    }, [mobileFilterSig]);
 
     // Data load
     const loadRatios = async (force) => {
@@ -13058,19 +13070,15 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     // Mutations
     const updateFilter = (idx, patch) => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: filters.map((f, i) => i === idx ? { ...f, ...patch } : f) } : s));
-        if (isScreenerMobile) setMobileFiltersExpanded(false);
     };
     const addFilter = () => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: [...filters, makeEmptyFilter()] } : s));
-        if (isScreenerMobile) setMobileFiltersExpanded(true);
     };
     const removeFilter = idx => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: filters.filter((_, i) => i !== idx) } : s));
-        if (isScreenerMobile) setMobileFiltersExpanded(false);
     };
     const clearFilters = () => {
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: [] } : s));
-        if (isScreenerMobile) setMobileFiltersExpanded(false);
     };
     const addScreen = () => { const id = "screen_" + Date.now(); saveScreens([...screens, { id, name: "New Screen", filters: [makeEmptyFilter()] }]); setActiveScreenId(id); setViewMode("screen"); };
     const deleteScreen = id => { if (screens.length <= 1) return; const next = screens.filter(s => s.id !== id); saveScreens(next); if (session?.user?.id) _deleteRemoteScreen(session, id); if (activeScreenId === id) setActiveScreenId(next[0].id); };
@@ -13606,6 +13614,27 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                 onMouseEnter={e => e.currentTarget.style.color = DS.text}
                                 onMouseLeave={e => e.currentTarget.style.color = DS.textMuted}>
                                 Clear all
+                            </button>
+                        )}
+
+                        {isScreenerMobile && (
+                            <button onClick={() => setMobileResultsApplied(true)}
+                                style={{
+                                    width: "100%", marginTop: 4, padding: "11px 16px",
+                                    background: mobileResultsApplied ? DS.accentDim : DS.accent,
+                                    border: `1px solid ${DS.accent}`, borderRadius: 9,
+                                    color: mobileResultsApplied ? DS.accent : "#fff",
+                                    fontSize: 13.5, fontWeight: 650, fontFamily: DS.sans, cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "center", gap: 7
+                                }}>
+                                {mobileResultsApplied ? (
+                                    <>
+                                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8l3.5 3.5L13 5" /></svg>
+                                        Filters Applied
+                                    </>
+                                ) : (
+                                    `Apply Filter${filters.length === 1 ? "" : "s"}${filters.length > 0 ? ` (${filters.length})` : ""}`
+                                )}
                             </button>
                         )}
                     </>
