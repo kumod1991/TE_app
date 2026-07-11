@@ -555,95 +555,6 @@ function SignalBadge({ signal }) {
   );
 }
 
-// ─── MINI SVG LINE ────────────────────────────────────────────────────────────
-function MiniLine({ data, color, w = 80, h = 32 }) {
-  const n = data.map(safeNum);
-  if (n.length < 2) return null;
-  const mn = Math.min(...n), mx = Math.max(...n), r = mx - mn || 1;
-  const pts = n.map((v, i) => `${(i / (n.length - 1)) * w},${h - ((v - mn) / r) * (h - 4) - 2}`).join(" ");
-  return (
-    <svg width={w} height={h} style={{ overflow: "visible" }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-// ─── TREND SPARKLINES ─────────────────────────────────────────────────────────
-function TrendSparklines({ stock, T }) {
-  const [tooltip, setTooltip] = useState(null);
-  const W = 28, H = 28, BAR_W = 4, GAP = 2;
-  const series = [
-    { key: "fiis",      label: "FII",      color: "#3b82f6", trend: stock.fiiTrend },
-    { key: "diis",      label: "DII",      color: "#8b5cf6", trend: stock.diiTrend },
-    { key: "promoters", label: "Promoter", color: "#059669", trend: stock.promoterTrend },
-  ];
-
-  function renderBars(values, color, trend) {
-    const nums = values.map(safeNum);
-    const mx = Math.max(...nums.map(Math.abs), 1);
-    const totalW = nums.length * BAR_W + (nums.length - 1) * GAP;
-    const offsetX = (W - totalW) / 2;
-    return nums.map((v, i) => {
-      const barH = Math.max(2, (Math.abs(v) / mx) * (H - 4));
-      const x = offsetX + i * (BAR_W + GAP);
-      const y = H - barH;
-      const opacity = i === nums.length - 1 ? 1 : 0.35 + (i / nums.length) * 0.45;
-      const fill = trend > 0.05 ? color : trend < -0.05 ? "#ef4444" : "#94a3b8";
-      return <rect key={i} x={x} y={y} width={BAR_W} height={barH} rx="1" fill={fill} opacity={opacity} />;
-    });
-  }
-
-  return (
-    <div style={{ position: "relative", display: "inline-flex", gap: 5, alignItems: "flex-end" }}>
-      {series.map((s) => {
-        const vals = stock.last4.map(q => q[s.key]);
-        return (
-          <div key={s.key} style={{ position: "relative", cursor: "default" }}
-            onMouseEnter={e => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setTooltip({ x: rect.left + rect.width / 2, y: rect.top, series: s, vals });
-            }}
-            onMouseLeave={() => setTooltip(null)}>
-            <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
-              {renderBars(vals, s.color, s.trend)}
-            </svg>
-          </div>
-        );
-      })}
-      {tooltip && (
-        <div style={{
-          position: "fixed", left: tooltip.x, top: tooltip.y - 8,
-          transform: "translate(-50%, -100%)", zIndex: 99999,
-          background: T.card, border: `1px solid ${T.border}`,
-          borderRadius: 8, padding: "9px 12px",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-          pointerEvents: "none", minWidth: 140, whiteSpace: "nowrap",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: tooltip.series.color }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.text, letterSpacing: "0.05em" }}>
-              {tooltip.series.label} Trend
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
-            {tooltip.vals.map((v, i) => (
-              <div key={i} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: T.muted, marginBottom: 2 }}>Q{i + 1}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, ...mono, color: T.subtext }}>{safeNum(v).toFixed(1)}%</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: T.muted }}>4Q net</span>
-            <span style={{ fontSize: 12, fontWeight: 700, ...mono, color: tooltip.series.trend > 0.05 ? "#059669" : tooltip.series.trend < -0.05 ? "#dc2626" : T.muted }}>
-              {fmt(tooltip.series.trend)}%
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── DRILLDOWN MODAL ──────────────────────────────────────────────────────────
 function DrilldownModal({ stock, T, onClose }) {
@@ -1191,49 +1102,6 @@ function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
   );
 }
 
-// ─── MAIN TABLE ROW ───────────────────────────────────────────────────────────
-function TableRow({ stock, rowNum, onSelect, T, isDark, TH_BASE, sortKey }) {
-  const chipPalette = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f97316"];
-  const chipColor = chipPalette[stock.ticker.charCodeAt(0) % chipPalette.length];
-  const td = { padding: "0 16px", height: 54, fontSize: 13, borderBottom: `1px solid ${isDark ? "rgba(99,131,179,0.07)" : "rgba(15,23,42,0.05)"}`, verticalAlign: "middle" };
-
-  return (
-    <tr className="os-row" style={{ cursor: "pointer" }} onClick={() => onSelect(stock)}>
-      <td style={{ ...td, width: 44, textAlign: "center", color: T.muted, fontSize: 12 }}>{rowNum}</td>
-      <td style={{ ...td, textAlign: "left", paddingLeft: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 7, flexShrink: 0, background: `${chipColor}15`, border: `1px solid ${chipColor}28`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 9, fontWeight: 800, color: chipColor, letterSpacing: "0.02em", ...mono }}>{stock.ticker.slice(0,4)}</span>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", marginBottom: 2 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{stock.name || stock.ticker}</span>
-              {stock.timing === "Recent" && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(16,185,129,0.1)", color: "#10b981" }}>RECENT</span>}
-              {stock.accel.fii > 0.3 && stock.accel.dii > 0.3 && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(217,119,6,0.08)", color: "#d97706" }}>ACCEL</span>}
-              {stock.anomalies.length > 0 && <span title={stock.anomalies.join(", ")} style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(220,38,38,0.07)", color: "#dc2626", cursor: "help" }}>⚠</span>}
-            </div>
-            <div style={{ fontSize: 11, color: T.muted, ...mono }}>{stock.ticker}</div>
-          </div>
-        </div>
-      </td>
-      <td style={{ ...td, textAlign: "left", fontSize: 12, color: T.subtext }}>{stock.sector || "—"}</td>
-      <td style={{ ...td, textAlign: "right", ...mono, color: T.muted, fontSize: 13 }}>{stock.ownPromoter.toFixed(1)}</td>
-      <td style={{ ...td, textAlign: "right", ...mono, color: T.muted, fontSize: 13 }}>{stock.ownFii.toFixed(1)}</td>
-      <td style={{ ...td, textAlign: "right", ...mono, color: T.muted, fontSize: 13 }}>{stock.ownDii.toFixed(1)}</td>
-      <td style={{ ...td, textAlign: "right", ...mono }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: stock.fiiTrend > 0.05 ? "#059669" : stock.fiiTrend < -0.05 ? "#dc2626" : T.muted }}>{fmt(stock.fiiTrend)}%</span>
-      </td>
-      <td style={{ ...td, textAlign: "right", ...mono }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: stock.diiTrend > 0.05 ? "#059669" : stock.diiTrend < -0.05 ? "#dc2626" : T.muted }}>{fmt(stock.diiTrend)}%</span>
-      </td>
-      <td style={{ ...td, textAlign: "right", ...mono, fontWeight: 700, fontSize: 14, color: stock.score > 3 ? "#059669" : stock.score < -3 ? "#dc2626" : T.text, minWidth: 64 }}>{fmt(stock.score)}</td>
-      <td style={{ ...td, textAlign: "center" }}><SignalBadge signal={stock.signal} /></td>
-      <td style={{ ...td, textAlign: "center", fontSize: 12, fontWeight: 600, color: stock.conviction === "High" ? "#059669" : stock.conviction === "Medium" ? "#d97706" : T.muted }}>{stock.conviction}</td>
-      <td style={{ ...td, textAlign: "center", padding: "0 10px" }}><TrendSparklines stock={stock} T={T} /></td>
-    </tr>
-  );
-}
-
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function OwnershipScansModule({ T }) {
   const getIsMobile = () => (typeof window !== "undefined" ? window.innerWidth <= 768 : false);
@@ -1253,9 +1121,6 @@ export default function OwnershipScansModule({ T }) {
   const [searchQ,    setSearchQ]    = useState("");
   const deferredSearchQ = useDeferredValue(searchQ);
   const [page,       setPage]       = useState(1);
-  const [fullScreen, setFullScreen] = useState(false);
-  const [fullPage,   setFullPage]   = useState(1);
-  const [fullPageSize, setFullPageSize] = useState(25);
   const [isMobile,   setIsMobile]   = useState(getIsMobile);
   const [mobileVisibleCount, setMobileVisibleCount] = useState(10);
   const [explainerDismissed, setExplainerDismissedState] = useState(() => {
@@ -1411,15 +1276,6 @@ export default function OwnershipScansModule({ T }) {
 
   const commitOwnershipChange = (fn) => startTransition(fn);
 
-  function onSort(k) {
-    commitOwnershipChange(() => {
-      if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
-      else { setSortKey(k); setSortDir("desc"); }
-      setPage(1);
-      setFullPage(1);
-    });
-  }
-
   function handleRefresh() {
     cacheInvalidate();
     setLoading(true);
@@ -1457,17 +1313,6 @@ export default function OwnershipScansModule({ T }) {
       .finally(() => setLoading(false));
   }
 
-  const filterOptions = [
-    { id: "all",        label: "All",                        col: "#6b7280" },
-    { id: "smart",      label: "Both Buying",                col: "#059669" },
-    { id: "aggressive", label: "Heavy Buying",                col: "#059669" },
-    { id: "recent",     label: "New Buying",                 col: "#10b981" },
-    { id: "accel",      label: "Speeding Up",                col: "#d97706" },
-    { id: "balanced",   label: "Balanced",                   col: "#8b5cf6" },
-    { id: "promoter",   label: "Promoters Buying",           col: "#2563eb" },
-    { id: "promout",    label: "Promoters Out, Funds In",    col: "#6366f1" },
-    { id: "exit",       label: "Both Selling",               col: "#dc2626" },
-  ];
   const sortOptions = [
     { value: "score",         label: "Overall Score" },
     { value: "combinedFlow",  label: "Combined Buying (4Q)" },
@@ -1478,9 +1323,7 @@ export default function OwnershipScansModule({ T }) {
     { value: "accelFii",      label: "Foreign Fund Acceleration" },
   ];
 
-  const activeFilter = filterOptions.find(x => x.id === filter) || filterOptions[0];
   const activeSort   = sortOptions.find(x => x.value === sortKey)?.label || sortKey;
-  const fullPageCount = Math.max(1, Math.ceil(filtered.length / fullPageSize));
   const summaryCards = [
     { label: "Both Buying",     value: summary.smartMoney,   sub: "Foreign + domestic funds both accumulating",  color: "#059669" },
     { label: "Both Selling",    value: summary.distribution, sub: "Foreign + domestic funds both reducing",      color: "#dc2626" },
@@ -1499,149 +1342,6 @@ export default function OwnershipScansModule({ T }) {
     fontFamily: "inherit",
   });
 
-  // ─── FULL SCREEN TABLE VIEW ─────────────────────────────────────────────────
-  if (fullScreen) {
-    const TH_BASE = {
-      padding: "10px 16px", fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-      letterSpacing: ".09em", background: T.tableHead, whiteSpace: "nowrap",
-      cursor: "pointer", userSelect: "none", position: "sticky", top: 0, zIndex: 1,
-      color: T.muted, borderBottom: `1px solid ${isDark ? "rgba(99,131,179,0.10)" : "rgba(15,23,42,0.06)"}`,
-    };
-    const Th = ({ col, label, left = false }) => {
-      const active = sortKey === col;
-      return (
-        <th onClick={() => onSort(col)} style={{
-          ...TH_BASE, textAlign: left ? "left" : "right",
-          color: active ? T.text : T.muted,
-          borderBottom: `2px solid ${active ? (T.green || "#10b981") : T.border}`,
-          paddingBottom: active ? 8 : 9,
-        }}>
-          {label}{active ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-        </th>
-      );
-    };
-
-    return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: T.bg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <style>{`
-          @keyframes spin { to { transform: rotate(360deg) } }
-          .os-row:hover td { background: ${isDark ? "rgba(99,131,179,0.04)" : "rgba(15,23,42,0.025)"} !important; }
-          .os-chip-scroll { scrollbar-width: none; }
-          .os-chip-scroll::-webkit-scrollbar { display: none; }
-          select { appearance: none; }
-        `}</style>
-
-        {/* Top bar */}
-        <div style={{ borderBottom: `1px solid ${T.border}`, background: T.card, flexShrink: 0, display: "flex", justifyContent: "center", boxShadow: "0 1px 0 rgba(0,0,0,0.04)" }}>
-          <div style={{ width: "100%", maxWidth: 1400, padding: isMobile ? "14px" : "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <button onClick={() => setFullScreen(false)} style={{ display: "flex", alignItems: "center", gap: 7, background: "transparent", border: `1.5px solid ${T.border}`, borderRadius: 8, cursor: "pointer", color: T.subtext, fontSize: 13, padding: "8px 14px", fontFamily: "inherit", fontWeight: 600 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5"/><path d="m12 5-7 7 7 7"/></svg>
-                Back
-              </button>
-              <span style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: "-0.02em" }}>Ownership Universe</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: T.subtext, ...mono }}>{filtered.length} stocks</span>
-              <select value={sortKey} onChange={e => commitOwnershipChange(() => { setSortKey(e.target.value); setSortDir("desc"); setFullPage(1); })}
-                style={{ background: T.surface || T.card, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
-                {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <div style={{ position: "relative" }}>
-                <svg style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2.2" strokeLinecap="round">
-                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                </svg>
-                <input placeholder="Search ticker / name..." value={searchQ} onChange={e => { const next = e.target.value; setSearchQ(next); commitOwnershipChange(() => setFullPage(1)); }}
-                  style={{ background: T.surface || T.card, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "9px 12px 9px 30px", fontSize: 13, width: isMobile ? "100%" : 200, outline: "none", fontFamily: "inherit" }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Filter bar */}
-        <div style={{ borderBottom: `1px solid ${T.border}`, background: T.surface || T.card, flexShrink: 0, display: "flex", justifyContent: "center" }}>
-          <div className="os-chip-scroll" style={{ width: "100%", maxWidth: 1400, display: "flex", alignItems: "center", gap: 8, padding: isMobile ? "10px 14px" : "10px 24px", overflowX: "auto" }}>
-            <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" }}>
-              {filterOptions.slice(0,3).map(f => (
-                <button key={f.id} onClick={() => commitOwnershipChange(() => { setFilter(f.id); setFullPage(1); })} style={tabStyle(filter === f.id, f.col)}>{f.label}</button>
-              ))}
-            </div>
-            <select value={["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? filter : ""} onChange={e => { if (e.target.value) commitOwnershipChange(() => { setFilter(e.target.value); setFullPage(1); }); }}
-              style={{ background: T.surface || T.card, border: `1.5px solid ${["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.border}`, color: ["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.subtext, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}>
-              <option value="">More filters ⚙</option>
-              <option value="aggressive">Heavy Buying</option>
-              <option value="recent">New Buying</option>
-              <option value="accel">Speeding Up (Both Funds)</option>
-              <option value="balanced">Balanced Conviction</option>
-              <option value="promoter">Promoters Buying</option>
-              <option value="promout">Promoters Out, Funds In</option>
-            </select>
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-              {[25,50,100].map(n => (
-                <button key={n} onClick={() => commitOwnershipChange(() => { setFullPageSize(n); setFullPage(1); })}
-                  style={{ padding: "7px 12px", borderRadius: 7, fontSize: 12, fontFamily: "inherit", cursor: "pointer", border: `1.5px solid ${fullPageSize === n ? activeFilter.col : T.border}`, background: fullPageSize === n ? `${activeFilter.col}14` : "transparent", color: fullPageSize === n ? activeFilter.col : T.subtext, fontWeight: fullPageSize === n ? 700 : 500 }}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Table */}
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: isMobile ? "12px 14px 14px" : "18px 24px 16px", display: "flex", justifyContent: "center" }}>
-          <div style={{ width: "100%", maxWidth: 1400, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", background: T.card, boxShadow: "0 4px 20px rgba(15,23,42,0.06)" }}>
-            <div style={{ maxHeight: "calc(100vh - 300px)", overflow: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
-                <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
-                  <tr>
-                    <th style={{ ...TH_BASE, width: 44, textAlign: "center" }}>#</th>
-                    <Th col="ticker" label="Company" left />
-                    <th style={{ ...TH_BASE, textAlign: "left", minWidth: 160 }}>Sector</th>
-                    <Th col="ownPromoter" label="Promoter %" />
-                    <Th col="ownFii"      label="Foreign %" />
-                    <Th col="ownDii"      label="Domestic %" />
-                    <Th col="fiiTrend"    label="Foreign 4Q" />
-                    <Th col="diiTrend"    label="Domestic 4Q" />
-                    <Th col="score"       label="Score" />
-                    <th style={{ ...TH_BASE, textAlign: "center" }}>Trend</th>
-                    <th style={{ ...TH_BASE, textAlign: "center" }}>Confidence</th>
-                    <th style={{ ...TH_BASE, textAlign: "center" }}>Last 4 Qtrs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const fp = filtered.slice((fullPage-1)*fullPageSize, fullPage*fullPageSize);
-                    if (fp.length === 0) return (
-                      <tr><td colSpan={12} style={{ padding: "48px 24px", textAlign: "center", color: T.muted, fontSize: 13 }}>No stocks match current filters</td></tr>
-                    );
-                    return fp.map((stock, i) => (
-                      <TableRow key={stock.ticker} stock={stock} rowNum={(fullPage-1)*fullPageSize+i+1} onSelect={setSelected} T={T} isDark={isDark} TH_BASE={TH_BASE} sortKey={sortKey} />
-                    ));
-                  })()}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer pagination */}
-        <div style={{ borderTop: `1px solid ${T.border}`, background: T.card, flexShrink: 0, display: "flex", justifyContent: "center" }}>
-          <div style={{ width: "100%", maxWidth: 1400, padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, color: T.muted }}>Showing {Math.min(fullPage*fullPageSize, filtered.length)} of {filtered.length} stocks</span>
-            {fullPageCount > 1 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button onClick={() => setFullPage(p => Math.max(1,p-1))} disabled={fullPage===1} style={{ background: T.surface||T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, color: T.subtext, padding: "8px 14px", cursor: fullPage===1?"default":"pointer", fontSize: 13, fontFamily: "inherit", opacity: fullPage===1?0.45:1 }}>← Prev</button>
-                <span style={{ fontSize: 13, color: T.muted, minWidth: 80, textAlign: "center" }}>Page {fullPage} of {fullPageCount}</span>
-                <button onClick={() => setFullPage(p => Math.min(fullPageCount,p+1))} disabled={fullPage===fullPageCount} style={{ background: T.surface||T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, color: T.subtext, padding: "8px 14px", cursor: fullPage===fullPageCount?"default":"pointer", fontSize: 13, fontFamily: "inherit", opacity: fullPage===fullPageCount?0.45:1 }}>Next →</button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {selected && <DrilldownModal stock={selected} T={T} onClose={() => setSelected(null)} />}
-      </div>
-    );
-  }
 
   // ─── LOADING ─────────────────────────────────────────────────────────────────
   if (loading) return <LoadingSkeleton T={T} />;
@@ -1797,7 +1497,7 @@ export default function OwnershipScansModule({ T }) {
           <div style={{ textAlign: "center", paddingTop: 80, color: T.subtext, fontSize: 15 }}>
             No stocks match the current filter.
             <div style={{ marginTop: 16 }}>
-              <button onClick={() => commitOwnershipChange(() => { setFilter("all"); setScoreMin(-10); setSearchQ(""); setPage(1); setFullPage(1); })} style={{ padding: "10px 20px", borderRadius: 8, border: `1.5px solid ${T.border}`, background: "transparent", color: T.subtext, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              <button onClick={() => commitOwnershipChange(() => { setFilter("all"); setScoreMin(-10); setSearchQ(""); setPage(1); })} style={{ padding: "10px 20px", borderRadius: 8, border: `1.5px solid ${T.border}`, background: "transparent", color: T.subtext, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                 Clear filters
               </button>
             </div>
