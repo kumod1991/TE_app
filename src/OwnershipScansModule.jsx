@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useDeferredValue, startTransition } from "react";
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -1171,12 +1171,13 @@ export default function OwnershipScansModule({ T }) {
   const [filter,     setFilter]     = useState("smart");
   const [scoreMin,   setScoreMin]   = useState(-10);
   const [searchQ,    setSearchQ]    = useState("");
+  const deferredSearchQ = useDeferredValue(searchQ);
   const [page,       setPage]       = useState(1);
   const [fullScreen, setFullScreen] = useState(false);
   const [fullPage,   setFullPage]   = useState(1);
   const [fullPageSize, setFullPageSize] = useState(25);
   const [isMobile,   setIsMobile]   = useState(getIsMobile);
-  const [mobileVisibleCount, setMobileVisibleCount] = useState(25);
+  const [mobileVisibleCount, setMobileVisibleCount] = useState(10);
   const [explainerDismissed, setExplainerDismissedState] = useState(() => {
     try { return localStorage.getItem("ownership_explainer_dismissed") === "1"; } catch { return false; }
   });
@@ -1186,7 +1187,8 @@ export default function OwnershipScansModule({ T }) {
   }
 
   const PREVIEW_SIZE = 8;
-  const PAGE_SIZE    = 50;
+  const SHOW_MORE_STEP = 10;
+  const PAGE_SIZE    = 10;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1292,8 +1294,9 @@ export default function OwnershipScansModule({ T }) {
     else if (filter === "accel")    list = list.filter(x => x.accel.fii > 0 && x.accel.dii > 0);
     else if (filter === "balanced") list = list.filter(x => x.dominance === "Balanced" && x.fiiTrend > 1 && x.diiTrend > 1);
     else if (filter === "promout")  list = list.filter(x => x.promoterTrend < -1 && x.combinedFlow > 2);
-    if (searchQ.trim()) {
-      const q = searchQ.toLowerCase();
+    const query = deferredSearchQ.trim();
+    if (query) {
+      const q = query.toLowerCase();
       list = list.filter(x => x.ticker.toLowerCase().includes(q) || (x.name || "").toLowerCase().includes(q));
     }
     return [...list].sort((a, b) => {
@@ -1302,14 +1305,19 @@ export default function OwnershipScansModule({ T }) {
       else { va = a[sortKey] ?? 0; vb = b[sortKey] ?? 0; }
       return sortDir === "asc" ? va - vb : vb - va;
     });
-  }, [processed, filter, scoreMin, searchQ, sortKey, sortDir]);
+  }, [processed, filter, scoreMin, deferredSearchQ, sortKey, sortDir]);
 
-  useEffect(() => { setMobileVisibleCount(25); }, [filter, scoreMin, searchQ, sortKey, sortDir, processed.length]);
+  useEffect(() => { setMobileVisibleCount(10); }, [filter, scoreMin, deferredSearchQ, sortKey, sortDir, processed.length]);
+
+  const commitOwnershipChange = (fn) => startTransition(fn);
 
   function onSort(k) {
-    if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(k); setSortDir("desc"); }
-    setPage(1);
+    commitOwnershipChange(() => {
+      if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
+      else { setSortKey(k); setSortDir("desc"); }
+      setPage(1);
+      setFullPage(1);
+    });
   }
 
   function handleRefresh() {
@@ -1435,7 +1443,7 @@ export default function OwnershipScansModule({ T }) {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 12, color: T.subtext, ...mono }}>{filtered.length} stocks</span>
-              <select value={sortKey} onChange={e => { setSortKey(e.target.value); setSortDir("desc"); setFullPage(1); }}
+              <select value={sortKey} onChange={e => commitOwnershipChange(() => { setSortKey(e.target.value); setSortDir("desc"); setFullPage(1); })}
                 style={{ background: T.surface || T.card, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
                 {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -1443,7 +1451,7 @@ export default function OwnershipScansModule({ T }) {
                 <svg style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2.2" strokeLinecap="round">
                   <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                 </svg>
-                <input placeholder="Search ticker / name..." value={searchQ} onChange={e => { setSearchQ(e.target.value); setFullPage(1); }}
+                <input placeholder="Search ticker / name..." value={searchQ} onChange={e => { const next = e.target.value; setSearchQ(next); commitOwnershipChange(() => setFullPage(1)); }}
                   style={{ background: T.surface || T.card, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "9px 12px 9px 30px", fontSize: 13, width: isMobile ? "100%" : 200, outline: "none", fontFamily: "inherit" }} />
               </div>
             </div>
@@ -1455,10 +1463,10 @@ export default function OwnershipScansModule({ T }) {
           <div className="os-chip-scroll" style={{ width: "100%", maxWidth: 1400, display: "flex", alignItems: "center", gap: 8, padding: isMobile ? "10px 14px" : "10px 24px", overflowX: "auto" }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" }}>
               {filterOptions.slice(0,3).map(f => (
-                <button key={f.id} onClick={() => { setFilter(f.id); setFullPage(1); }} style={tabStyle(filter === f.id, f.col)}>{f.label}</button>
+                <button key={f.id} onClick={() => commitOwnershipChange(() => { setFilter(f.id); setFullPage(1); })} style={tabStyle(filter === f.id, f.col)}>{f.label}</button>
               ))}
             </div>
-            <select value={["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? filter : ""} onChange={e => { if (e.target.value) { setFilter(e.target.value); setFullPage(1); } }}
+            <select value={["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? filter : ""} onChange={e => { if (e.target.value) commitOwnershipChange(() => { setFilter(e.target.value); setFullPage(1); }); }}
               style={{ background: T.surface || T.card, border: `1.5px solid ${["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.border}`, color: ["aggressive","recent","accel","balanced","promoter","promout"].includes(filter) ? "#6366f1" : T.subtext, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}>
               <option value="">More filters ⚙</option>
               <option value="aggressive">Heavy Buying</option>
@@ -1470,7 +1478,7 @@ export default function OwnershipScansModule({ T }) {
             </select>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
               {[25,50,100].map(n => (
-                <button key={n} onClick={() => { setFullPageSize(n); setFullPage(1); }}
+                <button key={n} onClick={() => commitOwnershipChange(() => { setFullPageSize(n); setFullPage(1); })}
                   style={{ padding: "7px 12px", borderRadius: 7, fontSize: 12, fontFamily: "inherit", cursor: "pointer", border: `1.5px solid ${fullPageSize === n ? activeFilter.col : T.border}`, background: fullPageSize === n ? `${activeFilter.col}14` : "transparent", color: fullPageSize === n ? activeFilter.col : T.subtext, fontWeight: fullPageSize === n ? 700 : 500 }}>
                   {n}
                 </button>
@@ -1590,12 +1598,6 @@ export default function OwnershipScansModule({ T }) {
               </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              {!isMobile && (
-                <button onClick={() => { setFullScreen(true); setFullPage(1); }} style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 8, border: `1.5px solid ${T.border}`, background: T.text, color: T.surface || T.card, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                  Full universe
-                </button>
-              )}
               <button onClick={handleRefresh} title="Refresh data" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: 8, border: `1.5px solid ${T.border}`, background: "transparent", color: T.subtext, cursor: "pointer" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               </button>
@@ -1637,14 +1639,14 @@ export default function OwnershipScansModule({ T }) {
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.subtext, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.09em" }}>Show me</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "0 0 18px" }}>
-            <button style={tabStyle(filter === "all", "#6b7280")} onClick={() => { setFilter("all"); setPage(1); }}>All stocks</button>
-            <button style={tabStyle(filter === "smart", "#059669")} onClick={() => { setFilter("smart"); setPage(1); }}>Both buying</button>
-            <button style={tabStyle(filter === "exit", "#dc2626")} onClick={() => { setFilter("exit"); setPage(1); }}>Both selling</button>
-            <button style={tabStyle(filter === "recent", "#10b981")} onClick={() => { setFilter("recent"); setPage(1); }}>New buying</button>
-            <button style={tabStyle(filter === "accel", "#d97706")} onClick={() => { setFilter("accel"); setPage(1); }}>Speeding up</button>
-            <button style={tabStyle(filter === "promoter", "#2563eb")} onClick={() => { setFilter("promoter"); setPage(1); }}>Promoters buying</button>
-            <button style={tabStyle(filter === "promout", "#6366f1")} onClick={() => { setFilter("promout"); setPage(1); }}>Promoters selling, funds buying</button>
-            <button style={tabStyle(filter === "aggressive", "#059669")} onClick={() => { setFilter("aggressive"); setPage(1); }}>Heavy buying</button>
+            <button style={tabStyle(filter === "all", "#6b7280")} onClick={() => commitOwnershipChange(() => { setFilter("all"); setPage(1); })}>All stocks</button>
+            <button style={tabStyle(filter === "smart", "#059669")} onClick={() => commitOwnershipChange(() => { setFilter("smart"); setPage(1); })}>Both buying</button>
+            <button style={tabStyle(filter === "exit", "#dc2626")} onClick={() => commitOwnershipChange(() => { setFilter("exit"); setPage(1); })}>Both selling</button>
+            <button style={tabStyle(filter === "recent", "#10b981")} onClick={() => commitOwnershipChange(() => { setFilter("recent"); setPage(1); })}>New buying</button>
+            <button style={tabStyle(filter === "accel", "#d97706")} onClick={() => commitOwnershipChange(() => { setFilter("accel"); setPage(1); })}>Speeding up</button>
+            <button style={tabStyle(filter === "promoter", "#2563eb")} onClick={() => commitOwnershipChange(() => { setFilter("promoter"); setPage(1); })}>Promoters buying</button>
+            <button style={tabStyle(filter === "promout", "#6366f1")} onClick={() => commitOwnershipChange(() => { setFilter("promout"); setPage(1); })}>Promoters selling, funds buying</button>
+            <button style={tabStyle(filter === "aggressive", "#059669")} onClick={() => commitOwnershipChange(() => { setFilter("aggressive"); setPage(1); })}>Heavy buying</button>
           </div>
           <div style={{ fontSize: 13.5, color: T.subtext, marginBottom: 4, lineHeight: 1.6 }}>
             {filter === "smart"      && <>Stocks where <strong>both foreign and domestic funds</strong> have been buying over the last 4 quarters.</>}
@@ -1679,11 +1681,11 @@ export default function OwnershipScansModule({ T }) {
             {filtered.length} results{searchQ.trim() ? ` for "${searchQ.trim()}"` : ""} — sorted by <strong style={{ color: T.text }}>{activeSort}</strong>
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <select value={sortKey} onChange={e => { setSortKey(e.target.value); setSortDir("desc"); setPage(1); }}
+            <select value={sortKey} onChange={e => commitOwnershipChange(() => { setSortKey(e.target.value); setSortDir("desc"); setPage(1); })}
               style={{ background: T.surface, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
               {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <select value={scoreMin} onChange={e => { setScoreMin(Number(e.target.value)); setPage(1); }}
+            <select value={scoreMin} onChange={e => commitOwnershipChange(() => { setScoreMin(Number(e.target.value)); setPage(1); })}
               style={{ background: T.surface, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
               {[-10,-5,0,1,2,3,5].map(v => <option key={v} value={v}>Score ≥ {v >= 0 ? "+" : ""}{v}</option>)}
             </select>
@@ -1695,7 +1697,7 @@ export default function OwnershipScansModule({ T }) {
           <div style={{ textAlign: "center", paddingTop: 80, color: T.subtext, fontSize: 15 }}>
             No stocks match the current filter.
             <div style={{ marginTop: 16 }}>
-              <button onClick={() => { setFilter("all"); setScoreMin(-10); setSearchQ(""); }} style={{ padding: "10px 20px", borderRadius: 8, border: `1.5px solid ${T.border}`, background: "transparent", color: T.subtext, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              <button onClick={() => commitOwnershipChange(() => { setFilter("all"); setScoreMin(-10); setSearchQ(""); setPage(1); setFullPage(1); })} style={{ padding: "10px 20px", borderRadius: 8, border: `1.5px solid ${T.border}`, background: "transparent", color: T.subtext, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                 Clear filters
               </button>
             </div>
@@ -1714,20 +1716,20 @@ export default function OwnershipScansModule({ T }) {
               />
             ))}
 
-            {/* Load more / View all */}
+            {/* Load more */}
             {filtered.length > (isMobile ? mobileVisibleCount : PREVIEW_SIZE) && (
               <div style={{ textAlign: "center", paddingTop: 8, paddingBottom: 8 }}>
                 {isMobile ? (
-                  <button onClick={() => setMobileVisibleCount(c => c + 25)} style={{ padding: "12px 32px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: "transparent", color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit", transition: "background .15s" }}
+                  <button onClick={() => setMobileVisibleCount(c => c + SHOW_MORE_STEP)} style={{ padding: "12px 32px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: "transparent", color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit", transition: "background .15s" }}
                     onMouseEnter={e => e.currentTarget.style.background = T.surface}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    Load more
+                    Show more +10
                   </button>
                 ) : (
-                  <button onClick={() => { setFullScreen(true); setFullPage(1); }} style={{ padding: "12px 32px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: "transparent", color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit", transition: "background .15s" }}
+                  <button onClick={() => setPage(p => p + 1)} style={{ padding: "12px 32px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: "transparent", color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit", transition: "background .15s" }}
                     onMouseEnter={e => e.currentTarget.style.background = T.surface}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    View all {filtered.length} stocks
+                    Show more +10
                   </button>
                 )}
               </div>

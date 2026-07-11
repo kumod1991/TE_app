@@ -277,6 +277,46 @@ function cacheGetAllPages(path, ttl, pageSize = 1000, maxPages = 20) {
 //  Updated eagerly whenever batchFetchBhavNames resolves new rows.
 // ─────────────────────────────────────────────────────────────────────────────
 const _nameMap = new Map(); // ticker → name
+const MOVERS_BATCH_SIZE = 20;
+const VOLUME_SHOCKERS_BATCH_SIZE = 20;
+const MOVERS_TTL = 5 * 60 * 1000;
+const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
+const MOVERS_SELECT = "symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at";
+// Each Market Movers tab is backed by its own correctly-ordered, independently
+// paginated query — no more fetching one shared batch and slicing it four ways.
+//   Gainers:   ORDER BY rank_gainer
+//   Losers:    ORDER BY rank_loser
+//   Near High: ORDER BY pct_from_high DESC
+//   Near Low:  ORDER BY pct_from_low
+const MOVERS_TAB_PATHS = {
+    gainers: `market_movers?select=${MOVERS_SELECT}&rank_gainer=not.is.null&order=rank_gainer.asc.nullslast`,
+    losers: `market_movers?select=${MOVERS_SELECT}&rank_loser=not.is.null&order=rank_loser.asc.nullslast`,
+    near_high: `market_movers?select=${MOVERS_SELECT}&near_high=eq.true&order=pct_from_high.desc.nullslast`,
+    near_low: `market_movers?select=${MOVERS_SELECT}&near_low=eq.true&order=pct_from_low.asc.nullslast`,
+};
+const VOLUME_SHOCKERS_BASE_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast";
+
+function withPageParams(path, limit, offset = 0) {
+    const separator = path.includes("?") ? "&" : "?";
+    return `${path}${separator}limit=${limit}&offset=${offset}`;
+}
+
+function dedupeByTicker(rows) {
+    const seen = new Set();
+    const out = [];
+    for (const row of rows || []) {
+        const ticker = row?.ticker || row?.symbol;
+        const key = String(ticker || "").trim();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(row);
+    }
+    return out;
+}
+
+function mergeUniqueByTicker(prevRows, nextRows) {
+    return dedupeByTicker([...(prevRows || []), ...(nextRows || [])]);
+}
 
 function _seedNameMapFromCache() {
     // ── Layer 1: dedicated flat name-map (single localStorage read, always fresh) ──
@@ -2120,7 +2160,7 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
 }
 
 // â”€â”€â”€ MOVERS TABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function MoversTable({ T, data, loading, type, isCompact }) {
+function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState(() => {
         if (type === "gainers" || type === "losers") return "change_pct";
@@ -2164,7 +2204,15 @@ function MoversTable({ T, data, loading, type, isCompact }) {
         });
     }, [data, sortKey, sortDir]);
     const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
-    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+    const loadMoreRows = async () => {
+        if (visibleCount < sorted.length) {
+            setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+            return;
+        }
+        if (!hasMore || loadingMore || !onLoadMore) return;
+        await onLoadMore();
+        setVisibleCount(prev => prev + MOVERS_LOAD_MORE_ROWS);
+    };
 
     if (loading) {
         return (
@@ -2287,7 +2335,7 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                         );
                     })}
                 </div>
-                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
             </>
         );
     }
@@ -2438,14 +2486,14 @@ function MoversTable({ T, data, loading, type, isCompact }) {
                 })}
             </tbody>
         </PremiumTableShell>
-        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
         </>
     );
 }
 
 
 // ─── VOLUME SHOCKERS TABLE ───────────────────────────────────────────────────
-function VolumeShockersTable({ T, data, loading, isCompact }) {
+function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("volume_ratio");
     const [sortDir, setSortDir] = useState("desc");
@@ -2472,7 +2520,15 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
         });
     }, [data, sortKey, sortDir]);
     const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
-    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+    const loadMoreRows = async () => {
+        if (visibleCount < sorted.length) {
+            setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+            return;
+        }
+        if (!hasMore || loadingMore || !onLoadMore) return;
+        await onLoadMore();
+        setVisibleCount(prev => prev + MOVERS_LOAD_MORE_ROWS);
+    };
 
     if (loading) {
         return (
@@ -2677,7 +2733,7 @@ function VolumeShockersTable({ T, data, loading, isCompact }) {
                 })}
             </tbody>
         </PremiumTableShell>
-        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
         </>
     );
 }
@@ -2761,35 +2817,63 @@ function isETF(r) {
     return etfRe.test(r.ticker || "") || etfRe.test(r.name || "");
 }
 
-/** Build the four mover lists directly from raw market_movers rows. */
-function deriveMovers(moversData, allowedSet = getAllowedTickerSetSync()) {
-    const enriched = (moversData || []).map(p => {
-        return {
-            ticker: p.symbol,
-            name: _nameMap.get(p.symbol) || null,
-            ltp: Number(p.ltp) || 0,
-            change_pct: Number(p.pchange) ?? null,
-            high_52w: Number(p.high_52w) ?? null,
-            low_52w: Number(p.low_52w) ?? null,
-            dist_high: Number(p.pct_from_high) ?? null,
-            dist_low: Number(p.pct_from_low) ?? null,
-            dist_pct: Number(p.pct_from_high) ?? null,
-            rank_gainer: p.rank_gainer,
-            rank_loser: p.rank_loser,
-            near_high: p.near_high,
-            near_low: p.near_low,
-        };
-    });
-    // Filter out stocks with gain > 50% (outliers) or loss > 20% (circuit filters)
-    const validGainer = r => r.change_pct == null || r.change_pct <= 50;
-    const validLoser = r => r.change_pct == null || r.change_pct >= -20;
-    const validBoth = r => validGainer(r) && validLoser(r);
-    const canKeep = r => isAllowedTicker(r.ticker, allowedSet);
+/** Returns true if a row should be excluded because its ticker looks like a liquid fund (e.g. LIQUIDBEES, LIQID). */
+function isLiquidFund(r) {
+    const liquidRe = /liqu?id/i;
+    return liquidRe.test(r.ticker || "");
+}
+
+/** Map a raw market_movers row into the shape the movers tables render. */
+function mapMoverRow(p) {
     return {
-        gainers: enriched.filter(r => r.rank_gainer != null && validGainer(r) && !isETF(r) && canKeep(r)).sort((a, b) => (a.rank_gainer || 9999) - (b.rank_gainer || 9999)).slice(0, 100),
-        losers: enriched.filter(r => r.rank_loser != null && validLoser(r) && !isETF(r) && canKeep(r)).sort((a, b) => (a.rank_loser || 9999) - (b.rank_loser || 9999)).slice(0, 100),
-        nearHigh: enriched.filter(r => r.near_high === true && validBoth(r) && !isETF(r) && canKeep(r)).map(r => ({ ...r, dist_pct: r.dist_high })).sort((a, b) => (b.dist_high || -999) - (a.dist_high || -999)).slice(0, 100),
-        nearLow: enriched.filter(r => r.near_low === true && validBoth(r) && !isETF(r) && canKeep(r)).map(r => ({ ...r, dist_pct: r.dist_low })).sort((a, b) => (a.dist_low || 999) - (b.dist_low || 999)).slice(0, 100),
+        ticker: p.symbol,
+        name: _nameMap.get(p.symbol) || null,
+        ltp: Number(p.ltp) || 0,
+        change_pct: Number(p.pchange) ?? null,
+        high_52w: Number(p.high_52w) ?? null,
+        low_52w: Number(p.low_52w) ?? null,
+        dist_high: Number(p.pct_from_high) ?? null,
+        dist_low: Number(p.pct_from_low) ?? null,
+        dist_pct: Number(p.pct_from_high) ?? null,
+        rank_gainer: p.rank_gainer,
+        rank_loser: p.rank_loser,
+        near_high: p.near_high,
+        near_low: p.near_low,
+    };
+}
+
+// Outlier / circuit-filter rules kept client-side per tab (gain > 50% or loss > 20%
+// are excluded as data artifacts, not genuine moves). The row ordering itself now
+// comes straight from the per-tab SQL query, not from client-side sorting.
+const MOVERS_TAB_ROW_FILTERS = {
+    gainers: r => r.change_pct == null || r.change_pct <= 50,
+    losers: r => r.change_pct == null || r.change_pct >= -20,
+    near_high: r => r.change_pct == null || (r.change_pct <= 50 && r.change_pct >= -20),
+    near_low: r => r.change_pct == null || (r.change_pct <= 50 && r.change_pct >= -20),
+};
+
+/** Turn a page of raw rows from one movers tab's query into display-ready rows. */
+function processMoversRows(tabKey, rawRows, allowedSet = getAllowedTickerSetSync()) {
+    const rowFilter = MOVERS_TAB_ROW_FILTERS[tabKey] || (() => true);
+    return (rawRows || [])
+        .map(mapMoverRow)
+        .filter(r => rowFilter(r) && !isETF(r) && !isLiquidFund(r) && isAllowedTicker(r.ticker, allowedSet))
+        .map(r => {
+            if (tabKey === "near_high") return { ...r, dist_pct: r.dist_high };
+            if (tabKey === "near_low") return { ...r, dist_pct: r.dist_low };
+            return r;
+        });
+}
+
+/** Read a movers tab's first page straight from cache (for instant seed on mount). */
+function seedMoversTabFromCache(tabKey) {
+    const path = withPageParams(MOVERS_TAB_PATHS[tabKey], MOVERS_BATCH_SIZE, 0);
+    const hit = cacheGet(path, MOVERS_TTL);
+    const rawRows = hit ? hit.data || [] : null;
+    return {
+        rawRows,
+        data: rawRows ? applyNamesFromMap(processMoversRows(tabKey, rawRows)) : [],
+        hasMore: (rawRows?.length || 0) >= MOVERS_BATCH_SIZE,
     };
 }
 
@@ -2823,9 +2907,6 @@ function enrichRsStocks(tirsData, returnsMap, allowedSet = getAllowedTickerSetSy
 export async function warmStockDashboardCaches(userToken) {
     if (_stockDashboardWarmPromise) return _stockDashboardWarmPromise;
 
-    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
-    const MOVERS_TTL = 5 * 60 * 1000;
-
     const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
     const TIRS_ALL_PATH = "ticker_industry_rs?select=industry&order=industry.asc";
     const RETURNS_PATH = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
@@ -2841,14 +2922,20 @@ export async function warmStockDashboardCaches(userToken) {
     _stockDashboardWarmPromise = (async () => {
         try {
             const allowedSetPromise = ensureAllowedTickerSet();
-            const moversPromise = sbFetch(MOVERS_PATH, headers, { ttl: MOVERS_TTL }).catch(() => null);
+            // Warm the first page of each movers tab independently — each tab has its
+            // own ordering (rank_gainer / rank_loser / pct_from_high / pct_from_low),
+            // so there's no single shared batch to slice anymore.
+            const moversTabEntries = Object.entries(MOVERS_TAB_PATHS);
+            const moversTabPromises = moversTabEntries.map(([tabKey, path]) =>
+                sbFetch(withPageParams(path, MOVERS_BATCH_SIZE, 0), headers, { ttl: MOVERS_TTL }).catch(() => null)
+            );
             const tirsRsPromise = sbFetchAll(TIRS_RS85_PATH, headers, { ttl: RS_TTL }).catch(() => []);
             const tirsAllPromise = sbFetchAll(TIRS_ALL_PATH, headers, { ttl: RS_TTL }).catch(() => []);
             const returnsPromise = sbFetchAll(RETURNS_PATH, headers, { ttl: RETURNS_TTL }).catch(() => []);
             const latestDatePromise = sbFetch(ALL_RS_LATEST_DATE_PATH, headers, { ttl: ALL_RS_TTL }).catch(() => []);
 
-            const [moversData, tirsRsRows, tirsAllRows, returnsRows, latestDateRows] = await Promise.all([
-                moversPromise,
+            const [moversResults, tirsRsRows, tirsAllRows, returnsRows, latestDateRows] = await Promise.all([
+                Promise.all(moversTabPromises),
                 tirsRsPromise,
                 tirsAllPromise,
                 returnsPromise,
@@ -2856,11 +2943,12 @@ export async function warmStockDashboardCaches(userToken) {
             ]);
             const allowedSet = await allowedSetPromise;
 
-            if (Array.isArray(moversData) && moversData.length > 0) {
-                const derived = deriveMovers(moversData, allowedSet);
-                cacheSet(MOVERS_PATH, moversData, MOVERS_TTL);
-                void derived;
-            }
+            moversTabEntries.forEach(([tabKey, path], idx) => {
+                const rawRows = moversResults[idx];
+                if (Array.isArray(rawRows) && rawRows.length > 0) {
+                    cacheSet(withPageParams(path, MOVERS_BATCH_SIZE, 0), rawRows, MOVERS_TTL);
+                }
+            });
 
             if (Array.isArray(tirsRsRows) && tirsRsRows.length > 0 && Array.isArray(tirsAllRows) && tirsAllRows.length > 0 && Array.isArray(returnsRows) && returnsRows.length > 0) {
                 const retMap = buildReturnsMap(returnsRows);
@@ -2933,7 +3021,6 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const [lastUpdated, setLastUpdated] = useState(null);
 
     // ── Cache-key constants (same paths used in sbFetch calls below) ──────────
-    const MOVERS_PATH = "market_movers?select=symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at&order=rank_gainer.asc.nullslast";
     const MOVERS_TTL = 5 * 60 * 1000;
 
     const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
@@ -2950,26 +3037,53 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const ALL_RS_TTL = 10 * 60 * 1000;
 
     // ── Market Movers – seed from cache so first paint is instant ────────────
+    // Each tab (gainers / losers / near_high / near_low) has its own query, its own
+    // cache entry, and — below — its own offset/hasMore/loading state, so tabs no
+    // longer share one fetch and one pagination cursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const _cachedMovers = useMemo(() => {
-        const hit = cacheGet(MOVERS_PATH, MOVERS_TTL);
-        return hit ? hit.data || [] : null;
-    }, []); // run once at mount
-
-    const _derivedMovers = useMemo(() => {
-        if (!_cachedMovers) return null;
-        return deriveMovers(_cachedMovers);
-    }, [_cachedMovers]); // eslint-disable-line react-hooks/exhaustive-deps
+    const _seedGainers = useMemo(() => seedMoversTabFromCache("gainers"), []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const _seedLosers = useMemo(() => seedMoversTabFromCache("losers"), []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const _seedNearHigh = useMemo(() => seedMoversTabFromCache("near_high"), []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const _seedNearLow = useMemo(() => seedMoversTabFromCache("near_low"), []);
 
     // Apply names from the global map at init – if map is warm (revisit), names appear instantly.
-    const [gainers, setGainers] = useState(() => applyNamesFromMap(_derivedMovers?.gainers || []));
-    const [losers, setLosers] = useState(() => applyNamesFromMap(_derivedMovers?.losers || []));
-    const [nearHigh, setNearHigh] = useState(() => applyNamesFromMap(_derivedMovers?.nearHigh || []));
-    const [nearLow, setNearLow] = useState(() => applyNamesFromMap(_derivedMovers?.nearLow || []));
+    const [gainers, setGainers] = useState(() => _seedGainers.data);
+    const [losers, setLosers] = useState(() => _seedLosers.data);
+    const [nearHigh, setNearHigh] = useState(() => _seedNearHigh.data);
+    const [nearLow, setNearLow] = useState(() => _seedNearLow.data);
+
+    const [gainersHasMore, setGainersHasMore] = useState(() => _seedGainers.hasMore);
+    const [losersHasMore, setLosersHasMore] = useState(() => _seedLosers.hasMore);
+    const [nearHighHasMore, setNearHighHasMore] = useState(() => _seedNearHigh.hasMore);
+    const [nearLowHasMore, setNearLowHasMore] = useState(() => _seedNearLow.hasMore);
+
+    const [loadingGainers, setLoadingGainers] = useState(() => !_seedGainers.rawRows);
+    const [loadingLosers, setLoadingLosers] = useState(() => !_seedLosers.rawRows);
+    const [loadingNearHigh, setLoadingNearHigh] = useState(() => !_seedNearHigh.rawRows);
+    const [loadingNearLow, setLoadingNearLow] = useState(() => !_seedNearLow.rawRows);
+
+    const [loadingMoreGainers, setLoadingMoreGainers] = useState(false);
+    const [loadingMoreLosers, setLoadingMoreLosers] = useState(false);
+    const [loadingMoreNearHigh, setLoadingMoreNearHigh] = useState(false);
+    const [loadingMoreNearLow, setLoadingMoreNearLow] = useState(false);
+
+    const gainersOffsetRef = useRef(_seedGainers.rawRows?.length || 0);
+    const losersOffsetRef = useRef(_seedLosers.rawRows?.length || 0);
+    const nearHighOffsetRef = useRef(_seedNearHigh.rawRows?.length || 0);
+    const nearLowOffsetRef = useRef(_seedNearLow.rawRows?.length || 0);
+
+    // Tracks whether each tab's first page has been fetched at least once this session.
+    const gainersLoadedRef = useRef(!!_seedGainers.rawRows);
+    const losersLoadedRef = useRef(!!_seedLosers.rawRows);
+    const nearHighLoadedRef = useRef(!!_seedNearHigh.rawRows);
+    const nearLowLoadedRef = useRef(!!_seedNearLow.rawRows);
     const [volumeShockers, setVolumeShockers] = useState(() => {
         // Seed from cache so the Volume Shockers tab renders instantly on revisit
-        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
-        const hit = cacheGet(VS_PATH, 5 * 60 * 1000);
+        const VS_PATH = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, 0);
+        const hit = cacheGet(VS_PATH, VOLUME_SHOCKERS_TTL);
         if (!hit || !Array.isArray(hit.data)) return [];
         const allowedSet = getAllowedTickerSetSync();
         return applyNamesFromMap(hit.data.map(r => ({
@@ -2979,10 +3093,16 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         })).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
     });
     const [loadingVolumeShockers, setLoadingVolumeShockers] = useState(() => {
-        const VS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
-        const hit = cacheGet(VS_PATH, 5 * 60 * 1000);
+        const VS_PATH = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, 0);
+        const hit = cacheGet(VS_PATH, VOLUME_SHOCKERS_TTL);
         return !(hit && Array.isArray(hit.data) && hit.data.length > 0);
     });
+    const [volumeShockersHasMore, setVolumeShockersHasMore] = useState(() => {
+        const VS_PATH = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, 0);
+        const hit = cacheGet(VS_PATH, VOLUME_SHOCKERS_TTL);
+        return !!(hit && Array.isArray(hit.data) && hit.data.length >= VOLUME_SHOCKERS_BATCH_SIZE);
+    });
+    const [loadingMoreVolumeShockers, setLoadingMoreVolumeShockers] = useState(false);
 
     const [breadthSnapshot, setBreadthSnapshot] = useState(() => {
         const hit = cacheGet(BREADTH_LATEST_PATH, MOVERS_TTL);
@@ -2996,10 +3116,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         const hit = cacheGet(FII_DII_PATH, FII_DII_TTL);
         return hit?.data || [];
     });
-    // Only show skeleton if there's truly nothing cached
-    const [loadingMovers, setLoadingMovers] = useState(() => !_derivedMovers);
     const [activeMoversTab, setActiveMoversTab] = useState("gainers");
     const [activeMobilePanel, setActiveMobilePanel] = useState("pulse");
+    const volumeShockersOffsetRef = useRef(0);
 
     // ── RS stocks – seed from cache ──────────────────────────────────────────
     const _cachedRs = useMemo(() => {
@@ -3061,72 +3180,123 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const prefetchRef = useRef(null);
     const stockReturnsMapRef = useRef(new Map()); // ticker -> {ret_3m, ret_6m, ret_12m}
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // FETCH MARKET MOVERS
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    useEffect(() => {
-        // applyMovers: takes raw API rows and updates all mover state slices.
-        function applyMovers(moversData, allowedSet) {
-            const derived = deriveMovers(moversData, allowedSet);
-            // applyNamesFromMap fills names for tickers already in the global map (instant on revisit)
-            setGainers(applyNamesFromMap(derived.gainers));
-            setLosers(applyNamesFromMap(derived.losers));
-            setNearHigh(applyNamesFromMap(derived.nearHigh));
-            setNearLow(applyNamesFromMap(derived.nearLow));
-            if (moversData[0]?.created_at) {
-                setLastUpdated(new Date(moversData[0].created_at).toLocaleString("en-IN", {
-                    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true,
-                }));
+    // ── Per-tab config: each Market Movers tab owns its query, its cache, its
+    // offset, its hasMore flag, and its loading flags. Nothing here is shared
+    // across tabs anymore, so paginating one tab can never affect another's data.
+    const MOVERS_TAB_CONFIG = {
+        gainers: {
+            path: MOVERS_TAB_PATHS.gainers,
+            setData: setGainers, offsetRef: gainersOffsetRef, loadedRef: gainersLoadedRef,
+            hasMore: gainersHasMore, setHasMore: setGainersHasMore,
+            loading: loadingGainers, setLoading: setLoadingGainers,
+            loadingMore: loadingMoreGainers, setLoadingMore: setLoadingMoreGainers,
+        },
+        losers: {
+            path: MOVERS_TAB_PATHS.losers,
+            setData: setLosers, offsetRef: losersOffsetRef, loadedRef: losersLoadedRef,
+            hasMore: losersHasMore, setHasMore: setLosersHasMore,
+            loading: loadingLosers, setLoading: setLoadingLosers,
+            loadingMore: loadingMoreLosers, setLoadingMore: setLoadingMoreLosers,
+        },
+        near_high: {
+            path: MOVERS_TAB_PATHS.near_high,
+            setData: setNearHigh, offsetRef: nearHighOffsetRef, loadedRef: nearHighLoadedRef,
+            hasMore: nearHighHasMore, setHasMore: setNearHighHasMore,
+            loading: loadingNearHigh, setLoading: setLoadingNearHigh,
+            loadingMore: loadingMoreNearHigh, setLoadingMore: setLoadingMoreNearHigh,
+        },
+        near_low: {
+            path: MOVERS_TAB_PATHS.near_low,
+            setData: setNearLow, offsetRef: nearLowOffsetRef, loadedRef: nearLowLoadedRef,
+            hasMore: nearLowHasMore, setHasMore: setNearLowHasMore,
+            loading: loadingNearLow, setLoading: setLoadingNearLow,
+            loadingMore: loadingMoreNearLow, setLoadingMore: setLoadingMoreNearLow,
+        },
+    };
+
+    // Fetches one page for one movers tab. isLoadMore=false always fetches page 1
+    // (used for the initial load and for cache revalidation); isLoadMore=true
+    // fetches the next page starting at that tab's own offset.
+    const fetchMoversTabPage = async (tabKey, { isLoadMore = false, isCancelled = () => false } = {}) => {
+        const cfg = MOVERS_TAB_CONFIG[tabKey];
+        if (!cfg) return;
+        if (isLoadMore) {
+            if (cfg.loadingMore || !cfg.hasMore) return;
+            cfg.setLoadingMore(true);
+        } else {
+            cfg.setLoading(true);
+        }
+        try {
+            const allowedSet = await ensureAllowedTickerSet();
+            const offset = isLoadMore ? cfg.offsetRef.current : 0;
+            const pagePath = withPageParams(cfg.path, MOVERS_BATCH_SIZE, offset);
+
+            const applyPage = (rawRows, replace) => {
+                if (isCancelled() || !Array.isArray(rawRows)) return;
+                const processed = applyNamesFromMap(processMoversRows(tabKey, rawRows, allowedSet));
+                if (replace) {
+                    cfg.setData(processed);
+                    cfg.offsetRef.current = rawRows.length;
+                } else {
+                    cfg.setData(prev => mergeUniqueByTicker(prev, processed));
+                    cfg.offsetRef.current += rawRows.length;
+                }
+                cfg.setHasMore(rawRows.length >= MOVERS_BATCH_SIZE);
+                cfg.loadedRef.current = true;
+                if (!isLoadMore && rawRows[0]?.created_at) {
+                    setLastUpdated(new Date(rawRows[0].created_at).toLocaleString("en-IN", {
+                        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true,
+                    }));
+                }
+            };
+
+            const rawRows = await sbFetch(pagePath, userToken, {
+                ttl: MOVERS_TTL,
+                onStale: isLoadMore ? undefined : fresh => applyPage(fresh, true),
+            });
+
+            if (isCancelled()) return;
+            applyPage(rawRows, !isLoadMore);
+
+            try {
+                const allTickers = [...new Set((rawRows || []).map(r => r.symbol).filter(Boolean))];
+                const missingTickers = allTickers.filter(t => !_nameMap.has(t));
+                if (missingTickers.length) {
+                    const nameRows = await batchFetchBhavNames(missingTickers, userToken);
+                    if (nameRows.length && !isCancelled()) {
+                        cfg.setData(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
+                    }
+                }
+            } catch (nameErr) {
+                console.warn(`Could not enrich ${tabKey} mover names from bhav_copy:`, nameErr.message);
+            }
+        } catch (err) {
+            if (!isCancelled()) {
+                console.error(`Error fetching movers (${tabKey}):`, err);
+                if (!isLoadMore) setError(`Failed to load market movers: ${err.message}`);
+            }
+        } finally {
+            if (!isCancelled()) {
+                if (isLoadMore) cfg.setLoadingMore(false);
+                else cfg.setLoading(false);
             }
         }
+    };
 
-        (async () => {
-            // If we already seeded from cache, don't show a spinner.
-            // loadingMovers is only true when there was no cache at mount.
-            setError(null);
-            try {
-                const allowedSet = await ensureAllowedTickerSet();
-                let latestMovers = _cachedMovers || null;
-
-                const moversData = await sbFetch(MOVERS_PATH, userToken, {
-                    ttl: MOVERS_TTL,
-                    onStale: fresh => {
-                        latestMovers = fresh;
-                        applyMovers(latestMovers, allowedSet);
-                    },
-                });
-
-                // If we got a stale SWR hit, the onStale cb fires later.
-                // The synchronous return here is used for the initial render.
-                latestMovers = moversData;
-                applyMovers(moversData, allowedSet);
-
-                // ── Enrich mover rows with names (background, non-blocking) ────────
-                // Names already present from _nameMap for cached tickers.
-                // This fetch fills in any that were missing (new tickers).
-                try {
-                    const allTickers = [...new Set((moversData || []).map(r => r.symbol).filter(Boolean))];
-                    const missingTickers = allTickers.filter(t => !_nameMap.has(t));
-                    if (missingTickers.length) {
-                        const nameRows = await batchFetchBhavNames(missingTickers, userToken);
-                        // _updateNameMap is called inside batchFetchBhavNames; push update to UI
-                        if (nameRows.length) {
-                            setGainers(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
-                            setLosers(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
-                            setNearHigh(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
-                            setNearLow(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
-                        }
-                    }
-                } catch (nameErr) {
-                    console.warn("Could not enrich mover names from bhav_copy:", nameErr.message);
-                }
-            } catch (err) {
-                console.error("Error fetching movers:", err);
-                setError(`Failed to load market movers: ${err.message}`);
-            } finally {
-                setLoadingMovers(false);
-            }
-        })();
+    // ─────────────────────────────────────────────────────────────────────────
+    // FETCH MARKET MOVERS — first page of all four tabs, in parallel, each via
+    // its own query. Cheap (MOVERS_BATCH_SIZE rows each) and keeps hero-level
+    // gainer/loser counts accurate without loading the whole market_movers table.
+    // ─────────────────────────────────────────────────────────────────────────
+    useEffect(() => {
+        let cancelled = false;
+        setError(null);
+        Promise.all(
+            Object.keys(MOVERS_TAB_CONFIG).map(tabKey =>
+                fetchMoversTabPage(tabKey, { isLoadMore: false, isCancelled: () => cancelled })
+            )
+        );
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
@@ -3134,58 +3304,41 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // FETCH VOLUME SHOCKERS
     // ─────────────────────────────────────────────────────────────────────────
     useEffect(() => {
-        const VOLUME_SHOCKERS_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast&limit=100";
-        const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
+        const pagePath = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, 0);
+        let cancelled = false;
         (async () => {
             try {
-                // mapRow enriches each row with change_pct and applies cached names instantly
                 const mapRow = r => ({
                     ...r,
                     name: _nameMap.get(r.ticker) || r.name || null,
                     change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
                 });
                 const allowedSet = await ensureAllowedTickerSet();
-                const cached = cacheGet(VOLUME_SHOCKERS_PATH, VOLUME_SHOCKERS_TTL);
+                const cached = cacheGet(pagePath, VOLUME_SHOCKERS_TTL);
                 let vsData = null;
                 if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
-                    // Paint stale or fresh data immediately — no spinner
                     vsData = cached.data;
+                    if (cancelled) return;
                     setVolumeShockers(vsData.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
-                    setLoadingVolumeShockers(false);
-                    if (!cached.stale) {
-                        // Fresh — background name enrichment only
-                    } else {
-                        // Stale — background refresh, don't block UI
-                        sbFetch(VOLUME_SHOCKERS_PATH, userToken, {
-                            ttl: VOLUME_SHOCKERS_TTL,
-                            noCache: false,
-                            onStale: fresh => {
-                                if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
-                            },
-                        }).then(fresh => {
-                            if (Array.isArray(fresh)) {
-                                vsData = fresh;
-                                setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
-                            }
-                        }).catch(() => { });
-                    }
+                    setVolumeShockersHasMore(vsData.length >= VOLUME_SHOCKERS_BATCH_SIZE);
+                    volumeShockersOffsetRef.current = vsData.length;
                 } else {
-                    vsData = await sbFetch(VOLUME_SHOCKERS_PATH, userToken, {
+                    vsData = await sbFetch(pagePath, userToken, {
                         ttl: VOLUME_SHOCKERS_TTL,
-                        onStale: fresh => {
-                            if (Array.isArray(fresh)) setVolumeShockers(fresh.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
-                        },
                     });
+                    if (cancelled) return;
                     setVolumeShockers((vsData || []).map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
+                    setVolumeShockersHasMore((vsData || []).length >= VOLUME_SHOCKERS_BATCH_SIZE);
+                    volumeShockersOffsetRef.current = (vsData || []).length;
+                    cacheSet(pagePath, vsData || [], VOLUME_SHOCKERS_TTL);
                 }
 
-                // ── Enrich volume shocker rows with names (missing tickers only) ──
                 try {
                     const allTickers = [...new Set((vsData || []).map(r => r.ticker).filter(Boolean))];
                     const missingTickers = allTickers.filter(t => !_nameMap.has(t));
                     if (missingTickers.length) {
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
-                        if (nameRows.length) {
+                        if (nameRows.length && !cancelled) {
                             setVolumeShockers(prev => applyNamesFromMap(prev).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
                         }
                     }
@@ -3193,11 +3346,12 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     console.warn("Could not enrich volume shocker names from bhav_copy:", nameErr.message);
                 }
             } catch (err) {
-                console.error("Error fetching volume shockers:", err);
+                if (!cancelled) console.error("Error fetching volume shockers:", err);
             } finally {
-                setLoadingVolumeShockers(false);
+                if (!cancelled) setLoadingVolumeShockers(false);
             }
         })();
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
@@ -3453,6 +3607,61 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         volume_shockers: volumeShockers,
     }[activeMoversTab] || [];
 
+    // These reflect whichever movers tab is currently active, sourced from that
+    // tab's own independent state (see MOVERS_TAB_CONFIG above).
+    const activeMoversTabCfg = MOVERS_TAB_CONFIG[activeMoversTab];
+    const loadingMovers = activeMoversTabCfg?.loading ?? false;
+    const moversHasMore = activeMoversTabCfg?.hasMore ?? false;
+    const loadingMoreMovers = activeMoversTabCfg?.loadingMore ?? false;
+
+    // A tab that hasn't fetched its first page yet (e.g. lazily revisited after
+    // an error) gets one; otherwise this just pages that tab forward.
+    const loadMoreMovers = async () => {
+        if (!activeMoversTabCfg) return;
+        if (!activeMoversTabCfg.loadedRef.current) {
+            await fetchMoversTabPage(activeMoversTab, { isLoadMore: false });
+        } else {
+            await fetchMoversTabPage(activeMoversTab, { isLoadMore: true });
+        }
+    };
+
+    const loadMoreVolumeShockers = async () => {
+        if (loadingMoreVolumeShockers || !volumeShockersHasMore) return;
+        setLoadingMoreVolumeShockers(true);
+        try {
+            const allowedSet = await ensureAllowedTickerSet();
+            const pagePath = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, volumeShockersOffsetRef.current);
+            const batch = await sbFetch(pagePath, userToken, { ttl: VOLUME_SHOCKERS_TTL });
+            if (!Array.isArray(batch) || batch.length === 0) {
+                setVolumeShockersHasMore(false);
+                return;
+            }
+            const processed = applyNamesFromMap(batch.map(r => ({
+                ...r,
+                name: _nameMap.get(r.ticker) || r.name || null,
+                change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
+            }))).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet));
+            setVolumeShockers(prev => mergeUniqueByTicker(prev, processed));
+            volumeShockersOffsetRef.current += batch.length;
+            setVolumeShockersHasMore(batch.length >= VOLUME_SHOCKERS_BATCH_SIZE);
+
+            try {
+                const allTickers = [...new Set(batch.map(r => r.ticker).filter(Boolean))];
+                const missingTickers = allTickers.filter(t => !_nameMap.has(t));
+                if (missingTickers.length) {
+                    await batchFetchBhavNames(missingTickers, userToken);
+                    setVolumeShockers(prev => applyNamesFromMap(prev).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
+                }
+            } catch (nameErr) {
+                console.warn("Could not enrich additional volume shocker names from bhav_copy:", nameErr.message);
+            }
+        } catch (err) {
+            console.error("Error loading more volume shockers:", err);
+        } finally {
+            setLoadingMoreVolumeShockers(false);
+        }
+    };
+
     const rsIndustrySummary = useMemo(() => {
         if (!rsStocks.length && !searchTerm.trim() && cachedRsIndustrySummary.length) {
             return cachedRsIndustrySummary;
@@ -3671,10 +3880,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                         <TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />
                                         <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
                                     </TabBar>
-                                    {activeMoversTab === "volume_shockers"
-                                        ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} />
-                                        : <MoversTable key={activeMoversTab} T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} />
-                                    }
+                {activeMoversTab === "volume_shockers"
+                    ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} hasMore={volumeShockersHasMore} loadingMore={loadingMoreVolumeShockers} onLoadMore={loadMoreVolumeShockers} />
+                    : <MoversTable key={activeMoversTab} T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} hasMore={moversHasMore} loadingMore={loadingMoreMovers} onLoadMore={loadMoreMovers} />
+                }
                                 </SectionCard>
                             )}
 
@@ -3845,14 +4054,16 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
 
 StockDashboard.warmStockDashboardCaches = warmStockDashboardCaches;
 
-function LoadMoreRowsButton({ T, visibleCount, totalCount, onLoadMore }) {
-    if (visibleCount >= totalCount) return null;
-    const remaining = totalCount - visibleCount;
+function LoadMoreRowsButton({ T, visibleCount, totalCount, hasMore = false, loading = false, onLoadMore }) {
+    if (visibleCount >= totalCount && !hasMore) return null;
+    const remaining = Math.max(totalCount - visibleCount, 0);
+    const step = Math.min(MOVERS_LOAD_MORE_ROWS, remaining || MOVERS_LOAD_MORE_ROWS);
     return (
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 12 }}>
             <button
                 type="button"
                 onClick={onLoadMore}
+                disabled={loading}
                 style={{
                     padding: "8px 14px",
                     borderRadius: 999,
@@ -3864,9 +4075,10 @@ function LoadMoreRowsButton({ T, visibleCount, totalCount, onLoadMore }) {
                     fontWeight: 700,
                     cursor: "pointer",
                     boxShadow: T.isDark ? "none" : "0 4px 12px rgba(15,23,42,0.06)",
+                    opacity: loading ? 0.65 : 1,
                 }}
             >
-                Load {Math.min(MOVERS_LOAD_MORE_ROWS, remaining)} more
+                {loading ? "Loading..." : "Show more"}
             </button>
         </div>
     );

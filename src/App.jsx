@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createCont
 import { createPortal } from "react-dom";
 //import ForumModule from "./ForumModule"
 import WatchlistDashboard from "./WatchlistDashboard";
-import FiiDiiModule from "./FiiDiiModule";
-import OwnershipScansModule from "./OwnershipScansModule";
+import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule";
+import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule";
 import AnnouncementsModule from "./AnnouncementsModule";
 import StockDashboard, { warmStockDashboardCaches } from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
@@ -25612,6 +25612,9 @@ function TopNavItem({
     setTechnoFundaFilter,
     setTechnoFundaSource,
     clearTickerRoute,
+    prefetchFinancialTabs,
+    prefetchFiiDii,
+    prefetchOwnership,
     openDropdown,
     setOpenDropdown,
     onAuthRequired,   // called when a protected tab is clicked without a session
@@ -25648,6 +25651,10 @@ function TopNavItem({
         if (!item.subItems || !isDesktopViewport()) return;
         clearCloseTimer();
         setOpenDropdown(item.id);
+    };
+    const handleMouseEnter = () => {
+        openHoverDropdown();
+        if (item.id === "financial") prefetchFinancialTabs?.();
     };
     const scheduleCloseDropdown = () => {
         if (!item.subItems || !isDesktopViewport()) return;
@@ -25695,7 +25702,7 @@ function TopNavItem({
         <div
             ref={wrapRef}
             style={{ position: "relative", display: "flex", alignItems: "stretch" }}
-            onMouseEnter={openHoverDropdown}
+            onMouseEnter={handleMouseEnter}
             onMouseLeave={scheduleCloseDropdown}
         >
             <div
@@ -25716,6 +25723,7 @@ function TopNavItem({
                             event.stopPropagation();
                             clearTickerRoute?.();
                             setProductTab(item.id);
+                            if (item.id === "financial") prefetchFinancialTabs?.();
                             setOpenDropdown(isDropdownOpen ? null : item.id);
                         }}
                     >
@@ -25750,11 +25758,18 @@ function TopNavItem({
                             <div
                                 key={sub.id}
                                 className={`top-nav-dropdown-item${subActive ? " active" : ""}`}
+                                onMouseEnter={() => {
+                                    if (item.id !== "financial") return;
+                                    if (sub.id === "fiidii") prefetchFiiDii?.();
+                                    if (sub.id === "ownership") prefetchOwnership?.();
+                                }}
                                 onClick={() => {
                                     clearTickerRoute?.();
                                     setProductTab(item.id);
                                     if (item.id === "financial") {
                                         setFinancialSubPage(sub.id);
+                                        if (sub.id === "fiidii") prefetchFiiDii?.();
+                                        if (sub.id === "ownership") prefetchOwnership?.();
                                         if (sub.id !== "screener") {
                                             setTechnoFundaFilter(null);
                                             setTechnoFundaSource(null);
@@ -27618,6 +27633,12 @@ export default function App() {
                                             setTechnoFundaFilter={setTechnoFundaFilter}
                                             setTechnoFundaSource={setTechnoFundaSource}
                                             clearTickerRoute={clearTickerRoute}
+                                            prefetchFinancialTabs={() => {
+                                                prefetchFiiDiiData();
+                                                prefetchOwnershipData();
+                                            }}
+                                            prefetchFiiDii={prefetchFiiDiiData}
+                                            prefetchOwnership={prefetchOwnershipData}
                                             openDropdown={openDropdown}
                                             setOpenDropdown={setOpenDropdown}
                                             onAuthRequired={() => setShowLoginModal(true)}
@@ -27733,6 +27754,10 @@ export default function App() {
                                             }
                                             clearTickerRoute();
                                             setProductTab(item.id);
+                                            if (item.id === "financial") {
+                                                prefetchFiiDiiData();
+                                                prefetchOwnershipData();
+                                            }
                                             if (item.id === "financial" && financialSubPage === "search") {
                                                 setFinancialSubPage(item.subItems?.[0]?.id || "screener");
                                             }
@@ -27752,7 +27777,12 @@ export default function App() {
                                                 }`}
                                             onClick={() => {
                                                 clearTickerRoute();
-                                                if (item.id === "financial") { setFinancialSubPage(sub.id); if (sub.id !== "screener") { setTechnoFundaFilter(null); setTechnoFundaSource(null); } }
+                                                if (item.id === "financial") {
+                                                    setFinancialSubPage(sub.id);
+                                                    if (sub.id === "fiidii") prefetchFiiDiiData();
+                                                    if (sub.id === "ownership") prefetchOwnershipData();
+                                                    if (sub.id !== "screener") { setTechnoFundaFilter(null); setTechnoFundaSource(null); }
+                                                }
                                                 else if (item.id === "technical") setTechnicalSubPage(sub.id);
                                                 else setPage(sub.id);
                                                 setRailCollapsed(true);
@@ -27920,12 +27950,16 @@ export default function App() {
                                                 />
                                             </div>
                                         )}
-                                        <div style={{ display: financialSubPage === "fiidii" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", justifyContent: "center" }}>
-                                            <FiiDiiModule T={T} />
-                                        </div>
-                                        <div style={{ display: financialSubPage === "ownership" ? "flex" : "none", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
-                                            <OwnershipScansModule T={T} />
-                                        </div>
+                                        {financialSubPage === "fiidii" && (
+                                            <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", width: "100%", justifyContent: "center" }}>
+                                                <FiiDiiModule T={T} />
+                                            </div>
+                                        )}
+                                        {financialSubPage === "ownership" && (
+                                            <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
+                                                <OwnershipScansModule T={T} />
+                                            </div>
+                                        )}
                                         {financialSubPage === "announcements" && (
                                             <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
                                                 <AnnouncementsModule T={T} />
