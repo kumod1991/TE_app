@@ -96,6 +96,11 @@ function isTimeoutLikeError(e) {
 
 // ─── BACKGROUND PREFETCH ─────────────────────────────────────────────────────
 let _prefetchPromise = null;
+// Resolves with a small, fast slice of stocks on a genuinely cold start (no
+// cache at all). Anything awaiting `_prefetchPromise` can race this instead
+// so the tab can paint real data long before the full universe fetch lands.
+// Always cleared once the full fetch resolves — it never outlives its use.
+let _previewPromise = null;
 const FRESH_MS = 5 * 60 * 1000;
 
 export function prefetchOwnershipData() {
@@ -111,8 +116,21 @@ export function prefetchOwnershipData() {
 
   if (_prefetchPromise) return _prefetchPromise;
 
+  const isColdStart = !window.__ownershipInit;
   if (!window.__ownershipInit) {
     window.__ownershipInit = { processed: [], loading: true, refreshing: false, cacheAge: null, fetchedAt: null };
+  }
+
+  if (isColdStart) {
+    _previewPromise = fetchOwnershipPreview()
+      .then((previewRows) => {
+        // Only apply if the full fetch hasn't already won the race.
+        if (previewRows.length && window.__ownershipInit?.loading) {
+          window.__ownershipInit = { ...window.__ownershipInit, processed: previewRows, partial: true };
+        }
+        return previewRows;
+      })
+      .catch(() => []);
   }
 
   _prefetchPromise = fetchOwnershipUniverse().then((processed) => {
@@ -123,11 +141,23 @@ export function prefetchOwnershipData() {
       loading: false, refreshing: false, cacheAge: 0,
       fetchedAt: Date.now(),
     };
+    _previewPromise = null;
   }).catch(() => {
     initFromCacheIfPossible();
     _prefetchPromise = null;
+    _previewPromise = null;
   });
   return _prefetchPromise;
+}
+
+// Kick off loading the moment this module is evaluated — e.g. as soon as a
+// lazily-loaded chunk finishes downloading — instead of waiting for the
+// Ownership component to actually mount. On a cold tab visit this overlaps
+// the network fetch with whatever render work the app is still doing, so by
+// the time the component mounts there's a decent chance data (or at least
+// the in-flight promise) is already there to grab.
+if (typeof window !== "undefined") {
+  prefetchOwnershipData();
 }
 
 // ─── PAGINATED FETCH (parallel) ───────────────────────────────────────────────
@@ -174,9 +204,45 @@ async function fetchShareholding() {
 const OWNERSHIP_RPC_LIMIT = 5000;
 const OWNERSHIP_RPC_TIMEOUT_MS = 12000;
 
+// Small, fast slice used only to paint something real on a genuinely cold
+// start (empty cache, nothing pre-warmed). Kept low enough that Postgres can
+// return it quickly, and short-timeout so a slow response just gets ignored
+// rather than delaying anything — the full fetch below is always the source
+// of truth and this is purely a "look instant" optimization.
+const OWNERSHIP_PREVIEW_LIMIT = 150;
+const OWNERSHIP_PREVIEW_TIMEOUT_MS = 6000;
+
 async function fetchOwnershipScans({ limit = OWNERSHIP_RPC_LIMIT, timeoutMs = OWNERSHIP_RPC_TIMEOUT_MS } = {}) {
   const rows = await rpcFetch("get_company_shareholding_scans", { p_limit: limit }, timeoutMs);
   return normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
+}
+
+async function fetchOwnershipPreview() {
+  const rows = await rpcFetch("get_company_shareholding_scans", { p_limit: OWNERSHIP_PREVIEW_LIMIT }, OWNERSHIP_PREVIEW_TIMEOUT_MS);
+  return normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
+}
+
+// ─── ON-DEMAND PER-STOCK DETAIL (drilldown modal only) ───────────────────────
+// The bulk universe fetch intentionally excludes full quarterly history (see
+// normalizeOwnershipRow / processStock) to keep the list light. When a user
+// opens a single stock's drilldown, fetch just that one row's history here —
+// a single-row query, so it's fast regardless of how big the universe is.
+async function fetchStockQuarterlyDetail(ticker) {
+  if (!ticker) return [];
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/company_shareholding?select=quarterly&ticker=eq.${encodeURIComponent(ticker)}&limit=1`,
+    { headers: sbH() },
+    10000
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching detail for ${ticker}`);
+  const rows = await res.json();
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (!row) return [];
+  let q = [];
+  try { q = typeof row.quarterly === "string" ? JSON.parse(row.quarterly) : row.quarterly || []; }
+  catch { q = []; }
+  q = [...q].sort((a, b) => dateKey(a.date).localeCompare(dateKey(b.date)));
+  return q.map(normalizeOwnershipSeriesEntry).filter(Boolean);
 }
 
 async function fetchLegacyOwnershipProcessed() {
@@ -241,13 +307,14 @@ function normalizeOwnershipSeriesEntry(entry) {
 function normalizeOwnershipRow(row) {
   if (!row) return null;
   const last4Source = Array.isArray(row.last4) ? row.last4 : [];
-  const allQuarterlySource = Array.isArray(row.allQuarterly)
-    ? row.allQuarterly
-    : Array.isArray(row.all_quarterly)
-      ? row.all_quarterly
-      : [];
+  // Deliberately NOT keeping full history (`allQuarterly`/`all_quarterly`) on
+  // the bulk list objects — for a universe of hundreds/thousands of stocks
+  // that's a lot of memory and CPU spent normalizing data that's only ever
+  // looked at for the single stock a user opens in the drilldown. The modal
+  // fetches its own full history on demand instead (see DrilldownModal).
+  const { allQuarterly: _dropAQ, all_quarterly: _dropAQSnake, ...rowRest } = row;
   return {
-    ...row,
+    ...rowRest,
     ownPromoter: safeNum(row.ownPromoter ?? row.own_promoter ?? row.promoter_pct ?? row.promoter),
     ownFii: safeNum(row.ownFii ?? row.own_fii ?? row.fii_pct ?? row.fii),
     ownDii: safeNum(row.ownDii ?? row.own_dii ?? row.dii_pct ?? row.dii),
@@ -267,7 +334,6 @@ function normalizeOwnershipRow(row) {
       : { fii: 0, dii: 0 },
     anomalies: Array.isArray(row.anomalies) ? row.anomalies : [],
     last4: last4Source.map(normalizeOwnershipSeriesEntry).filter(Boolean),
-    allQuarterly: allQuarterlySource.map(normalizeOwnershipSeriesEntry).filter(Boolean),
     latestDate: row.latestDate ?? row.latest_date ?? row.latest_period_date ?? row.latest_period ?? null,
     inflect: row.inflect ?? null,
     sector: row.sector ?? "",
@@ -451,7 +517,7 @@ function processStock(row, sectorMap) {
     combinedFlow: tFii + tDii,
     score, signal, conviction, phase, inflect, insight,
     timing, accel, dominance, anomalies, story, sector,
-    last4: recentQ, allQuarterly: q, latestDate: last.date,
+    last4: recentQ, latestDate: last.date,
   };
 }
 
@@ -582,7 +648,21 @@ function TrendSparklines({ stock, T }) {
 // ─── DRILLDOWN MODAL ──────────────────────────────────────────────────────────
 function DrilldownModal({ stock, T, onClose }) {
   const isDark = (T?.bg || "").toLowerCase() === "#060d1a";
-  const qs = (stock.allQuarterly || []).filter(Boolean);
+
+  // Full history isn't carried on the bulk list anymore (see
+  // normalizeOwnershipRow/processStock) — fetch it just for this one stock.
+  // `stock.last4` (already in memory, no request needed) covers the chart
+  // right away so the modal never shows a blank/empty state while it loads.
+  const [detailQuarterly, setDetailQuarterly] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchStockQuarterlyDetail(stock.ticker)
+      .then((q) => { if (!cancelled && q.length) setDetailQuarterly(q); })
+      .catch(() => {}); // best-effort — last4 fallback below still renders a useful chart
+    return () => { cancelled = true; };
+  }, [stock.ticker]);
+
+  const qs = (detailQuarterly && detailQuarterly.length ? detailQuarterly : (stock.last4 || [])).filter(Boolean);
   const W = 520, H = 160;
   const series = [
     { key: "fiis",      label: "FII",      color: "#3b82f6" },
@@ -1224,11 +1304,26 @@ export default function OwnershipScansModule({ T }) {
       }
 
       setLoading(true);
+      let previewApplied = false;
       try {
         if (_prefetchPromise) {
+          // A fast preview is racing the full fetch (true cold start) — grab
+          // it as soon as it lands so the tab shows real stocks well before
+          // the full universe is ready, instead of a skeleton the whole time.
+          if (_previewPromise) {
+            _previewPromise.then((previewRows) => {
+              if (previewRows?.length && window.__ownershipInit?.partial) {
+                previewApplied = true;
+                setProcessed(previewRows);
+                setLoading(false);
+                setRefreshing(true);
+              }
+            }).catch(() => {});
+          }
           await _prefetchPromise;
           const fresh = window.__ownershipInit || initFromCacheIfPossible();
           if (fresh?.processed) setProcessed(fresh.processed);
+          setRefreshing(false);
         } else {
           const processed = await fetchOwnershipUniverse();
           assertCompleteUniverse(processed, processed.length);
@@ -1247,6 +1342,11 @@ export default function OwnershipScansModule({ T }) {
         if (cached?.processed?.length) {
           setProcessed(cached.processed);
           setRefreshing(true);
+          setError(null);
+        } else if (previewApplied) {
+          // A preview is already on screen — keep it visible instead of
+          // replacing real (if partial) content with a full-page error.
+          setRefreshing(false);
           setError(null);
         } else {
           try {
