@@ -13829,93 +13829,130 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 {/*  TABLE  matches portfolio table-wrap + thead th + td styles  */}
                 {isApplied && !loading && !loadErr && filtered.length > 0 && (
                     isScreenerMobile ? (
-                        <div style={{ flex: 1, overflow: "auto", padding: "12px 14px 18px" }}>
-                            <div style={{ display: "grid", gap: 12 }}>
-                                {pageRows.map((row, ri) => {
-                                    const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
-                                    const ticker = row.ticker || row.symbol || "";
-                                    const name = row.name || "";
-                                    const displayTicker = row.displayTicker || ticker;
-                                    const hue = displayTicker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
-                                    const badgeBg = DS.isDark ? `hsl(${hue},18%,18%)` : `hsl(${hue},28%,90%)`;
-                                    const badgeColor = DS.isDark ? `hsl(${hue},40%,60%)` : `hsl(${hue},35%,32%)`;
-                                    return (
-                                        <div key={ri} style={{
-                                            border: `1px solid ${DS.border}`,
-                                            borderRadius: 18,
-                                            background: DS.card,
-                                            boxShadow: `0 14px 28px ${DS.shadow}`,
-                                            overflow: "hidden",
-                                        }}>
-                                            <div style={{
-                                                padding: "14px 14px 12px",
-                                                background: DS.isDark ? "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0))" : "linear-gradient(180deg, rgba(37,99,235,0.04), rgba(37,99,235,0))",
-                                                borderBottom: `1px solid ${DS.border}`,
-                                            }}>
-                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-                                                    <div style={{ minWidth: 0 }}>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                                            <span style={{ fontFamily: DS.mono, fontSize: 11, color: DS.textMuted }}>#{rowNum}</span>
-                                                            <span style={{ minWidth: 36, height: 20, padding: "0 6px", borderRadius: 6, background: badgeBg, color: badgeColor, fontFamily: DS.mono, fontSize: 9, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", letterSpacing: ".04em" }}>
-                                                                {displayTicker.slice(0, 6)}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ marginTop: 8, fontSize: 16, fontWeight: 700, color: DS.text, fontFamily: DS.mono, letterSpacing: ".01em", wordBreak: "break-word" }}>
-                                                            {displayTicker}
-                                                        </div>
-                                                        {name && (
-                                                            <div style={{ marginTop: 4, fontSize: 12.5, color: DS.textSub, lineHeight: 1.45 }}>
-                                                                {name}
-                                                            </div>
-                                                        )}
+                        <div style={{
+                            flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch",
+                            scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
+                        }}>
+                            <table style={{
+                                width: "max-content", minWidth: "100%",
+                                borderCollapse: "collapse", fontFamily: DS.sans
+                            }}>
+                                <thead>
+                                    <tr style={{
+                                        position: "sticky", top: 0, zIndex: 10,
+                                        background: DS.tableHead,
+                                        borderBottom: `1px solid ${DS.border}`
+                                    }}>
+
+                                        {/* # */}
+                                        <th style={{
+                                            padding: "9px 0 9px 12px", textAlign: "left",
+                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                                            letterSpacing: ".06em", color: DS.textMuted,
+                                            position: "sticky", left: 0, zIndex: 11,
+                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                            width: 30, whiteSpace: "nowrap",
+                                        }}>#</th>
+
+                                        {/* Company */}
+                                        <th style={{
+                                            padding: "9px 12px 9px 8px", textAlign: "left",
+                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                                            letterSpacing: ".06em", color: DS.textMuted,
+                                            position: "sticky", left: 30, zIndex: 11,
+                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                            minWidth: 92, whiteSpace: "nowrap",
+                                        }}>Company</th>
+
+                                        {/* Metrics */}
+                                        {mobileCardCols.map(col => {
+                                            const isSort = sortCol === col.key;
+                                            return (
+                                                <th key={col.key} onClick={() => handleSort(col.key)}
+                                                    style={{
+                                                        padding: "9px 11px", textAlign: "right",
+                                                        fontSize: 10, fontWeight: 700,
+                                                        textTransform: "uppercase", letterSpacing: ".06em",
+                                                        color: isSort ? DS.accent : DS.textMuted,
+                                                        background: isSort ? DS.accentDim : DS.tableHead,
+                                                        borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
+                                                        whiteSpace: "nowrap", cursor: "pointer", userSelect: "none",
+                                                    }}>
+                                                    {col.label}
+                                                    {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "" : ""}</span>}
+                                                </th>
+                                            );
+                                        })}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pageRows.map((row, ri) => {
+                                        const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
+                                        const ticker = row.ticker || row.symbol || "";
+                                        const displayTicker = row.displayTicker || ticker;
+                                        return (
+                                            <tr key={ri} style={{ borderTop: `1px solid ${DS.border}` }}>
+
+                                                {/* # */}
+                                                <td data-sticky="1" style={{
+                                                    padding: "8px 0 8px 12px",
+                                                    fontSize: 12, color: DS.textMuted,
+                                                    fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                    position: "sticky", left: 0,
+                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                    borderRight: `1px solid ${DS.border}`,
+                                                    width: 30, textAlign: "left",
+                                                }}>{rowNum}</td>
+
+                                                {/* Company */}
+                                                <td data-sticky="1" style={{
+                                                    padding: "8px 12px 8px 8px",
+                                                    position: "sticky", left: 30,
+                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                    borderRight: `1px solid ${DS.border}`,
+                                                    minWidth: 92,
+                                                }}>
+                                                    <div style={{
+                                                        fontSize: 12.5, fontWeight: 650,
+                                                        color: DS.text, whiteSpace: "nowrap",
+                                                        overflow: "hidden", textOverflow: "ellipsis",
+                                                        fontFamily: DS.mono, letterSpacing: ".01em",
+                                                        maxWidth: 110
+                                                    }}>
+                                                        {displayTicker}
                                                     </div>
-                                                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                                        <div style={{ fontSize: 10, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".08em" }}>
-                                                            Rank
-                                                        </div>
-                                                        <div style={{ marginTop: 4, fontFamily: DS.mono, fontSize: 18, fontWeight: 700, color: DS.accent }}>
-                                                            {rowNum}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div style={{ padding: "12px 14px 14px" }}>
-                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                                                    {mobileCardCols.map(col => {
-                                                        const raw = row[col.key];
-                                                        let displayRaw = raw;
-                                                        let isLivePrice = false;
-                                                        if (col.key === "current_price") {
-                                                            const bp = _bestPrice(ticker, raw);
-                                                            if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
-                                                        }
-                                                        const formatted = col.fmt(displayRaw);
-                                                        const color = col.key === "current_price" && isLivePrice
-                                                            ? (DS.isDark ? "#34d399" : "#059669")
-                                                            : cellColor(col, raw);
-                                                        return (
-                                                            <div key={col.key} style={{
-                                                                border: `1px solid ${DS.border}`,
-                                                                borderRadius: 14,
-                                                                padding: "10px 10px 9px",
-                                                                background: DS.isDark ? "rgba(255,255,255,0.025)" : "rgba(15,23,42,0.02)",
-                                                                minWidth: 0,
-                                                            }}>
-                                                                <div style={{ fontSize: 10, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".07em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                                    {col.label}
-                                                                </div>
-                                                                <div style={{ marginTop: 6, fontFamily: DS.mono, fontSize: 14, fontWeight: 700, color: formatted === "" ? DS.textMuted : color, lineHeight: 1.25, wordBreak: "break-word" }}>
-                                                                    {formatted || "-"}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                                </td>
+
+                                                {/* Metric cells */}
+                                                {mobileCardCols.map(col => {
+                                                    const raw = row[col.key];
+                                                    let displayRaw = raw;
+                                                    let isLivePrice = false;
+                                                    if (col.key === "current_price") {
+                                                        const bp = _bestPrice(ticker, raw);
+                                                        if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
+                                                    }
+                                                    const formatted = col.fmt(displayRaw);
+                                                    const color = col.key === "current_price" && isLivePrice
+                                                        ? (DS.isDark ? "#34d399" : "#059669")
+                                                        : cellColor(col, raw);
+                                                    return (
+                                                        <td key={col.key} style={{
+                                                            padding: "8px 11px",
+                                                            textAlign: "right", fontSize: 12.5,
+                                                            fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                            color: formatted === "" ? DS.textMuted : color,
+                                                            whiteSpace: "nowrap",
+                                                        }}>
+                                                            {formatted || "-"}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     ) : (
                         <div style={{
