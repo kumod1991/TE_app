@@ -11959,7 +11959,7 @@ let _screenerCache = null;
 let _screenerCacheTime = null;
 let _screenerCacheLoadedAt = null;
 let _screenerPrefetchPromise = null;
-const _LS_SCREENER_KEY = "te_screener_cache_v1";
+const _LS_SCREENER_KEY = "te_screener_cache_v2";
 const _SCREENER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min memory fresh window
 const _LS_SCREENER_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h stale-but-usable window
 
@@ -12005,6 +12005,21 @@ function _isScreenerCacheFresh() {
     return !!(_screenerCacheLoadedAt && (Date.now() - _screenerCacheLoadedAt) < _SCREENER_CACHE_TTL_MS);
 }
 
+// Parses "MMM YYYY"-style quarter labels (e.g. "Jun 2023") into a comparable timestamp.
+function _parseQtrDate(label) {
+    if (!label) return 0;
+    const t = Date.parse(label);
+    return isNaN(t) ? 0 : t;
+}
+// Given a company_shareholding row's `quarterly` jsonb array, returns the single
+// most recent quarter's entry (handles both pre-parsed arrays and JSON strings).
+function _latestShareholdingQuarter(quarterly) {
+    let arr = quarterly;
+    if (typeof arr === "string") { try { arr = JSON.parse(arr); } catch { arr = null; } }
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    return arr.reduce((latest, q) => (!latest || _parseQtrDate(q?.date) > _parseQtrDate(latest?.date)) ? q : latest, null);
+}
+
 async function _fetchScreenerRows() {
     const PAGE = 1000;
     const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "count=exact" };
@@ -12043,6 +12058,45 @@ async function _fetchScreenerRows() {
         }
     } catch (_) {
         enriched = all;
+    }
+
+    // Promoter %/FII %/DII % should reflect the latest quarterly shareholding filing,
+    // not whatever (often stale/blank) snapshot lives on stock_ratios directly.
+    try {
+        const shHeaders = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "count=exact" };
+        const shBase = `${SUPABASE_URL}/rest/v1/company_shareholding?select=ticker,quarterly&limit=${PAGE}`;
+        const shFirstRes = await fetch(`${shBase}&offset=0`, { headers: shHeaders });
+        if (shFirstRes.ok) {
+            const shTotal = parseInt(shFirstRes.headers.get("content-range")?.split("/")[1] || "0");
+            const shFirstPage = await shFirstRes.json();
+            const shOffsets = [];
+            for (let offset = PAGE; offset < shTotal; offset += PAGE) shOffsets.push(offset);
+            const shRestPages = await Promise.all(
+                shOffsets.map(offset => fetch(`${shBase}&offset=${offset}`, { headers: shHeaders }).then(r => r.ok ? r.json() : []))
+            );
+            const shAll = [shFirstPage, ...shRestPages].flat().filter(Boolean);
+            const shMap = new Map();
+            for (const r of shAll) {
+                if (!r?.ticker) continue;
+                const latest = _latestShareholdingQuarter(r.quarterly);
+                if (!latest) continue;
+                shMap.set(r.ticker.trim().toUpperCase(), {
+                    promoter_pct: latest.promoters != null ? Number(latest.promoters) : null,
+                    fii_pct: latest.fiis != null ? Number(latest.fiis) : null,
+                    dii_pct: latest.diis != null ? Number(latest.diis) : null,
+                });
+            }
+            enriched.forEach(row => {
+                const sh = shMap.get((row.ticker || "").trim().toUpperCase());
+                if (sh) {
+                    row.promoter_pct = sh.promoter_pct;
+                    row.fii_pct = sh.fii_pct;
+                    row.dii_pct = sh.dii_pct;
+                }
+            });
+        }
+    } catch (_) {
+        // Leave whatever promoter_pct/fii_pct/dii_pct came from stock_ratios as a fallback.
     }
 
     _writeScreenerCache(enriched);
