@@ -12859,6 +12859,10 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     const openScreen = id => { setActiveScreenId(id); setViewMode("screen"); };
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState("");
+    // Rename support for the "My Screens" library grid (works on both mobile and desktop,
+    // since the tab bar with its own inline rename is desktop-only).
+    const [editingLibId, setEditingLibId] = useState(null);
+    const [libNameInput, setLibNameInput] = useState("");
     const [sortCol, setSortCol] = useState("market_cap_cr");
     const [sortAsc, setSortAsc] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
@@ -12872,9 +12876,13 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     // Live price overlay  incremented whenever _sessionPriceCache gains new entries
     const [livePriceTick, setLivePriceTick] = useState(0);
     const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
-    // On mobile, the table stays hidden until the person explicitly taps "Apply Filters".
-    // Any change to the active screen or its filters re-locks it until they apply again.
-    const [mobileResultsApplied, setMobileResultsApplied] = useState(false);
+    // The table stays hidden until the person explicitly clicks "Apply Filter"  on
+    // both mobile and desktop. We track this per screen+filter-combo (a "signature") so
+    // switching back to a screen you've already applied doesn't re-lock it, but creating
+    // a new screen or editing filters does. Previously-saved screens are pre-applied on
+    // load so existing behavior for them is unchanged.
+    const screenSigOf = sc => (sc?.id || "") + "|" + JSON.stringify(sc?.filters || []);
+    const [appliedSigs, setAppliedSigs] = useState(() => new Set(screens.map(screenSigOf)));
     const [screensSyncing, setScreensSyncing] = useState(!!(session?.user?.id));
 
     const saveScreens = next => {
@@ -12914,6 +12922,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                         .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
                         .map(r => ({ id: r.id, name: r.name, filters: r.filters || [] }));
                     setScreens(remote);
+                    setAppliedSigs(prev => new Set([...prev, ...remote.map(screenSigOf)]));
                     setActiveScreenId(prev => remote.some(s => s.id === prev) ? prev : remote[0].id);
                     try { localStorage.setItem(userScreensKey(uid), JSON.stringify(remote)); } catch { }
                 } else {
@@ -12937,6 +12946,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 if (s) { const parsed = JSON.parse(s).filter(sc => sc.id !== TECHNO_ID); if (parsed.length > 0) guest = parsed; }
             } catch { }
             setScreens(guest);
+            setAppliedSigs(prev => new Set([...prev, ...guest.map(screenSigOf)]));
             setActiveScreenId(guest[0].id);
             setViewMode("library");
         }
@@ -12950,6 +12960,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
             prevTF.current = tickerFilter;
             const sc = { id: TECHNO_ID, name: "TechnoFunda", filters: [] };
             setScreens(prev => [...prev.filter(s => s.id !== TECHNO_ID), sc]);
+            setAppliedSigs(prev => new Set(prev).add(screenSigOf(sc)));
             setActiveScreenId(TECHNO_ID);
             setViewMode("screen");
         }
@@ -12963,14 +12974,9 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     const activeScreen = screens.find(s => s.id === activeScreenId) || screens[0];
     const filters = activeScreen?.filters || [];
 
-    const mobileFilterSig = activeScreenId + "|" + JSON.stringify(filters);
-    const prevMobileFilterSig = useRef(mobileFilterSig);
-    useEffect(() => {
-        if (mobileFilterSig !== prevMobileFilterSig.current) {
-            prevMobileFilterSig.current = mobileFilterSig;
-            setMobileResultsApplied(false);
-        }
-    }, [mobileFilterSig]);
+    const screenSig = screenSigOf(activeScreen);
+    const isApplied = appliedSigs.has(screenSig);
+    const applyResults = () => setAppliedSigs(prev => new Set(prev).add(screenSig));
 
     // Data load
     const loadRatios = async (force) => {
@@ -13211,23 +13217,58 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                 <div data-accent-bar style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "transparent", transition: "background .15s" }} />
 
                                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-                                    <span style={{ fontSize: 14.5, fontWeight: 650, color: DS.text, letterSpacing: "-0.005em", lineHeight: 1.3 }}>
-                                        {sc.name}
-                                    </span>
-                                    {librayScreens.length > 1 && (
-                                        <button onClick={e => { e.stopPropagation(); deleteScreen(sc.id); }}
+                                    {editingLibId === sc.id ? (
+                                        <input autoFocus value={libNameInput}
+                                            onClick={e => e.stopPropagation()}
+                                            onChange={e => setLibNameInput(e.target.value)}
+                                            onBlur={() => { if (libNameInput.trim()) renameScreen(sc.id, libNameInput); setEditingLibId(null); }}
+                                            onKeyDown={e => {
+                                                if (e.key === "Enter" && libNameInput.trim()) { renameScreen(sc.id, libNameInput); setEditingLibId(null); }
+                                                if (e.key === "Escape") setEditingLibId(null);
+                                            }}
+                                            style={{
+                                                flex: 1, fontSize: 14.5, fontWeight: 650, color: DS.accent,
+                                                padding: "3px 7px", border: `1px solid ${DS.accent}`,
+                                                borderRadius: 6, background: DS.accentDim,
+                                                fontFamily: DS.sans, outline: "none", minWidth: 0
+                                            }} />
+                                    ) : (
+                                        <span style={{ fontSize: 14.5, fontWeight: 650, color: DS.text, letterSpacing: "-0.005em", lineHeight: 1.3 }}>
+                                            {sc.name}
+                                        </span>
+                                    )}
+                                    <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                                        <button onClick={e => { e.stopPropagation(); setLibNameInput(sc.name); setEditingLibId(sc.id); }}
                                             style={{
                                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                                width: 20, height: 20, flexShrink: 0, marginTop: -1,
+                                                width: 20, height: 20, marginTop: -1,
                                                 background: "none", border: "none", color: DS.textMuted,
                                                 cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
                                                 transition: "opacity .12s, background .12s"
                                             }}
                                             onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"; }}
-                                            onMouseLeave={e => { e.currentTarget.style.opacity = "0.38"; e.currentTarget.style.background = "transparent"; }}>
-                                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
+                                            onMouseLeave={e => { e.currentTarget.style.opacity = "0.38"; e.currentTarget.style.background = "transparent"; }}
+                                            title="Rename">
+                                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M11 2l3 3-8 8-3.5 1L3 11z" />
+                                            </svg>
                                         </button>
-                                    )}
+                                        {librayScreens.length > 1 && (
+                                            <button onClick={e => { e.stopPropagation(); deleteScreen(sc.id); }}
+                                                style={{
+                                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                                    width: 20, height: 20, marginTop: -1,
+                                                    background: "none", border: "none", color: DS.textMuted,
+                                                    cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
+                                                    transition: "opacity .12s, background .12s"
+                                                }}
+                                                onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"; }}
+                                                onMouseLeave={e => { e.currentTarget.style.opacity = "0.38"; e.currentTarget.style.background = "transparent"; }}
+                                                title="Delete">
+                                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div style={{ height: 1, background: DS.border, opacity: .6 }} />
@@ -13617,26 +13658,27 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                             </button>
                         )}
 
-                        {isScreenerMobile && (
-                            <button onClick={() => setMobileResultsApplied(true)}
-                                style={{
-                                    width: "100%", marginTop: 4, padding: "11px 16px",
-                                    background: mobileResultsApplied ? DS.accentDim : DS.accent,
-                                    border: `1px solid ${DS.accent}`, borderRadius: 9,
-                                    color: mobileResultsApplied ? DS.accent : "#fff",
-                                    fontSize: 13.5, fontWeight: 650, fontFamily: DS.sans, cursor: "pointer",
-                                    display: "flex", alignItems: "center", justifyContent: "center", gap: 7
-                                }}>
-                                {mobileResultsApplied ? (
-                                    <>
-                                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8l3.5 3.5L13 5" /></svg>
-                                        Filters Applied
-                                    </>
-                                ) : (
-                                    `Apply Filter${filters.length === 1 ? "" : "s"}${filters.length > 0 ? ` (${filters.length})` : ""}`
-                                )}
-                            </button>
-                        )}
+                        <button onClick={applyResults}
+                            style={{
+                                width: isScreenerMobile ? "100%" : "auto",
+                                marginTop: isScreenerMobile ? 4 : 0,
+                                marginLeft: isScreenerMobile ? 0 : "auto",
+                                padding: isScreenerMobile ? "11px 16px" : "6px 16px",
+                                background: isApplied ? DS.accentDim : DS.accent,
+                                border: `1px solid ${DS.accent}`, borderRadius: isScreenerMobile ? 9 : 7,
+                                color: isApplied ? DS.accent : "#fff",
+                                fontSize: isScreenerMobile ? 13.5 : 12.5, fontWeight: 650, fontFamily: DS.sans, cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: 7, flexShrink: 0
+                            }}>
+                            {isApplied ? (
+                                <>
+                                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8l3.5 3.5L13 5" /></svg>
+                                    Filters Applied
+                                </>
+                            ) : (
+                                `Apply Filter${filters.length === 1 ? "" : "s"}${filters.length > 0 ? ` (${filters.length})` : ""}`
+                            )}
+                        </button>
                     </>
                 )}
             </div>
@@ -13647,8 +13689,33 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 minHeight: 0, display: "flex", flexDirection: "column"
             }}>
 
+                {/* Not yet applied  results stay hidden until "Apply Filter" is clicked */}
+                {!isApplied && (
+                    <div style={{
+                        display: "flex", flexDirection: "column", alignItems: "center",
+                        justifyContent: "center", height: "100%", gap: 10, color: DS.textSub, padding: "0 24px"
+                    }}>
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: .2 }}>
+                            <path d="M4 5h16M7 12h10M10 19h4" />
+                        </svg>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub, textAlign: "center" }}>
+                            {filters.length > 0 ? "Filters not applied yet" : "No filters yet"}
+                        </div>
+                        <div style={{ fontSize: 13, color: DS.textMuted, textAlign: "center", maxWidth: 320 }}>
+                            {filters.length > 0
+                                ? "Click \"Apply Filter\" above to run this screen."
+                                : "Add a filter rule, then click \"Apply Filter\" to see matching stocks."}
+                        </div>
+                        <button onClick={applyResults} style={{ marginTop: 4, ...ghostBtn(false) }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                            {filters.length > 0 ? `Apply Filter${filters.length === 1 ? "" : "s"}` : "Show all stocks"}
+                        </button>
+                    </div>
+                )}
+
                 {/* Loading */}
-                {loading && allRows.length === 0 && (
+                {isApplied && loading && allRows.length === 0 && (
                     <div style={{
                         display: "flex", flexDirection: "column", alignItems: "center",
                         justifyContent: "center", height: "100%", gap: 12, color: DS.textSub
@@ -13663,7 +13730,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 )}
 
                 {/* Error */}
-                {loadErr && (
+                {isApplied && loadErr && (
                     <div style={{ padding: "40px 24px", textAlign: "center" }}>
                         <div style={{
                             display: "inline-block", background: DS.isDark ? "rgba(244,63,94,0.07)" : "rgba(220,38,38,0.05)",
@@ -13685,7 +13752,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 )}
 
                 {/* Empty */}
-                {!loading && !loadErr && filtered.length === 0 && (
+                {isApplied && !loading && !loadErr && filtered.length === 0 && (
                     <div style={{
                         display: "flex", flexDirection: "column", alignItems: "center",
                         justifyContent: "center", height: "100%", gap: 8, color: DS.textSub
@@ -13706,7 +13773,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 )}
 
                 {/*  TABLE  matches portfolio table-wrap + thead th + td styles  */}
-                {!loading && !loadErr && filtered.length > 0 && (
+                {isApplied && !loading && !loadErr && filtered.length > 0 && (
                     isScreenerMobile ? (
                         <div style={{ flex: 1, overflow: "auto", padding: "12px 14px 18px" }}>
                             <div style={{ display: "grid", gap: 12 }}>
@@ -13966,7 +14033,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 )}
 
                 {/*  PAGINATION  */}
-                {!loading && !loadErr && filtered.length > 0 && (
+                {isApplied && !loading && !loadErr && filtered.length > 0 && (
                     <div style={{
                         flexShrink: 0, padding: isScreenerMobile ? "8px 14px" : "9px 16px",
                         borderTop: `1px solid ${DS.border}`, background: DS.card,
@@ -14031,7 +14098,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                         flexDirection: isScreenerMobile ? "column" : "row"
                     }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                            {/*<span>Ratios pre-computed nightly  Market cap uses latest Bhav Copy  Double-click tab to rename</span>*/}
+                            {!tickerFilter && <span>Double-click a screen tab to rename it</span>}
                             <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <span style={{
                                     width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
