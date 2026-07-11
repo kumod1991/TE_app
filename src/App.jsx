@@ -11872,6 +11872,49 @@ const DEFAULT_SCREENS = [
 
 const OPS = [">", "<", ">=", "<=", "=", "!="];
 
+//  Screener Screens  cloud sync (Supabase) 
+// Table: screener_screens (id text, user_id uuid, name text, filters jsonb, sort_order int, updated_at timestamptz)
+// Primary key (user_id, id); RLS restricts rows to auth.uid() = user_id.
+async function _fetchRemoteScreens(sess) {
+    if (!sess?.user?.id || !sess?.access_token) return [];
+    try {
+        const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/screener_screens?select=id,name,filters,sort_order&user_id=eq.${sess.user.id}&order=sort_order.asc`,
+            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${sess.access_token}` } }
+        );
+        const data = await r.json();
+        return Array.isArray(data) ? data : [];
+    } catch { return []; }
+}
+async function _upsertRemoteScreen(sess, screen, order) {
+    if (!sess?.user?.id || !sess?.access_token) return;
+    try {
+        await fetch(`${SUPABASE_URL}/rest/v1/screener_screens?on_conflict=user_id,id`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${sess.access_token}`,
+                Prefer: "resolution=merge-duplicates",
+            },
+            body: JSON.stringify({
+                id: screen.id, user_id: sess.user.id, name: screen.name,
+                filters: screen.filters || [], sort_order: order,
+                updated_at: new Date().toISOString(),
+            }),
+        });
+    } catch { }
+}
+async function _deleteRemoteScreen(sess, id) {
+    if (!sess?.user?.id || !sess?.access_token) return;
+    try {
+        await fetch(
+            `${SUPABASE_URL}/rest/v1/screener_screens?user_id=eq.${sess.user.id}&id=eq.${encodeURIComponent(id)}`,
+            { method: "DELETE", headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${sess.access_token}` } }
+        );
+    } catch { }
+}
+
 function makeEmptyFilter() {
     return { id: Date.now() + Math.random(), col: "market_cap_cr", op: ">", val: "", valType: "number", rhsCol: "net_block_1y", rhsMul: "1" };
 }
@@ -12783,7 +12826,7 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
 }
 
 //  SCREENER MODULE 
-function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onClearTickerFilter, onBack = null }) {
+function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLabel = null, onClearTickerFilter, onBack = null }) {
     const [allRows, setAllRows] = useState(() => _screenerCache || []);
     const [loading, setLoading] = useState(() => !_screenerCache || _screenerCache.length === 0);
     const [loadErr, setLoadErr] = useState("");
@@ -12794,9 +12837,14 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     const isScreenerMobile = useViewportBelow(760);
 
     const TECHNO_ID = "technofunda_scan";
+    const guestScreensKey = "screener_screens";
+    const userScreensKey = uid => `screener_screens_${uid}`;
     const [screens, setScreens] = useState(() => {
         try {
-            const s = localStorage.getItem("screener_screens");
+            // If a session was already restored before this component mounted (e.g. page refresh
+            // while logged in), prefer that user's last-synced cache for an instant, correct load.
+            const key = session?.user?.id ? userScreensKey(session.user.id) : guestScreensKey;
+            const s = localStorage.getItem(key);
             if (s) {
                 // Always strip the TechnoFunda screen on load  it must never persist
                 const parsed = JSON.parse(s).filter(sc => sc.id !== "technofunda_scan");
@@ -12806,6 +12854,9 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         return DEFAULT_SCREENS;
     });
     const [activeScreenId, setActiveScreenId] = useState(DEFAULT_SCREENS[0].id);
+    // "library"  screener.in-style landing grid of saved screens; "screen"  filter/table view for one screen
+    const [viewMode, setViewMode] = useState(() => tickerFilter ? "screen" : "library");
+    const openScreen = id => { setActiveScreenId(id); setViewMode("screen"); };
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState("");
     const [sortCol, setSortCol] = useState("market_cap_cr");
@@ -12821,9 +12872,73 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
     // Live price overlay  incremented whenever _sessionPriceCache gains new entries
     const [livePriceTick, setLivePriceTick] = useState(0);
     const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
+    const [screensSyncing, setScreensSyncing] = useState(!!(session?.user?.id));
 
-    const saveScreens = next => { setScreens(next); try { localStorage.setItem("screener_screens", JSON.stringify(next.filter(sc => sc.id !== TECHNO_ID))); } catch { } };
+    const saveScreens = next => {
+        const prevById = new Map(screens.map(s => [s.id, s]));
+        setScreens(next);
+        const clean = next.filter(sc => sc.id !== TECHNO_ID);
+        try {
+            const key = session?.user?.id ? userScreensKey(session.user.id) : guestScreensKey;
+            localStorage.setItem(key, JSON.stringify(clean));
+        } catch { }
+        // Push only the screens that actually changed up to Supabase, so a single filter
+        // edit doesn't re-upload every saved screen.
+        if (session?.user?.id && session?.access_token) {
+            clean.forEach((sc, i) => {
+                const prev = prevById.get(sc.id);
+                const changed = !prev || prev.name !== sc.name || JSON.stringify(prev.filters) !== JSON.stringify(sc.filters);
+                if (changed) _upsertRemoteScreen(session, sc, i);
+            });
+        }
+    };
     const saveVisCols = next => { setVisibleCols(next); try { localStorage.setItem("screener_visible_cols", JSON.stringify(next)); } catch { } };
+
+    // Pull the logged-in user's saved screens from Supabase once per login, and push up
+    // whatever was showing locally (defaults or guest edits) the first time a device syncs.
+    const syncedUidRef = useRef(null);
+    const prevUidRef = useRef(session?.user?.id || null);
+    useEffect(() => {
+        const uid = session?.user?.id || null;
+
+        if (uid && session?.access_token && syncedUidRef.current !== uid) {
+            syncedUidRef.current = uid;
+            setScreensSyncing(true);
+            _fetchRemoteScreens(session).then(rows => {
+                if (rows.length > 0) {
+                    const remote = rows
+                        .slice()
+                        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                        .map(r => ({ id: r.id, name: r.name, filters: r.filters || [] }));
+                    setScreens(remote);
+                    setActiveScreenId(prev => remote.some(s => s.id === prev) ? prev : remote[0].id);
+                    try { localStorage.setItem(userScreensKey(uid), JSON.stringify(remote)); } catch { }
+                } else {
+                    // First time this account has synced  push up whatever is currently local
+                    setScreens(current => {
+                        const toUpload = current.filter(s => s.id !== TECHNO_ID);
+                        toUpload.forEach((sc, i) => _upsertRemoteScreen(session, sc, i));
+                        try { localStorage.setItem(userScreensKey(uid), JSON.stringify(toUpload)); } catch { }
+                        return current;
+                    });
+                }
+            }).finally(() => setScreensSyncing(false));
+        }
+
+        if (!uid && prevUidRef.current) {
+            // Logged out  fall back to guest/default screens
+            syncedUidRef.current = null;
+            let guest = DEFAULT_SCREENS;
+            try {
+                const s = localStorage.getItem(guestScreensKey);
+                if (s) { const parsed = JSON.parse(s).filter(sc => sc.id !== TECHNO_ID); if (parsed.length > 0) guest = parsed; }
+            } catch { }
+            setScreens(guest);
+            setActiveScreenId(guest[0].id);
+            setViewMode("library");
+        }
+        prevUidRef.current = uid;
+    }, [session?.user?.id, session?.access_token]);
 
     // TechnoFunda  ephemeral tab, never persisted to localStorage
     const prevTF = useRef(null);
@@ -12833,6 +12948,7 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
             const sc = { id: TECHNO_ID, name: "TechnoFunda", filters: [] };
             setScreens(prev => [...prev.filter(s => s.id !== TECHNO_ID), sc]);
             setActiveScreenId(TECHNO_ID);
+            setViewMode("screen");
         }
         if (!tickerFilter && prevTF.current) {
             prevTF.current = null;
@@ -12956,8 +13072,8 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         saveScreens(screens.map(s => s.id === activeScreenId ? { ...s, filters: [] } : s));
         if (isScreenerMobile) setMobileFiltersExpanded(false);
     };
-    const addScreen = () => { const id = "screen_" + Date.now(); saveScreens([...screens, { id, name: "New Screen", filters: [makeEmptyFilter()] }]); setActiveScreenId(id); };
-    const deleteScreen = id => { if (screens.length <= 1) return; const next = screens.filter(s => s.id !== id); saveScreens(next); if (activeScreenId === id) setActiveScreenId(next[0].id); };
+    const addScreen = () => { const id = "screen_" + Date.now(); saveScreens([...screens, { id, name: "New Screen", filters: [makeEmptyFilter()] }]); setActiveScreenId(id); setViewMode("screen"); };
+    const deleteScreen = id => { if (screens.length <= 1) return; const next = screens.filter(s => s.id !== id); saveScreens(next); if (session?.user?.id) _deleteRemoteScreen(session, id); if (activeScreenId === id) setActiveScreenId(next[0].id); };
     const renameScreen = (id, name) => saveScreens(screens.map(s => s.id === id ? { ...s, name } : s));
     const handleSort = key => { if (sortCol === key) setSortAsc(a => !a); else { setSortCol(key); setSortAsc(false); } };
 
@@ -12993,6 +13109,163 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
         boxShadow: active ? `0 10px 24px ${DS.shadow}` : "none",
     });
 
+    //  LIBRARY VIEW  screener.in-style landing grid of saved screens 
+    if (viewMode === "library") {
+        const librayScreens = screens.filter(sc => sc.id !== TECHNO_ID);
+        return (
+            <div style={{
+                display: "flex", flexDirection: "column", width: "100%",
+                background: DS.bg, color: DS.text, fontFamily: DS.sans,
+                flex: 1, minHeight: 0, overflow: "auto"
+            }}>
+                <div style={{
+                    padding: isScreenerMobile ? "20px 16px 16px" : "30px 32px 18px",
+                    display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+                    gap: 16, flexWrap: "wrap", borderBottom: `1px solid ${DS.border}`
+                }}>
+                    <div>
+                        <div style={{
+                            fontSize: 10.5, fontWeight: 700, color: DS.accent, fontFamily: DS.mono,
+                            textTransform: "uppercase", letterSpacing: ".12em", marginBottom: 7
+                        }}>
+                            Screener
+                        </div>
+                        <div style={{ fontSize: isScreenerMobile ? 20 : 23, fontWeight: 700, color: DS.text, letterSpacing: "-0.015em", lineHeight: 1.15 }}>
+                            Stock Screens
+                        </div>
+                        <div style={{ fontSize: 12.5, color: DS.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 7 }}>
+                            {screensSyncing ? (
+                                <>
+                                    <span style={{
+                                        width: 11, height: 11, border: `2px solid ${DS.border}`,
+                                        borderTopColor: DS.accent, borderRadius: "50%",
+                                        display: "inline-block", animation: "finspin .7s linear infinite"
+                                    }} />
+                                    Syncing your saved screens
+                                </>
+                            ) : session?.user?.id
+                                ? <>{librayScreens.length} screen{librayScreens.length === 1 ? "" : "s"}  synced to your account</>
+                                : <>{librayScreens.length} screen{librayScreens.length === 1 ? "" : "s"} on this device</>}
+                        </div>
+                    </div>
+                    <button onClick={addScreen}
+                        style={{
+                            display: "inline-flex", alignItems: "center", gap: 7,
+                            padding: isScreenerMobile ? "9px 15px" : "8px 16px",
+                            background: DS.accent, border: `1px solid ${DS.accent}`, borderRadius: 8, color: "#fff",
+                            fontSize: 12.5, fontWeight: 600, fontFamily: DS.sans, cursor: "pointer",
+                            transition: "opacity .12s", whiteSpace: "nowrap"
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
+                        Create New Screen
+                    </button>
+                </div>
+
+                <div style={{
+                    padding: isScreenerMobile ? "16px 16px 32px" : "22px 32px 44px",
+                    display: "grid",
+                    gridTemplateColumns: isScreenerMobile ? "1fr" : "repeat(auto-fill, minmax(272px, 1fr))",
+                    gap: 14
+                }}>
+                    {librayScreens.map(sc => {
+                        const fCount = (sc.filters || []).length;
+                        const preview = (sc.filters || [])
+                            .slice(0, 3)
+                            .map(f => SCREENER_COLS.find(c => c.key === f.col)?.label?.trim() || f.col);
+                        return (
+                            <div key={sc.id}
+                                onClick={() => openScreen(sc.id)}
+                                style={{
+                                    position: "relative", overflow: "hidden",
+                                    padding: "16px 18px 16px 20px", background: DS.card, border: `1px solid ${DS.border}`,
+                                    borderRadius: 10, cursor: "pointer", transition: "border-color .15s, background .15s",
+                                    display: "flex", flexDirection: "column", gap: 9
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.borderColor = DS.isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.14)";
+                                    e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.008)";
+                                    const bar = e.currentTarget.querySelector("[data-accent-bar]");
+                                    if (bar) bar.style.background = DS.accent;
+                                    const arrow = e.currentTarget.querySelector("[data-hover-arrow]");
+                                    if (arrow) { arrow.style.opacity = "1"; arrow.style.transform = "translateX(0)"; }
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.borderColor = DS.border;
+                                    e.currentTarget.style.background = DS.card;
+                                    const bar = e.currentTarget.querySelector("[data-accent-bar]");
+                                    if (bar) bar.style.background = "transparent";
+                                    const arrow = e.currentTarget.querySelector("[data-hover-arrow]");
+                                    if (arrow) { arrow.style.opacity = "0"; arrow.style.transform = "translateX(-3px)"; }
+                                }}>
+                                {/* Signature left accent bar  fills in on hover */}
+                                <div data-accent-bar style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "transparent", transition: "background .15s" }} />
+
+                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                                    <span style={{ fontSize: 14.5, fontWeight: 650, color: DS.text, letterSpacing: "-0.005em", lineHeight: 1.3 }}>
+                                        {sc.name}
+                                    </span>
+                                    {librayScreens.length > 1 && (
+                                        <button onClick={e => { e.stopPropagation(); deleteScreen(sc.id); }}
+                                            style={{
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                                width: 20, height: 20, flexShrink: 0, marginTop: -1,
+                                                background: "none", border: "none", color: DS.textMuted,
+                                                cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
+                                                transition: "opacity .12s, background .12s"
+                                            }}
+                                            onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"; }}
+                                            onMouseLeave={e => { e.currentTarget.style.opacity = "0.38"; e.currentTarget.style.background = "transparent"; }}>
+                                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div style={{ height: 1, background: DS.border, opacity: .6 }} />
+
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                                    <span style={{
+                                        fontSize: 10.5, color: DS.textSub, fontFamily: DS.mono,
+                                        textTransform: "uppercase", letterSpacing: ".04em",
+                                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                                    }}>
+                                        {preview.length > 0 ? preview.join("  ") : "No filters yet"}
+                                    </span>
+                                    <span style={{
+                                        flexShrink: 0, fontSize: 10, color: DS.textMuted, fontFamily: DS.mono,
+                                        fontVariantNumeric: "tabular-nums", border: `1px solid ${DS.border}`,
+                                        borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap"
+                                    }}>
+                                        {fCount} filter{fCount === 1 ? "" : "s"}
+                                    </span>
+                                </div>
+
+                                <svg data-hover-arrow width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={DS.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                                    style={{ position: "absolute", right: 14, top: 16, opacity: 0, transform: "translateX(-3px)", transition: "opacity .15s, transform .15s" }}>
+                                    <path d="M6 3l5 5-5 5" />
+                                </svg>
+                            </div>
+                        );
+                    })}
+
+                    <div onClick={addScreen}
+                        style={{
+                            padding: "16px 18px", background: "transparent", border: `1px dashed ${DS.border}`,
+                            borderRadius: 10, cursor: "pointer", display: "flex", alignItems: "center",
+                            justifyContent: "center", gap: 7, color: DS.textMuted, fontSize: 12.5,
+                            fontWeight: 500, minHeight: 78, transition: "border-color .13s, color .13s, background .13s"
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "77"; e.currentTarget.style.color = DS.accent; e.currentTarget.style.background = DS.accentDim; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
+                        <svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
+                        Create New Screen
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     //  RENDER 
     return (
         <div style={{
@@ -13013,6 +13286,21 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
 
                 {/* Tabs */}
                 <div style={{ display: "flex", alignItems: "stretch", flex: 1, overflow: isScreenerMobile ? "auto hidden" : "hidden", paddingBottom: isScreenerMobile ? 2 : 0 }}>
+                    {!tickerFilter && (
+                        <button onClick={() => setViewMode("library")}
+                            style={{
+                                display: "flex", alignItems: "center", gap: 6, alignSelf: "center",
+                                marginRight: 10, padding: "5px 10px 5px 6px", border: "none",
+                                background: "transparent", color: DS.textMuted, cursor: "pointer",
+                                fontSize: 12.5, fontWeight: 500, fontFamily: DS.sans,
+                                borderRadius: 7, transition: "color .12s, background .12s", flexShrink: 0
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L5 8l5 5" /></svg>
+                            My Screens
+                        </button>
+                    )}
                     {screens.map(sc => {
                         const isTechno = sc.id === TECHNO_ID;
                         const isActive = activeScreenId === sc.id;
@@ -13250,6 +13538,18 @@ function ScreenerModule({ T, tickerFilter = null, technoFundaLabel = null, onCle
                         padding: "2px 0 6px",
                     }}>
                         <div style={{ minWidth: 0 }}>
+                            {!tickerFilter && (
+                                <button onClick={() => setViewMode("library")}
+                                    style={{
+                                        display: "flex", alignItems: "center", gap: 5, marginBottom: 4,
+                                        padding: 0, border: "none", background: "transparent",
+                                        color: DS.textMuted, cursor: "pointer", fontSize: 11.5,
+                                        fontWeight: 600, fontFamily: DS.sans
+                                    }}>
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L5 8l5 5" /></svg>
+                                    My Screens
+                                </button>
+                            )}
                             <div style={{ fontSize: 11, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".08em" }}>
                                 Filters
                             </div>
@@ -27933,6 +28233,7 @@ export default function App() {
                                             <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", flexDirection: "column", width: "100%" }}>
                                                 <ScreenerModule
                                                     T={T}
+                                                    session={session}
                                                     tickerFilter={technoFundaFilter?.tickers || null}
                                                     technoFundaLabel={technoFundaFilter?.label || null}
                                                     onClearTickerFilter={() => { setTechnoFundaFilter(null); setTechnoFundaSource(null); }}
