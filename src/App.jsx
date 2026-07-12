@@ -12187,10 +12187,31 @@ function _lsWriteScreens(key, value) {
 }
 
 // ─── Background prefetch helpers ─────────────────────────────────────────────
-// Each function mirrors the fetch logic inside the corresponding ScreensModule
-// useEffect, but runs at module level so the cache is warm before the component
-// ever mounts.  The component useEffects call these same functions and reuse
-// the in-flight promise — no duplicate requests even if mount races with prefetch.
+// All five scans now resolve server-side (Postgres RPCs backed by
+// mv_screens_base, refreshed once daily by the sync pipeline). Each prefetch
+// function is just: cache check → one RPC POST → cache write. The filtering,
+// joining, and sorting that used to happen here in JS (multi-endpoint fetch +
+// pagination + client-side join/filter/sort) now lives in the get_screens_*
+// SQL functions — see screens_phase1.sql / screens_phase2.sql.
+// The component useEffects call these same functions and reuse the in-flight
+// promise — no duplicate requests even if mount races with prefetch.
+
+async function _rpcScreens(fnName, body) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
+        method: "POST",
+        headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body || {}),
+    });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) {
+        throw new Error(rows?.message || `${fnName} returned a non-array response`);
+    }
+    return rows;
+}
 
 function _prefetchScreensBreakout() {
     if (_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0 &&
@@ -12198,70 +12219,13 @@ function _prefetchScreensBreakout() {
         return Promise.resolve(_screensBreakoutCache.rows);
     }
     if (_prefetchBreakoutPromise) return _prefetchBreakoutPromise;
-    const exchange = "NSE";
-    const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-    const fetchPages = async (baseUrl, pageSize = 1000) => {
-        let all = [], page = 0;
-        while (true) {
-            const r = await fetch(`${baseUrl}&limit=${pageSize}&offset=${page * pageSize}`, { headers: H });
-            const rows = await r.json();
-            if (!Array.isArray(rows) || rows.length === 0) break;
-            all = all.concat(rows);
-            if (rows.length < pageSize) break;
-            page++;
-        }
-        return all;
-    };
     _prefetchBreakoutPromise = (async () => {
         try {
-            const s52Rows = await fetchPages(
-                `${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.${exchange}` +
-                `&select=ticker,close,high_52w,pct_from_high,pct_from_low,sma50,sma200,volume,volume_ma20` +
-                `&pct_from_high=gte.-7&pct_from_low=gt.25`
-            );
-            const latestDateRes = await fetch(
-                `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&rs_rating=not.is.null&order=date.desc&limit=1&select=date`,
-                { headers: H }
-            );
-            const latestDateRows = await latestDateRes.json();
-            const latestDate = latestDateRows?.[0]?.date;
-            let rsMap = {};
-            if (latestDate) {
-                const indRows = await fetchPages(
-                    `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&date=eq.${latestDate}` +
-                    `&rs_rating=gte.80&cap_category=in.(small,mid,large)&select=ticker,rs_rating,rs_3m,rs_6m,rs_12m`
-                );
-                indRows.forEach(r => { if (r?.ticker) rsMap[r.ticker] = r; });
-            }
-            const retRows = await fetchPages(
-                `${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`
-            );
-            const retMap = {};
-            retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-            const joined = s52Rows.filter(s => {
-                if (!rsMap[s.ticker]) return false;
-                const close = Number(s.close ?? 0), sma50 = Number(s.sma50 ?? 0), sma200 = Number(s.sma200 ?? 0);
-                const vol = Number(s.volume ?? 0), volMa = Number(s.volume_ma20 ?? 0);
-                const pctHigh = Number(s.pct_from_high ?? -999);
-                return pctHigh >= -7 && close > sma50 && sma50 > sma200 && volMa > 0 && (vol / volMa) >= 1.5;
-            }).map(s => {
-                const ind = rsMap[s.ticker] || {}, ret = retMap[s.ticker] || {};
-                const vol = Number(s.volume ?? 0), volMa = Number(s.volume_ma20 ?? 0);
-                return {
-                    ticker: s.ticker, close: s.close != null ? Number(s.close) : null,
-                    pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                    pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                    sma50: s.sma50 != null ? Number(s.sma50) : null, sma200: s.sma200 != null ? Number(s.sma200) : null,
-                    volume: vol || null, volume_20ma: volMa || null, rel_volume: volMa > 0 ? vol / volMa : null,
-                    rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                    rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null, rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null, rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                    ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null, ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null, ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                };
-            }).sort((a, b) => Math.abs(Number(a.pct_from_52w_high)) - Math.abs(Number(b.pct_from_52w_high)));
-            const cache = { rows: joined, loadedAt: Date.now() };
+            const rows = await _rpcScreens("get_screens_breakout", { p_universe: "all" });
+            const cache = { rows, loadedAt: Date.now() };
             _screensBreakoutCache = cache;
             _lsWriteScreens(_LS_SCR_BREAKOUT, cache);
-            return joined;
+            return rows;
         } catch (e) { console.warn("[prefetch] Breakout failed:", e); return []; }
         finally { _prefetchBreakoutPromise = null; }
     })();
@@ -12274,62 +12238,13 @@ function _prefetchScreensPivot() {
         return Promise.resolve(_screensPivotCache.rows);
     }
     if (_prefetchPivotPromise) return _prefetchPivotPromise;
-    const exchange = "NSE";
-    const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-    const fetchPages = async (url, pageSize = 1000) => {
-        let all = [], page = 0;
-        while (true) {
-            const r = await fetch(`${url}&limit=${pageSize}&offset=${page * pageSize}`, { headers: H });
-            const rows = await r.json();
-            if (!Array.isArray(rows) || rows.length === 0) break;
-            all = all.concat(rows);
-            if (rows.length < pageSize) break;
-            page++;
-        }
-        return all;
-    };
     _prefetchPivotPromise = (async () => {
         try {
-            const latestRes = await fetch(
-                `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&pivot_high_10w=not.is.null&order=date.desc&limit=1&select=date`,
-                { headers: H }
-            );
-            const latestRows = await latestRes.json();
-            const latestDate = latestRows?.[0]?.date;
-            if (!latestDate) return [];
-            const [indRows, s52Rows, retRows] = await Promise.all([
-                fetchPages(`${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&date=eq.${latestDate}` +
-                    `&sma50=not.is.null&sma150=not.is.null&sma200=not.is.null&rs_rating=gte.30&cap_category=in.(small,mid,large)` +
-                    `&select=ticker,sma50,sma150,sma200,pivot_high_10d,pivot_high_20d,pivot_high_10w,pivot_high_20w,rs_rating,rs_3m,rs_6m,rs_12m`),
-                fetchPages(`${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.${exchange}&pct_from_low=gt.15&select=ticker,close,pct_from_high,pct_from_low,volume,volume_ma20`),
-                fetchPages(`${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`),
-            ]);
-            const closeMap = {}, retMap = {};
-            s52Rows.forEach(r => { if (r?.ticker) closeMap[r.ticker] = r; });
-            retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-            const joined = indRows.map(ind => {
-                const s = closeMap[ind.ticker]; if (!s) return null;
-                const close = Number(s.close ?? 0), sma50 = Number(ind.sma50 ?? 0), sma150 = Number(ind.sma150 ?? 0), sma200 = Number(ind.sma200 ?? 0);
-                if (!(sma50 > sma150 && sma150 > sma200)) return null;
-                const vol = Number(s.volume ?? 0), volMa = Number(s.volume_ma20 ?? 0), ret = retMap[ind.ticker] || {};
-                return {
-                    ticker: ind.ticker, close, sma50, sma150, sma200,
-                    pivot_high_10d: ind.pivot_high_10d != null ? Number(ind.pivot_high_10d) : null,
-                    pivot_high_20d: ind.pivot_high_20d != null ? Number(ind.pivot_high_20d) : null,
-                    pivot_high_10w: ind.pivot_high_10w != null ? Number(ind.pivot_high_10w) : null,
-                    pivot_high_20w: ind.pivot_high_20w != null ? Number(ind.pivot_high_20w) : null,
-                    pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                    pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                    volume: vol || null, volume_20ma: volMa || null, rel_volume: volMa > 0 ? vol / volMa : null,
-                    rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                    rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null, rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null, rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                    ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null, ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null, ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                };
-            }).filter(Boolean);
-            const cache = { rows: joined, loadedAt: Date.now() };
+            const rows = await _rpcScreens("get_screens_pivot");
+            const cache = { rows, loadedAt: Date.now() };
             _screensPivotCache = cache;
             _lsWriteScreens(_LS_SCR_PIVOT, cache);
-            return joined;
+            return rows;
         } catch (e) { console.warn("[prefetch] Pivot failed:", e); return []; }
         finally { _prefetchPivotPromise = null; }
     })();
@@ -12342,63 +12257,13 @@ function _prefetchScreensVolBreak() {
         return Promise.resolve(_screensVolBreakCache.rows);
     }
     if (_prefetchVolBreakPromise) return _prefetchVolBreakPromise;
-    const exchange = "NSE";
-    const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-    const fetchPages = async (baseUrl, pageSize = 1000) => {
-        let all = [], page = 0;
-        while (true) {
-            const r = await fetch(`${baseUrl}&limit=${pageSize}&offset=${page * pageSize}`, { headers: H });
-            const rows = await r.json();
-            if (!Array.isArray(rows) || rows.length === 0) break;
-            all = all.concat(rows);
-            if (rows.length < pageSize) break;
-            page++;
-        }
-        return all;
-    };
     _prefetchVolBreakPromise = (async () => {
         try {
-            const s52Rows = await fetchPages(
-                `${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.${exchange}` +
-                `&select=ticker,close,high_52w,pct_from_high,pct_from_low,sma50,sma200,volume,volume_ma20&pct_from_low=gt.15`
-            );
-            const latestDateRes = await fetch(
-                `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&rs_rating=not.is.null&order=date.desc&limit=1&select=date`,
-                { headers: H }
-            );
-            const latestDate = (await latestDateRes.json())?.[0]?.date;
-            let indMap = {};
-            if (latestDate) {
-                const indRows = await fetchPages(
-                    `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&date=eq.${latestDate}&select=ticker,rs_rating,rs_3m,rs_6m,rs_12m`
-                );
-                indRows.forEach(r => { if (r?.ticker) indMap[r.ticker] = r; });
-            }
-            const retRows = await fetchPages(`${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`);
-            const retMap = {};
-            retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-            const joined = s52Rows.filter(s => {
-                const close = Number(s.close ?? 0), sma50 = Number(s.sma50 ?? 0), sma200 = Number(s.sma200 ?? 0);
-                const vol = Number(s.volume ?? 0), volMa = Number(s.volume_ma20 ?? 0);
-                return close > sma50 && sma50 > sma200 && volMa > 0 && (vol / volMa) >= 2.0;
-            }).map(s => {
-                const ind = indMap[s.ticker] || {}, ret = retMap[s.ticker] || {};
-                const vol = Number(s.volume ?? 0), volMa = Number(s.volume_ma20 ?? 0);
-                return {
-                    ticker: s.ticker, close: s.close != null ? Number(s.close) : null,
-                    pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                    pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                    sma50: s.sma50 != null ? Number(s.sma50) : null, sma200: s.sma200 != null ? Number(s.sma200) : null,
-                    volume: vol || null, volume_20ma: volMa || null, rel_volume: volMa > 0 ? vol / volMa : null,
-                    rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                    rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null, rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null, rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                    ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null, ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null, ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                };
-            }).sort((a, b) => Number(b.rel_volume ?? 0) - Number(a.rel_volume ?? 0));
-            const cache = { rows: joined, loadedAt: Date.now() };
+            const rows = await _rpcScreens("get_screens_volbreak");
+            const cache = { rows, loadedAt: Date.now() };
             _screensVolBreakCache = cache;
             _lsWriteScreens(_LS_SCR_VOLBREAK, cache);
-            return joined;
+            return rows;
         } catch (e) { console.warn("[prefetch] VolBreak failed:", e); return []; }
         finally { _prefetchVolBreakPromise = null; }
     })();
@@ -12411,60 +12276,13 @@ function _prefetchScreensPullback() {
         return Promise.resolve(_screensPullbackCache.rows);
     }
     if (_prefetchPullbackPromise) return _prefetchPullbackPromise;
-    const exchange = "NSE";
-    const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-    const fetchPages = async (url, pageSize = 1000) => {
-        let all = [], page = 0;
-        while (true) {
-            const r = await fetch(`${url}&limit=${pageSize}&offset=${page * pageSize}`, { headers: H });
-            const rows = await r.json();
-            if (!Array.isArray(rows) || rows.length === 0) break;
-            all = all.concat(rows);
-            if (rows.length < pageSize) break;
-            page++;
-        }
-        return all;
-    };
     _prefetchPullbackPromise = (async () => {
         try {
-            const latestRes = await fetch(
-                `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&sma50=not.is.null&rs_rating=not.is.null&order=date.desc&limit=1&select=date`,
-                { headers: H }
-            );
-            const latestDate = (await latestRes.json())?.[0]?.date;
-            if (!latestDate) return [];
-            const [indRows, s52Rows, retRows] = await Promise.all([
-                fetchPages(`${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&date=eq.${latestDate}` +
-                    `&sma50=not.is.null&sma200=not.is.null&rs_rating=gte.60&cap_category=in.(small,mid,large)` +
-                    `&select=ticker,sma50,sma150,sma200,pivot_high_10d,pivot_high_20d,pivot_high_10w,pivot_high_20w,rs_rating,rs_3m,rs_6m,rs_12m`),
-                fetchPages(`${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.${exchange}&select=ticker,close,high_52w,pct_from_high,pct_from_low,volume,volume_ma20`),
-                fetchPages(`${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`),
-            ]);
-            const closeMap = {}, retMap = {};
-            s52Rows.forEach(r => { if (r?.ticker) closeMap[r.ticker] = r; });
-            retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-            const joined = indRows.map(ind => {
-                const s = closeMap[ind.ticker]; if (!s) return null;
-                const close = Number(s.close ?? 0), sma50 = Number(ind.sma50 ?? 0), sma150 = Number(ind.sma150 ?? 0), sma200 = Number(ind.sma200 ?? 0);
-                const vol = Number(s.volume ?? 0), volMa = Number(s.volume_ma20 ?? 0), high52w = Number(s.high_52w ?? 0), ret = retMap[ind.ticker] || {};
-                return {
-                    ticker: ind.ticker, close, sma50, sma150, sma200, high_52w: high52w || null,
-                    pivot_high_10d: ind.pivot_high_10d != null ? Number(ind.pivot_high_10d) : null,
-                    pivot_high_20d: ind.pivot_high_20d != null ? Number(ind.pivot_high_20d) : null,
-                    pivot_high_10w: ind.pivot_high_10w != null ? Number(ind.pivot_high_10w) : null,
-                    pivot_high_20w: ind.pivot_high_20w != null ? Number(ind.pivot_high_20w) : null,
-                    pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                    pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                    volume: vol || null, volume_20ma: volMa || null, rel_volume: volMa > 0 ? vol / volMa : null,
-                    rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                    rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null, rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null, rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                    ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null, ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null, ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                };
-            }).filter(Boolean);
-            const cache = { rows: joined, loadedAt: Date.now() };
+            const rows = await _rpcScreens("get_screens_pullback");
+            const cache = { rows, loadedAt: Date.now() };
             _screensPullbackCache = cache;
             _lsWriteScreens(_LS_SCR_PULLBACK, cache);
-            return joined;
+            return rows;
         } catch (e) { console.warn("[prefetch] Pullback failed:", e); return []; }
         finally { _prefetchPullbackPromise = null; }
     })();
@@ -12477,53 +12295,24 @@ function _prefetchScreensVcp() {
         return Promise.resolve(_screensVcpCache.rows);
     }
     if (_prefetchVcpPromise) return _prefetchVcpPromise;
-    const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
     _prefetchVcpPromise = (async () => {
         try {
-            let all = [], page = 0;
-            while (true) {
-                const r = await fetch(`${SUPABASE_URL}/rest/v1/vcp_candidates?select=*&order=vcp_score.desc&limit=1000&offset=${page * 1000}`, { headers: H });
-                const rows = await r.json();
-                if (!Array.isArray(rows) || rows.length === 0) break;
-                all = all.concat(rows); if (rows.length < 1000) break; page++;
-            }
-            const [retR, s52R] = await Promise.all([
-                fetch(`${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.NSE&select=ticker,ret_3m,ret_6m,ret_12m`, { headers: H }),
-                fetch(`${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.NSE&select=ticker,close,volume,volume_ma20,pct_from_high,pct_from_low`, { headers: H }),
-            ]);
-            const retRows = await retR.json(), s52Rows = await s52R.json();
-            const rMap = {}, s52Map = {};
-            if (Array.isArray(retRows)) retRows.forEach(r => { if (r?.ticker) rMap[r.ticker] = r; });
-            if (Array.isArray(s52Rows)) s52Rows.forEach(r => { if (r?.ticker) s52Map[r.ticker] = r; });
-            const normalized = all.map(v => {
-                const ret = rMap[v.ticker] || {}, s52 = s52Map[v.ticker] || {};
-                const vol = Number(s52.volume ?? 0), volMa = Number(s52.volume_ma20 ?? 0);
-                return {
-                    ticker: v.ticker, exchange: v.exchange,
-                    vcp_score: v.vcp_score != null ? Number(v.vcp_score) : null,
-                    category: v.category, contractions: v.contractions != null ? Number(v.contractions) : null,
-                    contraction_pattern: v.contraction_pattern,
-                    pct_from_high: v.pct_from_high != null ? Number(v.pct_from_high) : null,
-                    base_depth: v.base_depth != null ? Number(v.base_depth) : null,
-                    volume_dryup: v.volume_dryup, tight_range: v.tight_range, near_pivot: v.near_pivot,
-                    breakout_level: v.breakout_level != null ? Number(v.breakout_level) : null,
-                    detected_at: v.detected_at,
-                    close: s52.close != null ? Number(s52.close) : null,
-                    pct_from_52w_high: s52.pct_from_high != null ? -Number(s52.pct_from_high) : null,
-                    pct_from_52w_low: s52.pct_from_low != null ? Number(s52.pct_from_low) : null,
-                    volume: vol || null, volume_20ma: volMa || null, rel_volume: volMa > 0 ? vol / volMa : null,
-                    ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null, ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null, ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                };
-            });
-            const cache = { rows: normalized, returnMap: rMap, loadedAt: Date.now() };
+            const rows = await _rpcScreens("get_screens_vcp");
+            // returnMap kept for API-shape compatibility with any caller that
+            // still reads it directly; ret_3m/6m/12m already come back joined
+            // onto each row from the RPC, so this is just a ticker index.
+            const returnMap = {};
+            rows.forEach(r => { if (r?.ticker) returnMap[r.ticker] = { ticker: r.ticker, ret_3m: r.ret_3m, ret_6m: r.ret_6m, ret_12m: r.ret_12m }; });
+            const cache = { rows, returnMap, loadedAt: Date.now() };
             _screensVcpCache = cache;
             _lsWriteScreens(_LS_SCR_VCP, cache);
-            return normalized;
+            return rows;
         } catch (e) { console.warn("[prefetch] VCP failed:", e); return []; }
         finally { _prefetchVcpPromise = null; }
     })();
     return _prefetchVcpPromise;
 }
+
 
 async function _loadNifty500() {
     if (_nifty500Cache !== null) return _nifty500Cache;
@@ -20020,130 +19809,25 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     useEffect(() => {
         let cancelled = false;
-        const exchange = "NSE";
-        const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-
-        const fetchAllBreakoutPages = async (baseUrl, pageSize = 1000) => {
-            let all = [], page = 0;
-            while (true) {
-                const url = `${baseUrl}&limit=${pageSize}&offset=${page * pageSize}`;
-                const r = await fetch(url, { headers: H });
-                const rows = await r.json();
-                if (!Array.isArray(rows) || rows.length === 0) break;
-                all = all.concat(rows);
-                if (rows.length < pageSize) break;
-                page++;
-            }
-            return all;
-        };
 
         const load = async () => {
             try {
-                //  SWR: serve stale cache instantly, skip or background-revalidate 
+                //  SWR: serve stale cache instantly, then revalidate 
                 const _bc = _screensBreakoutCache;
-                const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
                     if (!cancelled) { setBreakoutRawRows(_bc.rows); setBreakoutLoading(false); }
-                    if (_bcAge < _SCREENS_CACHE_TTL_MS) return; // fresh  skip network entirely
-                    // stale  continue to revalidate silently (no spinner)
                 } else {
                     setBreakoutLoading(true);
                 }
 
-                // Step 1: stock_52w rows passing price/volume base conditions
-                const s52Url =
-                    `${SUPABASE_URL}/rest/v1/stock_52w` +
-                    `?exchange=eq.${exchange}` +
-                    `&select=ticker,close,high_52w,pct_from_high,pct_from_low,sma50,sma200,volume,volume_ma20` +
-                    `&pct_from_high=gte.-7` +    // cond 1: within 7% of 52W high (close >= high * 0.93)
-                    `&pct_from_low=gt.25`;        // cond 3: >25% from base low
-                const s52Rows = await fetchAllBreakoutPages(s52Url);
-                if (cancelled) return;
-
-                // Step 2: latest indicators date, then rs_rating >= 80 rows
-                const latestDateRes = await fetch(
-                    `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&rs_rating=not.is.null&order=date.desc&limit=1&select=date`,
-                    { headers: H }
-                );
-                const latestDateRows = await latestDateRes.json();
-                if (cancelled) return;
-                const latestDate = latestDateRows?.[0]?.date;
-
-                let rsMap = {};
-                if (latestDate) {
-                    const indRows = await fetchAllBreakoutPages(
-                        `${SUPABASE_URL}/rest/v1/indicators` +
-                        `?exchange=eq.${exchange}&date=eq.${latestDate}` +
-                        `&rs_rating=gte.80` +
-                        `&cap_category=in.(small,mid,large)` +
-                        `&select=ticker,rs_rating,rs_3m,rs_6m,rs_12m`
-                    );
-                    if (cancelled) return;
-                    indRows.forEach(r => { if (r?.ticker) rsMap[r.ticker] = r; });
-                }
-
-                // Step 3: returns for display columns (ret_3m/6m/12m)
-                const retRows = await fetchAllBreakoutPages(
-                    `${SUPABASE_URL}/rest/v1/stock_returns` +
-                    `?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`
-                );
-                if (cancelled) return;
-                const retMap = {};
-                retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-
-                // Step 4: join + apply remaining JS-side conditions
-                const joined = s52Rows
-                    .filter(s => {
-                        if (!rsMap[s.ticker]) return false;             // cond 5: rs_rating >= 80
-                        const close = Number(s.close ?? 0);
-                        const sma50 = Number(s.sma50 ?? 0);
-                        const sma200 = Number(s.sma200 ?? 0);
-                        const vol = Number(s.volume ?? 0);
-                        const volMa = Number(s.volume_ma20 ?? 0);
-                        const pctHigh = Number(s.pct_from_high ?? -999);
-                        return (
-                            pctHigh >= -7 &&                            // cond 1: within 7% of 52W high (db stores as negative)
-                            close > sma50 &&                            // cond 2a: close > sma50
-                            sma50 > sma200 &&                            // cond 2b: Stage 2
-                            volMa > 0 &&
-                            (vol / volMa) >= 1.5                         // cond 4: volume expansion
-                        );
-                    })
-                    .map(s => {
-                        const ind = rsMap[s.ticker] || {};
-                        const ret = retMap[s.ticker] || {};
-                        const vol = Number(s.volume ?? 0);
-                        const volMa = Number(s.volume_ma20 ?? 0);
-                        return {
-                            ticker: s.ticker,
-                            close: s.close != null ? Number(s.close) : null,
-                            // negate to match existing convention: 0 = at high, positive = below high
-                            pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                            pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                            sma50: s.sma50 != null ? Number(s.sma50) : null,
-                            sma200: s.sma200 != null ? Number(s.sma200) : null,
-                            volume: vol || null,
-                            volume_20ma: volMa || null,
-                            rel_volume: volMa > 0 ? vol / volMa : null,
-                            rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                            rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null,
-                            rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null,
-                            rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                            ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null,
-                            ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null,
-                            ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                        };
-                    })
-                    // closest to / at breakout first
-                    .sort((a, b) => Math.abs(Number(a.pct_from_52w_high)) - Math.abs(Number(b.pct_from_52w_high)));
-
-                if (!cancelled) {
-                    setBreakoutRawRows(joined);
-                    const _newCache = { rows: joined, loadedAt: Date.now() };
-                    _screensBreakoutCache = _newCache;
-                    _lsWriteScreens(_LS_SCR_BREAKOUT, _newCache);
-                }
+                // All filtering/joining/sorting now happens in get_screens_breakout()
+                // (Postgres RPC over mv_screens_base). _prefetchScreensBreakout()
+                // owns the freshness check against _screensBreakoutCache and the
+                // in-flight-promise dedupe, so a race with the module-level
+                // prefetch just resolves the same promise instead of double-fetching.
+                const rows = await _prefetchScreensBreakout();
+                if (!cancelled) setBreakoutRawRows(rows);
             } catch (e) {
                 if (!cancelled) console.error("[52W Breakout] fetch failed:", e);
             } finally {
@@ -20180,133 +19864,23 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     useEffect(() => {
         let cancelled = false;
-        const exchange = "NSE";
-        const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-
-        const fetchPages = async (url, pageSize = 1000) => {
-            let all = [], page = 0;
-            while (true) {
-                const r = await fetch(`${url}&limit=${pageSize}&offset=${page * pageSize}`, { headers: H });
-                const rows = await r.json();
-                if (!Array.isArray(rows) || rows.length === 0) break;
-                all = all.concat(rows);
-                if (rows.length < pageSize) break;
-                page++;
-            }
-            return all;
-        };
 
         const load = async () => {
             try {
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensPivotCache;
-                const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
                     if (!cancelled) { setPivotRawRows(_bc.rows); setPivotLoading(false); }
-                    if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setPivotLoading(true);
                 }
 
-                // Step 1: latest date in indicators that has pivot columns populated
-                const latestRes = await fetch(
-                    `${SUPABASE_URL}/rest/v1/indicators` +
-                    `?exchange=eq.${exchange}&pivot_high_10w=not.is.null` +
-                    `&order=date.desc&limit=1&select=date`,
-                    { headers: H }
-                );
-                const latestRows = await latestRes.json();
-                if (cancelled) return;
-                const latestDate = latestRows?.[0]?.date;
-                if (!latestDate) { setPivotLoading(false); return; }
-                if (!cancelled) setPivotLatestDate(latestDate);
-
-                // Step 2: fetch all indicators rows for latest date with all four pivot cols + SMAs
-                // rs_rating >= 30 excludes liquid ETFs (LIQUIDCASE, HDFCLIQUID etc.) which have near-zero RS
-                // cap_category=in.(small,mid,large) additionally excludes ETFs/funds with high RS ratings
-                const indRows = await fetchPages(
-                    `${SUPABASE_URL}/rest/v1/indicators` +
-                    `?exchange=eq.${exchange}&date=eq.${latestDate}` +
-                    `&sma50=not.is.null&sma150=not.is.null&sma200=not.is.null` +
-                    `&rs_rating=gte.30` +
-                    `&cap_category=in.(small,mid,large)` +
-                    `&select=ticker,sma50,sma150,sma200,pivot_high_10d,pivot_high_20d,pivot_high_10w,pivot_high_20w,rs_rating,rs_3m,rs_6m,rs_12m`
-                );
-                if (cancelled) return;
-
-                // Step 3: fetch close prices from stock_52w
-                // pct_from_low > 15 ensures stock has risen meaningfully from its base (excludes near-flat ETFs)
-                const s52Rows = await fetchPages(
-                    `${SUPABASE_URL}/rest/v1/stock_52w` +
-                    `?exchange=eq.${exchange}` +
-                    `&pct_from_low=gt.15` +
-                    `&select=ticker,close,pct_from_high,pct_from_low,volume,volume_ma20`
-                );
-                if (cancelled) return;
-                const closeMap = {};
-                s52Rows.forEach(r => { if (r?.ticker) closeMap[r.ticker] = r; });
-
-                // Step 4: fetch 3/6/12M returns for display
-                const retRows = await fetchPages(
-                    `${SUPABASE_URL}/rest/v1/stock_returns` +
-                    `?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`
-                );
-                if (cancelled) return;
-                const retMap = {};
-                retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-
-                // Step 5: build unified rows  store all four pivot levels so toggling TF is instant (no re-fetch)
-                const joined = indRows
-                    .map(ind => {
-                        const s = closeMap[ind.ticker];
-                        if (!s) return null;
-                        const close = Number(s.close ?? 0);
-                        const sma50 = Number(ind.sma50 ?? 0);
-                        const sma150 = Number(ind.sma150 ?? 0);
-                        const sma200 = Number(ind.sma200 ?? 0);
-                        // Stage 2 filter: sma50 > sma150 > sma200
-                        if (!(sma50 > sma150 && sma150 > sma200)) return null;
-                        // Attach all four pivot levels; filtering by selected TF happens in useMemo
-                        const p10d = ind.pivot_high_10d != null ? Number(ind.pivot_high_10d) : null;
-                        const p20d = ind.pivot_high_20d != null ? Number(ind.pivot_high_20d) : null;
-                        const p10w = ind.pivot_high_10w != null ? Number(ind.pivot_high_10w) : null;
-                        const p20w = ind.pivot_high_20w != null ? Number(ind.pivot_high_20w) : null;
-                        const vol = Number(s.volume ?? 0);
-                        const volMa = Number(s.volume_ma20 ?? 0);
-                        const ret = retMap[ind.ticker] || {};
-                        return {
-                            ticker: ind.ticker,
-                            close,
-                            sma50,
-                            sma150,
-                            sma200,
-                            pivot_high_10d: p10d,
-                            pivot_high_20d: p20d,
-                            pivot_high_10w: p10w,
-                            pivot_high_20w: p20w,
-                            pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                            pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                            volume: vol || null,
-                            volume_20ma: volMa || null,
-                            rel_volume: volMa > 0 ? vol / volMa : null,
-                            rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                            rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null,
-                            rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null,
-                            rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                            ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null,
-                            ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null,
-                            ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                        };
-                    })
-                    .filter(Boolean);
-
-                if (!cancelled) {
-                    setPivotRawRows(joined);
-                    const _newCache = { rows: joined, loadedAt: Date.now() };
-                    _screensPivotCache = _newCache;
-                    _lsWriteScreens(_LS_SCR_PIVOT, _newCache);
-                }
+                // All filtering/joining now happens in get_screens_pivot() (Postgres
+                // RPC over mv_screens_base). All four pivot levels still come back on
+                // every row so toggling pivotTF stays a client-side useMemo, no re-fetch.
+                const joined = await _prefetchScreensPivot();
+                if (!cancelled) setPivotRawRows(joined);
             } catch (e) {
                 if (!cancelled) console.error("[Pivot Breakout] fetch failed:", e);
             } finally {
@@ -20350,122 +19924,23 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     useEffect(() => {
         let cancelled = false;
-        const exchange = "NSE";
-        const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-
-        const fetchPages = async (url, pageSize = 1000) => {
-            let all = [], page = 0;
-            while (true) {
-                const r = await fetch(`${url}&limit=${pageSize}&offset=${page * pageSize}`, { headers: H });
-                const rows = await r.json();
-                if (!Array.isArray(rows) || rows.length === 0) break;
-                all = all.concat(rows);
-                if (rows.length < pageSize) break;
-                page++;
-            }
-            return all;
-        };
 
         const load = async () => {
             try {
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensPullbackCache;
-                const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
                     if (!cancelled) { setPbRawRows(_bc.rows); setPbLoading(false); }
-                    if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setPbLoading(true);
                 }
 
-                // Step 1: latest date in indicators
-                const latestRes = await fetch(
-                    `${SUPABASE_URL}/rest/v1/indicators` +
-                    `?exchange=eq.${exchange}&sma50=not.is.null&rs_rating=not.is.null` +
-                    `&order=date.desc&limit=1&select=date`,
-                    { headers: H }
-                );
-                const latestRows = await latestRes.json();
-                if (cancelled) return;
-                const latestDate = latestRows?.[0]?.date;
-                if (!latestDate) { setPbLoading(false); return; }
-
-                // Step 2: parallel fetch  indicators (rs60 floor), stock_52w, returns
-                // stock_52w now includes high_52w for the Vol Dry-up near-52W-high condition
-                // cap_category=in.(small,mid,large) excludes ETFs/liquid funds/index funds
-                // which have null or 'etf' cap_category and pass all price/RS filters
-                const [indRows, s52Rows, retRows] = await Promise.all([
-                    fetchPages(
-                        `${SUPABASE_URL}/rest/v1/indicators` +
-                        `?exchange=eq.${exchange}&date=eq.${latestDate}` +
-                        `&sma50=not.is.null&sma200=not.is.null&rs_rating=gte.60` +
-                        `&cap_category=in.(small,mid,large)` +
-                        `&select=ticker,sma50,sma150,sma200,` +
-                        `pivot_high_10d,pivot_high_20d,pivot_high_10w,pivot_high_20w,` +
-                        `rs_rating,rs_3m,rs_6m,rs_12m`
-                    ),
-                    fetchPages(
-                        `${SUPABASE_URL}/rest/v1/stock_52w` +
-                        `?exchange=eq.${exchange}` +
-                        `&select=ticker,close,high_52w,pct_from_high,pct_from_low,volume,volume_ma20`
-                    ),
-                    fetchPages(
-                        `${SUPABASE_URL}/rest/v1/stock_returns` +
-                        `?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`
-                    ),
-                ]);
-                if (cancelled) return;
-
-                const closeMap = {};
-                s52Rows.forEach(r => { if (r?.ticker) closeMap[r.ticker] = r; });
-                const retMap = {};
-                retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-
-                // Build unified rows  close comes from stock_52w (same as SQL JOIN s.close)
-                const joined = indRows
-                    .map(ind => {
-                        const s = closeMap[ind.ticker];
-                        if (!s) return null;
-                        const close = Number(s.close ?? 0);
-                        const sma50 = Number(ind.sma50 ?? 0);
-                        const sma150 = Number(ind.sma150 ?? 0);
-                        const sma200 = Number(ind.sma200 ?? 0);
-                        const vol = Number(s.volume ?? 0);
-                        const volMa = Number(s.volume_ma20 ?? 0);
-                        const high52w = Number(s.high_52w ?? 0);
-                        const ret = retMap[ind.ticker] || {};
-                        return {
-                            ticker: ind.ticker,
-                            close,
-                            sma50, sma150, sma200,
-                            high_52w: high52w || null,
-                            pivot_high_10d: ind.pivot_high_10d != null ? Number(ind.pivot_high_10d) : null,
-                            pivot_high_20d: ind.pivot_high_20d != null ? Number(ind.pivot_high_20d) : null,
-                            pivot_high_10w: ind.pivot_high_10w != null ? Number(ind.pivot_high_10w) : null,
-                            pivot_high_20w: ind.pivot_high_20w != null ? Number(ind.pivot_high_20w) : null,
-                            pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                            pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                            volume: vol || null,
-                            volume_20ma: volMa || null,
-                            rel_volume: volMa > 0 ? vol / volMa : null,
-                            rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                            rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null,
-                            rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null,
-                            rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                            ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null,
-                            ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null,
-                            ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                        };
-                    })
-                    .filter(Boolean);
-
-                if (!cancelled) {
-                    setPbRawRows(joined);
-                    const _newCache = { rows: joined, loadedAt: Date.now() };
-                    _screensPullbackCache = _newCache;
-                    _lsWriteScreens(_LS_SCR_PULLBACK, _newCache);
-                }
+                // All filtering/joining now happens in get_screens_pullback() (Postgres
+                // RPC over mv_screens_base). The 5 derived pullback scans below still
+                // run as client-side useMemos over this single shared row set.
+                const joined = await _prefetchScreensPullback();
+                if (!cancelled) setPbRawRows(joined);
             } catch (e) {
                 if (!cancelled) console.error("[Pullback scans] fetch failed:", e);
             } finally {
@@ -20596,123 +20071,22 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     useEffect(() => {
         let cancelled = false;
-        const exchange = "NSE";
-        const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
-
-        const fetchVolBreakoutPages = async (baseUrl, pageSize = 1000) => {
-            let all = [], page = 0;
-            while (true) {
-                const url = `${baseUrl}&limit=${pageSize}&offset=${page * pageSize}`;
-                const r = await fetch(url, { headers: H });
-                const rows = await r.json();
-                if (!Array.isArray(rows) || rows.length === 0) break;
-                all = all.concat(rows);
-                if (rows.length < pageSize) break;
-                page++;
-            }
-            return all;
-        };
 
         const load = async () => {
             try {
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensVolBreakCache;
-                const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
                     if (!cancelled) { setVolBreakoutRawRows(_bc.rows); setVolBreakoutLoading(false); }
-                    if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setVolBreakoutLoading(true);
                 }
 
-                // Step 1: fetch all stock_52w rows with basic price data
-                const s52Rows = await fetchVolBreakoutPages(
-                    `${SUPABASE_URL}/rest/v1/stock_52w` +
-                    `?exchange=eq.${exchange}` +
-                    `&select=ticker,close,high_52w,pct_from_high,pct_from_low,sma50,sma200,volume,volume_ma20` +
-                    `&pct_from_low=gt.15`          // cond 3: has risen >15% from base
-                );
-                if (cancelled) return;
-
-                // Step 2: latest indicators date + all rs/sma data (no rs_rating floor  vol breakouts
-                //         can occur at any RS level, we just want to display the rating)
-                const latestDateRes = await fetch(
-                    `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&rs_rating=not.is.null&order=date.desc&limit=1&select=date`,
-                    { headers: H }
-                );
-                const latestDateRows = await latestDateRes.json();
-                if (cancelled) return;
-                const latestDate = latestDateRows?.[0]?.date;
-
-                let indMap = {};
-                if (latestDate) {
-                    const indRows = await fetchVolBreakoutPages(
-                        `${SUPABASE_URL}/rest/v1/indicators` +
-                        `?exchange=eq.${exchange}&date=eq.${latestDate}` +
-                        `&select=ticker,rs_rating,rs_3m,rs_6m,rs_12m`
-                    );
-                    if (cancelled) return;
-                    indRows.forEach(r => { if (r?.ticker) indMap[r.ticker] = r; });
-                }
-
-                // Step 3: returns for display columns
-                const retRows = await fetchVolBreakoutPages(
-                    `${SUPABASE_URL}/rest/v1/stock_returns` +
-                    `?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`
-                );
-                if (cancelled) return;
-                const retMap = {};
-                retRows.forEach(r => { if (r?.ticker) retMap[r.ticker] = r; });
-
-                // Step 4: apply JS-side conditions + build display rows
-                const joined = s52Rows
-                    .filter(s => {
-                        const close = Number(s.close ?? 0);
-                        const sma50 = Number(s.sma50 ?? 0);
-                        const sma200 = Number(s.sma200 ?? 0);
-                        const vol = Number(s.volume ?? 0);
-                        const volMa = Number(s.volume_ma20 ?? 0);
-                        return (
-                            close > sma50 &&               // cond 1a: price above 50 SMA
-                            sma50 > sma200 &&               // cond 1b: Stage 2 uptrend
-                            volMa > 0 &&
-                            (vol / volMa) >= 2.0            // cond 2: volume  2 avg
-                        );
-                    })
-                    .map(s => {
-                        const ind = indMap[s.ticker] || {};
-                        const ret = retMap[s.ticker] || {};
-                        const vol = Number(s.volume ?? 0);
-                        const volMa = Number(s.volume_ma20 ?? 0);
-                        return {
-                            ticker: s.ticker,
-                            close: s.close != null ? Number(s.close) : null,
-                            pct_from_52w_high: s.pct_from_high != null ? -Number(s.pct_from_high) : null,
-                            pct_from_52w_low: s.pct_from_low != null ? Number(s.pct_from_low) : null,
-                            sma50: s.sma50 != null ? Number(s.sma50) : null,
-                            sma200: s.sma200 != null ? Number(s.sma200) : null,
-                            volume: vol || null,
-                            volume_20ma: volMa || null,
-                            rel_volume: volMa > 0 ? vol / volMa : null,
-                            rs_rating: ind.rs_rating != null ? Number(ind.rs_rating) : null,
-                            rs_3m: ind.rs_3m != null ? Number(ind.rs_3m) : null,
-                            rs_6m: ind.rs_6m != null ? Number(ind.rs_6m) : null,
-                            rs_12m: ind.rs_12m != null ? Number(ind.rs_12m) : null,
-                            ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null,
-                            ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null,
-                            ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                        };
-                    })
-                    // highest relative volume first
-                    .sort((a, b) => Number(b.rel_volume ?? 0) - Number(a.rel_volume ?? 0));
-
-                if (!cancelled) {
-                    setVolBreakoutRawRows(joined);
-                    const _newCache = { rows: joined, loadedAt: Date.now() };
-                    _screensVolBreakCache = _newCache;
-                    _lsWriteScreens(_LS_SCR_VOLBREAK, _newCache);
-                }
+                // All filtering/joining/sorting now happens in get_screens_volbreak()
+                // (Postgres RPC over mv_screens_base).
+                const joined = await _prefetchScreensVolBreak();
+                if (!cancelled) setVolBreakoutRawRows(joined);
             } catch (e) {
                 if (!cancelled) console.error("[Vol Breakout] fetch failed:", e);
             } finally {
@@ -20736,96 +20110,25 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     useEffect(() => {
         let cancelled = false;
-        const H = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
 
         const load = async () => {
             try {
                 //  SWR: serve stale cache instantly 
                 const _bc = _screensVcpCache;
-                const _bcAge = _bc.loadedAt ? Date.now() - _bc.loadedAt : Infinity;
                 const _bcHasData = _bc.rows && _bc.rows.length > 0;
                 if (_bcHasData) {
                     if (!cancelled) { setVcpRawRows(_bc.rows); setVcpReturnMap(_bc.returnMap || {}); setVcpLoading(false); }
-                    if (_bcAge < _SCREENS_CACHE_TTL_MS) return;
                 } else {
                     setVcpLoading(true);
                 }
 
-                // Step 1: fetch vcp_candidates (all columns)
-                let all = [], page = 0;
-                while (true) {
-                    const r = await fetch(
-                        `${SUPABASE_URL}/rest/v1/vcp_candidates?select=*&order=vcp_score.desc&limit=1000&offset=${page * 1000}`,
-                        { headers: H }
-                    );
-                    const rows = await r.json();
-                    if (!Array.isArray(rows) || rows.length === 0) break;
-                    all = all.concat(rows);
-                    if (rows.length < 1000) break;
-                    page++;
-                }
-                if (cancelled) return;
-
-                // Step 2: returns for 3M/6M/12M display columns
-                const retR = await fetch(
-                    `${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.NSE&select=ticker,ret_3m,ret_6m,ret_12m`,
-                    { headers: H }
-                );
-                const retRows = await retR.json();
-                if (cancelled) return;
-                const rMap = {};
-                if (Array.isArray(retRows)) retRows.forEach(r => { if (r?.ticker) rMap[r.ticker] = r; });
-
-                // Step 3: stock_52w for price + rel_volume
-                const s52R = await fetch(
-                    `${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.NSE&select=ticker,close,volume,volume_ma20,pct_from_high,pct_from_low`,
-                    { headers: H }
-                );
-                const s52Rows = await s52R.json();
-                if (cancelled) return;
-                const s52Map = {};
-                if (Array.isArray(s52Rows)) s52Rows.forEach(r => { if (r?.ticker) s52Map[r.ticker] = r; });
-
-                // Normalize rows  merge VCP native fields with market data
-                const normalized = all.map(v => {
-                    const ret = rMap[v.ticker] || {};
-                    const s52 = s52Map[v.ticker] || {};
-                    const vol = Number(s52.volume ?? 0);
-                    const volMa = Number(s52.volume_ma20 ?? 0);
-                    return {
-                        // VCP native fields
-                        ticker: v.ticker,
-                        exchange: v.exchange,
-                        vcp_score: v.vcp_score != null ? Number(v.vcp_score) : null,
-                        category: v.category,
-                        contractions: v.contractions != null ? Number(v.contractions) : null,
-                        contraction_pattern: v.contraction_pattern,
-                        pct_from_high: v.pct_from_high != null ? Number(v.pct_from_high) : null,
-                        base_depth: v.base_depth != null ? Number(v.base_depth) : null,
-                        volume_dryup: v.volume_dryup,
-                        tight_range: v.tight_range,
-                        near_pivot: v.near_pivot,
-                        breakout_level: v.breakout_level != null ? Number(v.breakout_level) : null,
-                        detected_at: v.detected_at,
-                        // Market data (for standard preview + ScreenDetailView columns)
-                        close: s52.close != null ? Number(s52.close) : null,
-                        pct_from_52w_high: s52.pct_from_high != null ? -Number(s52.pct_from_high) : null,
-                        pct_from_52w_low: s52.pct_from_low != null ? Number(s52.pct_from_low) : null,
-                        volume: vol || null,
-                        volume_20ma: volMa || null,
-                        rel_volume: volMa > 0 ? vol / volMa : null,
-                        ret_3m: ret.ret_3m != null ? Number(ret.ret_3m) : null,
-                        ret_6m: ret.ret_6m != null ? Number(ret.ret_6m) : null,
-                        ret_12m: ret.ret_12m != null ? Number(ret.ret_12m) : null,
-                    };
-                });
-
+                // vcp_candidates joined with mv_screens_base now happens in
+                // get_screens_vcp() (Postgres RPC), replacing the three separate
+                // fetches (vcp_candidates + stock_returns + stock_52w) + client join.
+                const normalized = await _prefetchScreensVcp();
                 if (!cancelled) {
                     setVcpRawRows(normalized);
-                    setVcpReturnMap(rMap);
-                    const _newCache = { rows: normalized, returnMap: rMap, loadedAt: Date.now() };
-                    _screensVcpCache = _newCache;
-                    _lsWriteScreens(_LS_SCR_VCP, _newCache);
+                    setVcpReturnMap(_screensVcpCache.returnMap || {});
                 }
             } catch (e) {
                 if (!cancelled) console.error("[VCP] fetch failed:", e);
