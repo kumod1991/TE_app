@@ -125,9 +125,19 @@ function useViewportFlags() {
     const [width, setWidth] = useState(getWidth);
     useEffect(() => {
         if (typeof window === "undefined") return;
-        const onResize = () => setWidth(window.innerWidth);
+        let raf = null;
+        const onResize = () => {
+            if (raf != null) return;
+            raf = requestAnimationFrame(() => {
+                raf = null;
+                setWidth(window.innerWidth);
+            });
+        };
         window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
+        return () => {
+            window.removeEventListener("resize", onResize);
+            if (raf != null) cancelAnimationFrame(raf);
+        };
     }, []);
     return { width, isPhone: width <= 640, isTablet: width > 640 && width <= 1080, isCompact: width < 768 };
 }
@@ -1644,10 +1654,6 @@ export default function PremiumTickerDashboard({ symbol, T }) {
     const incQtr = useMemo(() => [...(fin?.incQtr || [])].sort((a, b) => String(b._period || "").localeCompare(String(a._period || ""))), [fin?.incQtr]);
     const bsQtr  = useMemo(() => [...(fin?.bsQtr  || [])].sort((a, b) => String(b._period || "").localeCompare(String(a._period || ""))), [fin?.bsQtr]);
 
-    const getBs = period => period ? bsAnn.find(b => b._period && b._period.slice(0,4) === period.slice(0,4)) || null : null;
-    const getCf = period => period ? cfAnn.find(c => c._period && c._period.slice(0,4) === period.slice(0,4)) || null : null;
-    const latestQtrWith = key => bsQtr.find(b => b[key] != null && Number(b[key]) !== 0) || bsQtr.find(b => b[key] != null) || null;
-
     const sharedTtm = useMemo(() => {
         const q = incQtr.slice(0, 4);
         if (!q.length) return null;
@@ -1661,259 +1667,209 @@ export default function PremiumTickerDashboard({ symbol, T }) {
         return out;
     }, [incQtr]);
 
-    const marginSeries = {
-        gpm:    [...incAnn.map(r => pct(r.GrossProfit, r.Revenue)).filter(Boolean),   raw?.gpm           ?? pct(sharedTtm?.GrossProfit, sharedTtm?.Revenue)],
-        ebitda: [...incAnn.map(r => pct(ebitdaOf(r), r.Revenue)).filter(Boolean),     raw?.ebitda_margin ?? pct(ebitdaOf(sharedTtm), sharedTtm?.Revenue)],
-        ebit:   [...incAnn.map(r => pct(r.EBIT, r.Revenue)).filter(Boolean),          raw?.ebit_margin   ?? pct(sharedTtm?.EBIT, sharedTtm?.Revenue)],
-        pat:    [...incAnn.map(r => pct(r.NetIncome, r.Revenue)).filter(Boolean),      raw?.pat_margin    ?? pct(sharedTtm?.NetIncome, sharedTtm?.Revenue)],
-    };
+    // All ratio/row computations below only re-run when the underlying
+    // financial data changes (incAnn/bsAnn/cfAnn/bsQtr/sharedTtm/raw) —
+    // not on every render (e.g. switching analytics tabs or resizing the
+    // window no longer re-triggers this whole block).
+    const derived = useMemo(() => {
+        // O(1) year lookups instead of re-scanning bsAnn/cfAnn/incAnn with
+        // .find() inside every row .map() below.
+        const bsByYear = new Map(bsAnn.map(b => [b._period ? b._period.slice(0, 4) : null, b]));
+        const cfByYear = new Map(cfAnn.map(c => [c._period ? c._period.slice(0, 4) : null, c]));
+        const incByYear = new Map(incAnn.map(r => [r._period ? r._period.slice(0, 4) : null, r]));
+        const getBs = period => period ? bsByYear.get(period.slice(0, 4)) || null : null;
+        const getCf = period => period ? cfByYear.get(period.slice(0, 4)) || null : null;
+        const getInc = period => period ? incByYear.get(period.slice(0, 4)) || null : null;
+        const latestQtrWith = key => bsQtr.find(b => b[key] != null && Number(b[key]) !== 0) || bsQtr.find(b => b[key] != null) || null;
 
-    const returnRows = incAnn.map(r => {
-        const bs = getBs(r._period);
-        const npm   = ratio(r.NetIncome, r.Revenue, 4);
-        const turns = ratio(r.Revenue, bs?.TotalAssets, 4);
-        const lev   = ratio(bs?.TotalAssets, bs?.StockholderEquity ?? bs?.TotalEquity, 4);
-        const ebitM = ratio(r.EBIT, r.Revenue, 4);
-        const ce    = bs ? (Number(bs.TotalEquity ?? bs.StockholderEquity ?? 0) + Number(bs.TotalDebt ?? ((bs.BorrowingsCurrent ?? 0) + (bs.LongTermDebt ?? 0))) - Number(bs.CashAndShortTerm ?? bs.Cash ?? 0) - Number(bs.LongTermInvestments ?? 0)) : null;
-        const ceTurns = ratio(r.Revenue, ce, 4);
-        return {
-            roe:   npm != null && turns != null && lev   != null ? Number((npm * turns * lev   * 100).toFixed(2)) : null,
-            roa:   npm != null && turns != null             ? Number((npm * turns         * 100).toFixed(2)) : null,
-            roce:  ebitM != null && ceTurns != null         ? Number((ebitM * ceTurns     * 100).toFixed(2)) : null,
-            asset: turns != null                            ? Number(turns.toFixed(2))                        : null,
+        const marginSeries = {
+            gpm:    [...incAnn.map(r => pct(r.GrossProfit, r.Revenue)).filter(Boolean),   raw?.gpm           ?? pct(sharedTtm?.GrossProfit, sharedTtm?.Revenue)],
+            ebitda: [...incAnn.map(r => pct(ebitdaOf(r), r.Revenue)).filter(Boolean),     raw?.ebitda_margin ?? pct(ebitdaOf(sharedTtm), sharedTtm?.Revenue)],
+            ebit:   [...incAnn.map(r => pct(r.EBIT, r.Revenue)).filter(Boolean),          raw?.ebit_margin   ?? pct(sharedTtm?.EBIT, sharedTtm?.Revenue)],
+            pat:    [...incAnn.map(r => pct(r.NetIncome, r.Revenue)).filter(Boolean),      raw?.pat_margin    ?? pct(sharedTtm?.NetIncome, sharedTtm?.Revenue)],
         };
-    });
 
-    const ttmBs = latestQtrWith("TotalAssets");
-    const ttmNpm = ratio(sharedTtm?.NetIncome, sharedTtm?.Revenue, 6);
-    const ttmAssetTurns = ratio(sharedTtm?.Revenue, ttmBs?.TotalAssets, 6);
-    const ttmFinLev = ratio(ttmBs?.TotalAssets, ttmBs?.StockholderEquity ?? ttmBs?.TotalEquity, 6);
-    const ttmCurrentRatio = ratio(latestQtrWith("TotalCurrentAssets")?.TotalCurrentAssets, latestQtrWith("TotalCurrentLiab")?.TotalCurrentLiab);
-    const ttmQuickRatio = (() => {
-        const ca = latestQtrWith("TotalCurrentAssets")?.TotalCurrentAssets;
-        const cl = latestQtrWith("TotalCurrentLiab")?.TotalCurrentLiab;
-        const inv = latestQtrWith("Inventories")?.Inventories ?? 0;
-        return n(ca) != null && n(cl) != null && Number(cl) !== 0 ? Number(((Number(ca) - Number(inv)) / Number(cl)).toFixed(2)) : null;
-    })();
-    const ttmInvTurn = ratio(sharedTtm?.COGS, latestQtrWith("Inventories")?.Inventories);
-    const ttmCcc = (() => {
-        const rec = latestQtrWith("TradeReceivables")?.TradeReceivables ?? latestQtrWith("AccountsReceivable-TradeNet")?.["AccountsReceivable-TradeNet"] ?? null;
-        const inv = latestQtrWith("Inventories")?.Inventories ?? null;
-        const pay = latestQtrWith("TradePayables")?.TradePayables ?? null;
-        const debtor    = sharedTtm?.Revenue && rec != null ? (365 * Number(rec)) / Number(sharedTtm.Revenue) : null;
-        const inventory = sharedTtm?.COGS    && inv != null ? (365 * Number(inv)) / Number(sharedTtm.COGS)   : null;
-        const payable   = sharedTtm?.COGS    && pay != null ? (365 * Number(pay)) / Number(sharedTtm.COGS)   : null;
-        return debtor != null && inventory != null && payable != null ? Number((debtor + inventory - payable).toFixed(1)) : raw?.ccc ?? null;
-    })();
-    const latestAnnual = incAnn[incAnn.length - 1];
-    const otherRows = incAnn.map(r => {
-        const bs = getBs(r._period);
-        const rev = r.Revenue != null ? Number(r.Revenue) : null;
-        const depr = r.Depreciation != null ? Number(r.Depreciation) : null;
-        const rec = bs?.TradeReceivables ?? bs?.["AccountsReceivable-TradeNet"] ?? null;
-        const inv = bs?.Inventories ?? null;
-        return {
-            recSales: pct(rec, rev),
-            depSales: pct(depr, rev),
-            invSales: pct(inv, rev),
+        const ttmBs = latestQtrWith("TotalAssets");
+        const ttmNpm = ratio(sharedTtm?.NetIncome, sharedTtm?.Revenue, 6);
+        const ttmAssetTurns = ratio(sharedTtm?.Revenue, ttmBs?.TotalAssets, 6);
+        const ttmFinLev = ratio(ttmBs?.TotalAssets, ttmBs?.StockholderEquity ?? ttmBs?.TotalEquity, 6);
+        const ttmCurrentRatio = ratio(latestQtrWith("TotalCurrentAssets")?.TotalCurrentAssets, latestQtrWith("TotalCurrentLiab")?.TotalCurrentLiab);
+        const ttmQuickRatio = (() => {
+            const ca = latestQtrWith("TotalCurrentAssets")?.TotalCurrentAssets;
+            const cl = latestQtrWith("TotalCurrentLiab")?.TotalCurrentLiab;
+            const inv = latestQtrWith("Inventories")?.Inventories ?? 0;
+            return n(ca) != null && n(cl) != null && Number(cl) !== 0 ? Number(((Number(ca) - Number(inv)) / Number(cl)).toFixed(2)) : null;
+        })();
+        const ttmInvTurn = ratio(sharedTtm?.COGS, latestQtrWith("Inventories")?.Inventories);
+        const ttmCcc = (() => {
+            const rec = latestQtrWith("TradeReceivables")?.TradeReceivables ?? latestQtrWith("AccountsReceivable-TradeNet")?.["AccountsReceivable-TradeNet"] ?? null;
+            const inv = latestQtrWith("Inventories")?.Inventories ?? null;
+            const pay = latestQtrWith("TradePayables")?.TradePayables ?? null;
+            const debtor    = sharedTtm?.Revenue && rec != null ? (365 * Number(rec)) / Number(sharedTtm.Revenue) : null;
+            const inventory = sharedTtm?.COGS    && inv != null ? (365 * Number(inv)) / Number(sharedTtm.COGS)   : null;
+            const payable   = sharedTtm?.COGS    && pay != null ? (365 * Number(pay)) / Number(sharedTtm.COGS)   : null;
+            return debtor != null && inventory != null && payable != null ? Number((debtor + inventory - payable).toFixed(1)) : raw?.ccc ?? null;
+        })();
+        const latestAnnual = incAnn[incAnn.length - 1];
+        const latestReceivables = (() => {
+            const q = latestQtrWith("TradeReceivables") || latestQtrWith("AccountsReceivable-TradeNet");
+            if (q) return q.TradeReceivables ?? q["AccountsReceivable-TradeNet"] ?? null;
+            const a = [...bsAnn].reverse().find(b =>
+                (b.TradeReceivables != null && Number(b.TradeReceivables) !== 0) ||
+                (b["AccountsReceivable-TradeNet"] != null && Number(b["AccountsReceivable-TradeNet"]) !== 0)
+            );
+            return a ? (a.TradeReceivables ?? a["AccountsReceivable-TradeNet"] ?? null) : null;
+        })();
+        const latestInventory = (() => {
+            const q = latestQtrWith("Inventories");
+            if (q) return q.Inventories ?? null;
+            const a = [...bsAnn].reverse().find(b => b.Inventories != null && Number(b.Inventories) !== 0);
+            return a?.Inventories ?? null;
+        })();
+        const ttmDepSales = pct(sharedTtm?.Depreciation, sharedTtm?.Revenue);
+        const ttmRecSales = pct(latestReceivables, sharedTtm?.Revenue);
+        const ttmInvSales = pct(latestInventory, sharedTtm?.Revenue);
+
+        const calcCapitalEmployed = bs => {
+            if (!bs) return null;
+            const equity = bs.TotalEquity ?? bs.StockholderEquity ?? null;
+            const debt = bs.TotalDebt ?? ((bs.BorrowingsCurrent ?? 0) + (bs.LongTermDebt ?? 0));
+            const cash = bs.CashAndShortTerm ?? bs.Cash ?? 0;
+            const ltInv = bs.LongTermInvestments ?? 0;
+            if (equity == null) return null;
+            return Number(equity) + Number(debt) - Number(cash) - Number(ltInv);
         };
-    });
-    const latestReceivables = (() => {
-        const q = latestQtrWith("TradeReceivables") || latestQtrWith("AccountsReceivable-TradeNet");
-        if (q) return q.TradeReceivables ?? q["AccountsReceivable-TradeNet"] ?? null;
-        const a = [...bsAnn].reverse().find(b =>
-            (b.TradeReceivables != null && Number(b.TradeReceivables) !== 0) ||
-            (b["AccountsReceivable-TradeNet"] != null && Number(b["AccountsReceivable-TradeNet"]) !== 0)
-        );
-        return a ? (a.TradeReceivables ?? a["AccountsReceivable-TradeNet"] ?? null) : null;
-    })();
-    const latestInventory = (() => {
-        const q = latestQtrWith("Inventories");
-        if (q) return q.Inventories ?? null;
-        const a = [...bsAnn].reverse().find(b => b.Inventories != null && Number(b.Inventories) !== 0);
-        return a?.Inventories ?? null;
-    })();
-    const ttmDepSales = pct(sharedTtm?.Depreciation, sharedTtm?.Revenue);
-    const ttmRecSales = pct(latestReceivables, sharedTtm?.Revenue);
-    const ttmInvSales = pct(latestInventory, sharedTtm?.Revenue);
+        const latestPayables = latestQtrWith("TradePayables")?.TradePayables ?? null;
+        const latestCf = cfAnn.at(-1);
+        const returnBreakdownRows = incAnn.map(r => {
+            const bs = getBs(r._period);
+            const ce = calcCapitalEmployed(bs);
+            const npm = ratio(r.NetIncome, r.Revenue, 6);
+            const assetTurns = ratio(r.Revenue, bs?.TotalAssets, 6);
+            const finLev = ratio(bs?.TotalAssets, bs?.StockholderEquity ?? bs?.TotalEquity, 6);
+            const ebitMargin = ratio(r.EBIT, r.Revenue, 6);
+            const ceTurnover = ratio(r.Revenue, ce, 6);
+            return {
+                roa: npm != null && assetTurns != null ? Number((npm * assetTurns * 100).toFixed(2)) : null,
+                roe: npm != null && assetTurns != null && finLev != null ? Number((npm * assetTurns * finLev * 100).toFixed(2)) : null,
+                roce: ebitMargin != null && ceTurnover != null ? Number((ebitMargin * ceTurnover * 100).toFixed(2)) : null,
+                npm: npm != null ? Number((npm * 100).toFixed(2)) : null,
+                assetTurns: assetTurns != null ? Number(assetTurns.toFixed(2)) : null,
+                finLev: finLev != null ? Number(finLev.toFixed(2)) : null,
+                ebitMargin: ebitMargin != null ? Number((ebitMargin * 100).toFixed(2)) : null,
+                ceTurnover: ceTurnover != null ? Number(ceTurnover.toFixed(2)) : null,
+            };
+        });
+        const ttmCapitalEmployed = calcCapitalEmployed(latestQtrWith("TotalEquity") || latestQtrWith("StockholderEquity"));
+        const ttmNpmPct = pct(sharedTtm?.NetIncome, sharedTtm?.Revenue);
+        const ttmEbitMarginPct = pct(sharedTtm?.EBIT, sharedTtm?.Revenue);
+        const ttmFinLevRatio = ratio(ttmBs?.TotalAssets, ttmBs?.StockholderEquity ?? ttmBs?.TotalEquity);
+        const ttmCeTurnover = ratio(sharedTtm?.Revenue, ttmCapitalEmployed);
+        const leverageRows = bsAnn.map(r => {
+            const eq = r.TotalEquity ?? r.StockholderEquity ?? null;
+            const ltDebt = r.LongTermDebt ?? 0;
+            const stDebt = r.BorrowingsCurrent ?? 0;
+            const inc = getInc(r._period);
+            return {
+                debtEq: ratio(ltDebt + stDebt, eq),
+                ltDebtEq: ratio(ltDebt, eq),
+                stDebtEq: ratio(stDebt, eq),
+                icr: ratio(Math.abs(Number(inc?.EBIT ?? 0)), Math.abs(Number(inc?.InterestExpense ?? 0))),
+            };
+        });
+        const ttmLeverageBs = latestQtrWith("TotalEquity") || latestQtrWith("StockholderEquity");
+        const ttmDebtEq = ratio((ttmLeverageBs?.LongTermDebt ?? 0) + (ttmLeverageBs?.BorrowingsCurrent ?? 0), ttmLeverageBs?.TotalEquity ?? ttmLeverageBs?.StockholderEquity);
+        const ttmLtDebtEq = ratio(ttmLeverageBs?.LongTermDebt, ttmLeverageBs?.TotalEquity ?? ttmLeverageBs?.StockholderEquity);
+        const ttmStDebtEq = ratio(ttmLeverageBs?.BorrowingsCurrent, ttmLeverageBs?.TotalEquity ?? ttmLeverageBs?.StockholderEquity);
+        const turnoverRows = bsAnn.map(r => ({
+            assetTurn: ratio(getInc(r._period)?.Revenue, r.TotalAssets),
+            invTurn: ratio(getInc(r._period)?.COGS, r.Inventories),
+        }));
+        const growthRows = {
+            sales: incAnn.slice(1).map((r, i) => growth(r.Revenue, incAnn[i].Revenue)).filter(v => v != null).concat(growth(sharedTtm?.Revenue, latestAnnual?.Revenue)),
+            ebitda: incAnn.slice(1).map((r, i) => growth(ebitdaOf(r), ebitdaOf(incAnn[i]))).filter(v => v != null).concat(growth(ebitdaOf(sharedTtm), ebitdaOf(latestAnnual))),
+            ebit: incAnn.slice(1).map((r, i) => growth(r.EBIT, incAnn[i].EBIT)).filter(v => v != null).concat(growth(sharedTtm?.EBIT, latestAnnual?.EBIT)),
+            pat: incAnn.slice(1).map((r, i) => growth(r.NetIncome, incAnn[i].NetIncome)).filter(v => v != null).concat(growth(sharedTtm?.NetIncome, latestAnnual?.NetIncome)),
+            eps: incAnn.slice(1).map((r, i) => growth(r.EPS, incAnn[i].EPS)).filter(v => v != null).concat(growth(sharedTtm?.EPS, latestAnnual?.EPS)),
+        };
+        const cashConversionRows = incAnn.map(r => {
+            const bs = getBs(r._period);
+            const rev = Number(r.Revenue ?? 0);
+            const cogs = Number(r.COGS ?? 0);
+            const rec = bs?.TradeReceivables ?? bs?.["AccountsReceivable-TradeNet"] ?? null;
+            const inv = bs?.Inventories ?? null;
+            const pay = bs?.TradePayables ?? null;
+            const debtorDays = rev && rec != null ? Number(((365 * Number(rec)) / rev).toFixed(1)) : null;
+            const inventoryDays = cogs && inv != null ? Number(((365 * Number(inv)) / cogs).toFixed(1)) : null;
+            const payableDays = cogs && pay != null ? Number(((365 * Number(pay)) / cogs).toFixed(1)) : null;
+            return {
+                debtorDays,
+                inventoryDays,
+                payableDays,
+                ccc: debtorDays != null && inventoryDays != null && payableDays != null ? Number((debtorDays + inventoryDays - payableDays).toFixed(1)) : null,
+            };
+        });
+        const forensicRows = incAnn.map(r => {
+            const cf = getCf(r._period);
+            const bs = getBs(r._period);
+            const rev = r.Revenue != null ? Number(r.Revenue) : null;
+            const depr = r.Depreciation != null ? Number(r.Depreciation) : null;
+            const cfo = cf?.OperatingCF != null ? Number(cf.OperatingCF) : null;
+            const rec = bs?.TradeReceivables ?? bs?.["AccountsReceivable-TradeNet"] ?? null;
+            const inv = bs?.Inventories ?? null;
+            return {
+                cfoPat: ratio(cfo, r.NetIncome),
+                cfoEbitda: ratio(cfo, ebitdaOf(r)),
+                depSales: pct(depr, rev),
+                recSales: pct(rec, rev),
+                invSales: pct(inv, rev),
+            };
+        });
+        const ttmCfoPat = ratio(latestCf?.OperatingCF, sharedTtm?.NetIncome);
+        const ttmCfoEbitda = ratio(latestCf?.OperatingCF, ebitdaOf(sharedTtm));
+        const ttmDebtorDays = sharedTtm?.Revenue && latestReceivables != null ? Number(((365 * Number(latestReceivables)) / Number(sharedTtm.Revenue)).toFixed(1)) : null;
+        const ttmInventoryDays = sharedTtm?.COGS && latestInventory != null ? Number(((365 * Number(latestInventory)) / Number(sharedTtm.COGS)).toFixed(1)) : null;
+        const ttmPayableDays = sharedTtm?.COGS && latestPayables != null ? Number(((365 * Number(latestPayables)) / Number(sharedTtm.COGS)).toFixed(1)) : null;
 
-    // ── Metric groups ───────────────────────────────────────────
-    const groups = [
-        {
-            title: "Margin Ratios",
-            shortTitle: "Margins",
-            subtitle: "Core earnings metrics and margin analysis",
-            cards: [
-                { title: "Gross Margin",  subtitle: "Gross Profit / Revenue", value: fmt(raw?.gpm           ?? marginSeries.gpm.at(-1),    "pct"), series: marginSeries.gpm,    color: C.green  },
-                { title: "EBITDA Margin", subtitle: "EBITDA / Revenue",        value: fmt(raw?.ebitda_margin ?? marginSeries.ebitda.at(-1), "pct"), series: marginSeries.ebitda, color: C.blue   },
-                { title: "EBIT Margin",   subtitle: "EBIT / Revenue",          value: fmt(raw?.ebit_margin   ?? marginSeries.ebit.at(-1),   "pct"), series: marginSeries.ebit,   color: C.amber  },
-                { title: "PAT Margin",    subtitle: "Net Income / Revenue",    value: fmt(raw?.pat_margin    ?? marginSeries.pat.at(-1),    "pct"), series: marginSeries.pat,    color: C.rose   },
-            ],
-        },
-        {
-            title: "Return Ratios",
-            shortTitle: "Returns",
-            subtitle: "Capital efficiency and shareholder returns",
-            cards: [
-                { title: "ROE",         subtitle: "DuPont return on equity", value: fmt(raw?.roe ?? (ttmNpm && ttmAssetTurns && ttmFinLev ? ttmNpm * ttmAssetTurns * ttmFinLev * 100 : null), "pct"), series: [...returnRows.map(r => r.roe).filter(Boolean),   raw?.roe],               color: C.purple },
-                { title: "ROA",         subtitle: "Net income / assets",     value: fmt(raw?.roa ?? (ttmNpm && ttmAssetTurns ? ttmNpm * ttmAssetTurns * 100 : null), "pct"),                         series: [...returnRows.map(r => r.roa).filter(Boolean),   raw?.roa],               color: C.green  },
-                { title: "ROCE",        subtitle: "EBIT efficiency",         value: fmt(raw?.roce, "pct"),                                                                                            series: [...returnRows.map(r => r.roce).filter(Boolean),  raw?.roce],              color: C.cyan   },
-                { title: "Asset Turns", subtitle: "Revenue / assets",        value: fmt(raw?.asset_turnover ?? ttmAssetTurns, "x"),                                                                   series: [...returnRows.map(r => r.asset).filter(Boolean), raw?.asset_turnover ?? ttmAssetTurns], color: C.indigo },
-            ],
-        },
-        {
-            title: "Liquidity & Leverage",
-            shortTitle: "Liquidity",
-            subtitle: "Balance sheet strength and solvency",
-            cards: [
-                { title: "Current Ratio",     subtitle: "Current assets / liabilities",  value: fmt(ttmCurrentRatio, "x"),  series: [...bsAnn.map(r => ratio(r.TotalCurrentAssets, r.TotalCurrentLiab)).filter(Boolean), ttmCurrentRatio], color: C.blue  },
-                { title: "Quick Ratio",       subtitle: "(CA - Inventory) / CL",          value: fmt(ttmQuickRatio, "x"),    series: [...bsAnn.map(r => r.TotalCurrentAssets && r.TotalCurrentLiab ? ((Number(r.TotalCurrentAssets) - Number(r.Inventories ?? 0)) / Number(r.TotalCurrentLiab)) : null).filter(Boolean), ttmQuickRatio], color: C.green },
-                { title: "Debt / Equity",     subtitle: "Total debt / equity",            value: fmt(raw?.debt_eq, "x"),     series: [...bsAnn.map(r => ratio(r.TotalDebt ?? ((r.BorrowingsCurrent ?? 0) + (r.LongTermDebt ?? 0)), r.TotalEquity ?? r.StockholderEquity)).filter(Boolean), raw?.debt_eq], color: C.rose  },
-                { title: "Interest Coverage", subtitle: "EBIT / interest",                value: fmt(raw?.icr, "x"),         series: [...incAnn.map(r => ratio(Math.abs(Number(r.EBIT ?? 0)), Math.abs(Number(r.InterestExpense ?? 0)))).filter(Boolean), raw?.icr], color: C.amber },
-            ],
-        },
-        {
-            title: "Turnover & Growth",
-            shortTitle: "Growth",
-            subtitle: "Operational efficiency and quality metrics",
-            cards: [
-                { title: "Inventory Turnover",    subtitle: "COGS / inventory",              value: fmt(raw?.inv_turnover ?? ttmInvTurn, "x"),                                                        series: [...bsAnn.map(r => ratio(incAnn.find(i => i._period && r._period && i._period.slice(0,4) === r._period.slice(0,4))?.COGS, r.Inventories)).filter(Boolean), raw?.inv_turnover ?? ttmInvTurn], color: C.blue  },
-                { title: "Cash Conversion Cycle", subtitle: "Debtor + inventory - payable",   value: fmt(ttmCcc, "days"),                                                                             series: [...incAnn.map(r => { const bs = getBs(r._period); const rev = Number(r.Revenue ?? 0); const cogs = Number(r.COGS ?? 0); const dd = rev && bs?.TradeReceivables != null ? (365 * Number(bs.TradeReceivables)) / rev : null; const id = cogs && bs?.Inventories != null ? (365 * Number(bs.Inventories)) / cogs : null; const pd = cogs && bs?.TradePayables != null ? (365 * Number(bs.TradePayables)) / cogs : null; return dd != null && id != null && pd != null ? Number((dd + id - pd).toFixed(1)) : null; }).filter(Boolean), ttmCcc], color: C.rose  },
-                { title: "Sales Growth",          subtitle: "YoY revenue growth",             value: fmt(growth(sharedTtm?.Revenue, latestAnnual?.Revenue), "pct", 1),                               series: incAnn.slice(1).map((r, i) => growth(r.Revenue, incAnn[i].Revenue)).filter(Boolean).concat(growth(sharedTtm?.Revenue, latestAnnual?.Revenue)), color: C.green },
-                { title: "CFO / PAT",             subtitle: "Cash conversion quality",        value: fmt(ratio(cfAnn.at(-1)?.OperatingCF, sharedTtm?.NetIncome) ?? raw?.cfo_pat, "x"),              series: incAnn.map(r => ratio(getCf(r._period)?.OperatingCF, r.NetIncome)).filter(Boolean).concat(ratio(cfAnn.at(-1)?.OperatingCF, sharedTtm?.NetIncome) ?? raw?.cfo_pat), color: C.amber },
-            ],
-        },
-        {
-            title: "Valuation",
-            shortTitle: "Valuation",
-            subtitle: "Market pricing and enterprise value metrics",
-            cards: [
-                { title: "Market Cap",  subtitle: "Current market capitalization", value: fmt(raw?.market_cap_cr, "cr"), series: [raw?.market_cap_cr], color: C.blue   },
-                { title: "P/E",         subtitle: "Price / EPS",                   value: fmt(raw?.pe, "x", 1),          series: [raw?.pe],            color: C.amber  },
-                { title: "P/S",         subtitle: "Market cap / sales",            value: fmt(raw?.ps, "x"),             series: [raw?.ps],             color: C.green  },
-                { title: "EV / EBITDA", subtitle: "Enterprise value / EBITDA",     value: fmt(raw?.ev_ebitda, "x", 1),   series: [raw?.ev_ebitda],     color: C.purple },
-            ],
-        },
-        {
-            title: "Other Ratios",
-            shortTitle: "Others",
-            subtitle: "Working capital and depreciation intensity",
-            cards: [
-                { title: "Receivables / Sales", subtitle: "Trade receivables / revenue", value: fmt(ttmRecSales, "pct"), series: [...otherRows.map(r => r.recSales).filter(Boolean), ttmRecSales], color: C.cyan   },
-                { title: "Dep / Sales",         subtitle: "Depreciation / revenue",      value: fmt(ttmDepSales, "pct"), series: [...otherRows.map(r => r.depSales).filter(Boolean), ttmDepSales], color: C.amber  },
-                { title: "Inventory / Sales",   subtitle: "Inventory / revenue",         value: fmt(ttmInvSales, "pct"), series: [...otherRows.map(r => r.invSales).filter(Boolean), ttmInvSales], color: C.indigo },
-            ],
-        },
-    ];
+        return {
+            marginSeries, returnBreakdownRows, leverageRows, turnoverRows, growthRows, cashConversionRows, forensicRows,
+            ttmBs, ttmNpm, ttmAssetTurns, ttmFinLev, ttmCurrentRatio, ttmQuickRatio, ttmInvTurn, ttmCcc, latestAnnual,
+            latestReceivables, latestInventory, ttmDepSales, ttmRecSales, ttmInvSales,
+            ttmCapitalEmployed, ttmNpmPct, ttmEbitMarginPct, ttmFinLevRatio, ttmCeTurnover,
+            ttmLeverageBs, ttmDebtEq, ttmLtDebtEq, ttmStDebtEq,
+            ttmCfoPat, ttmCfoEbitda, ttmDebtorDays, ttmInventoryDays, ttmPayableDays,
+        };
+    }, [incAnn, bsAnn, cfAnn, bsQtr, sharedTtm, raw]);
+
+    const {
+        marginSeries, returnBreakdownRows, leverageRows, turnoverRows, growthRows, cashConversionRows, forensicRows,
+        ttmBs, ttmNpm, ttmAssetTurns, ttmFinLev, ttmCurrentRatio, ttmQuickRatio, ttmInvTurn, ttmCcc, latestAnnual,
+        latestReceivables, latestInventory, ttmDepSales, ttmRecSales, ttmInvSales,
+        ttmCapitalEmployed, ttmNpmPct, ttmEbitMarginPct, ttmFinLevRatio, ttmCeTurnover,
+        ttmLeverageBs, ttmDebtEq, ttmLtDebtEq, ttmStDebtEq,
+        ttmCfoPat, ttmCfoEbitda, ttmDebtorDays, ttmInventoryDays, ttmPayableDays,
+    } = derived;
 
     const cardCols = isPhone ? 1 : isTablet ? 2 : 4;
-    const calcCapitalEmployed = bs => {
-        if (!bs) return null;
-        const equity = bs.TotalEquity ?? bs.StockholderEquity ?? null;
-        const debt = bs.TotalDebt ?? ((bs.BorrowingsCurrent ?? 0) + (bs.LongTermDebt ?? 0));
-        const cash = bs.CashAndShortTerm ?? bs.Cash ?? 0;
-        const ltInv = bs.LongTermInvestments ?? 0;
-        if (equity == null) return null;
-        return Number(equity) + Number(debt) - Number(cash) - Number(ltInv);
-    };
-    const latestPayables = latestQtrWith("TradePayables")?.TradePayables ?? null;
-    const latestCf = cfAnn.at(-1);
-    const returnBreakdownRows = incAnn.map(r => {
-        const bs = getBs(r._period);
-        const ce = calcCapitalEmployed(bs);
-        const npm = ratio(r.NetIncome, r.Revenue, 6);
-        const assetTurns = ratio(r.Revenue, bs?.TotalAssets, 6);
-        const finLev = ratio(bs?.TotalAssets, bs?.StockholderEquity ?? bs?.TotalEquity, 6);
-        const ebitMargin = ratio(r.EBIT, r.Revenue, 6);
-        const ceTurnover = ratio(r.Revenue, ce, 6);
-        return {
-            roa: npm != null && assetTurns != null ? Number((npm * assetTurns * 100).toFixed(2)) : null,
-            roe: npm != null && assetTurns != null && finLev != null ? Number((npm * assetTurns * finLev * 100).toFixed(2)) : null,
-            roce: ebitMargin != null && ceTurnover != null ? Number((ebitMargin * ceTurnover * 100).toFixed(2)) : null,
-            npm: npm != null ? Number((npm * 100).toFixed(2)) : null,
-            assetTurns: assetTurns != null ? Number(assetTurns.toFixed(2)) : null,
-            finLev: finLev != null ? Number(finLev.toFixed(2)) : null,
-            ebitMargin: ebitMargin != null ? Number((ebitMargin * 100).toFixed(2)) : null,
-            ceTurnover: ceTurnover != null ? Number(ceTurnover.toFixed(2)) : null,
-        };
-    });
-    const ttmCapitalEmployed = calcCapitalEmployed(latestQtrWith("TotalEquity") || latestQtrWith("StockholderEquity"));
-    const ttmNpmPct = pct(sharedTtm?.NetIncome, sharedTtm?.Revenue);
-    const ttmEbitMarginPct = pct(sharedTtm?.EBIT, sharedTtm?.Revenue);
-    const ttmFinLevRatio = ratio(ttmBs?.TotalAssets, ttmBs?.StockholderEquity ?? ttmBs?.TotalEquity);
-    const ttmCeTurnover = ratio(sharedTtm?.Revenue, ttmCapitalEmployed);
-    const leverageRows = bsAnn.map(r => {
-        const eq = r.TotalEquity ?? r.StockholderEquity ?? null;
-        const ltDebt = r.LongTermDebt ?? 0;
-        const stDebt = r.BorrowingsCurrent ?? 0;
-        const inc = incAnn.find(p => p._period && r._period && p._period.slice(0, 4) === r._period.slice(0, 4));
-        return {
-            debtEq: ratio(ltDebt + stDebt, eq),
-            ltDebtEq: ratio(ltDebt, eq),
-            stDebtEq: ratio(stDebt, eq),
-            icr: ratio(Math.abs(Number(inc?.EBIT ?? 0)), Math.abs(Number(inc?.InterestExpense ?? 0))),
-        };
-    });
-    const ttmLeverageBs = latestQtrWith("TotalEquity") || latestQtrWith("StockholderEquity");
-    const ttmDebtEq = ratio((ttmLeverageBs?.LongTermDebt ?? 0) + (ttmLeverageBs?.BorrowingsCurrent ?? 0), ttmLeverageBs?.TotalEquity ?? ttmLeverageBs?.StockholderEquity);
-    const ttmLtDebtEq = ratio(ttmLeverageBs?.LongTermDebt, ttmLeverageBs?.TotalEquity ?? ttmLeverageBs?.StockholderEquity);
-    const ttmStDebtEq = ratio(ttmLeverageBs?.BorrowingsCurrent, ttmLeverageBs?.TotalEquity ?? ttmLeverageBs?.StockholderEquity);
-    const turnoverRows = bsAnn.map(r => ({
-        assetTurn: ratio(incAnn.find(i => i._period && r._period && i._period.slice(0, 4) === r._period.slice(0, 4))?.Revenue, r.TotalAssets),
-        invTurn: ratio(incAnn.find(i => i._period && r._period && i._period.slice(0, 4) === r._period.slice(0, 4))?.COGS, r.Inventories),
-    }));
-    const growthRows = {
-        sales: incAnn.slice(1).map((r, i) => growth(r.Revenue, incAnn[i].Revenue)).filter(v => v != null).concat(growth(sharedTtm?.Revenue, latestAnnual?.Revenue)),
-        ebitda: incAnn.slice(1).map((r, i) => growth(ebitdaOf(r), ebitdaOf(incAnn[i]))).filter(v => v != null).concat(growth(ebitdaOf(sharedTtm), ebitdaOf(latestAnnual))),
-        ebit: incAnn.slice(1).map((r, i) => growth(r.EBIT, incAnn[i].EBIT)).filter(v => v != null).concat(growth(sharedTtm?.EBIT, latestAnnual?.EBIT)),
-        pat: incAnn.slice(1).map((r, i) => growth(r.NetIncome, incAnn[i].NetIncome)).filter(v => v != null).concat(growth(sharedTtm?.NetIncome, latestAnnual?.NetIncome)),
-        eps: incAnn.slice(1).map((r, i) => growth(r.EPS, incAnn[i].EPS)).filter(v => v != null).concat(growth(sharedTtm?.EPS, latestAnnual?.EPS)),
-    };
-    const cashConversionRows = incAnn.map(r => {
-        const bs = getBs(r._period);
-        const rev = Number(r.Revenue ?? 0);
-        const cogs = Number(r.COGS ?? 0);
-        const rec = bs?.TradeReceivables ?? bs?.["AccountsReceivable-TradeNet"] ?? null;
-        const inv = bs?.Inventories ?? null;
-        const pay = bs?.TradePayables ?? null;
-        const debtorDays = rev && rec != null ? Number(((365 * Number(rec)) / rev).toFixed(1)) : null;
-        const inventoryDays = cogs && inv != null ? Number(((365 * Number(inv)) / cogs).toFixed(1)) : null;
-        const payableDays = cogs && pay != null ? Number(((365 * Number(pay)) / cogs).toFixed(1)) : null;
-        return {
-            debtorDays,
-            inventoryDays,
-            payableDays,
-            ccc: debtorDays != null && inventoryDays != null && payableDays != null ? Number((debtorDays + inventoryDays - payableDays).toFixed(1)) : null,
-        };
-    });
-    const forensicRows = incAnn.map(r => {
-        const cf = getCf(r._period);
-        const bs = getBs(r._period);
-        const rev = r.Revenue != null ? Number(r.Revenue) : null;
-        const depr = r.Depreciation != null ? Number(r.Depreciation) : null;
-        const cfo = cf?.OperatingCF != null ? Number(cf.OperatingCF) : null;
-        const rec = bs?.TradeReceivables ?? bs?.["AccountsReceivable-TradeNet"] ?? null;
-        const inv = bs?.Inventories ?? null;
-        return {
-            cfoPat: ratio(cfo, r.NetIncome),
-            cfoEbitda: ratio(cfo, ebitdaOf(r)),
-            depSales: pct(depr, rev),
-            recSales: pct(rec, rev),
-            invSales: pct(inv, rev),
-        };
-    });
-    const ttmCfoPat = ratio(latestCf?.OperatingCF, sharedTtm?.NetIncome);
-    const ttmCfoEbitda = ratio(latestCf?.OperatingCF, ebitdaOf(sharedTtm));
-    const ttmDebtorDays = sharedTtm?.Revenue && latestReceivables != null ? Number(((365 * Number(latestReceivables)) / Number(sharedTtm.Revenue)).toFixed(1)) : null;
-    const ttmInventoryDays = sharedTtm?.COGS && latestInventory != null ? Number(((365 * Number(latestInventory)) / Number(sharedTtm.COGS)).toFixed(1)) : null;
-    const ttmPayableDays = sharedTtm?.COGS && latestPayables != null ? Number(((365 * Number(latestPayables)) / Number(sharedTtm.COGS)).toFixed(1)) : null;
+
+    // Margin cards (previously part of an unused "groups" array — the other
+    // sections there, Return/Liquidity/Turnover/Valuation/Other Ratios, were
+    // computed every render but never actually rendered; premiumTabs below
+    // already defines its own versions of those tabs, so that dead branch
+    // has been removed).
+    const marginCards = [
+        { title: "Gross Margin",  subtitle: "Gross Profit / Revenue", value: fmt(raw?.gpm           ?? marginSeries.gpm.at(-1),    "pct"), series: marginSeries.gpm,    color: C.green  },
+        { title: "EBITDA Margin", subtitle: "EBITDA / Revenue",        value: fmt(raw?.ebitda_margin ?? marginSeries.ebitda.at(-1), "pct"), series: marginSeries.ebitda, color: C.blue   },
+        { title: "EBIT Margin",   subtitle: "EBIT / Revenue",          value: fmt(raw?.ebit_margin   ?? marginSeries.ebit.at(-1),   "pct"), series: marginSeries.ebit,   color: C.amber  },
+        { title: "PAT Margin",    subtitle: "Net Income / Revenue",    value: fmt(raw?.pat_margin    ?? marginSeries.pat.at(-1),    "pct"), series: marginSeries.pat,    color: C.rose   },
+    ];
     const premiumTabs = [
         {
             id: "margin",
             title: "Margin Ratios",
             shortTitle: "Margin Ratios",
             subtitle: "Core earnings metrics and margin analysis",
-            cards: groups[0].cards,
+            cards: marginCards,
         },
         {
             id: "return",

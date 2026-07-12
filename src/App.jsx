@@ -27592,6 +27592,20 @@ export default function App() {
                                                 navigateToTicker(ticker);
                                             }}
                                             onLogin={() => setShowLoginModal(true)}
+                                            onNavigate={(tab, sub) => {
+                                                if (tab === "technical") {
+                                                    setProductTab("technical");
+                                                    if (sub) setTechnicalSubPage(sub);
+                                                } else if (tab === "financial") {
+                                                    setProductTab("financial");
+                                                    if (sub) setFinancialSubPage(sub);
+                                                } else if (tab === "watchlist") {
+                                                    setProductTab("watchlist");
+                                                } else if (tab === "tradevault") {
+                                                    setProductTab("tradevault");
+                                                    if (sub) setPage(sub);
+                                                }
+                                            }}
                                         />
                                     </ModuleErrorBoundary>
                                 )}
