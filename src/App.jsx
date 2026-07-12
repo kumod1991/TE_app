@@ -3551,7 +3551,7 @@ function Trades({ trades, tradeRows, onAdd, onEdit, onDelete, onImportCSV, T }) 
             <JournalHero
                 T={T}
                 kicker="Journals / Trade Journal"
-                title="Execution ledger with cleaner signal"
+                title="Trade Journal"
                 metrics={[
                     { label: "Total trades", value: `${trades.length}`, sub: `${filtered.length} in current view` },
                     { label: "Open vs closed", value: `${openTrades} / ${closedTrades}`, sub: "Open positions / completed positions" },
@@ -3618,17 +3618,17 @@ function Analytics({ trades, tradeRows, stats: providedStats, T }) {
             <JournalHero
                 T={T}
                 kicker="Journals / Analytics"
-                title="Performance analytics with faster context"
+                title="Trade Performance analytics"
                 metrics={[
-                    { label: "Best trade", value: stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : "--", tone: "positive", sub: "Largest realized winner" },
-                    { label: "Worst trade", value: stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : "--", tone: "negative", sub: "Largest realized drawdown" },
-                    { label: "Profit factor", value: pf || "--", sub: `${stats.closed.length} closed trades analysed` },
+                    //{ label: "Best trade", value: stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : "--", tone: "positive", sub: "Largest realized winner" },
+                    //{ label: "Worst trade", value: stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : "--", tone: "negative", sub: "Largest realized drawdown" },
+                    //{ label: "Profit factor", value: pf || "--", sub: `${stats.closed.length} closed trades analysed` },
                 ]}
                 asideTitle="Monthly cadence"
                 asideValue={`${monthly.length}`}
                 asideBody={monthly.length ? "Tracked months contributing to the current P&L rhythm." : "Add more closed trades to unlock trend analysis."}
             />
-            <div className="stats-row" style={{ marginBottom: 24 }}>
+            <div className="stats-row" style={{ marginBottom: 15, marginTop: 15 }}>
                 <div className="stat-card"><div className="stat-label">Best Trade</div><div className="stat-value green" style={{ fontSize: 16 }}>{stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
                 <div className="stat-card"><div className="stat-label">Worst Trade</div><div className="stat-value red" style={{ fontSize: 16 }}>{stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
                 <div className="stat-card"><div className="stat-label">Closed Trades</div><div className="stat-value">{stats.closed.length}</div></div>
@@ -3640,16 +3640,7 @@ function Analytics({ trades, tradeRows, stats: providedStats, T }) {
                         <div className="bar-row" key={month}><div className="bar-label">{month}</div><div className="bar-track"><div className="bar-fill" style={{ width: `${(Math.abs(pnl) / maxM) * 100}%`, background: pnl >= 0 ? T.green : T.red }}><span className="bar-fill-val">{pnl >= 0 ? "+" : ""}{Math.round(pnl).toLocaleString()}</span></div></div></div>
                     ))}</div>
                 </div>
-                <div className="chart-card"><div className="chart-title">Cumulative P&amp;L Curve</div><Sparkline data={stats.closed.map(t => t.pnl)} T={T} /></div>
-                <div className="chart-card">
-                    <div className="chart-title">Win Rate</div>
-                    <div style={{ paddingTop: 8 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} />
-                        <div style={{ marginTop: 20, borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.subtext, marginBottom: 8 }}><span>Avg Gain / Win</span><span style={{ color: T.pos, fontFamily: "'Space Mono'" }}>+{stats.avgGain.toFixed(2)}%</span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.subtext }}><span>Avg Loss / Loss</span><span style={{ color: T.neg, fontFamily: "'Space Mono'" }}>{stats.avgLoss.toFixed(2)}%</span></div>
-                        </div>
-                    </div>
-                </div>
+             
             </div>
         </div>
     );
@@ -3757,9 +3748,9 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
                 kicker="Journals / Capital Gains"
                 title="Financial-year gain book"
                 metrics={[
-                    { label: "Total realized P&L", value: `${totalPnl >= 0 ? "+" : ""}${inr(totalPnl)}`, tone: totalPnl >= 0 ? "positive" : "negative", sub: "Across all tracked years" },
-                    { label: "STCG", value: `${tot.st.pnl >= 0 ? "+" : ""}${inr(tot.st.pnl)}`, tone: tot.st.pnl >= 0 ? "positive" : "negative", sub: "Held 365 days or less" },
-                    { label: "LTCG", value: `${tot.lt.pnl >= 0 ? "+" : ""}${inr(tot.lt.pnl)}`, tone: tot.lt.pnl >= 0 ? "positive" : "negative", sub: "Held above 365 days" },
+                    //{ label: "Total realized P&L", value: `${totalPnl >= 0 ? "+" : ""}${inr(totalPnl)}`, tone: totalPnl >= 0 ? "positive" : "negative", sub: "Across all tracked years" },
+                    //{ label: "STCG", value: `${tot.st.pnl >= 0 ? "+" : ""}${inr(tot.st.pnl)}`, tone: tot.st.pnl >= 0 ? "positive" : "negative", sub: "Held 365 days or less" },
+                    //{ label: "LTCG", value: `${tot.lt.pnl >= 0 ? "+" : ""}${inr(tot.lt.pnl)}`, tone: tot.lt.pnl >= 0 ? "positive" : "negative", sub: "Held above 365 days" },
                 ]}
                 asideTitle="Current FY"
                 asideValue={curFY}
@@ -3767,7 +3758,7 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
             />
 
             {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 10, marginTop:10 }}>
                 <div className="stat-card hero">
                     <div className="stat-label">Total P&amp;L (All Years)</div>
                     <div className={`stat-value hero ${totalPnl >= 0 ? "green" : "red"}`} style={{ fontSize: 18 }}>
@@ -3793,7 +3784,7 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
 
             {/* Main table */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: `0 2px 8px ${T.shadow}` }}>
-                <table style={{ ...tableStyle, minWidth: 560 }}>
+                <table style={{ ...tableStyle, minWidth: 700 }}>
                     <colgroup>
                         <col style={{ width: "10%" }} />
                         <col style={{ width: "15%" }} /><col style={{ width: "15%" }} /><col style={{ width: "15%" }} />
@@ -5692,9 +5683,9 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 kicker="Journals / Funds & XIRR"
                 title="Capital flow cockpit"
                 metrics={[
-                    { label: "XIRR", value: xirrPct != null ? `${parseFloat(xirrPct) >= 0 ? "+" : ""}${xirrPct}%` : "--", tone: xirrRate == null ? "neutral" : xirrRate >= 0 ? "positive" : "negative", sub: xirrUsesLive ? "Using live unrealized P&L" : "Uses saved portfolio value when available" },
-                    { label: "Net invested", value: inr(netInvested), sub: `${sorted.length} cashflow entries` },
-                    { label: "Capital mix", value: `${inr(totalDeposited)} / ${inr(totalWithdrawn)}`, sub: "Deposits / withdrawals" },
+                    //{ label: "XIRR", value: xirrPct != null ? `${parseFloat(xirrPct) >= 0 ? "+" : ""}${xirrPct}%` : "--", tone: xirrRate == null ? "neutral" : xirrRate >= 0 ? "positive" : "negative", sub: xirrUsesLive ? "Using live unrealized P&L" : "Uses saved portfolio value when available" },
+                    //{ label: "Net invested", value: inr(netInvested), sub: `${sorted.length} cashflow entries` },
+                    //{ label: "Capital mix", value: `${inr(totalDeposited)} / ${inr(totalWithdrawn)}`, sub: "Deposits / withdrawals" },
                 ]}
                 actions={
                     <>
@@ -5708,11 +5699,11 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 }
                 asideTitle="Return engine"
                 asideValue={xirr3yr != null ? fmtXirr(xirr3yr) : xirr5yr != null ? fmtXirr(xirr5yr) : "--"}
-                asideBody="Three-year and five-year windows help compare how efficiently fresh capital has compounded over time."
+                asideBody="Add funds added/withdrawn to/from demat A/c to accurately compute XIRR."
             />
             {importStatus && (
                 <div style={{
-                    marginBottom: 14, padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500,
+                    marginBottom: 14, padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, margintop: 12,
                     background: importStatus.type === "success" ? T.greenGlow : T.redGlow,
                     border: `1px solid ${importStatus.type === "success" ? T.green + "55" : T.red + "44"}`,
                     color: importStatus.type === "success" ? T.greenText : T.redText,
@@ -5723,7 +5714,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
             )}
 
             {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 15, marginTop:15 }}>
                 {/* XIRR  hero card */}
                 <div className="stat-card hero" style={{ borderColor: xirrRate == null ? T.border : xirrRate >= 0 ? T.green : T.red + "88" }}>
                     <div className="stat-label">XIRR (Annualised)</div>
@@ -6178,9 +6169,9 @@ function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
                 kicker="Journals / Dividends"
                 title="Dividend income ledger"
                 metrics={[
-                    { label: "Total dividends", value: inr(totalDividend), tone: "positive", sub: `${sorted.length} payout entries` },
-                    { label: "Current view", value: inr(filteredTotal), sub: filterFY === "ALL" ? "Across all financial years" : `FY ${filterFY}` },
-                    { label: "Tracked FYs", value: `${Math.max(uniqueFYs.length - 1, 0)}`, sub: "Financial years with dividend history" },
+                    //{ label: "Total dividends", value: inr(totalDividend), tone: "positive", sub: `${sorted.length} payout entries` },
+                    //{ label: "Current view", value: inr(filteredTotal), sub: filterFY === "ALL" ? "Across all financial years" : `FY ${filterFY}` },
+                    //{ label: "Tracked FYs", value: `${Math.max(uniqueFYs.length - 1, 0)}`, sub: "Financial years with dividend history" },
                 ]}
                 actions={
                     <>
@@ -6209,7 +6200,7 @@ function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
             )}
 
             {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 15,marginTop:15 }}>
                 <div className="stat-card hero" style={{ borderColor: T.green }}>
                     <div className="stat-label">Total Dividend Received</div>
                     <div className="stat-value green" style={{ fontSize: 26, fontWeight: 700, ...mono }}>{inr(totalDividend)}</div>
