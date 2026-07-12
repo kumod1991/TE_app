@@ -3850,213 +3850,9 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
 
 
 //  PORTFOLIO (LIVE PRICES) 
-
-//  MULTI-SOURCE LIVE PRICE FETCHER 
-// Tries 3 independent sources in parallel per ticker.
-// First one that returns a valid price wins. Retries up to 2 times on failure.
-// No manual overrides needed  .NS, .BO, and SME-style NSE suffixes are tried automatically.
-
-const TICKER_OVERRIDES = {
-    SWARAJ: "SWARAJ-SM.NS",
-}; // Only for tickers with a completely different Yahoo/Google symbol
-
-function buildYahooTickerVariants(ticker, override) {
-    const up = (ticker || "").toUpperCase().trim();
-    if (!up) return [];
-    if (up.includes(".")) return [up];
-
-    const variants = [
-        ...(override ? (Array.isArray(override) ? override : [override]) : []),
-        `${up}.NS`,
-        `${up}.BO`,
-        // Some NSE SME listings appear on Yahoo with the SME board suffix.
-        `${up}-SM.NS`,
-    ];
-
-    return [...new Set(variants.filter(Boolean))];
-}
-
-//  Source 1: Yahoo Finance v8 via allorigins proxy 
-// range=2d gives today + yesterday, so chartPreviousClose = yesterday's close exactly.
-// We also read regularMarketChange directly from meta when available  that's
-// the most reliable source since Yahoo computes it server-side.
-function parseV8Chart(meta) {
-    const price = meta?.regularMarketPrice;
-    if (!price) return null;
-    // Prefer the direct server-computed change over our own calculation
-    const directChange = meta?.regularMarketChange;          // e.g. +3.45
-    const directPrevClose = meta?.regularMarketPreviousClose; // explicit prev close field
-    // chartPreviousClose with range=2d = yesterday's close (not 5 days ago)
-    const prevClose = directPrevClose || meta?.chartPreviousClose || meta?.previousClose || null;
-    return {
-        currentPrice: price,
-        prevClose,
-        // Store the direct change so we can use it without any calculation
-        directChange: typeof directChange === "number" ? directChange : null,
-        name: meta?.longName || meta?.shortName || "",
-    };
-}
-
-async function fromYahooAllorigins(sym) {
-    // range=2d: today + yesterday  chartPreviousClose = yesterday's close
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
-    const res = await fetch(
-        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        { signal: AbortSignal.timeout(10000) }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json.contents) return null;
-    const data = JSON.parse(json.contents);
-    if (data?.chart?.error) return null;
-    return parseV8Chart(data?.chart?.result?.[0]?.meta);
-}
-
-//  Source 2: Yahoo Finance v8 via corsproxy.io 
-async function fromYahooCorsProxy(sym) {
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
-    const res = await fetch(
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        { signal: AbortSignal.timeout(10000) }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data?.chart?.error) return null;
-    return parseV8Chart(data?.chart?.result?.[0]?.meta);
-}
-
-//  Source 3: Yahoo Finance quoteSummary via allorigins 
-// The price module returns regularMarketChange and regularMarketPreviousClose
-// directly  the most authoritative source for day change.
-async function fromYahooQuoteSummary(sym) {
-    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${sym}?modules=price,summaryDetail`;
-    const res = await fetch(
-        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-        { signal: AbortSignal.timeout(10000) }
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json.contents) return null;
-    const data = JSON.parse(json.contents);
-    const pr = data?.quoteSummary?.result?.[0]?.price;
-    const price = pr?.regularMarketPrice?.raw;
-    if (!price) return null;
-    return {
-        currentPrice: price,
-        prevClose: pr?.regularMarketPreviousClose?.raw || null,
-        // regularMarketChange is explicitly the today's change computed by Yahoo
-        directChange: pr?.regularMarketChange?.raw ?? null,
-        name: pr?.longName || pr?.shortName || sym,
-    };
-}
-
-//  Race all 3 sources, return first winner 
-async function raceQuote(sym) {
-    return new Promise(resolve => {
-        let settled = false;
-        let pending = 3;
-        const done = (result) => {
-            if (result && !settled) { settled = true; resolve(result); }
-            else { pending--; if (pending === 0 && !settled) resolve(null); }
-        };
-        fromYahooAllorigins(sym).then(done).catch(() => done(null));
-        fromYahooCorsProxy(sym).then(done).catch(() => done(null));
-        fromYahooQuoteSummary(sym).then(done).catch(() => done(null));
-    });
-}
-
-//  Main entry: tries NSE/BSE first, then SME-style Yahoo suffix fallback.
-async function fetchYahooQuote(ticker) {
-    const up = ticker.toUpperCase().trim();
-    const override = TICKER_OVERRIDES[up];
-
-    // Build suffix variants to try
-    const variants = buildYahooTickerVariants(up, override);
-
-    for (const sym of variants) {
-        // Up to 2 attempts per variant (handles transient proxy failures)
-        for (let attempt = 0; attempt < 2; attempt++) {
-            const result = await raceQuote(sym);
-            if (result) return { ...result, usedTicker: sym };
-            if (attempt === 0) await new Promise(r => setTimeout(r, 400)); // brief pause before retry
-        }
-    }
-    return null;
-}
-
-// 
-//  SESSION LIVE-PRICE CACHE
-//  Keyed by ticker (uppercase). Populated by Yahoo fetches during 9:15 AM7:00 PM IST.
-//  Persists for the lifetime of the page (cleared on refresh).
-//  Screens, Screener, and Peer Analysis use this to overlay live prices on bhav_copy prices.
-// 
-const _sessionPriceCache = new Map(); // ticker  { price, ts }
-const _sessionPriceFetching = new Set(); // tickers currently in-flight
-
-// Fetches live Yahoo price for one ticker and stores in the session cache.
-// If Yahoo returns nothing (ticker not listed, delisted, symbol mismatch) a sentinel
-// { price: null, source: "unavailable" } is stored so we never retry and always
-// fall back to bhav_copy for that ticker this session.
-//
-// bhavPrice (optional)  the latest known bhav_copy price for sanity-checking.
-// If the Yahoo price deviates from bhavPrice by more than 40%, it is likely a
-// stale price, wrong symbol resolution, or a corporate-action artefact (e.g. DPEL.NS
-// returning 106 when the real price is 397). In that case we treat it as unavailable.
-async function _fetchAndCachePrice(ticker, bhavPrice) {
-    const key = ticker.toUpperCase();
-    if (_sessionPriceFetching.has(key)) return;
-    if (_sessionPriceCache.has(key)) return;
-    _sessionPriceFetching.add(key);
-    try {
-        const q = await fetchYahooQuote(key);
-        if (q?.currentPrice) {
-            const yp = q.currentPrice;
-            // Sanity-check: if we have a bhav reference price, reject Yahoo if it
-            // deviates by more than 25%  likely a wrong/stale symbol match
-            if (bhavPrice != null && bhavPrice > 0) {
-                const deviation = Math.abs(yp - bhavPrice) / bhavPrice;
-                if (deviation > 0.25) {
-                    // Yahoo price is too far from bhav  treat as unavailable
-                    _sessionPriceCache.set(key, { price: null, source: "unavailable", ts: Date.now() });
-                    return;
-                }
-            }
-            _sessionPriceCache.set(key, { price: yp, source: "yahoo", ts: Date.now() });
-        } else {
-            // Not on Yahoo  mark unavailable so we use bhav and never show pending dot
-            _sessionPriceCache.set(key, { price: null, source: "unavailable", ts: Date.now() });
-        }
-    } catch (_) {
-        // Network/proxy error  sentinel to avoid retrying this session
-        _sessionPriceCache.set(key, { price: null, source: "unavailable", ts: Date.now() });
-    } finally {
-        _sessionPriceFetching.delete(key);
-    }
-}
-
-// Returns the best price for a ticker:
-//    Yahoo cached with valid price    { price, source:"yahoo" }
-//    Yahoo unavailable (sentinel)     bhav only
-//    Outside market hours             bhav only
-function _bestPrice(ticker, bhavPrice) {
-    if (isMarketLive()) {
-        const cached = _sessionPriceCache.get(ticker?.toUpperCase());
-        if (cached?.price != null && cached.source === "yahoo") {
-            return { price: cached.price, source: "yahoo" };
-        }
-    }
-    return bhavPrice != null ? { price: bhavPrice, source: "bhav" } : null;
-}
-
-// True only while a Yahoo fetch is genuinely in-flight or not yet attempted.
-// Returns false once the ticker is resolved (success or unavailable sentinel).
-function _isPricePending(ticker) {
-    const key = ticker?.toUpperCase();
-    if (!key) return false;
-    if (_sessionPriceFetching.has(key)) return true;
-    if (!_sessionPriceCache.has(key)) return true;
-    return false;
-}
+// NOTE: Live intraday price overlay (previously multi-source Yahoo Finance
+// fetching) has been removed. All current prices now come from bhav_copy
+// (EOD data). See fetchBhavPrice/fetchBhavQuote below.
 
 //  RELATIVE STRENGTH vs Nifty 500 
 // Replicates Google Sheets formula:
@@ -4199,28 +3995,11 @@ async function fetchBhavPriceForDate(ticker, dateStr) {
     } catch { return null; }
 }
 
-// NSE market hours: 9:15 AM  3:30 PM IST (UTC+5:30)
-// After 7:00 PM IST the day's final Bhav Copy is available  use DB only
-function isMarketLive() {
-    const now = new Date();
-    // Convert to IST (UTC+5:30)
-    const istOffset = 5.5 * 60; // minutes
-    const istMs = now.getTime() + (now.getTimezoneOffset() + istOffset) * 60000;
-    const ist = new Date(istMs);
-    const day = ist.getDay(); // 0=Sun, 6=Sat
-    if (day === 0 || day === 6) return false; // weekend
-    const h = ist.getHours(), m = ist.getMinutes();
-    const mins = h * 60 + m;
-    // Live window: 9:15 AM (555) to 7:00 PM (1140) IST
-    // After 7:00 PM Bhav Copy is final  no need for Yahoo
-    return mins >= 555 && mins < 1140;
-}
-
 async function fetchBhavQuote(ticker) {
-    // bhav_copy only  Yahoo Finance primary/fallback calls removed for speed.
-    // fetchBhavPrice() already walks back up to 5 trading days to cover
-    // weekends/holidays/not-yet-populated EOD data, so this stays reliable
-    // without the slow multi-proxy Yahoo round trips.
+    // bhav_copy only  live intraday overlay removed; this stays the single
+    // source of truth for current price. fetchBhavPrice() already walks
+    // back up to 5 trading days to cover weekends/holidays/not-yet-populated
+    // EOD data.
     return fetchBhavPrice(ticker);
 }
 
@@ -5139,7 +4918,7 @@ function Portfolio({ trades, T, embedded = false }) {
                         ))}
                     </div>
                     <div style={{ marginTop: 10, fontSize: 12, color: T.subtext, lineHeight: 1.6 }}>
-                        These tickers were tried with <strong>.NS</strong>, <strong>.BO</strong>, and an NSE SME fallback suffix automatically. They may not be listed on Yahoo Finance, or the symbol may differ. Try searching <strong>finance.yahoo.com</strong> for the correct symbol and add it to <code style={{ background: T.pill, padding: "1px 6px", borderRadius: 4 }}>TICKER_OVERRIDES</code> in the code if needed.
+                        These tickers were not found in the Bhav Copy table for the last 6 trading days. The ticker symbol may not match the exchange listing, or it may not have traded recently. Double-check the ticker symbol in the Trade Journal entry.
                     </div>
                 </div>
             )}
@@ -5248,9 +5027,6 @@ function Portfolio({ trades, T, embedded = false }) {
                 </div>
             )}
 
-            {/*<div style={{ marginTop: 12, fontSize: 11, color: T.muted, display: "flex", gap: 20, flexWrap: "wrap" }}>*/}
-            {/*    <span> {isMarketLive() ? `Live prices from Yahoo Finance  Bhav Copy (EOD) as fallback` : `Prices from Bhav Copy (EOD)  Yahoo Finance as fallback`}</span>*/}
-            {/*</div>*/}
         </div>
     );
 }
@@ -7530,8 +7306,6 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
     const [cmpLoading, setCmpLoading] = useState(false);
     const [cmpError, setCmpError] = useState("");
     const cmpTimer = useRef(null);
-    // Live price overlay  incremented when _sessionPriceCache gains new entries
-    const [livePriceTick, setLivePriceTick] = useState(0);
 
     //  Column definitions 
     const ALL_COL_DEFS = [
@@ -7796,31 +7570,6 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
 
     const handleSearch = () => { if (searchQ.trim()) loadPeers(searchQ.trim()); };
     useEffect(() => { if (sector) { setSearchQ(""); setView("peers"); setCmpQ(""); loadPeers(sector); } }, [sym]);
-
-    // Batch-fetch live prices for peer tickers (9:15 AM7:00 PM IST only)
-    useEffect(() => {
-        if (!isMarketLive()) return;
-        if (!peers || peers.length === 0) return;
-        let cancelled = false;
-        // Build bhav price lookup for sanity-checking Yahoo prices
-        const bhavMap = Object.fromEntries(peers.map(p => [p.ticker?.toUpperCase(), p.current_price ?? null]));
-        const newOnes = peers
-            .map(p => p.ticker).filter(Boolean)
-            .filter(t => !_sessionPriceCache.has(t.toUpperCase()) && !_sessionPriceFetching.has(t.toUpperCase()));
-        if (newOnes.length === 0) return;
-        const BATCH = 5;
-        let batchIdx = 0;
-        const runBatch = async () => {
-            if (cancelled) return;
-            const batch = newOnes.slice(batchIdx, batchIdx + BATCH);
-            if (batch.length === 0) return;
-            batchIdx += BATCH;
-            await Promise.allSettled(batch.map(t => _fetchAndCachePrice(t, bhavMap[t.toUpperCase()])));
-            if (!cancelled) { setLivePriceTick(n => n + 1); setTimeout(runBatch, 600); }
-        };
-        runBatch();
-        return () => { cancelled = true; };
-    }, [peers]);
 
     //  "Compare with" autocomplete 
     const updateCmpSugg = val => {
@@ -8110,36 +7859,11 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
                                                 </td>
                                                 {activeCols.map(col => {
                                                     const v = row[col.key];
-                                                    // Overlay live Yahoo price for the Price column during market hours
-                                                    let displayVal = v;
-                                                    let isLivePrice = false;
-                                                    if (col.key === "current_price") {
-                                                        const bp = _bestPrice(row.ticker, v);
-                                                        if (bp) { displayVal = bp.price; isLivePrice = bp.source === "yahoo"; }
-                                                    }
-                                                    const cellTextColor = col.key === "current_price" && isLivePrice
-                                                        ? T.green
-                                                        : (col.valColor ? col.valColor(v) : T.text);
-                                                    const isPending = col.key === "current_price" && isMarketLive()
-                                                        && _isPricePending(row.ticker) && v != null;
+                                                    const cellTextColor = col.valColor ? col.valColor(v) : T.text;
                                                     return (
                                                         <td key={col.key} style={{ ...tdBase, textAlign: "right", color: cellTextColor, minWidth: 100, position: "relative" }}>
-                                                            <div style={{ fontWeight: isCur ? 600 : 400 }}>{col.fmt(displayVal)}</div>
+                                                            <div style={{ fontWeight: isCur ? 600 : 400 }}>{col.fmt(v)}</div>
                                                             <SparkBar col={col.key} val={v} />
-                                                            {isPending && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 3, right: 3, width: 5, height: 5,
-                                                                    borderRadius: "50%", background: "#d97706", opacity: 0.7
-                                                                }}
-                                                                    title="Fetching live price" />
-                                                            )}
-                                                            {isLivePrice && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 3, right: 3, width: 5, height: 5,
-                                                                    borderRadius: "50%", background: T.green, opacity: 0.85
-                                                                }}
-                                                                    title="Live price from Yahoo Finance" />
-                                                            )}
                                                         </td>
                                                     );
                                                 })}
@@ -10871,7 +10595,7 @@ function CashConversionTab({ cashConvAnn, cashConvRows, ttmCashConvCol, T }) {
     );
 }
 
-function RatiosTab({ data, sharedTtmCol, livePrice, T }) {
+function RatiosTab({ data, sharedTtmCol, T }) {
     const [ratioSubTab, setRatioSubTab] = useState("margin");
     const [roaExpanded, setRoaExpanded] = useState(true);
     const [roeExpanded, setRoeExpanded] = useState(true);
@@ -11389,7 +11113,7 @@ function RatiosTab({ data, sharedTtmCol, livePrice, T }) {
                     );
                 })()}
                 {ratioSubTab === "valuation" && (() => {
-                    const curPrice = livePrice?.price ?? data.current_price ?? null;
+                    const curPrice = data.current_price ?? null;
                     const shares = data.shares_outstanding ?? null;
 
                     //  Helpers 
@@ -12701,8 +12425,6 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     });
     const [showColPicker, setShowColPicker] = useState(false);
     const [colSearch, setColSearch] = useState("");
-    // Live price overlay  incremented whenever _sessionPriceCache gains new entries
-    const [livePriceTick, setLivePriceTick] = useState(0);
     const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
     // The table stays hidden until the person explicitly clicks "Apply Filter"  on
     // both mobile and desktop. We track this per screen+filter-combo (a "signature") so
@@ -12874,32 +12596,6 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     const mobileResultsLabel = filtered.length === 0
         ? "0"
         : `${((safePage - 1) * rowsPerPage) + 1}-${Math.min(safePage * rowsPerPage, filtered.length)}`;
-
-    // Batch-fetch live prices for tickers on the current page (9:15 AM7:00 PM IST only)
-    useEffect(() => {
-        if (!isMarketLive()) return;
-        if (!pageRows || pageRows.length === 0) return;
-        let cancelled = false;
-        // Build bhav price lookup for sanity-checking Yahoo prices
-        const bhavMap = Object.fromEntries(pageRows.map(r => [r.ticker?.toUpperCase(), r.current_price ?? null]));
-        const newOnes = pageRows
-            .map(r => r.ticker).filter(Boolean)
-            .filter(t => !_sessionPriceCache.has(t.toUpperCase()) && !_sessionPriceFetching.has(t.toUpperCase()));
-        if (newOnes.length === 0) return;
-        const BATCH = 5;
-        let batchIdx = 0;
-        const runBatch = async () => {
-            if (cancelled) return;
-            const batch = newOnes.slice(batchIdx, batchIdx + BATCH);
-            if (batch.length === 0) return;
-            batchIdx += BATCH;
-            await Promise.allSettled(batch.map(t => _fetchAndCachePrice(t, bhavMap[t.toUpperCase()])));
-            if (!cancelled) { setLivePriceTick(n => n + 1); setTimeout(runBatch, 600); }
-        };
-        runBatch();
-        return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [safePage, filterKey, allRows]);
 
     // Mutations
     const updateFilter = (idx, patch) => {
@@ -13700,16 +13396,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                                 {/* Metric cells */}
                                                 {mobileCardCols.map(col => {
                                                     const raw = row[col.key];
-                                                    let displayRaw = raw;
-                                                    let isLivePrice = false;
-                                                    if (col.key === "current_price") {
-                                                        const bp = _bestPrice(ticker, raw);
-                                                        if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
-                                                    }
-                                                    const formatted = col.fmt(displayRaw);
-                                                    const color = col.key === "current_price" && isLivePrice
-                                                        ? (DS.isDark ? "#34d399" : "#059669")
-                                                        : cellColor(col, raw);
+                                                    const formatted = col.fmt(raw);
+                                                    const color = cellColor(col, raw);
                                                     return (
                                                         <td key={col.key} style={{
                                                             padding: "9px 13px",
@@ -13847,19 +13535,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                                 {/* Metric cells */}
                                                 {activeCols.map(col => {
                                                     const raw = row[col.key];
-                                                    // For the price column, overlay with live Yahoo price during market hours
-                                                    let displayRaw = raw;
-                                                    let isLivePrice = false;
-                                                    if (col.key === "current_price") {
-                                                        const bp = _bestPrice(ticker, raw);
-                                                        if (bp) { displayRaw = bp.price; isLivePrice = bp.source === "yahoo"; }
-                                                    }
-                                                    const formatted = col.fmt(displayRaw);
-                                                    const color = col.key === "current_price" && isLivePrice
-                                                        ? (DS.isDark ? "#34d399" : "#059669")
-                                                        : cellColor(col, raw);
-                                                    const isPending = col.key === "current_price" && isMarketLive()
-                                                        && _isPricePending(ticker) && raw != null;
+                                                    const formatted = col.fmt(raw);
+                                                    const color = cellColor(col, raw);
                                                     return (
                                                         <td key={col.key} style={{
                                                             padding: compactRow ? "5px 13px" : "9px 13px",
@@ -13869,22 +13546,6 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                                             whiteSpace: "nowrap", position: "relative",
                                                         }}>
                                                             {formatted}
-                                                            {isPending && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 4, right: 4,
-                                                                    width: 5, height: 5, borderRadius: "50%",
-                                                                    background: DS.isDark ? "#fbbf24" : "#d97706",
-                                                                    opacity: 0.7
-                                                                }} title="Fetching live price" />
-                                                            )}
-                                                            {isLivePrice && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 4, right: 4,
-                                                                    width: 5, height: 5, borderRadius: "50%",
-                                                                    background: DS.isDark ? "#34d399" : "#059669",
-                                                                    opacity: 0.85
-                                                                }} title="Live price from Yahoo Finance" />
-                                                            )}
                                                         </td>
                                                     );
                                                 })}
@@ -13964,18 +13625,6 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                     }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                             {!tickerFilter && <span>Double-click a screen tab to rename it</span>}
-                            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <span style={{
-                                    width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
-                                    background: isMarketLive() ? (DS.isDark ? "#34d399" : "#059669") : DS.textMuted,
-                                    display: "inline-block"
-                                }} />
-                                {/*<span style={{ fontFamily:DS.mono }}>*/}
-                                {/*    {isMarketLive()*/}
-                                {/*        ? "Price : live from Yahoo  Bhav Copy shown until fetched"*/}
-                                {/*        : "Price : Bhav Copy (EOD)  Live prices 9:15 AM  7:00 PM IST"}*/}
-                                {/*</span>*/}
-                            </span>
                             <span style={{
                                 padding: "1px 7px", borderRadius: 4,
                                 background: "rgba(245,158,11,0.07)",
@@ -14653,8 +14302,6 @@ function FinancialAnalyticsModule({
     const [dataAge, setDataAge] = useState(null);
     const [loadingMsg, setLoadingMsg] = useState("");
     const inputRef = useRef(null);
-    const livePollerRef = useRef(null);  // holds the setInterval id
-    const [livePrice, setLivePrice] = useState(null); // { price, chg, chgPct, source, ts }
     const [exchange, setExchange] = useState("NSE"); // "NSE" | "BSE"
     const exchangeRef = useRef("NSE"); // ref so async closures always see current value
     const sidebarRatiosRef = useRef(null); // stores ratioVals from SidebarContent so P2P can use them
@@ -14662,64 +14309,6 @@ function FinancialAnalyticsModule({
     useEffect(() => {
         setActiveTab(initialActiveTab);
     }, [initialActiveTab]);
-
-    //  Market hours helper (IST = UTC+5:30) 
-    // NSE market: 9:15 AM  3:30 PM IST = 03:45  10:00 UTC
-    const isMarketOpen = () => {
-        const now = new Date();
-        const utcH = now.getUTCHours();
-        const utcM = now.getUTCMinutes();
-        const utcMins = utcH * 60 + utcM;
-        const day = now.getUTCDay(); // 0=Sun, 6=Sat
-        if (day === 0 || day === 6) return false;
-        return utcMins >= 225 && utcMins <= 600; // 03:4510:00 UTC
-    };
-
-    //  Fetch live price from Yahoo and update livePrice state 
-    // bhavRef = the stored bhav_copy price used as a sanity reference.
-    // If Yahoo's price deviates >40% from bhav (stale/wrong symbol), we reject it.
-    const fetchLivePrice = async (sym, bhavRef) => {
-        if (!sym) return;
-        const q = await fetchYahooQuote(sym);
-        if (!q) return;
-        const price = q.currentPrice;
-        if (!price) return;
-        // Sanity-check against bhav price  reject if deviation > 40%
-        if (bhavRef != null && bhavRef > 0) {
-            const deviation = Math.abs(price - bhavRef) / bhavRef;
-            if (deviation > 0.40) return; // Yahoo price is wrong/stale  keep bhav
-        }
-        const prev = q.prevClose;
-        const chg = q.directChange != null ? q.directChange : (price && prev ? price - prev : null);
-        const chgPct = (chg != null && prev) ? chg / prev * 100 : null;
-        setLivePrice({ price, chg, chgPct, source: "live", ts: Date.now() });
-    };
-
-    //  Start/stop live polling when data changes 
-    useEffect(() => {
-        // Clear any existing poller
-        if (livePollerRef.current) { clearInterval(livePollerRef.current); livePollerRef.current = null; }
-        setLivePrice(null);
-        if (!data?._sym) return;
-
-        const sym = data._sym;
-        // Use the stored bhav price as sanity reference so Yahoo's wrong/stale prices get rejected
-        const bhavRef = data.current_price ?? null;
-
-        // Always do one immediate live fetch (even outside market hours, for latest available)
-        fetchLivePrice(sym, bhavRef);
-
-        // During market hours: poll every 60 seconds
-        if (isMarketOpen()) {
-            livePollerRef.current = setInterval(() => {
-                if (isMarketOpen()) fetchLivePrice(sym, bhavRef);
-                else { clearInterval(livePollerRef.current); livePollerRef.current = null; }
-            }, 60000);
-        }
-
-        // Cleanup on unmount or ticker change
-        return () => { if (livePollerRef.current) { clearInterval(livePollerRef.current); livePollerRef.current = null; } };
-    }, [data?._sym]);
 
     //  After market close, switch back to Bhav Copy when it updates 
     // Poll bhav_copy every 5 min between 7:309:00 PM IST (14:0015:30 UTC)
@@ -14733,8 +14322,7 @@ function FinancialAnalyticsModule({
             if (utcMins < 840 || utcMins > 930) return;
             const bhavRow = await fetchBhavPriceRow(data._sym);
             if (bhavRow && bhavRow.date === new Date().toISOString().slice(0, 10)) {
-                // Fresh bhav copy is available  switch back to it
-                setLivePrice(null);
+                // Fresh bhav copy is available  update the displayed price
                 setData(prev => {
                     if (!prev) return prev;
                     const liveClose = Number(bhavRow.close);
@@ -15214,10 +14802,9 @@ function FinancialAnalyticsModule({
     const SidebarContent = () => {
         if (!data) return null;
 
-        // livePrice (from Yahoo) takes priority over data.current_price (from Bhav Copy / stored)
-        const price = livePrice?.price ?? data.current_price;
-        const chg = livePrice?.chg ?? data.day_change;
-        const chgPct = livePrice?.chgPct ?? data.day_change_pct;
+        const price = data.current_price;
+        const chg = data.day_change;
+        const chgPct = data.day_change_pct;
 
         //  Compute all ratios exactly as P2P computeRatios does 
         // NOTE: data.incQtr/bsQtr/etc. have been through scaleCr (1e7, values in rupees).
@@ -16086,7 +15673,7 @@ function FinancialAnalyticsModule({
                             {activeTab === "pnl" && <PnlTab data={data} sharedTtmCol={sharedTtmCol} T={T} />}
                             {activeTab === "balance" && <BalanceSheetTab data={data} T={T} />}
                             {activeTab === "cashflow" && <CashFlowTab data={data} T={T} />}
-                            {activeTab === "ratios" && <RatiosTab data={data} sharedTtmCol={sharedTtmCol} livePrice={livePrice} T={T} />}
+                            {activeTab === "ratios" && <RatiosTab data={data} sharedTtmCol={sharedTtmCol} T={T} />}
                             {activeTab === "shareholding" && <ShareholdingTab sym={data?._sym} T={T} />}
                             {activeTab === "p2p" && <P2PTab currentData={data} sidebarRatiosRef={sidebarRatiosRef} T={T} />}
                             {activeTab === "documents" && <CompanyAnnouncementsTab nseCode={data?.nse_code || null} bseCode={data?.bse_code ? String(data.bse_code) : null} sym={data?._sym} T={T} />}
@@ -18589,8 +18176,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     // VCP-specific quick filters
     const [vcpCatFilter, setVcpCatFilter] = useState("ALL");   // ALL | IDEAL | DEVELOPING
     const [vcpNearPivot, setVcpNearPivot] = useState(false);
-    // Live price overlay  incremented whenever _sessionPriceCache gains new entries
-    const [livePriceTick, setLivePriceTick] = useState(0);
     // Chart preview popover
     const [hoveredRow, setHoveredRow] = useState(null); // { ticker, row, anchorRect }
     const addFilterRef = useRef(null);
@@ -18605,34 +18190,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
             if (_weeklyChartCache.get(ticker) !== undefined) return; // already cached/in-flight
             setTimeout(() => fetchWeeklyOHLCFromDB(ticker), i * 80); // stagger 80ms apart
         });
-    }, [activeRows]);
-
-    // Trigger Yahoo fetches for visible rows during market hours
-    useEffect(() => {
-        if (!isMarketLive()) return;
-        if (!activeRows || activeRows.length === 0) return;
-        let cancelled = false;
-        // Build bhav price lookup for sanity-checking Yahoo prices (rows use 'close' field)
-        const bhavMap = Object.fromEntries(activeRows.map(r => [r.ticker?.toUpperCase(), r.close ?? null]));
-        const tickers = activeRows.map(r => r.ticker).filter(Boolean);
-        const newOnes = tickers.filter(t => !_sessionPriceCache.has(t.toUpperCase()) && !_sessionPriceFetching.has(t.toUpperCase()));
-        if (newOnes.length === 0) return;
-        // Stagger fetches in small batches to avoid hammering proxies
-        const BATCH = 5;
-        let idx = 0;
-        const runBatch = async () => {
-            if (cancelled) return;
-            const batch = newOnes.slice(idx, idx + BATCH);
-            if (batch.length === 0) return;
-            idx += BATCH;
-            await Promise.allSettled(batch.map(t => _fetchAndCachePrice(t, bhavMap[t.toUpperCase()])));
-            if (!cancelled) {
-                setLivePriceTick(n => n + 1); // re-render with fresh prices
-                setTimeout(runBatch, 600);    // next batch after short pause
-            }
-        };
-        runBatch();
-        return () => { cancelled = true; };
     }, [activeRows]);
 
     useEffect(() => {
@@ -19447,35 +19004,16 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     </div>
                                                 </td>
 
-                                                {visibleCols.close && (() => {
-                                                    const bp = _bestPrice(row.ticker, row.close);
-                                                    const isLive = bp?.source === "yahoo";
-                                                    const isPending = isMarketLive() && _isPricePending(row.ticker) && row.close != null;
-                                                    return (
-                                                        <td style={{
-                                                            padding: "9px 13px", fontFamily: mono, fontSize: 13,
-                                                            color: isLive ? (isDark ? "#34d399" : "#059669") : T.text,
-                                                            textAlign: "right", fontVariantNumeric: "tabular-nums",
-                                                            position: "relative"
-                                                        }}>
-                                                            {bp ? fmtINR(bp.price) : ""}
-                                                            {isPending && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 4, right: 4, width: 5, height: 5,
-                                                                    borderRadius: "50%", background: isDark ? "#fbbf24" : "#d97706",
-                                                                    opacity: 0.7
-                                                                }} title="Fetching live price" />
-                                                            )}
-                                                            {isLive && (
-                                                                <span style={{
-                                                                    position: "absolute", top: 4, right: 4, width: 5, height: 5,
-                                                                    borderRadius: "50%", background: isDark ? "#34d399" : "#059669",
-                                                                    opacity: 0.85
-                                                                }} title="Live price from Yahoo Finance" />
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })()}
+                                                {visibleCols.close && (
+                                                    <td style={{
+                                                        padding: "9px 13px", fontFamily: mono, fontSize: 13,
+                                                        color: T.text,
+                                                        textAlign: "right", fontVariantNumeric: "tabular-nums",
+                                                        position: "relative"
+                                                    }}>
+                                                        {row.close != null ? fmtINR(row.close) : ""}
+                                                    </td>
+                                                )}
                                                 {scoreKey && (() => {
                                                     const sv = Number(row[scoreKey] ?? 0);
                                                     const sl = formatVal ? formatVal(sv, row) : sv.toFixed(2);
@@ -19568,16 +19106,9 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                         padding: "5px 16px", display: "flex", alignItems: "center", gap: 6,
                         background: T.surface || T.card
                     }}>
-                        <span style={{
-                            width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                            background: isMarketLive() ? (isDark ? "#34d399" : "#059669") : T.muted,
-                            display: "inline-block"
-                        }} />
-                        {/*<span className="sdv-price-footer" style={{ fontSize:11, color:T.subtext, fontFamily:"'IBM Plex Mono',monospace" }}>*/}
-                        {/*  {isMarketLive()*/}
-                        {/*    ? " Live prices from Yahoo Finance  Bhav Copy (EOD) shown until fetched"*/}
-                        {/*  : "Prices from Bhav Copy (EOD)  Yahoo Finance active 9:15 AM  7:00 PM IST"}*/}
-                        {/*</span>*/}
+                        <span className="sdv-price-footer" style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace" }}>
+                            Prices from Bhav Copy (EOD)
+                        </span>
                     </div>
                 </div>
 
@@ -20329,10 +19860,10 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     </div>
                                     <div style={{
                                         fontFamily: mono, fontSize: 12,
-                                        color: _bestPrice(row.ticker, row.close)?.source === "yahoo" ? (isDark ? "#34d399" : "#059669") : T.text,
+                                        color: T.text,
                                         textAlign: "right", fontVariantNumeric: "tabular-nums"
                                     }}>
-                                        {fmtINR(_bestPrice(row.ticker, row.close)?.price ?? row.close) || ""}
+                                        {fmtINR(row.close) || ""}
                                     </div>
                                     <div style={{
                                         fontFamily: mono, fontSize: 12, textAlign: "right",
@@ -27629,10 +27160,6 @@ export default function App() {
                                             onTechnoFunda={({ label, tickers }) => {
                                                 handleTechnoFundaScan({ label, tickers }, "watchlist");
                                             }}
-                                            fetchAndCachePrice={_fetchAndCachePrice}
-                                            bestPrice={_bestPrice}
-                                            isPricePending={_isPricePending}
-                                            isMarketLive={isMarketLive}
                                         />
                                     </ModuleErrorBoundary>
                                 )}
