@@ -451,189 +451,75 @@ async function RPC(fn, params, token) {
 }
 
 // ─── Data Loader ──────────────────────────────────────────────
+// Trend staging, breakout/pullback/vol-spike signals, relative volume,
+// filtering, sorting and pagination are all precomputed/executed in
+// Postgres now (see stock_analytics + get_watchlist_rows RPC). This is a
+// single round trip instead of 3 whole-table fetches + client-side joins.
 async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, sortAsc, filters }) {
-  const items = await GET(`watchlist_items?watchlist_id=eq.${watchlistId}&select=ticker&order=added_at.asc`, token);
-  if (!items || items.length === 0) return { rows:[], total:0 };
-  const allTickers = items.map(i => i.ticker);
-  const tickerIn   = `(${allTickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
-  async function GETMany(path) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers:{...hdrs(token), "Range-Unit":"items", Range:"0-9999"} });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
-  }
-
-  // Fetch only the single latest indicator row per ticker by using a recent
-  // 14-day window. This avoids the Supabase row-count explosion (N tickers ×
-  // 90 days) that causes page-2 tickers to be silently dropped when the
-  // response is truncated at the default 1000-row limit.
-  // If a ticker has no row in the last 14 days we fall back to fetching its
-  // most-recent row individually so RS is never missing.
-  const recentSince = new Date(Date.now() - 14*24*60*60*1000).toISOString().slice(0,10);
-
-  const [retRaw, indRaw, s52Raw] = await Promise.all([
-    GETMany(`stock_returns?ticker=in.${tickerIn}&select=ticker,ret_3m,ret_6m,ret_12m,latest_date&order=ticker.asc,latest_date.desc`).catch(()=>[]),
-    GETMany(`indicators?ticker=in.${tickerIn}&select=ticker,rs_rating,rs_score,sma50,sma150,sma200,pivot_high_20w,date&date=gte.${recentSince}&order=ticker.asc,date.desc`).catch(()=>[]),
-    GETMany(`stock_52w?ticker=in.${tickerIn}&select=ticker,close,pct_from_high,pct_from_low,high_52w,low_52w,volume,volume_ma20`).catch(()=>[]),
-  ]);
-  const latestReturns = {};
-  for (const r of (retRaw||[])) { if (!latestReturns[r.ticker]) latestReturns[r.ticker]=r; }
-  const latestIndicators = {};
-  for (const r of (indRaw||[])) { if (!latestIndicators[r.ticker]) latestIndicators[r.ticker]=r; }
-
-  // Fallback: fetch the single latest indicator row for any ticker that had
-  // no data in the recent 14-day window (e.g. stale/infrequently updated tickers).
-  const missingInd = allTickers.filter(t => !latestIndicators[t]);
-  if (missingInd.length > 0) {
-    try {
-      const missingIn = `(${missingInd.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
-      const fallbackRows = await GETMany(
-        `indicators?ticker=in.${missingIn}&select=ticker,rs_rating,rs_score,sma50,sma150,sma200,pivot_high_20w,date&order=ticker.asc,date.desc`
-      ).catch(() => []);
-      for (const r of (fallbackRows || [])) {
-        if (!latestIndicators[r.ticker]) latestIndicators[r.ticker] = r;
-      }
-    } catch {}
-  }
-  const latest52w = {};
-  for (const r of (s52Raw||[])) { latest52w[r.ticker]=r; }
-  let merged = allTickers.map(ticker => {
-    const ret = latestReturns[ticker]    || {};
-    const ind = latestIndicators[ticker] || {};
-    const s52 = latest52w[ticker]        || {};
-    const ret_3m  = ret.ret_3m   != null ? Number(ret.ret_3m)   : null;
-    const ret_6m  = ret.ret_6m   != null ? Number(ret.ret_6m)   : null;
-    const ret_12m = ret.ret_12m  != null ? Number(ret.ret_12m)  : null;
-    const rs      = ind.rs_rating != null ? Number(ind.rs_rating): null;
-    const sma50   = ind.sma50    != null ? Number(ind.sma50)    : null;
-    const sma150  = ind.sma150   != null ? Number(ind.sma150)   : null;
-    const sma200  = ind.sma200   != null ? Number(ind.sma200)   : null;
-    const pivot20w= ind.pivot_high_20w != null ? Number(ind.pivot_high_20w):null;
-    const close   = s52.close    != null ? Number(s52.close)    : null;
-    const vol     = s52.volume   != null ? Number(s52.volume)   : null;
-    const volMa20 = s52.volume_ma20 != null ? Number(s52.volume_ma20):null;
-    const pctHigh = s52.pct_from_high != null ? Number(s52.pct_from_high):null;
-    const pctLow  = s52.pct_from_low  != null ? Number(s52.pct_from_low) :null;
-    const high52w = s52.high_52w != null ? Number(s52.high_52w):null;
-    const low52w  = s52.low_52w  != null ? Number(s52.low_52w) :null;
-    const rel_vol = (volMa20 && volMa20>0) ? Math.round((vol/volMa20)*100)/100 : null;
-      let trend = null;
-
-      if (close != null && sma50 != null && sma150 != null && sma200 != null) {
-
-          // ── Stage 2 (Uptrend) ──
-          if (
-              close > sma50 &&
-              sma50 >= sma150 * 0.98 &&   // tolerance
-              sma150 >= sma200 * 0.98
-          ) {
-              trend = "stage2";
-          }
-
-          // ── Stage 4 (Downtrend) ──
-          else if (close < sma200) {
-              trend = "stage4";
-          }
-
-          // ── Stage 1 (Base / Transition) ──
-          else {
-              trend = "stage1";
-          }
-      }
-    const signals = [];
-    if (close!=null && high52w!=null && close>=high52w*0.995) signals.push("breakout");
-    if (rel_vol!=null && rel_vol>=1.5) signals.push("vol_spike");
-    if (close!=null && sma50!=null && Math.abs(close-sma50)/sma50<0.02) signals.push("pullback");
-    return { ticker, ret_3m, ret_6m, ret_12m, rs_rating:rs, pct_from_high:pctHigh,
-             pct_from_low:pctLow, pivot_20w:pivot20w, high_52w:high52w, low_52w:low52w,
-             close, rel_vol, trend, signals, sma50, sma150, sma200 };
-  });
   const f = filters || {};
-  if (f.rs_min       !=null) merged=merged.filter(r=>(r.rs_rating??0)>=f.rs_min);
-  if (f.pct_high_min !=null) merged=merged.filter(r=>(r.pct_from_high??0)>=f.pct_high_min);
-  if (f.ret3m_min    !=null) merged=merged.filter(r=>(r.ret_3m??0)>=f.ret3m_min);
-  if (f.ret6m_min    !=null) merged=merged.filter(r=>(r.ret_6m??0)>=f.ret6m_min);
-  if (f.ret12m_min   !=null) merged=merged.filter(r=>(r.ret_12m??0)>=f.ret12m_min);
-  if (f.relvol_min   !=null) merged=merged.filter(r=>(r.rel_vol??0)>=f.relvol_min);
-  if (f.price_gt_sma50)   merged=merged.filter(r=>r.close!=null&&r.sma50!=null&&r.close>r.sma50);
-  if (f.sma50_gt_sma150)  merged=merged.filter(r=>r.sma50!=null&&r.sma150!=null&&r.sma50>r.sma150);
-  if (f.sma50_gt_sma200)  merged=merged.filter(r=>r.sma50!=null&&r.sma200!=null&&r.sma50>r.sma200);
-  if (f.sma150_gt_sma200) merged=merged.filter(r=>r.sma150!=null&&r.sma200!=null&&r.sma150>r.sma200);
-  if (f.quick==="stage2")  merged=merged.filter(r=>r.trend==="stage2");
-  if (f.quick==="pullback") merged=merged.filter(r=>r.signals?.includes("pullback"));
-  if (f.quick==="leaders") merged=merged.filter(r=>(r.rs_rating??0)>=85);
-  const sortFn = {
-    rs_rating:   (a,b)=>(b.rs_rating??-1)-(a.rs_rating??-1),
-    ret_3m:      (a,b)=>(b.ret_3m??-9999)-(a.ret_3m??-9999),
-    ret_6m:      (a,b)=>(b.ret_6m??-9999)-(a.ret_6m??-9999),
-    ret_12m:     (a,b)=>(b.ret_12m??-9999)-(a.ret_12m??-9999),
-    pct_from_high:(a,b)=>(b.pct_from_high??-9999)-(a.pct_from_high??-9999),
-    pct_from_low: (a,b)=>(b.pct_from_low??-9999)-(a.pct_from_low??-9999),
-    rel_vol:     (a,b)=>(b.rel_vol??-1)-(a.rel_vol??-1),
-  }[sortCol] || ((a,b)=>(b.rs_rating??-1)-(a.rs_rating??-1));
-  merged.sort(sortAsc ? (a,b)=>-sortFn(a,b) : sortFn);
-  const total = merged.length;
-  const rows  = merged.slice(page*pageSize, (page+1)*pageSize);
+  const data = await RPC("get_watchlist_rows", {
+    p_watchlist_id:     watchlistId,
+    p_page:             page,
+    p_page_size:        pageSize,
+    p_sort_col:         sortCol || "rs_rating",
+    p_sort_asc:         !!sortAsc,
+    p_rs_min:           f.rs_min       ?? null,
+    p_pct_high_min:     f.pct_high_min ?? null,
+    p_ret3m_min:        f.ret3m_min    ?? null,
+    p_ret6m_min:        f.ret6m_min    ?? null,
+    p_ret12m_min:       f.ret12m_min   ?? null,
+    p_relvol_min:       f.relvol_min   ?? null,
+    p_price_gt_sma50:   !!f.price_gt_sma50,
+    p_sma50_gt_sma150:  !!f.sma50_gt_sma150,
+    p_sma50_gt_sma200:  !!f.sma50_gt_sma200,
+    p_sma150_gt_sma200: !!f.sma150_gt_sma200,
+    p_quick:            f.quick || null,
+  }, token);
+
+  if (!data || data.length === 0) return { rows: [], total: 0 };
+
+  const total = Number(data[0].total_count) || 0;
+  const rows = data.map(r => ({
+    ticker:        r.ticker,
+    ret_3m:        r.ret_3m,
+    ret_6m:        r.ret_6m,
+    ret_12m:       r.ret_12m,
+    rs_rating:     r.rs_rating,
+    pct_from_high: r.pct_from_high,
+    pct_from_low:  r.pct_from_low,
+    pivot_20w:     r.pivot_high_20w,
+    high_52w:      r.high_52w,
+    low_52w:       r.low_52w,
+    close:         r.close,
+    rel_vol:       r.rel_vol,
+    trend:         r.trend,
+    signals:       r.signals || [],
+    sma50:         r.sma50,
+    sma150:        r.sma150,
+    sma200:        r.sma200,
+  }));
   return { rows, total };
 }
 
 // ─── Screen Membership ────────────────────────────────────────
-let _scMemberCache = null;
-let _scMemberLoadedAt = 0;
-async function fetchScreenMembership(token) {
-  if (_scMemberCache && Date.now()-_scMemberLoadedAt<5*60*1000) return _scMemberCache;
+// Screens (RS Leader, Vol Breakout, Pullback 50DMA, etc.) are precomputed
+// once/day in Postgres (stock_analytics.screens). We only ask for the
+// tickers currently on screen instead of pulling every NSE ticker's
+// indicators + stock_52w rows to the browser and recomputing 13 "top 50"
+// rankings client-side on every load.
+async function fetchScreenMembership(tickers, token) {
+  if (!tickers || tickers.length === 0) return {};
   try {
-    async function GMany(path) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{headers:{...hdrs(token),"Range-Unit":"items",Range:"0-9999"}});
-      return r.ok?r.json():[];
+    const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
+    const data = await GET(`stock_analytics?ticker=in.${tickerIn}&select=ticker,screens`, token);
+    const membership = {};
+    for (const row of (data || [])) {
+      if (row.ticker) membership[row.ticker] = row.screens || [];
     }
-    // ORDER by ticker.asc,date.desc so the FIRST row per ticker is the latest
-    const [indRaw,s52Raw] = await Promise.all([
-      GMany(`indicators?select=ticker,date,rs_rating,rs_3m,rs_6m,rs_12m,sma50,sma150,sma200,pivot_high_10w,pivot_high_20w&order=ticker.asc,date.desc`).catch(()=>[]),
-      GMany(`stock_52w?select=ticker,close,pct_from_high,pct_from_low,volume,volume_ma20`).catch(()=>[]),
-    ]);
-    // Keep only the latest row per ticker (first occurrence after sort)
-    const indMap={},s52Map={};
-    for(const r of(indRaw||[])){if(!indMap[r.ticker])indMap[r.ticker]=r;}
-    for(const r of(s52Raw||[])){s52Map[r.ticker]=r;}
-    const joinRow=ticker=>{
-      const ind=indMap[ticker]||{},s=s52Map[ticker]||{};
-      const close=Number(s.close??0),
-            sma50=Number(ind.sma50??0),
-            sma150=Number(ind.sma150??0),
-            sma200=Number(ind.sma200??0),
-            vol=Number(s.volume??0),volMa=Number(s.volume_ma20??0),
-            pctHigh=Number(s.pct_from_high??0),relVol=volMa>0?vol/volMa:0;
-      return {ticker,close,sma50,sma150,sma200,vol,volMa,relVol,pctHigh,
-        rs:Number(ind.rs_rating??0),rs3m:Number(ind.rs_3m??0),rs6m:Number(ind.rs_6m??0),rs12m:Number(ind.rs_12m??0),
-        p20w:Number(ind.pivot_high_20w??0)};
-    };
-    const allTickers=[...new Set([...Object.keys(indMap),...Object.keys(s52Map)])];
-    const rows=allTickers.map(joinRow).filter(r=>r.close>0);
-    const top=(arr,sortFn,n=50)=>new Set(arr.slice().sort(sortFn).slice(0,n).map(r=>r.ticker));
-    const screens={
-      // ── Market Leaders ──
-      "Near 52W High":    top(rows.filter(r=>r.pctHigh>=-5&&r.close>r.sma50&&r.close>r.sma200),(a,b)=>b.pctHigh-a.pctHigh),
-      "RS Leader":        top(rows.filter(r=>r.rs>=85),(a,b)=>b.rs-a.rs),
-      "RS 3M Leader":     top(rows.filter(r=>r.rs3m>0),(a,b)=>b.rs3m-a.rs3m),
-      "RS 6M Leader":     top(rows.filter(r=>r.rs6m>0),(a,b)=>b.rs6m-a.rs6m),
-      "RS 12M Leader":    top(rows.filter(r=>r.rs12m>0),(a,b)=>b.rs12m-a.rs12m),
-      "Multi-TF RS":      top(rows.filter(r=>r.rs3m>70&&r.rs6m>70&&r.rs12m>70),(a,b)=>b.rs-a.rs),
-      "RS Accel":         top(rows.filter(r=>r.rs3m>r.rs6m&&r.rs3m>70),(a,b)=>(b.rs3m-b.rs6m)-(a.rs3m-a.rs6m)),
-      // ── Breakouts ──
-      "Vol Breakout":     top(rows.filter(r=>r.relVol>=2.0&&r.close>r.sma50&&r.close>r.sma200&&r.rs>=70),(a,b)=>b.relVol-a.relVol),
-      "52W High BO":      top(rows.filter(r=>r.pctHigh>=-7&&r.close>r.sma50&&r.close>r.sma200&&r.rs>=80),(a,b)=>b.rs-a.rs),
-      "Pivot BO":         top(rows.filter(r=>r.p20w>0&&r.close>=r.p20w*0.97&&r.close>r.sma50&&r.close>r.sma200),(a,b)=>b.rs-a.rs),
-      // ── Pullbacks ──
-      "Pullback 50DMA":   top(rows.filter(r=>r.close>0&&r.sma50>0&&Math.abs(r.close-r.sma50)/r.sma50<0.03&&r.close>r.sma200&&r.rs>=70),(a,b)=>b.rs-a.rs),
-      "Shallow Pullback": top(rows.filter(r=>r.p20w>0&&r.close<r.p20w&&r.close>=r.p20w*0.95&&r.close>r.sma50&&r.rs>=80),(a,b)=>b.rs-a.rs),
-      "Weekly Pullback":  top(rows.filter(r=>r.p20w>0&&r.close>=r.p20w*0.95&&r.close>r.sma50&&r.rs>=75),(a,b)=>b.rs-a.rs),
-      "Vol Dry-up":       top(rows.filter(r=>r.relVol>0&&r.relVol<0.7&&r.close>r.sma50&&r.close>r.sma200&&r.rs>=60),(a,b)=>b.rs-a.rs),
-    };
-    const membership={};
-    for(const[name,tickerSet]of Object.entries(screens)){for(const t of tickerSet){if(!membership[t])membership[t]=[];membership[t].push(name);}}
-    _scMemberCache=membership; _scMemberLoadedAt=Date.now();
     return membership;
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 }
 
 // ─── Default-Watchlist Seeding ────────────────────────────────
@@ -1831,8 +1717,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
   },[rows, token]);
 
   useEffect(()=>{
-    fetchScreenMembership(token).then(m=>setScreenMembership(m)).catch(()=>{});
-  },[token]);
+    const tickers = rows.map(r=>r.ticker).filter(Boolean);
+    if(!tickers.length) return;
+    fetchScreenMembership(tickers, token)
+      .then(m=>setScreenMembership(prev=>({...prev, ...m})))
+      .catch(()=>{});
+  },[rows, token]);
 
   // ── Background pre-warm: on first login, silently populate feed caches for ALL watchlists ──
   // This ensures the announcements panel feels instant on every watchlist switch.

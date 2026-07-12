@@ -2877,44 +2877,31 @@ function seedMoversTabFromCache(tabKey) {
     };
 }
 
-/** Deduplicate stock_returns rows → Map<ticker, row> keeping freshest date. */
-function buildReturnsMap(rows) {
-    const map = new Map();
-    for (const r of (rows || [])) {
-        if (!r.ticker) continue;
-        const prev = map.get(r.ticker);
-        if (!prev || (r.latest_date || "") > (prev.latest_date || "")) map.set(r.ticker, r);
-    }
-    return map;
-}
+// buildReturnsMap() (dedupe stock_returns by ticker) and enrichRsStocks()
+// (join ticker_industry_rs + returns) used to live here. Both are now done in
+// Postgres by the get_rs_stocks_enriched() RPC — see migration.sql. Removed
+// rather than kept as dead code; restore from git history if you ever need
+// to fall back to the client-side join.
 
-/** Merge ticker_industry_rs rows with a returns map into the rsStocks shape. */
-function enrichRsStocks(tirsData, returnsMap, allowedSet = getAllowedTickerSetSync()) {
-    return (tirsData || []).filter(row => isAllowedTicker(row.ticker, allowedSet)).map(row => {
-        const ret = returnsMap.get(row.ticker);
-        return {
-            ticker: row.ticker,
-            industry: normalizeIndustryName(row.industry),
-            rs_rating: row.rs_rating,
-            name: null,
-            ret_3m: ret?.ret_3m ?? null,
-            ret_6m: ret?.ret_6m ?? null,
-            ret_12m: ret?.ret_12m ?? null,
-        };
-    });
+// Call a Postgres function through PostgREST (Supabase's RPC endpoint), using
+// the same sbFetch cache/SWR plumbing as regular table reads. Replaces the
+// three raw-table fetches + client-side joins that used to live here — see
+// migration.sql (get_rs_industry_summary / get_rs_stocks_by_industry /
+// get_top_rs_stocks) for the backend side of this.
+function rpcPath(fnName, params = {}) {
+    const qs = Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+        .join("&");
+    return qs ? `rpc/${fnName}?${qs}` : `rpc/${fnName}`;
 }
 
 export async function warmStockDashboardCaches(userToken) {
     if (_stockDashboardWarmPromise) return _stockDashboardWarmPromise;
 
-    const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
-    const TIRS_ALL_PATH = "ticker_industry_rs?select=industry&order=industry.asc";
-    const RETURNS_PATH = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
     const RS_SUMMARY_CACHE_KEY = "dashboard-rs-industry-summary-v1";
     const ALL_RS_STOCKS_CACHE_KEY = "dashboard-all-rs-stocks-v1";
     const RS_TTL = 60 * 60 * 1000;
-    const RETURNS_TTL = 10 * 60 * 1000;
-    const ALL_RS_LATEST_DATE_PATH = "indicators?select=date&order=date.desc&limit=1";
     const ALL_RS_TTL = 10 * 60 * 1000;
 
     const headers = userToken ? userToken : null;
@@ -2929,17 +2916,17 @@ export async function warmStockDashboardCaches(userToken) {
             const moversTabPromises = moversTabEntries.map(([tabKey, path]) =>
                 sbFetch(withPageParams(path, MOVERS_BATCH_SIZE, 0), headers, { ttl: MOVERS_TTL }).catch(() => null)
             );
-            const tirsRsPromise = sbFetchAll(TIRS_RS85_PATH, headers, { ttl: RS_TTL }).catch(() => []);
-            const tirsAllPromise = sbFetchAll(TIRS_ALL_PATH, headers, { ttl: RS_TTL }).catch(() => []);
-            const returnsPromise = sbFetchAll(RETURNS_PATH, headers, { ttl: RETURNS_TTL }).catch(() => []);
-            const latestDatePromise = sbFetch(ALL_RS_LATEST_DATE_PATH, headers, { ttl: ALL_RS_TTL }).catch(() => []);
 
-            const [moversResults, tirsRsRows, tirsAllRows, returnsRows, latestDateRows] = await Promise.all([
+            // These two RPCs replace ticker_industry_rs (x2) + stock_returns raw
+            // fetches and all of buildReturnsMap/enrichRsStocks/industry-count math —
+            // the join, dedup, and aggregation now happen in Postgres.
+            const rsSummaryPromise = sbFetch(rpcPath("get_rs_industry_summary"), headers, { ttl: RS_TTL }).catch(() => []);
+            const topRsPromise = sbFetch(rpcPath("get_top_rs_stocks"), headers, { ttl: ALL_RS_TTL }).catch(() => []);
+
+            const [moversResults, rsSummary, topRsStocks] = await Promise.all([
                 Promise.all(moversTabPromises),
-                tirsRsPromise,
-                tirsAllPromise,
-                returnsPromise,
-                latestDatePromise,
+                rsSummaryPromise,
+                topRsPromise,
             ]);
             const allowedSet = await allowedSetPromise;
 
@@ -2950,58 +2937,17 @@ export async function warmStockDashboardCaches(userToken) {
                 }
             });
 
-            if (Array.isArray(tirsRsRows) && tirsRsRows.length > 0 && Array.isArray(tirsAllRows) && tirsAllRows.length > 0 && Array.isArray(returnsRows) && returnsRows.length > 0) {
-                const retMap = buildReturnsMap(returnsRows);
-                const rsStocks = enrichRsStocks(tirsRsRows, retMap, allowedSet).filter(r => !isETF(r));
-                const industryTotals = new Map();
-                const uniqueIndustries = new Set();
-                (tirsAllRows || []).forEach(r => {
-                    const key = normalizeIndustryKey(r.industry);
-                    if (key) industryTotals.set(key, (industryTotals.get(key) || 0) + 1);
-                });
-                (tirsRsRows || []).forEach(r => {
-                    const name = normalizeIndustryName(r.industry);
-                    if (name) uniqueIndustries.add(name);
-                });
-                const rsSummary = [...uniqueIndustries].sort().map(industry => {
-                    const key = normalizeIndustryKey(industry);
-                    const count = (tirsRsRows || []).filter(r => normalizeIndustryKey(r.industry) === key).length;
-                    const total = industryTotals.get(key) || count;
-                    return { industry, count, total, pct: total > 0 ? (count / total) * 100 : 0 };
-                }).sort((a, b) => (b.count || 0) - (a.count || 0) || a.industry.localeCompare(b.industry));
+            if (Array.isArray(rsSummary) && rsSummary.length > 0) {
                 persistentCacheSet(RS_SUMMARY_CACHE_KEY, rsSummary, RS_TTL);
-                cacheSet(TIRS_RS85_PATH, tirsRsRows, RS_TTL);
-                cacheSet(TIRS_ALL_PATH, tirsAllRows, RS_TTL);
-                cacheSet(RETURNS_PATH, returnsRows, RETURNS_TTL);
-                void rsStocks;
             }
 
-            const latestDate = latestDateRows?.[0]?.date;
-                if (latestDate) {
-                    const allRsPath = `indicators?select=ticker,rs_rating,rs_score,cap_category&date=eq.${latestDate}&exchange=eq.NSE&rs_rating=gte.85&order=rs_rating.desc.nullslast`;
-                    const [indicatorsHighRS, allReturnsRows] = await Promise.all([
-                        sbFetch(allRsPath, headers, { ttl: ALL_RS_TTL }).catch(() => []),
-                        returnsPromise,
-                    ]);
-                    if (Array.isArray(indicatorsHighRS) && indicatorsHighRS.length > 0 && Array.isArray(allReturnsRows) && allReturnsRows.length > 0) {
-                        const returnsMap = buildReturnsMap(allReturnsRows);
-                        const enriched = (indicatorsHighRS || []).filter(r => isAllowedTicker(r.ticker, allowedSet)).map((r, idx) => {
-                            const ret = returnsMap.get(r.ticker);
-                            return {
-                                ticker: r.ticker,
-                            name: null,
-                            rs_rating: r.rs_rating,
-                            rs_score: r.rs_score,
-                            cap_category: r.cap_category,
-                            rank: idx + 1,
-                            ret_3m: ret?.ret_3m ?? null,
-                            ret_6m: ret?.ret_6m ?? null,
-                            ret_12m: ret?.ret_12m ?? null,
-                        };
-                    });
-                    persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
-                    cacheSet(allRsPath, indicatorsHighRS, ALL_RS_TTL);
-                }
+            if (Array.isArray(topRsStocks) && topRsStocks.length > 0) {
+                // Allowed-ticker exclusion stays client-side until allowed_tickers is a
+                // real table the RPC can filter on server-side (see migration.sql TODO).
+                const enriched = topRsStocks
+                    .filter(r => isAllowedTicker(r.ticker, allowedSet))
+                    .map(r => ({ ...r, name: null }));
+                persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
             }
         } catch (err) {
             console.warn("[StockDashboard warmup] failed:", err);
@@ -3023,17 +2969,18 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // ── Cache-key constants (same paths used in sbFetch calls below) ──────────
     const MOVERS_TTL = 5 * 60 * 1000;
 
-    const TIRS_RS85_PATH = "ticker_industry_rs?select=ticker,industry,rs_rating&rs_rating=gte.85&order=rs_rating.desc.nullslast,ticker.asc";
-    const TIRS_ALL_PATH = "ticker_industry_rs?select=industry&order=industry.asc";
-    const RETURNS_PATH = "stock_returns?select=ticker,latest_date,ret_3m,ret_6m,ret_12m&order=ticker.asc,latest_date.desc";
+    // The RS>=85 dataset (industry-tagged, returns-joined) and the top-100
+    // ranked list now come from Postgres RPCs (get_rs_stocks_enriched,
+    // get_rs_industry_summary, get_top_rs_stocks — see migration.sql) instead
+    // of three raw-table fetches joined client-side. RPC_RS_PATH etc. below
+    // are just the PostgREST /rpc/<fn> cache keys for those calls.
+    const RPC_RS_ENRICHED_PATH = "rpc/get_rs_stocks_enriched";
+    const RPC_RS_SUMMARY_PATH = "rpc/get_rs_industry_summary";
+    const RPC_TOP_RS_PATH = "rpc/get_top_rs_stocks";
     const BREADTH_LATEST_PATH = "market_breadth?exchange=eq.NSE&select=date,above_sma50,above_sma200,near_52w_high,near_52w_low&order=date.desc&limit=1";
     const RS_SUMMARY_CACHE_KEY = "dashboard-rs-industry-summary-v1";
     const ALL_RS_STOCKS_CACHE_KEY = "dashboard-all-rs-stocks-v1";
     const RS_TTL = 60 * 60 * 1000;
-    const RETURNS_TTL = 10 * 60 * 1000;
-    // Fetch top 100 directly from indicators table (matches DB query: ORDER BY rs_rating DESC)
-    // We first get the latest date, then query that date + NSE only to avoid BSE duplicates
-    const ALL_RS_LATEST_DATE_PATH = "indicators?select=date&order=date.desc&limit=1";
     const ALL_RS_TTL = 10 * 60 * 1000;
 
     // ── Market Movers – seed from cache so first paint is instant ────────────
@@ -3121,17 +3068,17 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     const volumeShockersOffsetRef = useRef(0);
 
     // ── RS stocks – seed from cache ──────────────────────────────────────────
+    // get_rs_stocks_enriched() already returns an industry-tagged, returns-joined,
+    // ETF-excluded RS>=85 list, so there's no client-side join/dedup left to do here.
     const _cachedRs = useMemo(() => {
-        const hit = cacheGet(TIRS_RS85_PATH, RS_TTL);
-        return hit ? hit.data || [] : cacheGetAllPages(TIRS_RS85_PATH, RS_TTL);
+        const hit = cacheGet(RPC_RS_ENRICHED_PATH, RS_TTL);
+        return hit ? hit.data || [] : null;
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const [rsStocks, setRsStocks] = useState(() => {
         if (!_cachedRs) return [];
-        const retHit = cacheGet(RETURNS_PATH, RETURNS_TTL);
-        const retRows = retHit ? retHit.data || [] : (cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || []);
-        const retMap = buildReturnsMap(retRows);
-        return enrichRsStocks(_cachedRs, retMap, getAllowedTickerSetSync()).filter(r => !isETF(r));
+        const allowedSet = getAllowedTickerSetSync();
+        return _cachedRs.filter(r => isAllowedTicker(r.ticker, allowedSet));
     });
     const [loadingRs, setLoadingRs] = useState(() => !_cachedRs);
     const [industry, setIndustry] = useState("");
@@ -3148,31 +3095,26 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         const hit = persistentCacheGet(ALL_RS_STOCKS_CACHE_KEY, ALL_RS_TTL);
         return !hit?.data?.length;
     });
-    const [industries, setIndustries] = useState(() => {
-        const hit = cacheGet(TIRS_ALL_PATH, RS_TTL);
-        const rows = hit ? hit.data || [] : (cacheGetAllPages(TIRS_ALL_PATH, RS_TTL) || []);
-        if (!rows.length) return [];
-        return [...new Set(rows.map(r => normalizeIndustryName(r.industry)).filter(Boolean))].sort();
-    });
-    const [loadingIndustries, setLoadingIndustries] = useState(() => {
-        const hit = cacheGet(TIRS_ALL_PATH, RS_TTL);
-        return !(hit || cacheGetAllPages(TIRS_ALL_PATH, RS_TTL));
-    });
-    const [industryTotals, setIndustryTotals] = useState(() => {
-        const hit = cacheGet(TIRS_ALL_PATH, RS_TTL);
-        const rows = hit ? hit.data || [] : (cacheGetAllPages(TIRS_ALL_PATH, RS_TTL) || []);
-        if (!rows.length) return new Map();
-        const m = new Map();
-        rows.forEach(r => {
-            const key = normalizeIndustryKey(r.industry);
-            if (key) m.set(key, (m.get(key) || 0) + 1);
-        });
-        return m;
-    }); // total stocks per industry (all ratings)
-    const [cachedRsIndustrySummary, setCachedRsIndustrySummary] = useState(() => {
+    // industries / industryTotals now derive from the already-aggregated
+    // get_rs_industry_summary() result (industry, count, total, pct) instead of
+    // a separate full-table TIRS_ALL_PATH fetch + client-side group-by.
+    const _cachedRsSummary = (() => {
         const hit = persistentCacheGet(RS_SUMMARY_CACHE_KEY, RS_TTL);
         return hit?.data || [];
-    });
+    })();
+    const [industries, setIndustries] = useState(() =>
+        [...new Set(_cachedRsSummary.map(r => r.industry).filter(Boolean))].sort()
+    );
+    const [loadingIndustries, setLoadingIndustries] = useState(() => !_cachedRsSummary.length);
+    const [industryTotals, setIndustryTotals] = useState(() => {
+        const m = new Map();
+        _cachedRsSummary.forEach(r => {
+            const key = normalizeIndustryKey(r.industry);
+            if (key) m.set(key, r.total || r.count || 0);
+        });
+        return m;
+    }); // total stocks per industry (all ratings) — comes straight from the RPC now
+    const [cachedRsIndustrySummary, setCachedRsIndustrySummary] = useState(_cachedRsSummary);
 
     // RS Tab: "sector" | "all"
     const [activeRsTab, setActiveRsTab] = useState("sector");
@@ -3388,58 +3330,38 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
+    // ── RS data — now backed by Postgres RPCs (see migration.sql) ─────────────
+    // get_rs_stocks_enriched() and get_rs_industry_summary() replace the old
+    // TIRS_RS85_PATH + TIRS_ALL_PATH + RETURNS_PATH raw fetches and all of
+    // buildReturnsMap/enrichRsStocks/the per-industry count-inside-map logic.
+    // get_top_rs_stocks() replaces the indicators+returns join+rank assignment
+    // that used to happen here for allRsStocks.
     useEffect(() => {
         let allowedSet = getAllowedTickerSetSync();
-        function buildRsSummary(tirsData, allIndustryData) {
-            const totalsMap = new Map();
-            (allIndustryData || []).forEach(r => {
-                const key = normalizeIndustryKey(r.industry);
-                if (key) totalsMap.set(key, (totalsMap.get(key) || 0) + 1);
-            });
-            const counts = new Map();
-            const labels = new Map();
-            (tirsData || []).forEach(row => {
-                const key = normalizeIndustryKey(row.industry);
-                if (!key) return;
-                labels.set(key, normalizeIndustryName(row.industry));
-                counts.set(key, (counts.get(key) || 0) + 1);
-            });
-            return [...counts.entries()]
-                .map(([industryKey, count]) => {
-                    const total = totalsMap.get(industryKey) || count;
-                    return {
-                        industry: labels.get(industryKey) || industryKey,
-                        count,
-                        total,
-                        pct: total > 0 ? (count / total) * 100 : 0,
-                    };
-                })
-                .sort((a, b) => (b.count || 0) - (a.count || 0) || a.industry.localeCompare(b.industry));
-        }
 
-        function applyRsData(tirsData, allIndustryData, allReturnsData = []) {
-            const returnsMap = buildReturnsMap(allReturnsData);
+        function applyRsData(enrichedRows, summaryRows) {
+            const filtered = (enrichedRows || []).filter(r => isAllowedTicker(r.ticker, allowedSet));
+            setRsStocks(filtered);
+
+            const returnsMap = new Map();
+            filtered.forEach(r => returnsMap.set(r.ticker, { ret_3m: r.ret_3m, ret_6m: r.ret_6m, ret_12m: r.ret_12m }));
             stockReturnsMapRef.current = returnsMap;
-            const filteredTirsData = (tirsData || []).filter(r => isAllowedTicker(r.ticker, allowedSet));
 
-            const totalsMap = new Map();
-            allIndustryData.forEach(r => {
-                const key = normalizeIndustryKey(r.industry);
-                if (key) totalsMap.set(key, (totalsMap.get(key) || 0) + 1);
-            });
-            setIndustryTotals(totalsMap);
-
-            const uniqueInds = [...new Set(
-                filteredTirsData.map(r => normalizeIndustryName(r.industry)).filter(Boolean)
-            )].sort();
+            const uniqueInds = [...new Set(filtered.map(r => r.industry).filter(Boolean))].sort();
             setIndustries(uniqueInds);
             setLoadingIndustries(false);
 
-            setRsStocks(enrichRsStocks(filteredTirsData, returnsMap, allowedSet).filter(r => !isETF(r)));
+            if (Array.isArray(summaryRows) && summaryRows.length) {
+                setCachedRsIndustrySummary(summaryRows);
+                persistentCacheSet(RS_SUMMARY_CACHE_KEY, summaryRows, RS_TTL);
 
-            const summary = buildRsSummary(filteredTirsData, allIndustryData);
-            setCachedRsIndustrySummary(summary);
-            persistentCacheSet(RS_SUMMARY_CACHE_KEY, summary, RS_TTL);
+                const totalsMap = new Map();
+                summaryRows.forEach(r => {
+                    const key = normalizeIndustryKey(r.industry);
+                    if (key) totalsMap.set(key, r.total || r.count || 0);
+                });
+                setIndustryTotals(totalsMap);
+            }
         }
 
         (async () => {
@@ -3447,96 +3369,46 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
             setError(null);
             try {
                 allowedSet = await ensureAllowedTickerSet();
-                let latestTirsData = _cachedRs || [];
-                let latestAllIndustryData = cacheGetAllPages(TIRS_ALL_PATH, RS_TTL) || [];
-                let latestReturnsData = cacheGetAllPages(RETURNS_PATH, RETURNS_TTL) || [];
-                const applyLatestRsData = () => {
-                    if (latestTirsData.length && latestAllIndustryData.length) {
-                        applyRsData(latestTirsData, latestAllIndustryData, latestReturnsData);
-                        setLoadingRs(false);
-                    }
-                };
 
-                const [tirsData, allIndustryData] = await Promise.all([
-                    sbFetchAll(TIRS_RS85_PATH, userToken, {
+                const [enrichedRows, summaryRows] = await Promise.all([
+                    sbFetch(RPC_RS_ENRICHED_PATH, userToken, {
                         ttl: RS_TTL,
-                        onStale: fresh => {
-                            latestTirsData = fresh || [];
-                            applyLatestRsData();
-                        },
+                        onStale: fresh => applyRsData(fresh, cachedRsIndustrySummary),
                     }),
-                    sbFetchAll(TIRS_ALL_PATH, userToken, {
+                    sbFetch(RPC_RS_SUMMARY_PATH, userToken, {
                         ttl: RS_TTL,
-                        onStale: fresh => {
-                            latestAllIndustryData = fresh || [];
-                            applyLatestRsData();
-                        },
+                        onStale: fresh => applyRsData(_cachedRs, fresh),
                     }),
                 ]);
-                latestTirsData = tirsData || [];
-                latestAllIndustryData = allIndustryData || [];
-                applyRsData(tirsData, allIndustryData);
+                applyRsData(enrichedRows, summaryRows);
                 setLoadingRs(false);
 
-                const [allReturnsData, latestDateRows] = await Promise.all([
-                    sbFetchAll(RETURNS_PATH, userToken, {
-                        ttl: RETURNS_TTL,
-                        onStale: fresh => {
-                            latestReturnsData = fresh || [];
-                            applyLatestRsData();
-                        },
-                    }),
-                    // Step 1: get the latest date in indicators
-                    sbFetch(ALL_RS_LATEST_DATE_PATH, userToken, { ttl: ALL_RS_TTL }),
-                ]);
-                latestReturnsData = allReturnsData || [];
-                applyRsData(tirsData, allIndustryData, allReturnsData);
+                // ── Top 100 RS stocks — now one RPC call, joined+ranked server-side ──
+                const buildAllRsStocks = topRows =>
+                    (topRows || []).map(r => ({ ...r, name: _nameMap.get(r.ticker) || null }));
 
-                // Step 2: fetch all stocks with RS >= 85 for latest date, NSE only (avoids BSE duplicates)
-                const latestDate = latestDateRows?.[0]?.date;
-                const ALL_RS_PATH = latestDate
-                    ? `indicators?select=ticker,rs_rating,rs_score,cap_category&date=eq.${latestDate}&exchange=eq.NSE&rs_rating=gte.85&order=rs_rating.desc.nullslast`
-                    : `indicators?select=ticker,rs_rating,rs_score,cap_category&exchange=eq.NSE&rs_rating=gte.85&order=rs_rating.desc.nullslast`;
-                const buildAllRsStocks = (indicatorsRows, returnsRows) => {
-                    const returnsMap = buildReturnsMap(returnsRows);
-                    return (indicatorsRows || []).map((r, idx) => {
-                        const ret = returnsMap.get(r.ticker);
-                        return {
-                            ticker: r.ticker,
-                            name: _nameMap.get(r.ticker) || null,
-                            rs_rating: r.rs_rating,
-                            rs_score: r.rs_score,
-                            cap_category: r.cap_category,
-                            rank: idx + 1,
-                            ret_3m: ret?.ret_3m ?? null,
-                            ret_6m: ret?.ret_6m ?? null,
-                            ret_12m: ret?.ret_12m ?? null,
-                        };
-                    });
-                };
-                const indicatorsHighRS = await sbFetch(ALL_RS_PATH, userToken, {
+                const topRsRows = await sbFetch(RPC_TOP_RS_PATH, userToken, {
                     ttl: ALL_RS_TTL,
                     onStale: fresh => {
-                        const enriched = buildAllRsStocks(fresh, latestReturnsData).filter(r => isAllowedTicker(r.ticker, allowedSet));
-                        setAllRsStocks(enriched.filter(r => !isETF(r)));
+                        const enriched = buildAllRsStocks(fresh).filter(r => isAllowedTicker(r.ticker, allowedSet));
+                        setAllRsStocks(enriched);
                         persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
                     },
                 });
 
-                // Build allRsStocks: join indicators with returns
-                const enriched = buildAllRsStocks(indicatorsHighRS, allReturnsData).filter(r => isAllowedTicker(r.ticker, allowedSet));
-                setAllRsStocks(enriched.filter(r => !isETF(r)));
+                const enriched = buildAllRsStocks(topRsRows).filter(r => isAllowedTicker(r.ticker, allowedSet));
+                setAllRsStocks(enriched);
                 persistentCacheSet(ALL_RS_STOCKS_CACHE_KEY, enriched, ALL_RS_TTL);
 
                 // ── Enrich allRsStocks with names (only missing tickers) ──────
                 try {
-                    const allTickers = (indicatorsHighRS || []).map(r => r.ticker).filter(Boolean);
+                    const allTickers = (topRsRows || []).map(r => r.ticker).filter(Boolean);
                     const missingTickers = [...new Set(allTickers)].filter(t => !_nameMap.has(t));
                     if (missingTickers.length) {
                         const nameRows = await batchFetchBhavNames(missingTickers, userToken);
                         if (nameRows.length) {
                             // _updateNameMap already called inside batchFetchBhavNames
-                            setAllRsStocks(prev => applyNamesFromMap(prev).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
+                            setAllRsStocks(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
                         }
                     }
                 } catch (nameErr) {
