@@ -13846,22 +13846,22 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
                                         {/* # */}
                                         <th style={{
-                                            padding: "9px 0 9px 12px", textAlign: "left",
+                                            padding: "9px 0 9px 16px", textAlign: "left",
                                             fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".06em", color: DS.textMuted,
+                                            letterSpacing: ".07em", color: DS.textMuted,
                                             position: "sticky", left: 0, zIndex: 11,
                                             background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            width: 30, whiteSpace: "nowrap",
+                                            width: 40, whiteSpace: "nowrap",
                                         }}>#</th>
 
                                         {/* Company */}
                                         <th style={{
-                                            padding: "9px 12px 9px 8px", textAlign: "left",
+                                            padding: "9px 16px 9px 10px", textAlign: "left",
                                             fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".06em", color: DS.textMuted,
-                                            position: "sticky", left: 30, zIndex: 11,
+                                            letterSpacing: ".07em", color: DS.textMuted,
+                                            position: "sticky", left: 40, zIndex: 11,
                                             background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            minWidth: 92, whiteSpace: "nowrap",
+                                            minWidth: 140, whiteSpace: "nowrap",
                                         }}>Company</th>
 
                                         {/* Metrics */}
@@ -13870,9 +13870,9 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                             return (
                                                 <th key={col.key} onClick={() => handleSort(col.key)}
                                                     style={{
-                                                        padding: "9px 11px", textAlign: "right",
+                                                        padding: "9px 13px", textAlign: "right",
                                                         fontSize: 10, fontWeight: 700,
-                                                        textTransform: "uppercase", letterSpacing: ".06em",
+                                                        textTransform: "uppercase", letterSpacing: ".07em",
                                                         color: isSort ? DS.accent : DS.textMuted,
                                                         background: isSort ? DS.accentDim : DS.tableHead,
                                                         borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
@@ -13895,29 +13895,29 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
                                                 {/* # */}
                                                 <td data-sticky="1" style={{
-                                                    padding: "8px 0 8px 12px",
-                                                    fontSize: 12, color: DS.textMuted,
+                                                    padding: "9px 0 9px 16px",
+                                                    fontSize: 13, color: DS.textMuted,
                                                     fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
                                                     position: "sticky", left: 0,
                                                     background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
                                                     borderRight: `1px solid ${DS.border}`,
-                                                    width: 30, textAlign: "left",
+                                                    width: 40, textAlign: "left",
                                                 }}>{rowNum}</td>
 
                                                 {/* Company */}
                                                 <td data-sticky="1" style={{
-                                                    padding: "8px 12px 8px 8px",
-                                                    position: "sticky", left: 30,
+                                                    padding: "9px 16px 9px 10px",
+                                                    position: "sticky", left: 40,
                                                     background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
                                                     borderRight: `1px solid ${DS.border}`,
-                                                    minWidth: 92,
+                                                    minWidth: 140,
                                                 }}>
                                                     <div style={{
-                                                        fontSize: 12.5, fontWeight: 650,
+                                                        fontSize: 13, fontWeight: 600,
                                                         color: DS.text, whiteSpace: "nowrap",
                                                         overflow: "hidden", textOverflow: "ellipsis",
-                                                        fontFamily: DS.mono, letterSpacing: ".01em",
-                                                        maxWidth: 110
+                                                        fontFamily: DS.mono, letterSpacing: ".02em",
+                                                        maxWidth: 180
                                                     }}>
                                                         {displayTicker}
                                                     </div>
@@ -13938,8 +13938,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                                         : cellColor(col, raw);
                                                     return (
                                                         <td key={col.key} style={{
-                                                            padding: "8px 11px",
-                                                            textAlign: "right", fontSize: 12.5,
+                                                            padding: "9px 13px",
+                                                            textAlign: "right", fontSize: 13,
                                                             fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
                                                             color: formatted === "" ? DS.textMuted : color,
                                                             whiteSpace: "nowrap",
