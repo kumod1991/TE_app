@@ -4217,21 +4217,11 @@ function isMarketLive() {
 }
 
 async function fetchBhavQuote(ticker) {
-    if (isMarketLive()) {
-        // 9:15 AM  7:00 PM IST: try Yahoo first for live price, Bhav as fallback
-        const yahoo = await fetchYahooQuote(ticker);
-        if (yahoo) return { ...yahoo, source: "yahoo" };
-        const bhav = await fetchBhavPrice(ticker);
-        if (bhav) return bhav;
-    } else {
-        // After 7:00 PM or weekend: Bhav Copy is final EOD price  use DB only
-        const bhav = await fetchBhavPrice(ticker);
-        if (bhav) return bhav;
-        // Bhav may not be populated yet for today  Yahoo as safety fallback
-        const yahoo = await fetchYahooQuote(ticker);
-        if (yahoo) return { ...yahoo, source: "yahoo" };
-    }
-    return null;
+    // bhav_copy only  Yahoo Finance primary/fallback calls removed for speed.
+    // fetchBhavPrice() already walks back up to 5 trading days to cover
+    // weekends/holidays/not-yet-populated EOD data, so this stays reliable
+    // without the slow multi-proxy Yahoo round trips.
+    return fetchBhavPrice(ticker);
 }
 
 function buildOpenPositionsFromTrades(trades) {
@@ -4282,7 +4272,7 @@ async function refreshJournalPortfolioCache(trades) {
         await Promise.all(batch.map(async p => {
             const q = await fetchBhavQuote(p.ticker);
             if (q) results[p.ticker] = { ...q };
-            else failed.push({ ticker: p.ticker, reason: "Not found in Bhav Copy or Yahoo Finance" });
+            else failed.push({ ticker: p.ticker, reason: "Not found in Bhav Copy" });
         }));
         if (i + 3 < openPositions.length) await new Promise(r => setTimeout(r, 300));
     }
@@ -4798,12 +4788,12 @@ function Portfolio({ trades, T, embedded = false }) {
         for (let i = 0; i < openPositions.length; i += 3) {
             const batch = openPositions.slice(i, i + 3);
             await Promise.all(batch.map(async p => {
-                // Primary: Bhav Copy from Supabase; fallback: Yahoo Finance
+                // bhav_copy from Supabase only  instant EOD price lookup
                 const q = await fetchBhavQuote(p.ticker);
                 if (q) {
                     results[p.ticker] = { ...q };
                 } else {
-                    errs.push({ ticker: p.ticker, reason: "Not found in Bhav Copy or Yahoo Finance" });
+                    errs.push({ ticker: p.ticker, reason: "Not found in Bhav Copy" });
                 }
                 setProgress(prev => ({ ...prev, done: prev.done + 1 }));
             }));
@@ -4817,6 +4807,11 @@ function Portfolio({ trades, T, embedded = false }) {
             localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() }));
             window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized } }));
         } catch { }
+        // Prices are done  stop the "Refreshing" spinner here. RS-6M still relies
+        // on Yahoo Finance (slow multi-proxy history calls) and is fetched quietly
+        // in the background below so it no longer blocks the price refresh.
+        setLoading(false);
+
         nifty500Cache = null;
         const rsResults = {};
         const successTickers = Object.entries(results);
@@ -4830,7 +4825,6 @@ function Portfolio({ trades, T, embedded = false }) {
         }
         setRsScores(rsResults);
         try { localStorage.setItem("tv_portfolio_rs", JSON.stringify(rsResults)); } catch { }
-        setLoading(false);
     };
 
 
@@ -5000,7 +4994,7 @@ function Portfolio({ trades, T, embedded = false }) {
                                                 color: T.subtext,
                                                 fontWeight: 800,
                                                 textAlign: idx < 2 ? "left" : "right",
-                                                background: "rgba(255,255,255,0.55)",
+                                                background: T.tableHead,
                                                 borderBottom: `1px solid ${T.border}`,
                                                 whiteSpace: "nowrap",
                                             }}
@@ -5012,12 +5006,12 @@ function Portfolio({ trades, T, embedded = false }) {
                             </thead>
                             <tbody>
                                 {sorted.map((r, i) => {
-                                    const rowBg = i % 2 === 0 ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.38)";
+                                    const rowBg = i % 2 === 0 ? T.card : T.tableAlt;
                                     return (
                                         <tr key={r.ticker} style={{ background: rowBg, transition: "transform .12s ease, background .12s ease" }}
                                             onMouseOver={e => {
                                                 e.currentTarget.style.transform = "translateY(-1px)";
-                                                e.currentTarget.style.background = "rgba(255,255,255,0.82)";
+                                                e.currentTarget.style.background = T.tableHover;
                                             }}
                                             onMouseOut={e => e.currentTarget.style.background = rowBg}>
                                             <td style={td({ textAlign: "left", padding: "14px 16px" })}>
@@ -17310,6 +17304,31 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
 // 
 //  MARKET BREADTH MODULE  institutional-grade redesign
 // 
+/* ============================================================================
+ * REVISED: MarketBreadthModule
+ * ----------------------------------------------------------------------------
+ * What changed vs. the original:
+ *   The "screens" section (Top 52W High Proximity, Top RS 3M/6M/12M,
+ *   RS Rating, RS Acceleration, Trend Aligned) previously paginated through
+ *   6 tables client-side (indicators x3, stock_prices_daily, stock_returns,
+ *   stock_52w, company_financials  up to ~30-40 requests) and joined/sorted
+ *   the full ~1,500-2,000 stock universe in JS, even though only the top 50
+ *   rows of each list are ever rendered.
+ *
+ *   That's now a single call to the get_breadth_screens() Postgres RPC
+ *   (see market_breadth_screens_migration.sql), which does the joins,
+ *   filtering and ranking server-side and returns only the top ~300 rows
+ *   per list (buffer for the client-side Nifty-500 filter).
+ *
+ *   The chart time-series fetch (market_breadth table) is untouched  it
+ *   was already a single lightweight query with no joins.
+ *
+ * Drop-in: replace the existing MarketBreadthModule function in App.jsx
+ * with this one. No other files need to change except the small
+ * _breadthCache seed object near the top of App.jsx (optional cleanup 
+ * see note below); the existing shape still works fine as-is since JS
+ * objects don't require pre-declared keys.
+ * ============================================================================ */
 function MarketBreadthModule({ T, onDataReady }) {
     const exchange = "NSE";
     const [range, setRange] = useState("1Y");
@@ -17350,24 +17369,14 @@ function MarketBreadthModule({ T, onDataReady }) {
         return d.toISOString().split("T")[0];
     };
 
-    const fetchAllPages = async (baseUrl, pageSize = 1000) => {
-        const firstRes = await fetch(`${baseUrl}&limit=${pageSize}&offset=0`, { headers: { ...H, "Range-Unit": "items" } });
-        const first = await firstRes.json();
-        if (!Array.isArray(first) || first.length < pageSize) return Array.isArray(first) ? first : [];
-        const extraPages = await Promise.all(
-            [1, 2, 3, 4, 5, 6, 7, 8, 9].map(p =>
-                fetch(`${baseUrl}&limit=${pageSize}&offset=${p * pageSize}`, { headers: { ...H, "Range-Unit": "items" } })
-                    .then(r => r.json()).catch(() => [])
-            )
-        );
-        let all = [...first];
-        for (const page of extraPages) {
-            if (!Array.isArray(page) || page.length === 0) break;
-            all = all.concat(page);
-            if (page.length < pageSize) break;
-        }
-        return all;
-    };
+    // ------------------------------------------------------------------
+    // Screens data (Top 52W High Proximity / Top RS / RS Rating / RS
+    // Acceleration / Trend Aligned) now come from a single server-side
+    // RPC — get_breadth_screens() — instead of the client paginating
+    // through indicators (x3), stock_prices_daily, stock_returns,
+    // stock_52w, and company_financials and joining/sorting the full
+    // NSE universe in JS. See market_breadth_screens_migration.sql.
+    // ------------------------------------------------------------------
 
     useEffect(() => {
         const abortCtrl = new AbortController();
@@ -17415,18 +17424,13 @@ function MarketBreadthModule({ T, onDataReady }) {
             }
             try {
                 const from = rangeDate();
-                const isEquity = ticker => !/^\d/.test(ticker);
-                const CF_TTL_MS = 30 * 60 * 1000;
-                const cfStale = !_breadthCache.cfRows || (Date.now() - (_breadthCache.cfRowsTime || 0)) > CF_TTL_MS;
-                const [breadthRows, latestRows, latestRsRows, cfRows] = await Promise.all([
-                    fetch(`${SUPABASE_URL}/rest/v1/market_breadth?exchange=eq.${exchange}&date=gte.${from}&order=date.asc&limit=2000`, { headers: H, signal: sig }).then(r => r.json()).catch(() => []),
-                    fetch(`${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&w52_high=not.is.null&order=date.desc&limit=1&select=date`, { headers: H, signal: sig }).then(r => r.json()).catch(() => []),
-                    fetch(`${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&rs_3m=not.is.null&order=date.desc&limit=1&select=date`, { headers: H, signal: sig }).then(r => r.json()).catch(() => []),
-                    cfStale
-                        ? fetchAllPages(`${SUPABASE_URL}/rest/v1/company_financials?exchange=eq.NSE&select=ticker,name,industry,market_cap_cr`)
-                            .then(rows => { _breadthCache.cfRows = rows; _breadthCache.cfRowsTime = Date.now(); return rows; })
-                        : Promise.resolve(_breadthCache.cfRows),
-                ]);
+
+                //  1) Chart time series  single table, already lightweight, unchanged 
+                const breadthRows = await fetch(
+                    `${SUPABASE_URL}/rest/v1/market_breadth?exchange=eq.${exchange}&date=gte.${from}&order=date.asc&limit=2000`,
+                    { headers: H, signal: sig }
+                ).then(r => r.json()).catch(() => []);
+
                 // Detect Supabase error response (returns {message, code, hint, details} instead of array)
                 const isBreadthError = !Array.isArray(breadthRows) || breadthRows?.code || breadthRows?.message;
                 const cleanData = (!isBreadthError && Array.isArray(breadthRows)) ? breadthRows.filter(r =>
@@ -17450,196 +17454,67 @@ function MarketBreadthModule({ T, onDataReady }) {
                 }
                 setLoading(false);
 
-                // Build maps from company_financials
+                //  2) Screens  a single server-side RPC does the joins, filtering,
+                //     ranking and sorting inside Postgres and returns only the top
+                //     p_limit rows per list (default 300  a buffer for the client
+                //     -side Nifty-500 filter, since the UI only ever shows 50).
+                const screensRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_breadth_screens`, {
+                    method: "POST",
+                    headers: { ...H, "Content-Type": "application/json" },
+                    signal: sig,
+                    body: JSON.stringify({ p_exchange: exchange, p_min_market_cap: 500, p_limit: 300 }),
+                }).then(r => r.json()).catch(e => ({ __error: e.message }));
+
+                const screensFailed = !screensRes || screensRes.__error || screensRes.code || screensRes.message;
+                if (screensFailed) {
+                    if (!hasStale) console.warn("[Breadth] get_breadth_screens RPC failed:", screensRes);
+                    else console.warn("[Breadth] Background screens refresh failed, keeping stale data:", screensRes);
+                    setTablesLoading(false);
+                    setRefreshing(false);
+                    return;
+                }
+
+                const {
+                    latestDate,
+                    top52wHigh: top52wHighRows = [],
+                    topRS: topRSRows = { rs3m: [], rs6m: [], rs12m: [] },
+                    rsRating: rsRatingRows = [],
+                    rsAcceleration: rsAccelerationRows = [],
+                    trendAligned: trendAlignedRows = [],
+                } = screensRes;
+
+                // Build ticker  name/industry maps from whatever rows came back.
+                // Cheap now: each list is capped at p_limit rows (not the full
+                // ~1,500-2,000 stock universe), so this is a tiny dedup pass.
                 const nameMapInit = {};
                 const industryMap = {};
-                const mcMap = {};
-                if (Array.isArray(cfRows)) {
-                    cfRows.forEach(r => {
-                        if (r?.ticker) {
-                            nameMapInit[r.ticker] = r.name || r.ticker;
-                            industryMap[r.ticker] = r.industry || "";
-                            // After (correct):
-                            mcMap[r.ticker] = r.market_cap_cr != null ? Number(r.market_cap_cr) : null;
-                        }
-                    });
-                }
-                // Override nameMap with names from bhav_copy (the authoritative display name)
-                try {
-                    const bhavLatestDate = latestRows?.[0]?.date || latestRsRows?.[0]?.date;
-                    if (bhavLatestDate) {
-                        const bhavNameUrl = `${SUPABASE_URL}/rest/v1/bhav_copy?select=ticker,name&date=eq.${bhavLatestDate}&exchange=eq.NSE&limit=5000`;
-                        const bhavNameRows = await fetch(bhavNameUrl, { headers: H, signal: sig }).then(r => r.ok ? r.json() : []).catch(() => []);
-                        if (Array.isArray(bhavNameRows)) {
-                            bhavNameRows.forEach(r => {
-                                if (r?.ticker && r?.name) {
-                                    nameMapInit[r.ticker] = r.name;
-                                }
-                            });
-                        }
-                    }
-                } catch (bhavErr) {
-                    console.warn("[Breadth] bhav_copy name fetch failed, using company_financials names:", bhavErr.message);
-                }
-                setNameMap(nameMapInit);
-                setIndustryMap(industryMap);
-                _breadthCache.nameMap = nameMapInit;
-                _breadthCache.industryMap = industryMap;
-
-                const hasIndustry = t => !!industryMap[t];
-                const latestDate = latestRows?.[0]?.date;
-                const latestRsDate = latestRsRows?.[0]?.date || latestDate;
-                if (!latestDate) { setTablesLoading(false); return; }
-                _breadthCache.latestDate = latestDate;
-
-                const indBase52w = `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&date=eq.${latestRsDate}&w52_high=not.is.null&sma200=not.is.null&select=ticker,w52_high,rs_3m,rs_6m,rs_12m,rs_rating,sma50,sma150,sma200,cap_category`;
-                const indBaseRS = `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&date=eq.${latestRsDate}&rs_3m=not.is.null&rs_6m=not.is.null&rs_12m=not.is.null&select=ticker,rs_3m,rs_6m,rs_12m,rs_rating,sma50,sma150,sma200,cap_category`;
-                const indBaseTrend = `${SUPABASE_URL}/rest/v1/indicators?exchange=eq.${exchange}&date=eq.${latestRsDate}&sma50=not.is.null&sma150=not.is.null&sma200=not.is.null&select=ticker,sma50,sma150,sma200,cap_category`;
-                const priceBase = `${SUPABASE_URL}/rest/v1/stock_prices_daily?exchange=eq.${exchange}&date=eq.${latestRsDate}&select=ticker,close`;
-                const returnsBase = `${SUPABASE_URL}/rest/v1/stock_returns?exchange=eq.${exchange}&select=ticker,ret_3m,ret_6m,ret_12m`;
-                const [indAllRows, rsRawRows, trendRawRows, allPriceRows, returnsRows, stock52wRows] = await Promise.all([
-                    fetchAllPages(indBase52w),
-                    fetchAllPages(indBaseRS),
-                    fetchAllPages(indBaseTrend),
-                    fetchAllPages(priceBase),
-                    fetchAllPages(returnsBase),
-                    fetchAllPages(`${SUPABASE_URL}/rest/v1/stock_52w?exchange=eq.${exchange}&select=ticker,close,high_52w,low_52w,pct_from_high,pct_from_low,sma50,sma200,volume,volume_ma20`),
-                ]);
-
-                const stock52wMap = {};
-                if (Array.isArray(stock52wRows)) {
-                    stock52wRows.forEach(r => {
-                        if (r?.ticker) stock52wMap[r.ticker] = {
-                            close: r.close != null ? Number(r.close) : null,
-                            pct_from_52w_high: r.pct_from_high != null ? -Number(r.pct_from_high) : null,
-                            pct_from_52w_low: r.pct_from_low != null ? Number(r.pct_from_low) : null,
-                            volume: r.volume != null ? Number(r.volume) : null,
-                            volume_20ma: r.volume_ma20 != null ? Number(r.volume_ma20) : null,
-                            sma50: r.sma50 != null ? Number(r.sma50) : null,
-                            sma200: r.sma200 != null ? Number(r.sma200) : null,
-                        };
-                    });
-                }
-
-                const priceMap = {};
-                if (Array.isArray(allPriceRows)) allPriceRows.forEach(p => { if (p?.ticker) priceMap[p.ticker] = p.close; });
-
-                const returnsMap = {};
-                if (Array.isArray(returnsRows)) {
-                    returnsRows.forEach(r => {
-                        if (r?.ticker) returnsMap[r.ticker] = {
-                            ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
-                            ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
-                            ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
-                        };
-                    });
-                }
-
-                const withReturns = row => ({
-                    ...row,
-                    close: stock52wMap[row.ticker]?.close ?? priceMap[row.ticker] ?? null,
-                    ret_3m: returnsMap[row.ticker]?.ret_3m ?? null,
-                    ret_6m: returnsMap[row.ticker]?.ret_6m ?? null,
-                    ret_12m: returnsMap[row.ticker]?.ret_12m ?? null,
-                    pct_from_52w_high: row.pct_from_52w_high ?? stock52wMap[row.ticker]?.pct_from_52w_high ?? null,
-                    pct_from_52w_low: stock52wMap[row.ticker]?.pct_from_52w_low ?? null,
-                    volume: stock52wMap[row.ticker]?.volume ?? null,
-                    volume_20ma: stock52wMap[row.ticker]?.volume_20ma ?? null,
-                    rel_volume: (() => {
-                        const vol = stock52wMap[row.ticker]?.volume ?? null;
-                        const ma = stock52wMap[row.ticker]?.volume_20ma ?? null;
-                        return (vol != null && ma != null && ma > 0) ? vol / ma : null;
-                    })(),
+                const allScreenRows = [
+                    ...top52wHighRows,
+                    ...topRSRows.rs3m, ...topRSRows.rs6m, ...topRSRows.rs12m,
+                    ...rsRatingRows, ...rsAccelerationRows, ...trendAlignedRows,
+                ];
+                allScreenRows.forEach(r => {
+                    if (!r?.ticker) return;
+                    if (r.name) nameMapInit[r.ticker] = r.name;
+                    if (r.industry) industryMap[r.ticker] = r.industry;
                 });
 
-                const filterRow = r => {
-                    if (!isEquity(r.ticker)) return false;
-                    // Don't hard-exclude if industry is simply missing from cfRows cache
-                    // (stale cache can cause valid stocks to be dropped)
-                    const mc = mcMap[r.ticker];
-                    if (mc != null && mc < 500) return false;  // only exclude if we *know* it's small
-                    if (r.rs_rating == null || r.rs_3m == null) return false;
-                    return true;
-                };
-
-                const indRows = indAllRows.filter(filterRow);
-                const rsAllFiltered = rsRawRows.filter(filterRow);
-
-                const rs3m = [...rsAllFiltered].sort((a, b) => b.rs_3m - a.rs_3m).map(withReturns);
-                const rs6m = [...rsAllFiltered].sort((a, b) => b.rs_6m - a.rs_6m).map(withReturns);
-                const rs12m = [...rsAllFiltered].sort((a, b) => b.rs_12m - a.rs_12m).map(withReturns);
-                setTopRS({ rs3m, rs6m, rs12m });
-                if (rs3m.length > 0) _breadthCache.topRS = { rs3m, rs6m, rs12m };
-                else _breadthCache.topRS = null;
-
-                const rsRatingRows = rsAllFiltered
-                    .filter(r => r.rs_rating != null && Number(r.rs_rating) > 0)
-                    .sort((a, b) => Number(b.rs_rating) - Number(a.rs_rating))
-                    .map(withReturns);
+                setNameMap(nameMapInit);
+                setIndustryMap(industryMap);
+                setTop52wHigh(top52wHighRows);
+                setTopRS(topRSRows);
                 setRsRating(rsRatingRows);
-                _breadthCache.rsRating = rsRatingRows;
-
-                const rsAccelerationRows = rsAllFiltered
-                    .filter(r => Number(r.rs_3m) > Number(r.rs_6m) && Number(r.rs_6m) > Number(r.rs_12m))
-                    .sort((a, b) => (Number(b.rs_3m) - Number(b.rs_6m)) - (Number(a.rs_3m) - Number(a.rs_6m)))
-                    .map(r => ({ ...withReturns(r), rs_acceleration: Number(r.rs_3m) - Number(r.rs_6m) }));
                 setRsAcceleration(rsAccelerationRows);
-                _breadthCache.rsAcceleration = rsAccelerationRows;
-
-                const trendAlignedRows = (Array.isArray(trendRawRows) ? trendRawRows : [])
-                    .filter(r => {
-                        if (!filterRow(r)) return false;
-                        const close = priceMap[r.ticker]; if (!close) return false;
-                        return Number(r.sma50) > Number(r.sma150) && Number(r.sma150) > Number(r.sma200) && close > Number(r.sma50);
-                    })
-                    .map(r => ({ ...r, close: priceMap[r.ticker], pct_above_sma50: ((priceMap[r.ticker] - Number(r.sma50)) / Number(r.sma50)) * 100 }))
-                    .map(withReturns)
-                    .sort((a, b) => b.pct_above_sma50 - a.pct_above_sma50);
                 setTrendAligned(trendAlignedRows);
+
+                _breadthCache.nameMap = nameMapInit;
+                _breadthCache.industryMap = industryMap;
+                _breadthCache.latestDate = latestDate;
+                _breadthCache.top52wHigh = top52wHighRows;
+                _breadthCache.topRS = topRSRows?.rs3m?.length ? topRSRows : null;
+                _breadthCache.rsRating = rsRatingRows;
+                _breadthCache.rsAcceleration = rsAccelerationRows;
                 _breadthCache.trendAligned = trendAlignedRows;
-
-                const rsMap = {};
-                if (Array.isArray(rsRawRows)) {
-                    rsRawRows.forEach(r => {
-                        if (r?.ticker) rsMap[r.ticker] = {
-                            rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
-                            rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
-                            rs_12m: r.rs_12m != null ? Number(r.rs_12m) : null,
-                            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
-                            sma50: r.sma50 != null ? Number(r.sma50) : null,
-                            sma150: r.sma150 != null ? Number(r.sma150) : null,
-                            sma200: r.sma200 != null ? Number(r.sma200) : null,
-                        };
-                    });
-                }
-
-                const withProximity = indRows
-                    .map(row => {
-                        const s52 = stock52wMap[row.ticker];
-                        const rs = rsMap[row.ticker] || {};
-                        const pct = s52?.pct_from_52w_high != null
-                            ? s52.pct_from_52w_high
-                            : (() => {
-                                const close = s52?.close ?? priceMap[row.ticker];
-                                return close && row.w52_high ? ((row.w52_high - close) / row.w52_high) * 100 : null;
-                            })();
-                        return withReturns({
-                            ...row,
-                            rs_3m: row.rs_3m ?? rs.rs_3m ?? null,
-                            rs_6m: row.rs_6m ?? rs.rs_6m ?? null,
-                            rs_12m: row.rs_12m ?? rs.rs_12m ?? null,
-                            rs_rating: row.rs_rating ?? rs.rs_rating ?? null,
-                            sma50: row.sma50 ?? rs.sma50 ?? null,
-                            sma150: row.sma150 ?? rs.sma150 ?? null,
-                            sma200: row.sma200 ?? rs.sma200 ?? null,
-                            pct_from_52w_high: pct,
-                        });
-                    })
-                    .filter(r => r.pct_from_52w_high !== null && r.pct_from_52w_high > 0.05)
-                    .sort((a, b) => a.pct_from_52w_high - b.pct_from_52w_high);
-
-                setTop52wHigh(withProximity);
-                _breadthCache.top52wHigh = withProximity;
                 _breadthCache.loadedAt = Date.now();
 
                 // Only persist to localStorage when we actually have data  never write empty cache
@@ -17647,20 +17522,20 @@ function MarketBreadthModule({ T, onDataReady }) {
                     _lsWrite(_LS_BREADTH_KEY, {
                         data: _breadthCache.data,
                         range: _breadthCache.range,
-                        top52wHigh: withProximity,
+                        top52wHigh: top52wHighRows,
                         topRS: _breadthCache.topRS,
-                        rsRating: _breadthCache.rsRating,
-                        rsAcceleration: _breadthCache.rsAcceleration,
-                        trendAligned: _breadthCache.trendAligned,
-                        nameMap: _breadthCache.nameMap,
-                        industryMap: _breadthCache.industryMap,
+                        rsRating: rsRatingRows,
+                        rsAcceleration: rsAccelerationRows,
+                        trendAligned: trendAlignedRows,
+                        nameMap: nameMapInit,
+                        industryMap: industryMap,
                         loadedAt: _breadthCache.loadedAt,
                     });
                 }
 
                 if (onDataReady) onDataReady({
-                    top52wHigh: withProximity,
-                    topRS: { rs3m, rs6m, rs12m },
+                    top52wHigh: top52wHighRows,
+                    topRS: topRSRows,
                     trendAligned: trendAlignedRows,
                     rsRating: rsRatingRows,
                     rsAcceleration: rsAccelerationRows,
@@ -17681,6 +17556,7 @@ function MarketBreadthModule({ T, onDataReady }) {
         load();
         return () => abortCtrl.abort();
     }, [exchange, range, refreshTick]);
+
 
     //  Chart configs 
     // Single consistent color per indicator  no rainbow
@@ -18094,7 +17970,6 @@ function MarketBreadthModule({ T, onDataReady }) {
     );
 
 }
-
 /*  Design tokens (dark & light)  Premium Redesign  */
 const DT = {
     bg: "#080c12",
@@ -21807,6 +21682,29 @@ function getSignalConfidence(signal) {
     return { val, label, color };
 }
 
+/* ============================================================================
+ * REVISED: SectorRotationModule
+ * ----------------------------------------------------------------------------
+ * Finding: unlike the Ownership/Breadth pages, the RRG math here (SMA,
+ * momentum, velocity, opportunity score in computeForLookback/buildTrails)
+ * is NOT the bottleneck  it runs on ~24 sectors x ~280 daily points and
+ * completes in well under a millisecond. There's nothing worth moving to
+ * the backend on the calculation side.
+ *
+ * The real slowness was an N+1 network pattern: the original code fired
+ * one `sector_rs` fetch PER sector (~24 parallel requests, repeated on
+ * every 5-min auto-refresh). Browsers cap concurrent connections per
+ * origin, so these queue instead of running truly in parallel  that
+ * queuing, not JS compute, is what made the tab feel slow to load.
+ *
+ * Fix: a single `sector=in.(...)` query fetches all sectors' RS history
+ * in one round trip (paginated defensively via Range/count in case the
+ * project's PostgREST max-rows setting is below the ~6-7k rows this can
+ * return). In practice this is 1-2 requests instead of 25. Everything
+ * downstream (computeForLookback, buildTrails, timeframe switching,
+ * rendering) is unchanged.
+ * ============================================================================ */
+
 function SectorRotationModule({ T }) {
     const isDark = T.bg === "#0f1117" || T.bg === "#13151a" || T.bg?.startsWith("#0") || T.bg?.startsWith("#1");
     const { subtext, text, bg, green } = T;
@@ -22008,14 +21906,43 @@ function SectorRotationModule({ T }) {
                 const RH = { ...H, "Cache-Control": "max-age=300" };
                 const knownSectors = Object.keys(SECTOR_GROUPS).filter(k => !k.startsWith("nifty_"));
 
-                const [snapRes, ...sectorResults] = await Promise.all([
+                // Was: one fetch PER sector (~24 parallel HTTP round trips every load
+                // and every 5-min auto-refresh). The RRG math itself (SMA/momentum/
+                // velocity in computeForLookback/buildTrails) is cheap  it runs on
+                // ~24 sectors x ~280 points and finishes in well under a millisecond,
+                // so there's nothing worth moving to the backend there. The actual
+                // slowness is network overhead: the browser can only run a handful of
+                // connections to the same origin at once, so 24 requests queue up
+                // instead of running truly in parallel.
+                //
+                // Fix: one query for ALL sectors' RS history (sector=in.(...) instead
+                // of 24x sector=eq.X), paginated defensively in case the project's
+                // PostgREST max-rows setting is below the ~6-7k rows this can return
+                // for 24 sectors x 280 days. In practice this resolves to 1-2 requests
+                // total instead of 25.
+                const sectorInFilter = `sector=in.(${knownSectors.map(encodeURIComponent).join(",")})`;
+                const fetchAllSectorRS = async () => {
+                    const PAGE = 1000;
+                    const base = `${SUPABASE_URL}/rest/v1/sector_rs?select=date,sector,rs&${sectorInFilter}&date=gte.${sinceStr}&order=date.asc`;
+                    const pageHeaders = { ...RH, Prefer: "count=exact" };
+                    const firstRes = await fetch(`${base}&limit=${PAGE}&offset=0`, { headers: pageHeaders });
+                    if (!firstRes.ok) return [];
+                    const total = parseInt(firstRes.headers.get("content-range")?.split("/")[1] || "0", 10);
+                    const firstPage = await firstRes.json();
+                    const offsets = [];
+                    for (let o = PAGE; o < total; o += PAGE) offsets.push(o);
+                    const restPages = await Promise.all(
+                        offsets.map(o =>
+                            fetch(`${base}&limit=${PAGE}&offset=${o}`, { headers: pageHeaders })
+                                .then(r => r.ok ? r.json() : []).catch(() => [])
+                        )
+                    );
+                    return [firstPage, ...restPages].flat().filter(Boolean);
+                };
+
+                const [snapRes, sectorRows] = await Promise.all([
                     fetch(`${SUPABASE_URL}/rest/v1/sector_rotation_snapshot?select=*&order=sector.asc`, { headers: RH }),
-                    ...knownSectors.map(sector =>
-                        fetch(
-                            `${SUPABASE_URL}/rest/v1/sector_rs?select=date,sector,rs&sector=eq.${encodeURIComponent(sector)}&date=gte.${sinceStr}&order=date.asc`,
-                            { headers: RH }
-                        ).then(r => r.ok ? r.json() : []).catch(() => [])
-                    ),
+                    fetchAllSectorRS(),
                 ]);
 
                 if (!snapRes.ok) throw new Error(`HTTP ${snapRes.status}`);
@@ -22049,14 +21976,11 @@ function SectorRotationModule({ T }) {
                 });
 
                 const rawHist = {};
-                sectorResults.forEach(rows => {
-                    if (!Array.isArray(rows)) return;
-                    rows.forEach(row => {
-                        const rs = parseFloat(row.rs);
-                        if (!isFinite(rs) || rs <= 0) return;
-                        if (!rawHist[row.sector]) rawHist[row.sector] = [];
-                        rawHist[row.sector].push({ date: row.date, rs });
-                    });
+                (Array.isArray(sectorRows) ? sectorRows : []).forEach(row => {
+                    const rs = parseFloat(row.rs);
+                    if (!isFinite(rs) || rs <= 0) return;
+                    if (!rawHist[row.sector]) rawHist[row.sector] = [];
+                    rawHist[row.sector].push({ date: row.date, rs });
                 });
 
                 const counts = Object.entries(rawHist).map(([s, pts]) => `${s}:${pts.length}`).join(", ");
@@ -23193,13 +23117,6 @@ function SectorRotationModule({ T }) {
         </div>
     );
 }
-
-
-
-
-
-
-
 
 
 
