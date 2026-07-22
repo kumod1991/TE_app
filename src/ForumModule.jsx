@@ -1,9 +1,11 @@
 /*
 ===============================================================
-  ForumModule.jsx — TradeEdge Investor Community (v2)
-  Premium redesign: conviction system, sidebars, sentiment,
-  structured thesis format, author credibility, gamification.
-  All sub-components inline. Supabase realtime enabled.
+  ForumModule.jsx — TradeEdge Investor Community (v3)
+  Visual redesign pass: premium financial-terminal aesthetic
+  (Apple × Linear × Notion × Bloomberg × Stripe). Conviction
+  system, sidebars, sentiment, structured thesis format, author
+  credibility, gamification — all business logic and data flow
+  unchanged. All sub-components inline. Supabase realtime enabled.
 ===============================================================
 */
 
@@ -101,6 +103,46 @@ function useToast() {
   }, []);
   return { toasts, addToast };
 }
+
+// ─── Design System Tokens ──────────────────────────────────────────────────
+// Shared radius / motion / elevation scale so every surface in the module
+// (cards, modals, chips, inputs) reads as one coherent system rather than
+// per-component guesswork. Elevation reuses T.shadow (already tuned per
+// light/dark theme by the host app) at increasing blur so panels feel
+// layered without introducing a competing shadow color.
+const R = { xs: 6, sm: 8, md: 10, lg: 14, xl: 18, xxl: 24, pill: 999 };
+const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+const MOTION = { fast: `150ms ${EASE}`, base: `200ms ${EASE}`, slow: `260ms ${EASE}` };
+function elevate(T, level = 1) {
+  if (level === 3) return `0 20px 48px ${T.shadow}, 0 2px 6px ${T.shadow}`;
+  if (level === 2) return `0 8px 24px ${T.shadow}`;
+  return `0 1px 3px ${T.shadow}`;
+}
+// Injected once at module root — focus rings, scrollbars, shared keyframes.
+const GLOBAL_CSS = `
+  .te-forum * { box-sizing: border-box; }
+  .te-forum ::selection { background: rgba(96,165,250,0.28); }
+  .te-forum button, .te-forum input, .te-forum textarea, .te-forum select { font-family: inherit; }
+  .te-forum button:focus-visible, .te-forum input:focus-visible, .te-forum textarea:focus-visible, .te-forum select:focus-visible, .te-forum [tabindex]:focus-visible {
+    outline: 2px solid var(--te-focus, #60a5fa); outline-offset: 2px; border-radius: 6px;
+  }
+  .te-forum ::-webkit-scrollbar { width: 9px; height: 9px; }
+  .te-forum ::-webkit-scrollbar-track { background: transparent; }
+  .te-forum ::-webkit-scrollbar-thumb { background: var(--te-scroll, rgba(148,163,184,0.35)); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+  .te-forum ::-webkit-scrollbar-thumb:hover { background: var(--te-scroll-hover, rgba(148,163,184,0.55)); background-clip: content-box; }
+  .te-fade-up { animation: teFadeUp 260ms cubic-bezier(0.16,1,0.3,1) both; }
+  .te-fade-in { animation: teFadeIn 200ms ease both; }
+  .te-scale-in { animation: teScaleIn 180ms cubic-bezier(0.16,1,0.3,1) both; }
+  @keyframes teFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes teFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes teScaleIn { from { opacity: 0; transform: scale(0.97) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  @keyframes teShimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+  @keyframes teSlideInBottom { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes tePulseRing { 0% { box-shadow: 0 0 0 0 var(--te-pulse, rgba(96,165,250,0.35)); } 100% { box-shadow: 0 0 0 8px rgba(96,165,250,0); } }
+  @media (prefers-reduced-motion: reduce) {
+    .te-forum, .te-forum * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+`;
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -228,9 +270,9 @@ function Avatar({ name, size = 32, T, url }) {
   const initials = (name || "?").split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
   const palette = ["#2563eb", "#059669", "#7c3aed", "#db2777", "#d97706", "#0891b2", "#dc2626", "#0d9488"];
   const color = palette[(name || "").charCodeAt(0) % palette.length];
-  if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
+  if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `1px solid ${T ? withAlpha(T.text, 0.08) : "transparent"}` }} />;
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: `linear-gradient(135deg, ${color}, ${color}cc)`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: size * 0.38, fontWeight: 800, flexShrink: 0, userSelect: "none", border: `1.5px solid ${color}44` }}>
+    <div style={{ width: size, height: size, borderRadius: "50%", background: `linear-gradient(135deg, ${color}, ${color}cc)`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: size * 0.36, fontWeight: 700, letterSpacing: "-0.02em", flexShrink: 0, userSelect: "none", boxShadow: `0 0 0 1.5px ${withAlpha(color, 0.35)}` }}>
       {initials}
     </div>
   );
@@ -254,6 +296,27 @@ const ICON_PATHS = {
   bookmark:  <path d="M4,2 H12 V14 L8,11.2 L4,14 Z" />,
   pin:       <><path d="M9.5,2 L14,6.5 L11,9.5 L11,13.6 L9.6,12.2 L6.2,15.6 L5.2,14.6 L8.6,11.2 L7.2,9.8 L3.2,9.8 L6.5,6.5 Z" /></>,
   chevronRight: <polyline points="6,3 11,8 6,13" />,
+  chevronDown:  <polyline points="3,6 8,11 13,6" />,
+  search:    <><circle cx="7" cy="7" r="4.6" /><line x1="10.3" y1="10.3" x2="14.2" y2="14.2" /></>,
+  flame:     <path d="M8,1.3 C6.5,4 4.5,5 4.5,8 C4.5,10.5 6,12.6 8,12.6 C10,12.6 11.5,10.9 11.5,8.9 C11.5,7.6 10.9,7 10.4,6.4 C10.4,7.6 9.7,8.2 9.1,8.2 C9.6,6.9 9.2,5.4 8,4.1 C8.2,5.3 7.7,6 7.1,6.6 C6.4,7.3 6,7.9 6,8.9 C6,9.9 6.7,10.7 7.6,10.9 C6.9,10.3 6.7,9.6 6.9,8.9 C7.1,9.3 7.5,9.6 8,9.6 C8.7,9.6 9.2,9.1 9.2,8.4 C9.2,7.4 8,6.8 8,1.3 Z" />,
+  bolt:      <polyline points="9,1.3 3.3,9 7.3,9 6.3,14.7 12.7,6.5 8.5,6.5" />,
+  folder:    <path d="M1.7,3.7 H6 L7.5,5.5 H14.3 V12.3 H1.7 Z" />,
+  image:     <><rect x="1.7" y="2.7" width="12.6" height="10.6" rx="1.6" /><circle cx="5.4" cy="6.3" r="1.15" /><path d="M2.3,11.8 L6.2,7.9 L8.6,10.3 L10.6,8.3 L13.7,11.4" /></>,
+  video:     <><rect x="1.7" y="3.7" width="8.6" height="8.6" rx="1.4" /><path d="M10.3,6.4 L14.3,4.3 V11.7 L10.3,9.6 Z" /></>,
+  doc:       <><path d="M4,1.7 H9.6 L12.3,4.4 V14.3 H4 Z" /><path d="M9.6,1.7 V4.4 H12.3" /><line x1="6" y1="8" x2="10.3" y2="8" /><line x1="6" y1="10.6" x2="10.3" y2="10.6" /></>,
+  close:     <><line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" /></>,
+  check:     <polyline points="3.3,8.5 6.3,11.5 12.7,4.5" />,
+  edit:      <><path d="M10.4,2.3 L13.7,5.6 L5.5,13.8 L1.9,14.1 L2.2,10.5 Z" /><line x1="9" y1="3.7" x2="12.3" y2="7" /></>,
+  trash:     <><path d="M3,4.6 H13 M6.3,4.6 V2.9 H9.7 V4.6 M4.3,4.6 L4.9,13.1 H11.1 L11.7,4.6" /><line x1="8" y1="7" x2="8" y2="11" /></>,
+  send:      <path d="M1.6,8 L14.4,1.7 L10.5,14.3 L7.7,9.1 Z M14.4,1.7 L7.7,9.1" />,
+  bulb:      <><path d="M5.2,10.6 C4.1,9.7 3.4,8.4 3.4,6.9 C3.4,4.3 5.5,2.2 8,2.2 C10.5,2.2 12.6,4.3 12.6,6.9 C12.6,8.4 11.9,9.7 10.8,10.6 V12.4 H5.2 Z" /><line x1="5.6" y1="14" x2="10.4" y2="14" /></>,
+  rocket:    <><path d="M8,1.7 C10.3,3 11.6,5.6 11.3,9.1 L8,11.3 L4.7,9.1 C4.4,5.6 5.7,3 8,1.7 Z" /><circle cx="8" cy="6.6" r="1.3" /><path d="M4.7,9.1 L2.9,10.4 L3.6,7.4 M11.3,9.1 L13.1,10.4 L12.4,7.4" /><path d="M6.2,11.6 L6.2,14 L8,12.7 L9.8,14 L9.8,11.6" /></>,
+  inbox:     <><path d="M1.7,9 H5.3 L6.4,10.8 H9.6 L10.7,9 H14.3" /><path d="M1.7,9 L3.2,2.6 H12.8 L14.3,9 V13 H1.7 Z" /></>,
+  reply:     <path d="M6.5,3.5 L2.3,7.7 L6.5,11.9 M2.3,7.7 H9.6 C12.1,7.7 13.7,9.6 13.7,12.1" />,
+  plus:      <><line x1="8" y1="2.8" x2="8" y2="13.2" /><line x1="2.8" y1="8" x2="13.2" y2="8" /></>,
+  paperclip: <path d="M11.3,4.6 L5.6,10.3 C4.6,11.3 4.6,12.9 5.6,13.9 C6.6,14.9 8.2,14.9 9.2,13.9 L14,9.1 C15.5,7.6 15.5,5.1 14,3.6 C12.5,2.1 10,2.1 8.5,3.6 L3.1,9 C1,11.1 1,14.4 3.1,16.4" />,
+  more:      <><circle cx="4" cy="8" r="1.1" fill="currentColor" stroke="none" /><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none" /><circle cx="12" cy="8" r="1.1" fill="currentColor" stroke="none" /></>,
+  filter:    <path d="M2,3 H14 L9.6,8.3 V13 L6.4,11.4 V8.3 Z" />,
 };
 function Icon({ name, size = 13, color = "currentColor", strokeWidth = 1.7, filled = false }) {
   const body = ICON_PATHS[name];
@@ -276,13 +339,13 @@ function TickerBadge({ ticker, size = "sm", onTickerClick, T }) {
       onClick={onTickerClick && ticker ? (e) => { e.stopPropagation(); onTickerClick(ticker); } : undefined}
       style={{
         display: "inline-flex", alignItems: "center", gap: 5,
-        background: T.accentFill, border: `1px solid ${withAlpha(T.accent, 0.2)}`,
-        borderRadius: 6, padding: isLg ? "5px 12px" : "3px 8px",
+        background: T.accentFill, border: `1px solid ${withAlpha(T.accent, 0.22)}`,
+        borderRadius: R.xs, padding: isLg ? "6px 13px" : "3px 8px",
         cursor: onTickerClick ? "pointer" : "default", flexShrink: 0,
-        transition: "all 0.15s",
+        transition: `transform ${MOTION.fast}, background ${MOTION.fast}, box-shadow ${MOTION.fast}`,
       }}
-      onMouseEnter={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "scale(1.04)", background: withAlpha(T.accent, 0.15) })}
-      onMouseLeave={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "scale(1)", background: T.accentFill })}
+      onMouseEnter={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "translateY(-1px)", background: withAlpha(T.accent, 0.16), boxShadow: `0 3px 10px ${withAlpha(T.accent, 0.18)}` })}
+      onMouseLeave={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "translateY(0)", background: T.accentFill, boxShadow: "none" })}
     >
       <span style={{ fontSize: isLg ? 13 : 11, fontWeight: 800, color: T.accent, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{ticker}</span>
       {pct != null && <span style={{ fontSize: isLg ? 12 : 10, color: isPos ? T.green : T.red, fontWeight: 700 }}>{isPos ? "+" : ""}{pct.toFixed(2)}%</span>}
@@ -294,10 +357,10 @@ function ConvictionBadge({ conviction, T, compact = false }) {
   const meta = CONVICTION_META[conviction] || CONVICTION_META.low;
   const abbrev = { low: "LOW", medium: "MED", high: "HIGH" }[conviction] || "LOW";
   return (
-    <div title={meta.label} style={{ display: "flex", alignItems: "center", gap: 6, background: T.mutedFill, borderRadius: 5, padding: compact ? "2px 6px" : "3px 8px 3px 7px", border: `1px solid ${T.border}` }}>
-      <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, letterSpacing: "0.05em" }}>{abbrev}</span>
+    <div title={meta.label} style={{ display: "flex", alignItems: "center", gap: 6, background: T.mutedFill, borderRadius: R.xs, padding: compact ? "3px 7px" : "4px 9px 4px 8px", border: `1px solid ${T.border}` }}>
+      <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, letterSpacing: "0.06em" }}>{abbrev}</span>
       <div style={{ width: 26, height: 4, borderRadius: 2, background: withAlpha(T.text, 0.1), overflow: "hidden" }}>
-        <div style={{ width: `${meta.score}%`, height: "100%", background: meta.color, borderRadius: 2 }} />
+        <div style={{ width: `${meta.score}%`, height: "100%", background: meta.color, borderRadius: 2, transition: `width ${MOTION.slow}` }} />
       </div>
       <span style={{ fontSize: 9, fontWeight: 800, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{meta.score}</span>
     </div>
@@ -307,7 +370,7 @@ function ConvictionBadge({ conviction, T, compact = false }) {
 function LevelBadge({ level, T }) {
   const meta = LEVEL_META[level] || LEVEL_META.Beginner;
   return (
-    <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, background: withAlpha(meta.color, 0.1), padding: "2px 7px", borderRadius: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+    <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, background: withAlpha(meta.color, 0.1), padding: "3px 8px", borderRadius: R.xs, letterSpacing: "0.05em", textTransform: "uppercase" }}>
       {level || "Beginner"}
     </span>
   );
@@ -319,7 +382,7 @@ function ThesisTypeBadge({ type, T, compact = false }) {
   const bg = meta ? meta.bg : withAlpha(T.accent, 0.08);
   const iconName = THESIS_ICON[type];
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color, background: bg, padding: compact ? "2px 6px" : "2px 7px", borderRadius: 4, letterSpacing: "0.04em", border: `1px solid ${withAlpha(color, 0.22)}` }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color, background: bg, padding: compact ? "3px 7px" : "3px 8px", borderRadius: R.xs, letterSpacing: "0.05em", border: `1px solid ${withAlpha(color, 0.24)}` }}>
       {iconName && <Icon name={iconName} size={10} color={color} strokeWidth={2} />}
       {type}
     </span>
@@ -333,11 +396,11 @@ function SentimentBar({ bullish = 0, bearish = 0, T }) {
   const bearPct = 100 - bullPct;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 11, fontWeight: 800, color: T.green, fontFamily: "'IBM Plex Mono', monospace" }}>🟢 {bullPct}%</span>
-      <div style={{ flex: 1, height: 4, borderRadius: 4, overflow: "hidden", background: withAlpha(T.red, 0.2), minWidth: 60 }}>
-        <div style={{ width: `${bullPct}%`, height: "100%", background: `linear-gradient(90deg, ${T.green}, ${withAlpha(T.green, 0.7)})`, borderRadius: 4, transition: "width 0.4s ease" }} />
+      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 800, color: T.green, fontFamily: "'IBM Plex Mono', monospace" }}><Icon name="trendUp" size={10} color={T.green} strokeWidth={2.2} />{bullPct}%</span>
+      <div style={{ flex: 1, height: 5, borderRadius: 4, overflow: "hidden", background: withAlpha(T.red, 0.18), minWidth: 60 }}>
+        <div style={{ width: `${bullPct}%`, height: "100%", background: `linear-gradient(90deg, ${withAlpha(T.green,0.75)}, ${T.green})`, borderRadius: 4, transition: `width ${MOTION.slow}` }} />
       </div>
-      <span style={{ fontSize: 11, fontWeight: 800, color: T.red, fontFamily: "'IBM Plex Mono', monospace" }}>🔴 {bearPct}%</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 800, color: T.red, fontFamily: "'IBM Plex Mono', monospace" }}>{bearPct}%<Icon name="trendDown" size={10} color={T.red} strokeWidth={2.2} /></span>
     </div>
   );
 }

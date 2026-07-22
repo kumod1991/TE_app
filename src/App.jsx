@@ -2986,8 +2986,11 @@ function TradeModal({ trade, onClose, onSave, T }) {
         if (bq > 0 && sq > bq) setSellQtyErr(`Cannot sell more than available qty (${bq})`);
         else setSellQtyErr("");
     };
-    const buyAmt = (parseFloat(form.buy_qty) || 0) * (parseFloat(form.buy_price) || 0);
-    const sellAmt = (parseFloat(form.sell_qty) || 0) * (parseFloat(form.sell_price) || 0);
+    // Cost basis must match the qty actually being sold (partial-sell aware),
+    // not the full original buy_qty of the open position.
+    const sellQtyForPnl = parseFloat(form.sell_qty) || 0;
+    const buyAmt = sellQtyForPnl * (parseFloat(form.buy_price) || 0);
+    const sellAmt = sellQtyForPnl * (parseFloat(form.sell_price) || 0);
     const pnl = form.exit_date && sellAmt > 0 ? sellAmt - buyAmt : null;
 
     //  Ticker autocomplete 
@@ -26408,6 +26411,11 @@ export default function App() {
             sell_price: null,
         } : null;
 
+        // PostgREST returns a plain error object (with a `message`/`code`/`hint`)
+        // instead of throwing, so a failed insert/update looks identical to success
+        // unless we explicitly check the shape of the response.
+        const dbErr = (res) => (res && !Array.isArray(res) && (res.message || res.code || res.error)) ? res : null;
+
         if (isDemo) {
             if (modal.mode === "add") {
                 const newTrades = [{ ...closedData, id: Date.now() }];
@@ -26425,12 +26433,48 @@ export default function App() {
             const db = await supabase.db("trades", session.access_token);
             if (modal.mode === "add") {
                 const res = await db.insert({ ...closedData, user_id: session.user?.id });
-                if (remainderData) await db.insert({ ...remainderData, user_id: session.user?.id });
-                if (!remainderData && Array.isArray(res)) setTrades(t => [...t, ...res]);
-                else loadTrades(session);
+                const err1 = dbErr(res);
+                if (err1) { alert(`Failed to save trade: ${err1.message || err1.error || "unknown error"}`); return; }
+
+                let remainderRes = null;
+                if (remainderData) {
+                    remainderRes = await db.insert({ ...remainderData, user_id: session.user?.id });
+                    const err2 = dbErr(remainderRes);
+                    if (err2) {
+                        alert(`Trade was saved, but creating the open remainder position (${remainderData.buy_qty} qty) failed: ${err2.message || err2.error || "unknown error"}. Please add it manually.`);
+                    }
+                }
+
+                // Optimistic local update so the split is visible immediately,
+                // plus a background reload to stay in sync with the server.
+                setTrades(t => [
+                    ...t,
+                    ...(Array.isArray(res) ? res : []),
+                    ...(Array.isArray(remainderRes) ? remainderRes : []),
+                ]);
+                loadTrades(session);
             } else {
-                await db.update(modal.trade.id, closedData);
-                if (remainderData) await db.insert({ ...remainderData, user_id: session.user?.id });
+                const updRes = await db.update(modal.trade.id, closedData);
+                const err1 = dbErr(updRes);
+                if (err1) { alert(`Failed to update trade: ${err1.message || err1.error || "unknown error"}`); return; }
+
+                let remainderRes = null;
+                if (remainderData) {
+                    remainderRes = await db.insert({ ...remainderData, user_id: session.user?.id });
+                    const err2 = dbErr(remainderRes);
+                    if (err2) {
+                        alert(`Sell was recorded, but creating the open remainder position (${remainderData.buy_qty} qty) failed: ${err2.message || err2.error || "unknown error"}. Please add it manually.`);
+                    }
+                }
+
+                // Optimistic local update: replace the original row with the closed
+                // portion, and append the new open remainder row if the insert worked.
+                setTrades(t => {
+                    const updatedRow = Array.isArray(updRes) && updRes[0] ? updRes[0] : { ...closedData, id: modal.trade.id };
+                    const updated = t.map(tr => tr.id === modal.trade.id ? updatedRow : tr);
+                    if (Array.isArray(remainderRes) && remainderRes[0]) return [...updated, remainderRes[0]];
+                    return updated;
+                });
                 loadTrades(session);
             }
         }
