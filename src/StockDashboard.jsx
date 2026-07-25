@@ -3256,37 +3256,42 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
                 });
                 const allowedSet = await ensureAllowedTickerSet();
-                const cached = cacheGet(pagePath, VOLUME_SHOCKERS_TTL);
-                let vsData = null;
-                if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
-                    vsData = cached.data;
-                    if (cancelled) return;
-                    setVolumeShockers(vsData.map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
-                    setVolumeShockersHasMore(vsData.length >= VOLUME_SHOCKERS_BATCH_SIZE);
-                    volumeShockersOffsetRef.current = vsData.length;
-                } else {
-                    vsData = await sbFetch(pagePath, userToken, {
-                        ttl: VOLUME_SHOCKERS_TTL,
-                    });
-                    if (cancelled) return;
-                    setVolumeShockers((vsData || []).map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
-                    setVolumeShockersHasMore((vsData || []).length >= VOLUME_SHOCKERS_BATCH_SIZE);
-                    volumeShockersOffsetRef.current = (vsData || []).length;
-                    cacheSet(pagePath, vsData || [], VOLUME_SHOCKERS_TTL);
-                }
+                const applyFilter = rows => (rows || []).map(mapRow).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet));
 
-                try {
-                    const allTickers = [...new Set((vsData || []).map(r => r.ticker).filter(Boolean))];
-                    const missingTickers = allTickers.filter(t => !_nameMap.has(t));
-                    if (missingTickers.length) {
-                        const nameRows = await batchFetchBhavNames(missingTickers, userToken);
-                        if (nameRows.length && !cancelled) {
-                            setVolumeShockers(prev => applyNamesFromMap(prev).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
+                const enrichNames = async rows => {
+                    try {
+                        const allTickers = [...new Set((rows || []).map(r => r.ticker).filter(Boolean))];
+                        const missingTickers = allTickers.filter(t => !_nameMap.has(t));
+                        if (missingTickers.length) {
+                            const nameRows = await batchFetchBhavNames(missingTickers, userToken);
+                            if (nameRows.length && !cancelled) {
+                                setVolumeShockers(prev => applyNamesFromMap(prev).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet)));
+                            }
                         }
+                    } catch (nameErr) {
+                        console.warn("Could not enrich volume shocker names from bhav_copy:", nameErr.message);
                     }
-                } catch (nameErr) {
-                    console.warn("Could not enrich volume shocker names from bhav_copy:", nameErr.message);
-                }
+                };
+
+                const vsData = await sbFetch(pagePath, userToken, {
+                    ttl: VOLUME_SHOCKERS_TTL,
+                    // Stale cache is returned instantly above, but this fires a
+                    // background refetch and pushes the fresh DB rows into state
+                    // once they land — otherwise a stale localStorage snapshot
+                    // could be shown indefinitely even after the DB updates.
+                    onStale: fresh => {
+                        if (cancelled) return;
+                        setVolumeShockers(applyFilter(fresh));
+                        setVolumeShockersHasMore((fresh || []).length >= VOLUME_SHOCKERS_BATCH_SIZE);
+                        volumeShockersOffsetRef.current = (fresh || []).length;
+                        enrichNames(fresh);
+                    },
+                });
+                if (cancelled) return;
+                setVolumeShockers(applyFilter(vsData));
+                setVolumeShockersHasMore((vsData || []).length >= VOLUME_SHOCKERS_BATCH_SIZE);
+                volumeShockersOffsetRef.current = (vsData || []).length;
+                await enrichNames(vsData);
             } catch (err) {
                 if (!cancelled) console.error("Error fetching volume shockers:", err);
             } finally {
