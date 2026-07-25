@@ -2631,7 +2631,7 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
                         );
                     })}
                 </div>
-                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
             </>
         );
     }
