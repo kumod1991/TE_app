@@ -3197,7 +3197,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
       </div>
 
       {/* Feed Body */}
-      <div ref={scrollRef} style={{ flex:1, overflowY:"auto" }}>
+      <div ref={scrollRef} style={{ flex:1, overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain" }}>
         {loading ? (
           <div style={{ padding:"28px 14px", display:"flex", flexDirection:"column", gap:12 }}>
             {[80,60,90,70,50].map((w,i)=>(
@@ -3508,7 +3508,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
       </div>
 
       {/* Body */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {loading ? (
           <div style={{ padding: "24px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
             {[70, 90, 60, 80, 75, 55].map((w, i) => (
@@ -3630,7 +3630,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
             })}
 
             {grouped.hasMore && (
-              <div style={{ padding: "12px 16px 16px", borderTop: `1px solid ${T.border}` }}>
+              <div style={{ padding: isMobile ? "12px 16px calc(20px + env(safe-area-inset-bottom, 0px))" : "12px 16px 16px", borderTop: `1px solid ${T.border}` }}>
                 <button
                   onClick={() => setVisibleCount(c => c + 30)}
                   style={{ width: "100%", padding: "7px 0", background: "transparent",
