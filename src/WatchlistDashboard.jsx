@@ -2928,7 +2928,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     <div style={{
                       position:"fixed", left:0, right:0, bottom:0, zIndex:220,
                       background:T.surface, borderTop:`1px solid ${T.border}`,
-                      borderRadius:"20px 20px 0 0", height:"82vh",
+                      borderRadius:"20px 20px 0 0", height:"82dvh", maxHeight:"82dvh",
                       display:"flex", flexDirection:"column", overflow:"hidden",
                       animation:"slideInBottom 0.25s cubic-bezier(0.32,0.72,0,1)",
                       paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -2971,7 +2971,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     <div style={{
                       position:"fixed", left:0, right:0, bottom:0, zIndex:220,
                       background:T.surface, borderTop:`1px solid ${T.border}`,
-                      borderRadius:"20px 20px 0 0", height:"82vh",
+                      borderRadius:"20px 20px 0 0", height:"82dvh", maxHeight:"82dvh",
                       display:"flex", flexDirection:"column", overflow:"hidden",
                       animation:"slideInBottom 0.25s cubic-bezier(0.32,0.72,0,1)",
                       paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -3273,7 +3273,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
 
             {/* Show More button */}
             {grouped.hasMore && (
-              <div style={{ padding:"12px 16px 16px", borderTop:`1px solid ${T.border}` }}>
+              <div style={{ padding: isMobile ? "12px 16px calc(20px + env(safe-area-inset-bottom, 0px))" : "12px 16px 16px", borderTop:`1px solid ${T.border}` }}>
                 <button
                   onClick={() => setVisibleCount(c => c + FEED_PAGE_SIZE)}
                   style={{
