@@ -2823,18 +2823,28 @@ function isLiquidFund(r) {
     return liquidRe.test(r.ticker || "");
 }
 
+// Number(x) ?? null is a no-op guard: Number(null) is 0 and Number(undefined)
+// is NaN, and neither is nullish, so ?? never fires. That silently turned real
+// DB nulls (e.g. no 52w high on record yet, unknown day-change) into a false
+// 0 / 0.00 in the movers tables instead of the "—" empty state.
+function numOrNull(v) {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
 /** Map a raw market_movers row into the shape the movers tables render. */
 function mapMoverRow(p) {
     return {
         ticker: p.symbol,
         name: _nameMap.get(p.symbol) || null,
         ltp: Number(p.ltp) || 0,
-        change_pct: Number(p.pchange) ?? null,
-        high_52w: Number(p.high_52w) ?? null,
-        low_52w: Number(p.low_52w) ?? null,
-        dist_high: Number(p.pct_from_high) ?? null,
-        dist_low: Number(p.pct_from_low) ?? null,
-        dist_pct: Number(p.pct_from_high) ?? null,
+        change_pct: numOrNull(p.pchange),
+        high_52w: numOrNull(p.high_52w),
+        low_52w: numOrNull(p.low_52w),
+        dist_high: numOrNull(p.pct_from_high),
+        dist_low: numOrNull(p.pct_from_low),
+        dist_pct: numOrNull(p.pct_from_high),
         rank_gainer: p.rank_gainer,
         rank_loser: p.rank_loser,
         near_high: p.near_high,
@@ -3233,12 +3243,31 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     useEffect(() => {
         let cancelled = false;
         setError(null);
-        Promise.all(
+        const fetchAllTabs = () => Promise.all(
             Object.keys(MOVERS_TAB_CONFIG).map(tabKey =>
                 fetchMoversTabPage(tabKey, { isLoadMore: false, isCancelled: () => cancelled })
             )
         );
-        return () => { cancelled = true; };
+        fetchAllTabs();
+
+        // Long-lived tabs never remount, so without this the effect above only
+        // ever runs once and the UI is frozen on whatever was fetched at mount
+        // — sbFetch's TTL is only checked when sbFetch is actually called again.
+        // Re-invoke on the same cadence as MOVERS_TTL so a stale tab self-heals
+        // once the DB's market_movers snapshot is recomputed, and also
+        // revalidate whenever the tab regains focus/visibility (covers the
+        // common case of a laptop sleeping/backgrounding past the interval).
+        const intervalId = setInterval(fetchAllTabs, MOVERS_TTL);
+        const onVisible = () => { if (document.visibilityState === "visible") fetchAllTabs(); };
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("focus", onVisible);
+
+        return () => {
+            cancelled = true;
+            clearInterval(intervalId);
+            document.removeEventListener("visibilitychange", onVisible);
+            window.removeEventListener("focus", onVisible);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
