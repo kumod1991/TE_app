@@ -26604,7 +26604,7 @@ export default function App() {
             icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>,
         },
         {
-            id: "financial", label: "Fundamentals", section: "Markets",
+            id: "financial", label: "FinSight", section: "Markets",
             icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="5" height="18" /><rect x="9.5" y="8" width="5" height="13" /><rect x="17" y="13" width="5" height="8" /></svg>,
             subItems: [
                 { id: "screener", label: "Screener", description: "Filter the market with structured factor and quality rules." },
@@ -26614,7 +26614,7 @@ export default function App() {
             ],
         },
         {
-            id: "technical", label: "Technicals", section: "Markets",
+            id: "technical", label: "TechLens", section: "Markets",
             icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></svg>,
             subItems: [
                 { id: "breadth", label: "Market Breadth", description: "Read trend participation and internal market strength." },
@@ -26649,7 +26649,7 @@ export default function App() {
             ? activeNavItem?.subItems?.find(s => s.id === technicalSubPage)
             : activeNavItem?.subItems?.find(s => s.id === page);
     const breadcrumb = route.kind === "ticker"
-        ? ["Fundamentals", route.symbol]
+        ? ["FinSight", route.symbol]
         : activeSubItem
             ? [activeNavItem?.label, activeSubItem?.label]
             : [activeNavItem?.label];
