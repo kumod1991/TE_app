@@ -799,12 +799,15 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
         return `${sign}${Math.round(v).toLocaleString("en-IN")}`;
     };
 
-    const barMaxH = 44;
+    const barMaxH = isCompact ? 44 : 72;
+    const barGap = isCompact ? 2 : 4;
+    const barMaxW = isCompact ? 14 : 22;
+    const dateFontSize = isCompact ? 8 : 10;
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, width: "100%" }}>
             {/* bars + date labels: one column per day, fills available width */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, width: "100%", minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: isCompact ? 3 : 8, width: "100%", minWidth: 0 }}>
                 {rows.map((r, i) => {
                     const fiiH = Math.max(2, Math.round(Math.abs(r.fii_net || 0) / absMax * barMaxH));
                     const diiH = Math.max(2, Math.round(Math.abs(r.dii_net || 0) / absMax * barMaxH));
@@ -814,17 +817,17 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
                     return (
                         <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
                             {/* bar pair */}
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: barMaxH, width: "100%", justifyContent: "center" }}>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: barGap, height: barMaxH, width: "100%", justifyContent: "center" }}>
                                 <div title={`FII: ${fmtCr(r.fii_net)}Cr`} style={{
                                     flex: 1,
-                                    maxWidth: 14,
+                                    maxWidth: barMaxW,
                                     height: fiiH,
                                     borderRadius: "2px 2px 0 0",
                                     background: fiiPos ? withAlpha(D.pos || "#10b981", 0.85) : withAlpha(D.neg || "#ef4444", 0.82),
                                 }} />
                                 <div title={`DII: ${fmtCr(r.dii_net)}Cr`} style={{
                                     flex: 1,
-                                    maxWidth: 14,
+                                    maxWidth: barMaxW,
                                     height: diiH,
                                     borderRadius: "2px 2px 0 0",
                                     background: diiPos ? withAlpha(D.accent || "#2563eb", 0.78) : withAlpha("#f59e0b", 0.78),
@@ -832,7 +835,7 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
                             </div>
                             {/* date */}
                             <div style={{
-                                fontSize: 8,
+                                fontSize: dateFontSize,
                                 color: D.muted,
                                 fontFamily: "'IBM Plex Mono', monospace",
                                 letterSpacing: "-0.02em",
@@ -853,15 +856,15 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
                 const fiiNet = latest.fii_net || 0;
                 const diiNet = latest.dii_net || 0;
                 return (
-                    <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+                    <div style={{ display: "flex", gap: isCompact ? 10 : 16, marginTop: isCompact ? 2 : 6 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <span style={{
                                 width: 6, height: 6, borderRadius: 1, flexShrink: 0,
                                 background: fiiNet >= 0 ? withAlpha(D.pos || "#10b981", 0.85) : withAlpha(D.neg || "#ef4444", 0.82),
                             }} />
-                            <span style={{ fontSize: 9, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>FII</span>
+                            <span style={{ fontSize: isCompact ? 9 : 11, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>FII</span>
                             <span style={{
-                                fontSize: 11,
+                                fontSize: isCompact ? 11 : 14,
                                 fontWeight: 800,
                                 fontFamily: "'IBM Plex Mono', monospace",
                                 color: fiiNet >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
@@ -872,9 +875,9 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
                                 width: 6, height: 6, borderRadius: 1, flexShrink: 0,
                                 background: diiNet >= 0 ? withAlpha(D.accent || "#2563eb", 0.78) : withAlpha("#f59e0b", 0.78),
                             }} />
-                            <span style={{ fontSize: 9, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>DII</span>
+                            <span style={{ fontSize: isCompact ? 9 : 11, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>DII</span>
                             <span style={{
-                                fontSize: 11,
+                                fontSize: isCompact ? 11 : 14,
                                 fontWeight: 800,
                                 fontFamily: "'IBM Plex Mono', monospace",
                                 color: diiNet >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
@@ -921,8 +924,8 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
         { label: "FII / DII Daily Flow", fiiDii: true },
     ];
     const lenses = [
-        { type: "screens", title: "Breadth", meta: `${gainerCount} gainers`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
-        { type: "momentum", title: "Momentum", meta: `${leadershipCount || 0} leaders`, action: "RS Screens", onClick: () => onNavigate?.("technical", "screens") },
+        { type: "screens", title: "Breadth", meta: `Market Participation`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
+        { type: "momentum", title: "Momentum", meta: `Identify leaders`, action: "RS Screens", onClick: () => onNavigate?.("technical", "screens") },
         { type: "flow", title: "Institutions", meta: "FII / DII", action: "Flow Desk", onClick: () => onNavigate?.("financial", "fiidii") },
         { type: "ownership", title: "Ownership", meta: "Promoter / funds", action: "Scans", onClick: () => onNavigate?.("financial", "ownership") },
         { type: "watchlist", title: "Watchlist", meta: "Saved setups", action: "Open", onClick: () => onNavigate?.("watchlist") },
@@ -1000,7 +1003,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(140px, 1fr))",
+                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "minmax(140px, 1fr) minmax(140px, 1fr) minmax(280px, 2fr)",
                         gap: 10,
                     }}>
                         {heroMetrics.map(metric => (
