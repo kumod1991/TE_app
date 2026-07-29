@@ -3563,7 +3563,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
 
                         {/* Show More button */}
                         {grouped.hasMore && (
-                            <div style={{ padding: isMobile ? "12px 16px calc(20px + env(safe-area-inset-bottom, 0px))" : "12px 16px 16px", borderTop: `1px solid ${T.border}` }}>
+                            <div style={{ padding: isMobile ? "16px 16px calc(20px + env(safe-area-inset-bottom, 0px))" : "16px 16px 16px", borderTop: `1px solid ${T.border}` }}>
                                 <button
                                     onClick={() => setVisibleCount(c => c + FEED_PAGE_SIZE)}
                                     style={{
