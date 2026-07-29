@@ -3211,10 +3211,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         <div style={{
                                             position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220,
                                             background: T.surface, borderTop: `1px solid ${T.border}`,
-                                            borderRadius: "20px 20px 0 0", height: "100dvh", maxHeight: "100dvh",
+                                            borderRadius: "20px 20px 0 0", height: "90dvh", maxHeight: "90dvh",
                                             display: "flex", flexDirection: "column", overflow: "hidden",
                                             animation: "slideInBottom 0.25s cubic-bezier(0.32,0.72,0,1)",
-                                            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+                                            paddingBottom: "env(safe-area-inset-bottom, 2px)",
                                             boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
                                         }}>
                                             <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6, flexShrink: 0 }}>
