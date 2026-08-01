@@ -3080,7 +3080,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
         if (price) {
             setForm(f => ({ ...f, [leg === "buy" ? "buy_price" : "sell_price"]: String(price) }));
         } else {
-            alert(`No Bhav Copy data found for ${ticker} on ${date}.\nMake sure the Bhav Copy has been fetched for that date.`);
+            alert(``);
         }
         setAutofilling(null);
     };
@@ -3223,7 +3223,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
                                             fontSize: 10, padding: "1px 7px", borderRadius: 4,
                                             border: `1px solid ${buyBorder}`, background: buyGlow,
                                             color: buyColor, cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
-                                        }}>{autofilling === "buy" ? "" : " Bhav"}</button>
+                                        }}>{autofilling === "buy" ? "" : ""}</button>
                                     )}
                                 </label>
                                 <input type="number" step="0.01" value={form.buy_price} onChange={set("buy_price")} placeholder="450.00" style={inputStyle} />
@@ -3259,7 +3259,7 @@ function TradeModal({ trade, onClose, onSave, T }) {
                                             fontSize: 10, padding: "1px 7px", borderRadius: 4,
                                             border: `1px solid ${sellBorder}`, background: sellGlow,
                                             color: sellColor, cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
-                                        }}>{autofilling === "sell" ? "" : " Bhav"}</button>
+                                        }}>{autofilling === "sell" ? "" : " "}</button>
                                     )}
                                 </label>
                                 <input type="number" step="0.01" value={form.sell_price} onChange={set("sell_price")} placeholder="500.00" style={inputStyle} />
@@ -3974,7 +3974,7 @@ async function fetchBhavPrice(ticker) {
                 date: row.date,
                 exchange: row.exchange,
                 name: ticker,
-                source: "bhav",
+                source: "",
             };
         } catch { continue; }
     }
@@ -4056,7 +4056,7 @@ async function refreshJournalPortfolioCache(trades) {
         await Promise.all(batch.map(async p => {
             const q = await fetchBhavQuote(p.ticker);
             if (q) results[p.ticker] = { ...q };
-            else failed.push({ ticker: p.ticker, reason: "Not found in Bhav Copy" });
+            else failed.push({ ticker: p.ticker, reason: "" });
         }));
         if (i + 3 < openPositions.length) await new Promise(r => setTimeout(r, 300));
     }
@@ -4095,7 +4095,7 @@ async function triggerBhavFetch() {
         body: JSON.stringify({ force: true }),
         signal: AbortSignal.timeout(60000),
     });
-    if (!r.ok) throw new Error(`Bhav fetch failed: ${r.status}`);
+    if (!r.ok) throw new Error(``);
     return r.json();
 }
 
@@ -4577,7 +4577,7 @@ function Portfolio({ trades, T, embedded = false }) {
                 if (q) {
                     results[p.ticker] = { ...q };
                 } else {
-                    errs.push({ ticker: p.ticker, reason: "Not found in Bhav Copy" });
+                    errs.push({ ticker: p.ticker, reason: "" });
                 }
                 setProgress(prev => ({ ...prev, done: prev.done + 1 }));
             }));
@@ -4923,7 +4923,7 @@ function Portfolio({ trades, T, embedded = false }) {
                         ))}
                     </div>
                     <div style={{ marginTop: 10, fontSize: 12, color: T.subtext, lineHeight: 1.6 }}>
-                        These tickers were not found in the Bhav Copy table for the last 6 trading days. The ticker symbol may not match the exchange listing, or it may not have traded recently. Double-check the ticker symbol in the Trade Journal entry.
+                        
                     </div>
                 </div>
             )}
@@ -7281,7 +7281,6 @@ function DetailedComparisonView({ initialStocks, onBack, computeRatiosFn, T }) {
                 padding: "6px 18px", fontSize: 11, color: T.muted,
                 borderTop: `1px solid ${T.border}`, background: T.surface, flexShrink: 0
             }}>
-                Anchor = currently viewed stock  BEST = best value among compared stocks  Prices from Bhav Copy (NSE)  Ratios computed from quarterly financials
             </div>
         </div>
     );
@@ -7949,7 +7948,7 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
                         </div>
                     </div>
                     <div style={{ padding: "8px 20px 14px", fontSize: 11, color: T.muted }}>
-                        Top 8 by market cap  {peers.length} total sector peers  Prices from Bhav Copy (NSE)
+                        
                     </div>
                 </div>
             )}
