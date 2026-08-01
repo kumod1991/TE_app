@@ -5,6 +5,7 @@ import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule";
 import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule";
 import AnnouncementsModule from "./AnnouncementsModule";
+import IPOModule from "./IPOModule";
 import StockDashboard, { warmStockDashboardCaches } from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 
@@ -99,6 +100,7 @@ const SUB_ROUTE_SEO = {
         fiidii: { title: "FII DII Flow Tracker", description: "Track FII and DII cash, index futures, stock futures, and institutional participation trends." },
         ownership: { title: "Ownership Scans", description: "Review promoter, FII, DII, public shareholder, and pledge changes across Indian companies." },
         announcements: { title: "Company Announcements", description: "Follow exchange filings, corporate announcements, presentations, and disclosure events." },
+        ipo: { title: "IPO Tracker", description: "Track upcoming, open, recently listed, and below-issue-price IPOs in the Indian market." },
     },
     technical: {
         breadth: { title: "Market Breadth Dashboard", description: "Read participation, new highs, relative strength, trend alignment, and market internals for Indian equities." },
@@ -122,7 +124,7 @@ const SUB_ROUTE_SEO = {
         contact: { title: "Contact TradeEdge", description: "Contact TradeEdge for support, feedback, suggestions, and platform queries." },
     },
 };
-const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements"]);
+const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements", "ipo"]);
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "heatmap", "rotation"]);
 const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "funds", "dividends"]);
 const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact"]);
@@ -26611,6 +26613,7 @@ export default function App() {
                 { id: "fiidii", label: "FII / DII Flow", description: "Track institutional cash and derivatives participation." },
                 { id: "ownership", label: "Ownership Scans", description: "Review promoter, fund, and shareholder positioning." },
                 { id: "announcements", label: "Announcements", description: "Track corporate disclosures and regulatory filings in real time." },
+                { id: "ipo", label: "IPO", description: "Track upcoming, recent, and below-issue-price IPOs." },
             ],
         },
         {
@@ -27247,6 +27250,11 @@ export default function App() {
                                         {financialSubPage === "announcements" && (
                                             <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
                                                 <AnnouncementsModule T={T} />
+                                            </div>
+                                        )}
+                                        {financialSubPage === "ipo" && (
+                                            <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", width: "100%" }}>
+                                                <IPOModule T={T} />
                                             </div>
                                         )}
                                     </div>
