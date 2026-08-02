@@ -26,7 +26,32 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
 // ─── CACHE (7-day localStorage TTL) ──────────────────────────────────────────
 const CACHE_KEY    = "ownership_processed_v10";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MIN_EXPECTED_UNIVERSE = 500;
+
+// This used to be a fixed floor of 500 rows, sized for the old RPC path
+// which pulled from the full raw shareholding universe. Now that data comes
+// straight from ownership_metrics (see fetchOwnershipMetricsTable), the real
+// row count can legitimately be smaller — and a fixed 500-row floor meant
+// cacheRead/cacheWrite silently rejected every fetch below that number,
+// so the cache could never populate and *every* page open paid the full
+// network + normalization cost. Replaced with a low sanity floor (rejects
+// only genuinely empty/broken responses) plus a self-calibrating check
+// against the last known-good fetch size (rejects a response that's
+// suspiciously smaller than history, e.g. a network hiccup mid-pagination).
+const MIN_SANITY_FLOOR = 20;
+const LAST_GOOD_COUNT_KEY = "ownership_last_good_count";
+
+function getLastGoodCount() {
+  try { return Number(localStorage.getItem(LAST_GOOD_COUNT_KEY)) || 0; } catch { return 0; }
+}
+function setLastGoodCount(n) {
+  try { localStorage.setItem(LAST_GOOD_COUNT_KEY, String(n)); } catch {}
+}
+function looksCompleteCount(count) {
+  if (!Number.isFinite(count) || count < MIN_SANITY_FLOOR) return false;
+  const lastGood = getLastGoodCount();
+  if (lastGood > 0 && count < lastGood * 0.5) return false;
+  return true;
+}
 
 function cacheRead() {
   try {
@@ -34,18 +59,21 @@ function cacheRead() {
     if (!raw) return null;
     const { ts, processed } = JSON.parse(raw);
     if (Date.now() - ts > CACHE_TTL_MS) return null;
-    if (!Array.isArray(processed) || processed.length < MIN_EXPECTED_UNIVERSE) return null;
+    if (!Array.isArray(processed) || !looksCompleteCount(processed.length)) return null;
     return { processed, ts };
   } catch { return null; }
 }
 
 function cacheWrite(processed) {
-  if (!Array.isArray(processed) || processed.length < MIN_EXPECTED_UNIVERSE) return;
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), processed })); } catch {}
+  if (!Array.isArray(processed) || !looksCompleteCount(processed.length)) return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), processed }));
+    setLastGoodCount(processed.length);
+  } catch {}
 }
 
 function assertCompleteUniverse(processed, sourceCount) {
-  if (Array.isArray(processed) && processed.length >= MIN_EXPECTED_UNIVERSE) return;
+  if (Array.isArray(processed) && looksCompleteCount(processed.length)) return;
   if (Number.isFinite(sourceCount) && sourceCount > 0 && processed.length / sourceCount >= 0.12) return;
   const scanned = Array.isArray(processed) ? processed.length : 0;
   const fetched = Number.isFinite(sourceCount) ? ` from ${sourceCount} fetched rows` : "";
@@ -1352,9 +1380,12 @@ export default function OwnershipScansModule({ T }) {
         setProcessed(w.processed || []);
         setLoading(false);
         setRefreshing(true);
-        if (_prefetchPromise) {
-          try { await _prefetchPromise; } catch {}
-        }
+        // A previous background refresh may have already finished and
+        // cleared _prefetchPromise, in which case there's nothing in
+        // flight — without this, stale data would just sit there until the
+        // 7-day cache TTL expires or a manual refresh, instead of quietly
+        // updating in the background like it's supposed to.
+        await (_prefetchPromise || prefetchOwnershipData());
         const fresh = window.__ownershipInit;
         if (fresh) setProcessed(fresh.processed);
         setRefreshing(false);
