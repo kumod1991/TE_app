@@ -24904,7 +24904,7 @@ function LegalCenter({ T, onNavigate, initialTab }) {
                     {/* Sections */}
                     {current.sections.map((s, i) => (
                         <div key={i} style={{ marginBottom: 14, padding: "16px 18px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9 }}>
-                            <h3 style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 7, letterSpacing: "-.01em", textTransform: "uppercase", letterSpacing: ".04em", opacity: .8 }}>{s.title}</h3>
+                            <h3 style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 7, letterSpacing: ".04em", textTransform: "uppercase", opacity: .8 }}>{s.title}</h3>
                             <p style={{ fontSize: 13, color: T.subtext, lineHeight: 1.75, margin: 0 }}>{s.body}</p>
                         </div>
                     ))}
