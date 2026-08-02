@@ -23,19 +23,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
-async function rpcFetch(fn, body = {}, timeoutMs = 20000) {
-  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: sbH(),
-    body: JSON.stringify(body),
-  }, timeoutMs);
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `HTTP ${res.status} on rpc/${fn}`);
-  }
-  return res.json();
-}
-
 // ─── CACHE (7-day localStorage TTL) ──────────────────────────────────────────
 const CACHE_KEY    = "ownership_processed_v10";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -201,8 +188,12 @@ async function fetchShareholding() {
   throw lastError || new Error("Failed to fetch company_shareholding");
 }
 
-const OWNERSHIP_RPC_LIMIT = 5000;
-const OWNERSHIP_RPC_TIMEOUT_MS = 12000;
+// The ownership_metrics table is precomputed in Postgres — every column the
+// UI needs (latest %, deltas, trends, score, signal) is already sitting
+// there, so reading it directly is a single paginated SELECT with zero
+// client-side computation. This replaces the old RPC call, which was doing
+// (or re-doing) that computation server-side on every request.
+const OWNERSHIP_METRICS_TABLE = "ownership_metrics";
 
 // Small, fast slice used only to paint something real on a genuinely cold
 // start (empty cache, nothing pre-warmed). Kept low enough that Postgres can
@@ -212,16 +203,72 @@ const OWNERSHIP_RPC_TIMEOUT_MS = 12000;
 const OWNERSHIP_PREVIEW_LIMIT = 150;
 const OWNERSHIP_PREVIEW_TIMEOUT_MS = 6000;
 
-async function fetchOwnershipScans({ limit = OWNERSHIP_RPC_LIMIT, timeoutMs = OWNERSHIP_RPC_TIMEOUT_MS } = {}) {
-  const rows = await rpcFetch("get_company_shareholding_scans", { p_limit: limit }, timeoutMs);
+async function fetchOwnershipMetricsTable() {
+  const rows = await fetchAllPages(`${OWNERSHIP_METRICS_TABLE}?select=*`);
   const normalized = normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
   return enrichOwnershipNames(normalized);
 }
 
 async function fetchOwnershipPreview() {
-  const rows = await rpcFetch("get_company_shareholding_scans", { p_limit: OWNERSHIP_PREVIEW_LIMIT }, OWNERSHIP_PREVIEW_TIMEOUT_MS);
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/${OWNERSHIP_METRICS_TABLE}?select=*&limit=${OWNERSHIP_PREVIEW_LIMIT}`,
+    { headers: sbH() },
+    OWNERSHIP_PREVIEW_TIMEOUT_MS
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ownership preview`);
+  const rows = await res.json();
   const normalized = normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
   return enrichOwnershipNames(normalized);
+}
+
+// ─── QUARTERLY DETAIL CACHE (per-ticker; memory + localStorage) ─────────────
+// Quarterly shareholding only updates once a quarter, so there's no reason
+// to hit the network every time a user opens (or reopens) a stock's
+// drilldown. Two tiers: an in-memory Map for instant repeat-opens within the
+// same tab session, backed by a localStorage store (24h TTL, capped entry
+// count) so it also survives a page reload.
+const QUARTERLY_CACHE_KEY = "ownership_quarterly_cache_v1";
+const QUARTERLY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const QUARTERLY_CACHE_MAX_ENTRIES = 400; // caps localStorage growth as users browse more stocks
+
+const _quarterlyMemCache = new Map();
+
+function readQuarterlyCacheStore() {
+  try {
+    const raw = localStorage.getItem(QUARTERLY_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function writeQuarterlyCacheStore(store) {
+  try { localStorage.setItem(QUARTERLY_CACHE_KEY, JSON.stringify(store)); } catch {}
+}
+
+function getCachedQuarterlyDetail(ticker) {
+  const mem = _quarterlyMemCache.get(ticker);
+  if (mem && Date.now() - mem.ts <= QUARTERLY_CACHE_TTL_MS) return mem.data;
+
+  const entry = readQuarterlyCacheStore()[ticker];
+  if (entry && Date.now() - entry.ts <= QUARTERLY_CACHE_TTL_MS) {
+    _quarterlyMemCache.set(ticker, entry); // promote to memory for next time
+    return entry.data;
+  }
+  return null;
+}
+
+function setCachedQuarterlyDetail(ticker, data) {
+  const entry = { data, ts: Date.now() };
+  _quarterlyMemCache.set(ticker, entry);
+
+  const store = readQuarterlyCacheStore();
+  store[ticker] = entry;
+  const keys = Object.keys(store);
+  if (keys.length > QUARTERLY_CACHE_MAX_ENTRIES) {
+    // Evict oldest entries first so this can't grow without bound.
+    keys.sort((a, b) => (store[a]?.ts || 0) - (store[b]?.ts || 0));
+    for (let i = 0; i < keys.length - QUARTERLY_CACHE_MAX_ENTRIES; i++) delete store[keys[i]];
+  }
+  writeQuarterlyCacheStore(store);
 }
 
 // ─── ON-DEMAND PER-STOCK DETAIL (drilldown modal only) ───────────────────────
@@ -231,6 +278,9 @@ async function fetchOwnershipPreview() {
 // a single-row query, so it's fast regardless of how big the universe is.
 async function fetchStockQuarterlyDetail(ticker) {
   if (!ticker) return [];
+  const cached = getCachedQuarterlyDetail(ticker);
+  if (cached) return cached;
+
   const res = await fetchWithTimeout(
     `${SUPABASE_URL}/rest/v1/company_shareholding?select=quarterly&ticker=eq.${encodeURIComponent(ticker)}&limit=1`,
     { headers: sbH() },
@@ -244,7 +294,9 @@ async function fetchStockQuarterlyDetail(ticker) {
   try { q = typeof row.quarterly === "string" ? JSON.parse(row.quarterly) : row.quarterly || []; }
   catch { q = []; }
   q = [...q].sort((a, b) => dateKey(a.date).localeCompare(dateKey(b.date)));
-  return q.map(normalizeOwnershipSeriesEntry).filter(Boolean);
+  const result = q.map(normalizeOwnershipSeriesEntry).filter(Boolean);
+  if (result.length) setCachedQuarterlyDetail(ticker, result);
+  return result;
 }
 
 async function fetchLegacyOwnershipProcessed() {
@@ -261,8 +313,12 @@ async function fetchLegacyOwnershipProcessed() {
 }
 
 async function fetchOwnershipUniverse() {
-  const rpc = await fetchOwnershipScans();
-  if (Array.isArray(rpc) && rpc.length > 0) return rpc;
+  try {
+    const rows = await fetchOwnershipMetricsTable();
+    if (Array.isArray(rows) && rows.length > 0) return rows;
+  } catch (err) {
+    console.warn("[Ownership] ownership_metrics fetch failed, falling back to legacy computation:", err?.message || err);
+  }
   return fetchLegacyOwnershipProcessed();
 }
 
@@ -284,6 +340,29 @@ async function fetchCompanyFinancialsMapping() {
 
   console.warn("[Ownership] company_financials mapping unavailable; continuing without sector enrichment.", lastError?.message || lastError);
   return [];
+}
+
+// ─── NAME CACHE (ticker → company name; localStorage, 30-day TTL) ───────────
+// Company names essentially never change, but ownership_metrics' `name`
+// column is frequently just the ticker echoed back (see looksLikeMissingName
+// below), which means *every* row needs a bhav_copy lookup on a cold fetch.
+// Caching resolved names for a month means that lookup only ever happens
+// once per ticker, not once per cold load.
+const NAME_CACHE_KEY = "ownership_name_cache_v1";
+const NAME_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function readNameCache() {
+  try {
+    const raw = localStorage.getItem(NAME_CACHE_KEY);
+    if (!raw) return {};
+    const { ts, map } = JSON.parse(raw);
+    if (!map || Date.now() - ts > NAME_CACHE_TTL_MS) return {};
+    return map;
+  } catch { return {}; }
+}
+
+function writeNameCache(map) {
+  try { localStorage.setItem(NAME_CACHE_KEY, JSON.stringify({ ts: Date.now(), map })); } catch {}
 }
 
 // ─── NAME ENRICHMENT (bhav_copy) ─────────────────────────────────────────────
@@ -330,14 +409,28 @@ async function enrichOwnershipNames(rows) {
   const missing = rows.filter(looksLikeMissingName);
   if (missing.length === 0) return rows;
 
-  const nameMap = await fetchBhavCopyNameMap(missing.map((r) => r.ticker)).catch(() => ({}));
-  if (!nameMap || Object.keys(nameMap).length === 0) return rows;
+  // Serve as many names as possible from the cache first — only tickers
+  // we've genuinely never resolved before hit the network.
+  const nameCache = readNameCache();
+  const stillMissing = missing.filter((r) => !nameCache[String(r.ticker || "").trim()]);
+
+  let fetchedMap = {};
+  if (stillMissing.length > 0) {
+    fetchedMap = await fetchBhavCopyNameMap(stillMissing.map((r) => r.ticker)).catch(() => ({}));
+    if (fetchedMap && Object.keys(fetchedMap).length > 0) {
+      writeNameCache({ ...nameCache, ...fetchedMap });
+    }
+  }
+
+  const combinedMap = { ...nameCache, ...fetchedMap };
+  if (Object.keys(combinedMap).length === 0) return rows;
 
   return rows.map((r) => {
-    const better = nameMap[String(r.ticker || "").trim()];
+    const better = combinedMap[String(r.ticker || "").trim()];
     return better ? { ...r, name: better } : r;
   });
 }
+
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const safeNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
@@ -368,21 +461,29 @@ function normalizeOwnershipRow(row) {
   // looked at for the single stock a user opens in the drilldown. The modal
   // fetches its own full history on demand instead (see DrilldownModal).
   const { allQuarterly: _dropAQ, all_quarterly: _dropAQSnake, ...rowRest } = row;
+  // ownership_metrics uses "_latest" column names (promoter_latest, fii_latest,
+  // dii_latest, public_latest) — checked after the older aliases above so any
+  // other source shape (RPC/legacy) still takes precedence where present.
+  const fiiTrend = safeNum(row.fiiTrend ?? row.fii_trend);
+  const diiTrend = safeNum(row.diiTrend ?? row.dii_trend);
+  // ownership_metrics has no combined_flow column — derive it from the two
+  // trend columns it does have, rather than silently defaulting to 0.
+  const hasCombinedCol = row.combinedFlow != null || row.combined_flow != null;
   return {
     ...rowRest,
-    ownPromoter: safeNum(row.ownPromoter ?? row.own_promoter ?? row.promoter_pct ?? row.promoter),
-    ownFii: safeNum(row.ownFii ?? row.own_fii ?? row.fii_pct ?? row.fii),
-    ownDii: safeNum(row.ownDii ?? row.own_dii ?? row.dii_pct ?? row.dii),
-    ownPublic: safeNum(row.ownPublic ?? row.own_public ?? row.public_pct ?? row.public_retail ?? row.public),
+    ownPromoter: safeNum(row.ownPromoter ?? row.own_promoter ?? row.promoter_pct ?? row.promoter_latest ?? row.promoter),
+    ownFii: safeNum(row.ownFii ?? row.own_fii ?? row.fii_pct ?? row.fii_latest ?? row.fii),
+    ownDii: safeNum(row.ownDii ?? row.own_dii ?? row.dii_pct ?? row.dii_latest ?? row.dii),
+    ownPublic: safeNum(row.ownPublic ?? row.own_public ?? row.public_pct ?? row.public_latest ?? row.public_retail ?? row.public),
     deltaFii: safeNum(row.deltaFii ?? row.delta_fii),
     deltaDii: safeNum(row.deltaDii ?? row.delta_dii),
     deltaPromoter: safeNum(row.deltaPromoter ?? row.delta_promoter),
     deltaPublic: safeNum(row.deltaPublic ?? row.delta_public),
-    fiiTrend: safeNum(row.fiiTrend ?? row.fii_trend),
-    diiTrend: safeNum(row.diiTrend ?? row.dii_trend),
+    fiiTrend,
+    diiTrend,
     promoterTrend: safeNum(row.promoterTrend ?? row.promoter_trend),
     publicTrend: safeNum(row.publicTrend ?? row.public_trend),
-    combinedFlow: safeNum(row.combinedFlow ?? row.combined_flow),
+    combinedFlow: hasCombinedCol ? safeNum(row.combinedFlow ?? row.combined_flow) : fiiTrend + diiTrend,
     score: safeNum(row.score),
     accel: row.accel && typeof row.accel === "object"
       ? { fii: safeNum(row.accel.fii), dii: safeNum(row.accel.dii) }
@@ -917,100 +1018,6 @@ function DrilldownModal({ stock, T, onClose }) {
   );
 }
 
-// ─── INSIGHTS STRIP ───────────────────────────────────────────────────────────
-function InsightsStrip({ processed, T }) {
-  const isDark = (T?.bg || "").toLowerCase() === "#060d1a";
-  const stats = useMemo(() => {
-    if (!processed.length) return null;
-    const fiiLeading    = processed.filter(x => !["Noise","Distribution"].includes(x.signal) && x.fiiTrend > x.diiTrend).length;
-    const totalAccum    = processed.filter(x => !["Noise","Distribution"].includes(x.signal)).length;
-    const fiiPct        = totalAccum > 0 ? Math.round(fiiLeading / totalAccum * 100) : 0;
-    const sectorCounts  = {};
-    processed.filter(x => x.sector && ["Aggressive Accumulation","Strong Accumulation"].includes(x.signal))
-      .forEach(x => { sectorCounts[x.sector] = (sectorCounts[x.sector] || 0) + 1; });
-    const topSector     = Object.entries(sectorCounts).sort((a,b) => b[1]-a[1])[0];
-    const accelPositive = processed.filter(x => x.accel.fii > 0.5 && x.accel.dii > 0.5).length;
-    const promExitInstEntry = processed.filter(x => x.promoterTrend < -1 && x.combinedFlow > 2).length;
-    return [
-      accelPositive > 0     && { label: `${accelPositive} stocks`, sub: "where both foreign and domestic buying is speeding up", dot: "#d97706" },
-      promExitInstEntry > 0 && { label: `${promExitInstEntry} stocks`, sub: "where promoters sold but funds bought the shares up", dot: "#6366f1" },
-      topSector             && { label: topSector[0], sub: `${topSector[1]} stocks with strong buying — top sector`, dot: "#059669" },
-      fiiPct > 0            && { label: `${fiiPct}%`, sub: "of buying activity is foreign-fund led", dot: "#3b82f6" },
-    ].filter(Boolean).slice(0, 4);
-  }, [processed]);
-
-  if (!stats || !stats.length) return null;
-  const borderColor = isDark ? "rgba(148,163,184,0.10)" : "rgba(15,23,42,0.07)";
-  const bg = isDark ? "rgba(10,18,32,0.82)" : "rgba(255,255,255,0.92)";
-
-  return (
-    <div style={{ display: "flex", gap: 8, padding: "2px 0 8px", overflowX: "auto", flexShrink: 0, alignItems: "stretch" }} className="os-chip-scroll">
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, background: bg, border: `1px solid ${borderColor}`, flexShrink: 0 }}>
-        <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.muted }} />
-        <span style={{ fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: ".12em", textTransform: "uppercase" }}>Highlights</span>
-      </div>
-      {stats.map((item, i) => (
-        <div key={i} style={{ background: bg, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "8px 14px", display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap", flexShrink: 0 }}>
-          <div style={{ width: 5, height: 5, borderRadius: "50%", background: item.dot, flexShrink: 0 }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.text, ...mono }}>{item.label}</span>
-          <span style={{ fontSize: 11.5, color: T.subtext }}>{item.sub}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── LOADING SKELETON ─────────────────────────────────────────────────────────
-function LoadingSkeleton({ T }) {
-  const pulse = {
-    background: `linear-gradient(90deg, ${T.surface} 25%, ${T.tableHead} 50%, ${T.surface} 75%)`,
-    backgroundSize: "200% 100%",
-    animation: "shimmer 1.4s ease-in-out infinite",
-    borderRadius: 6,
-  };
-  const Block = ({ w, h = 14, style = {} }) => (
-    <div style={{ width: w, height: h, ...pulse, ...style }} />
-  );
-  return (
-    <div style={{ padding: "28px 32px", maxWidth: 1400, margin: "0 auto" }}>
-      <style>{`@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }`}</style>
-      <div style={{ marginBottom: 28 }}>
-        <Block w={200} h={28} style={{ marginBottom: 10 }} />
-        <Block w={360} h={14} style={{ marginBottom: 20 }} />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
-        {[0,1,2,3].map(i => (
-          <div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <Block w={90} h={10} />
-            <Block w={60} h={28} />
-            <Block w={120} h={11} />
-          </div>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {[80, 110, 90, 110, 100, 90, 110].map((w, i) => (
-          <Block key={i} w={w} h={32} style={{ borderRadius: 8 }} />
-        ))}
-      </div>
-      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
-        <div style={{ padding: "12px 16px", background: T.tableHead, borderBottom: `1px solid ${T.border}`, display: "flex", gap: 12 }}>
-          {[140, 80, 60, 60, 90, 90, 80, 70, 110].map((w, i) => (
-            <Block key={i} w={w} h={10} />
-          ))}
-        </div>
-        {[...Array(8)].map((_, i) => (
-          <div key={i} style={{ padding: "14px 16px", borderTop: `1px solid ${T.border}`, background: i % 2 === 0 ? T.card : T.surface, display: "flex", gap: 12, alignItems: "center" }}>
-            <Block w={140} h={13} />
-            {[80, 60, 60, 90, 90, 80, 70, 110].map((w, j) => (
-              <Block key={j} w={w} h={12} />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── DATA BUILDERS ────────────────────────────────────────────────────────────
 function buildSectorMap(mapping) {
   const sMap = {};
@@ -1083,77 +1090,220 @@ function getInit() {
   return window.__ownershipInit;
 }
 
-// ─── STOCK CARD (mobile / preview) ───────────────────────────────────────────
-function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
-  const chipPalette = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f97316"];
-  const chipColor = chipPalette[stock.ticker.charCodeAt(0) % chipPalette.length];
-  const positiveFlow = stock.combinedFlow >= 0;
-  const scoreColor = stock.score > 3 ? "#059669" : stock.score < -3 ? "#dc2626" : T.text;
-  const elevatedBorder = isDark ? "rgba(148,163,184,0.14)" : "rgba(15,23,42,0.08)";
 
+// ─── METRIC DEFINITIONS (the 3 cards) ────────────────────────────────────────
+const METRICS = {
+  dii: {
+    id: "dii",
+    key: "diiTrend",
+    cardTitle: "Domestic funds",
+    cardSub: "Indian mutual funds & insurers",
+    tableTitle: "Change in domestic fund holding",
+    colHeader: "DII change",
+    description: "Stocks ranked by how much Indian mutual funds and insurance companies have changed their stake over the last 4 quarters.",
+    color: "#8b5cf6",
+    icon: (c) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M9 21v-6h6v6" /><path d="M9 11h.01" /><path d="M15 11h.01" />
+      </svg>
+    ),
+  },
+  fii: {
+    id: "fii",
+    key: "fiiTrend",
+    cardTitle: "Foreign funds",
+    cardSub: "Overseas institutional investors",
+    tableTitle: "Change in foreign fund holding",
+    colHeader: "FII change",
+    description: "Stocks ranked by how much foreign institutional investors have changed their stake over the last 4 quarters.",
+    color: "#3b82f6",
+    icon: (c) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.5 2.5 3.8 5.7 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.7-3.8-9s1.3-6.5 3.8-9z" />
+      </svg>
+    ),
+  },
+  both: {
+    id: "both",
+    key: "combinedFlow",
+    cardTitle: "Foreign + domestic funds",
+    cardSub: "Combined institutional buying",
+    tableTitle: "Change in combined institutional holding",
+    colHeader: "Combined change",
+    description: "Stocks ranked by the combined change in stake from both foreign and domestic funds together over the last 4 quarters.",
+    color: "#059669",
+    icon: (c) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="9" r="3.2" /><circle cx="15.5" cy="9" r="3.2" /><path d="M2.5 20c0-3.3 2.5-5.8 5.5-5.8s5.5 2.5 5.5 5.8" /><path d="M11 20c0-3.3 2-5.8 4.5-5.8S20 16.7 20 20" />
+      </svg>
+    ),
+  },
+};
+
+// ─── HOME CARD ────────────────────────────────────────────────────────────────
+function MetricCard({ metric, count, risingCount, fallingCount, T, isDark, isMobile, onSelect }) {
+  const [hover, setHover] = useState(false);
   return (
     <button
-      onClick={() => onSelect(stock)}
-      className="os-stock-card"
+      onClick={() => onSelect(metric.id)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
-        width: "100%", textAlign: "left", color: "inherit", cursor: "pointer",
-        display: "flex", gap: 18, padding: "18px 20px",
-        background: T.surface,
-        border: `1px solid ${T.border}`,
-        borderRadius: 14, alignItems: "flex-start",
-        transition: "box-shadow .2s, border-color .2s",
+        textAlign: "left", cursor: "pointer", width: "100%", fontFamily: "inherit",
+        position: "relative", overflow: "hidden",
+        background: isDark
+          ? `linear-gradient(160deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.012) 100%)`
+          : `linear-gradient(160deg, #ffffff 0%, #fbfbfd 100%)`,
+        border: `1px solid ${hover ? `${metric.color}55` : T.border}`,
+        borderRadius: 20,
+        padding: isMobile ? "22px 20px" : "28px 26px",
+        display: "flex", flexDirection: "column", gap: isMobile ? 16 : 22,
+        boxShadow: hover
+          ? (isDark ? `0 16px 40px rgba(0,0,0,0.35)` : `0 16px 40px rgba(15,23,42,0.10)`)
+          : (isDark ? "0 1px 0 rgba(255,255,255,0.03)" : "0 1px 2px rgba(15,23,42,0.03)"),
+        transform: hover ? "translateY(-3px)" : "translateY(0)",
+        transition: "transform .22s cubic-bezier(.16,1,.3,1), box-shadow .22s, border-color .22s",
       }}
     >
-      {/* Avatar */}
+      {/* ambient glow */}
       <div style={{
-        width: 42, height: 42, borderRadius: 10, flexShrink: 0,
-        background: `${chipColor}15`, border: `1px solid ${chipColor}28`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <span style={{ fontSize: 9, fontWeight: 800, color: chipColor, letterSpacing: "0.02em", ...mono }}>{stock.ticker.slice(0,4)}</span>
+        position: "absolute", top: -60, right: -60, width: 160, height: 160, borderRadius: "50%",
+        background: `radial-gradient(circle, ${metric.color}${isDark ? "26" : "18"} 0%, transparent 70%)`,
+        pointerEvents: "none", opacity: hover ? 1 : 0.7, transition: "opacity .22s",
+      }} />
+
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", position: "relative" }}>
+        <div style={{
+          width: 46, height: 46, borderRadius: 13, flexShrink: 0,
+          background: `${metric.color}${isDark ? "1c" : "12"}`,
+          border: `1px solid ${metric.color}30`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {metric.icon(metric.color)}
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.subtext} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ opacity: hover ? 1 : 0.45, transform: hover ? "translateX(2px)" : "translateX(0)", transition: "all .2s", flexShrink: 0, marginTop: 4 }}>
+          <path d="M5 12h14" /><path d="M13 6l6 6-6 6" />
+        </svg>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: T.text, letterSpacing: "-0.01em" }}>
-            {stock.name || stock.ticker}
-          </span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#6366f1", background: isDark ? "rgba(99,102,241,0.15)" : "#eef2ff", padding: "2px 8px", borderRadius: 5, letterSpacing: "0.02em", ...mono }}>
-            {stock.ticker}
-          </span>
-          {stock.timing === "Recent" && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(16,185,129,0.1)", color: "#10b981" }}>RECENT</span>
-          )}
-          {stock.accel.fii > 0.3 && stock.accel.dii > 0.3 && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(217,119,6,0.1)", color: "#d97706" }}>ACCEL</span>
-          )}
-          <span style={{ fontSize: 13, marginLeft: "auto", whiteSpace: "nowrap", ...mono, fontWeight: 700, color: scoreColor }}>
-            {fmt(stock.score)}
-          </span>
+      <div style={{ position: "relative" }}>
+        <div style={{ fontSize: isMobile ? 18 : 19, fontWeight: 700, color: T.text, letterSpacing: "-0.015em", marginBottom: 4 }}>
+          {metric.cardTitle}
         </div>
-
-        {stock.sector && (
-          <div style={{ fontSize: 13, color: T.subtext, marginBottom: 6 }}>· {stock.sector}</div>
-        )}
-
-        <div style={{ display: "flex", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
-          <SignalBadge signal={stock.signal} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.subtext, padding: "3px 8px", borderRadius: 99, background: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)", border: `1px solid ${T.border}` }}>
-            Foreign {fmt(stock.fiiTrend)}% · Domestic {fmt(stock.diiTrend)}%
-          </span>
+        <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.5 }}>
+          {metric.cardSub}
         </div>
+      </div>
 
-        {stock.story && (
-          <p style={{
-            margin: "6px 0 0", fontSize: 13, color: T.subtext, lineHeight: 1.6,
-            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-          }}>
-            {stock.story}
-          </p>
-        )}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative", paddingTop: 2, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ paddingTop: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#059669", ...mono }}>{risingCount.toLocaleString()} rising</div>
+        </div>
+        <div style={{ width: 3, height: 3, borderRadius: "50%", background: T.subtext, opacity: 0.5, marginTop: 14 }} />
+        <div style={{ paddingTop: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", ...mono }}>{fallingCount.toLocaleString()} falling</div>
+        </div>
+        <div style={{ marginLeft: "auto", paddingTop: 14, fontSize: 11, color: T.subtext, ...mono }}>{count.toLocaleString()} tracked</div>
       </div>
     </button>
+  );
+}
+
+// ─── TABLE ROW ────────────────────────────────────────────────────────────────
+function MetricTableRow({ stock, metric, rank, T, isDark, onSelect, isMobile }) {
+  const chipPalette = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f97316"];
+  const chipColor = chipPalette[stock.ticker.charCodeAt(0) % chipPalette.length];
+  const val = stock[metric.key] ?? 0;
+  const valColor = val > 0 ? "#059669" : val < 0 ? "#dc2626" : T.subtext;
+
+  if (isMobile) {
+    return (
+      <button onClick={() => onSelect(stock)} style={{
+        width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+        display: "flex", alignItems: "center", gap: 12, padding: "14px 4px",
+        background: "transparent", border: "none", borderBottom: `1px solid ${T.border}`,
+      }}>
+        <span style={{ width: 20, fontSize: 11, color: T.subtext, ...mono, flexShrink: 0 }}>{rank}</span>
+        <div style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0, background: `${chipColor}15`, border: `1px solid ${chipColor}28`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 8, fontWeight: 800, color: chipColor, ...mono }}>{stock.ticker.slice(0, 4)}</span>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stock.name || stock.ticker}</div>
+          <div style={{ fontSize: 11, color: T.subtext, marginTop: 1 }}>{stock.sector || stock.ticker}</div>
+        </div>
+        <span style={{ fontSize: 14, fontWeight: 700, color: valColor, ...mono, flexShrink: 0 }}>{fmt(val)}%</span>
+      </button>
+    );
+  }
+
+  return (
+    <button onClick={() => onSelect(stock)} style={{
+      width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+      display: "flex", alignItems: "center", gap: 16, padding: "13px 18px",
+      background: "transparent", border: "none", borderBottom: `1px solid ${T.border}`,
+      transition: "background .12s",
+    }}
+      onMouseEnter={e => e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.025)" : "rgba(15,23,42,0.02)"}
+      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+    >
+      <span style={{ width: 26, fontSize: 12, color: T.subtext, ...mono, flexShrink: 0 }}>{rank}</span>
+      <div style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: `${chipColor}15`, border: `1px solid ${chipColor}28`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 8.5, fontWeight: 800, color: chipColor, ...mono }}>{stock.ticker.slice(0, 4)}</span>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 14.5, fontWeight: 600, color: T.text }}>{stock.name || stock.ticker}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: "#6366f1", background: isDark ? "rgba(99,102,241,0.15)" : "#eef2ff", padding: "1px 7px", borderRadius: 5, ...mono }}>{stock.ticker}</span>
+        </div>
+        {stock.sector && <div style={{ fontSize: 12, color: T.subtext, marginTop: 2 }}>{stock.sector}</div>}
+      </div>
+      {metric.id === "both" && (
+        <div style={{ display: "flex", gap: 18, flexShrink: 0 }}>
+          <div style={{ textAlign: "right", minWidth: 64 }}>
+            <div style={{ fontSize: 9.5, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Foreign</div>
+            <div style={{ fontSize: 13, fontWeight: 700, ...mono, color: stock.fiiTrend > 0 ? "#059669" : stock.fiiTrend < 0 ? "#dc2626" : T.subtext }}>{fmt(stock.fiiTrend)}%</div>
+          </div>
+          <div style={{ textAlign: "right", minWidth: 64 }}>
+            <div style={{ fontSize: 9.5, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Domestic</div>
+            <div style={{ fontSize: 13, fontWeight: 700, ...mono, color: stock.diiTrend > 0 ? "#059669" : stock.diiTrend < 0 ? "#dc2626" : T.subtext }}>{fmt(stock.diiTrend)}%</div>
+          </div>
+        </div>
+      )}
+      <div style={{ textAlign: "right", minWidth: 84, flexShrink: 0 }}>
+        <div style={{ fontSize: 9.5, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{metric.id === "both" ? "Combined" : metric.colHeader}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, ...mono, color: valColor }}>{fmt(val)}%</div>
+      </div>
+    </button>
+  );
+}
+
+// ─── LOADING SKELETON (home) ─────────────────────────────────────────────────
+function HomeLoadingSkeleton({ T, isMobile }) {
+  const pulse = {
+    background: `linear-gradient(90deg, ${T.surface} 25%, ${T.tableHead} 50%, ${T.surface} 75%)`,
+    backgroundSize: "200% 100%",
+    animation: "shimmer 1.4s ease-in-out infinite",
+    borderRadius: 8,
+  };
+  return (
+    <div style={{ padding: isMobile ? "20px 16px" : "28px 32px", maxWidth: 1100, margin: "0 auto" }}>
+      <style>{`@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }`}</style>
+      <div style={{ ...pulse, width: 220, height: 26, marginBottom: 10 }} />
+      <div style={{ ...pulse, width: 360, height: 14, marginBottom: 34 }} />
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 16 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ border: `1px solid ${T.border}`, borderRadius: 20, padding: 26, display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ ...pulse, width: 46, height: 46, borderRadius: 13 }} />
+            <div>
+              <div style={{ ...pulse, width: "70%", height: 18, marginBottom: 8 }} />
+              <div style={{ ...pulse, width: "90%", height: 13 }} />
+            </div>
+            <div style={{ ...pulse, width: "50%", height: 12 }} />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1161,7 +1311,6 @@ function StockCard({ stock, onSelect, T, isDark, rowNum, isMobile }) {
 export default function OwnershipScansModule({ T }) {
   const getIsMobile = () => (typeof window !== "undefined" ? window.innerWidth <= 768 : false);
   const isDark = (T?.bg || "").toLowerCase() === "#060d1a";
-  const darkMode = isDark;
   const init = getInit();
 
   const [processed,  setProcessed]  = useState(() => init.processed);
@@ -1169,26 +1318,15 @@ export default function OwnershipScansModule({ T }) {
   const [refreshing, setRefreshing] = useState(() => init.refreshing);
   const [error,      setError]      = useState(null);
   const [selected,   setSelected]   = useState(null);
-  const [sortKey,    setSortKey]    = useState("score");
-  const [sortDir,    setSortDir]    = useState("desc");
-  const [filter,     setFilter]     = useState("smart");
-  const [scoreMin,   setScoreMin]   = useState(-10);
-  const [searchQ,    setSearchQ]    = useState("");
-  const deferredSearchQ = useDeferredValue(searchQ);
-  const [page,       setPage]       = useState(1);
   const [isMobile,   setIsMobile]   = useState(getIsMobile);
-  const [mobileVisibleCount, setMobileVisibleCount] = useState(10);
-  const [explainerDismissed, setExplainerDismissedState] = useState(() => {
-    try { return localStorage.getItem("ownership_explainer_dismissed") === "1"; } catch { return false; }
-  });
-  function setExplainerDismissed(v) {
-    setExplainerDismissedState(v);
-    try { localStorage.setItem("ownership_explainer_dismissed", v ? "1" : "0"); } catch {}
-  }
 
-  const PREVIEW_SIZE = 8;
-  const SHOW_MORE_STEP = 10;
-  const PAGE_SIZE    = 10;
+  const [view, setView] = useState("home");        // 'home' | 'table'
+  const [activeMetricId, setActiveMetricId] = useState(null);
+  const [searchQ, setSearchQ] = useState("");
+  const deferredSearchQ = useDeferredValue(searchQ);
+  const [sortDir, setSortDir] = useState("desc");   // 'desc' = rising first, 'asc' = falling first
+  const [visibleCount, setVisibleCount] = useState(20);
+  const SHOW_MORE_STEP = 20;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1227,9 +1365,6 @@ export default function OwnershipScansModule({ T }) {
       let previewApplied = false;
       try {
         if (_prefetchPromise) {
-          // A fast preview is racing the full fetch (true cold start) — grab
-          // it as soon as it lands so the tab shows real stocks well before
-          // the full universe is ready, instead of a skeleton the whole time.
           if (_previewPromise) {
             _previewPromise.then((previewRows) => {
               if (previewRows?.length && window.__ownershipInit?.partial) {
@@ -1264,8 +1399,6 @@ export default function OwnershipScansModule({ T }) {
           setRefreshing(true);
           setError(null);
         } else if (previewApplied) {
-          // A preview is already on screen — keep it visible instead of
-          // replacing real (if partial) content with a full-page error.
           setRefreshing(false);
           setError(null);
         } else {
@@ -1291,46 +1424,6 @@ export default function OwnershipScansModule({ T }) {
     load();
   }, []);
 
-  const summary = useMemo(() => {
-    if (!processed.length) return { avgInst: 0, label: "No Data", smartMoney: 0, distribution: 0, promoterUp: 0 };
-    const avgInst = processed.reduce((s, x) => s + x.fiiTrend + x.diiTrend, 0) / processed.length;
-    return {
-      avgInst,
-      label: avgInst > 0.5 ? "Strong Buying" : avgInst > 0 ? "Mild Buying" : avgInst > -0.5 ? "Neutral" : "Selling Pressure",
-      smartMoney:   processed.filter(x => ["Aggressive Accumulation","Strong Accumulation","Selective Accumulation"].includes(x.signal)).length,
-      distribution: processed.filter(x => x.signal === "Distribution").length,
-      promoterUp:   processed.filter(x => x.promoterTrend > 1).length,
-    };
-  }, [processed]);
-
-  const filtered = useMemo(() => {
-    let list = processed.filter(x => x.score >= scoreMin);
-    if (filter === "smart")         list = list.filter(x => x.fiiTrend > 0 && x.diiTrend > 0);
-    else if (filter === "aggressive") list = list.filter(x => x.signal === "Aggressive Accumulation");
-    else if (filter === "early")    list = list.filter(x => ["Selective Accumulation","Strong Accumulation"].includes(x.signal));
-    else if (filter === "promoter") list = list.filter(x => x.promoterTrend > 1);
-    else if (filter === "exit")     list = list.filter(x => x.signal === "Distribution");
-    else if (filter === "recent")   list = list.filter(x => x.timing === "Recent");
-    else if (filter === "accel")    list = list.filter(x => x.accel.fii > 0 && x.accel.dii > 0);
-    else if (filter === "balanced") list = list.filter(x => x.dominance === "Balanced" && x.fiiTrend > 1 && x.diiTrend > 1);
-    else if (filter === "promout")  list = list.filter(x => x.promoterTrend < -1 && x.combinedFlow > 2);
-    const query = deferredSearchQ.trim();
-    if (query) {
-      const q = query.toLowerCase();
-      list = list.filter(x => x.ticker.toLowerCase().includes(q) || (x.name || "").toLowerCase().includes(q));
-    }
-    return [...list].sort((a, b) => {
-      let va, vb;
-      if (sortKey === "accelFii") { va = a.accel?.fii ?? 0; vb = b.accel?.fii ?? 0; }
-      else { va = a[sortKey] ?? 0; vb = b[sortKey] ?? 0; }
-      return sortDir === "asc" ? va - vb : vb - va;
-    });
-  }, [processed, filter, scoreMin, deferredSearchQ, sortKey, sortDir]);
-
-  useEffect(() => { setMobileVisibleCount(10); }, [filter, scoreMin, deferredSearchQ, sortKey, sortDir, processed.length]);
-
-  const commitOwnershipChange = (fn) => startTransition(fn);
-
   function handleRefresh() {
     cacheInvalidate();
     setLoading(true);
@@ -1343,17 +1436,11 @@ export default function OwnershipScansModule({ T }) {
       .then((processed) => {
         assertCompleteUniverse(processed, processed.length);
         cacheWrite(processed);
-        window.__ownershipInit = {
-          processed,
-          loading: false,
-          refreshing: false,
-          cacheAge: 0,
-          fetchedAt: Date.now(),
-        };
+        window.__ownershipInit = { processed, loading: false, refreshing: false, cacheAge: 0, fetchedAt: Date.now() };
         setProcessed(processed);
         setRefreshing(false);
       })
-      .catch((e) => {
+      .catch(() => {
         const fallback = initFromCacheIfPossible();
         if (fallback?.processed?.length) {
           window.__ownershipInit = { ...fallback, loading: false, refreshing: false };
@@ -1368,43 +1455,58 @@ export default function OwnershipScansModule({ T }) {
       .finally(() => setLoading(false));
   }
 
-  const sortOptions = [
-    { value: "score",         label: "Overall Score" },
-    { value: "combinedFlow",  label: "Combined Buying (4Q)" },
-    { value: "fiiTrend",      label: "Foreign Funds (4Q)" },
-    { value: "diiTrend",      label: "Domestic Funds (4Q)" },
-    { value: "promoterTrend", label: "Promoter Stake (4Q)" },
-    { value: "deltaFii",      label: "Foreign Funds (Latest Qtr)" },
-    { value: "accelFii",      label: "Foreign Fund Acceleration" },
-  ];
+  // Counts for each metric card
+  const metricCounts = useMemo(() => {
+    const out = {};
+    for (const id of Object.keys(METRICS)) {
+      const key = METRICS[id].key;
+      let rising = 0, falling = 0;
+      for (const s of processed) {
+        const v = s[key] ?? 0;
+        if (v > 0) rising++; else if (v < 0) falling++;
+      }
+      out[id] = { rising, falling };
+    }
+    return out;
+  }, [processed]);
 
-  const activeSort   = sortOptions.find(x => x.value === sortKey)?.label || sortKey;
-  const summaryCards = [
-    { label: "Both Buying",     value: summary.smartMoney,   sub: "Foreign + domestic funds both accumulating",  color: "#059669" },
-    { label: "Both Selling",    value: summary.distribution, sub: "Foreign + domestic funds both reducing",      color: "#dc2626" },
-    { label: "Promoters Buying",value: summary.promoterUp,   sub: "Founder/insider stake up over 4 quarters",    color: "#2563eb" },
-    { label: "Universe",        value: processed.length,     sub: summary.label + " overall",                    color: summary.avgInst >= 0 ? "#059669" : "#dc2626" },
-  ];
+  const activeMetric = activeMetricId ? METRICS[activeMetricId] : null;
 
-  // Tab style matching Announcements module
-  const tabStyle = (active, col = "#5b5bd6") => ({
-    padding: "8px 18px", borderRadius: 8, border: `1.5px solid ${active ? col : T.border}`,
-    background: active ? (darkMode ? `${col}28` : `${col}12`) : "transparent",
-    color: active ? col : T.subtext,
-    fontSize: 14, fontWeight: active ? 600 : 400,
-    cursor: "pointer", transition: "all .15s",
-    display: "inline-flex", alignItems: "center", gap: 6,
-    fontFamily: "inherit",
-  });
+  const tableRows = useMemo(() => {
+    if (!activeMetric) return [];
+    let list = processed;
+    const q = deferredSearchQ.trim().toLowerCase();
+    if (q) list = list.filter(x => x.ticker.toLowerCase().includes(q) || (x.name || "").toLowerCase().includes(q));
+    return [...list].sort((a, b) => {
+      const va = a[activeMetric.key] ?? 0, vb = b[activeMetric.key] ?? 0;
+      return sortDir === "desc" ? vb - va : va - vb;
+    });
+  }, [processed, activeMetric, deferredSearchQ, sortDir]);
 
+  function openMetric(id) {
+    setActiveMetricId(id);
+    setView("table");
+    setSearchQ("");
+    setSortDir("desc");
+    setVisibleCount(20);
+  }
+
+  function goHome() {
+    setView("home");
+    setActiveMetricId(null);
+  }
+
+  useEffect(() => { setVisibleCount(20); }, [searchQ, sortDir]);
+
+  const commitOwnershipChange = (fn) => startTransition(fn);
 
   // ─── LOADING ─────────────────────────────────────────────────────────────────
-  if (loading) return <LoadingSkeleton T={T} />;
+  if (loading) return <HomeLoadingSkeleton T={T} isMobile={isMobile} />;
 
   // ─── ERROR ───────────────────────────────────────────────────────────────────
   if (error) return (
     <div style={{ width: "100%", minHeight: "100%", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px", boxSizing: "border-box" }}>
-      <div style={{ background: T.surface, border: `1px solid ${darkMode ? "rgba(239,68,68,0.3)" : "#fecaca"}`, borderRadius: 14, padding: "24px 32px", textAlign: "center", maxWidth: 440, width: "100%" }}>
+      <div style={{ background: T.surface, border: `1px solid ${isDark ? "rgba(239,68,68,0.3)" : "#fecaca"}`, borderRadius: 14, padding: "24px 32px", textAlign: "center", maxWidth: 440, width: "100%" }}>
         <div style={{ fontSize: 20, marginBottom: 10 }}>⚠️</div>
         <div style={{ fontSize: 14, color: "#dc2626", marginBottom: 8, fontWeight: 700 }}>Failed to load ownership data</div>
         <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.65, marginBottom: 16 }}>{error}</div>
@@ -1415,181 +1517,156 @@ export default function OwnershipScansModule({ T }) {
     </div>
   );
 
+  const shown = tableRows.slice(0, visibleCount);
+
   // ─── MAIN RENDER ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ width: "100%", minHeight: "100%", overflowY: "auto", boxSizing: "border-box", fontFamily: "inherit", color: T.text, background: T.bg, padding: isMobile ? "0" : "22px 28px 36px" }}>
-      <style>{`
-        @keyframes spin    { to { transform: rotate(360deg) } }
-        @keyframes fadeIn  { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
-        @keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
-        .os-chip-scroll { scrollbar-width: none; }
-        .os-chip-scroll::-webkit-scrollbar { display: none; }
-        .os-stock-card:hover { box-shadow: ${darkMode ? "0 4px 24px rgba(0,0,0,0.45)" : "0 4px 20px rgba(0,0,0,0.09)"}; border-color: ${darkMode ? "rgba(99,102,241,0.4)" : "#c7d2fe"} !important; }
-        .os-row:hover td { background: ${isDark ? "rgba(99,131,179,0.04)" : "rgba(15,23,42,0.025)"} !important; }
-        select { appearance: none; }
-      `}</style>
+    <div style={{ width: "100%", minHeight: "100%", overflowY: "auto", boxSizing: "border-box", fontFamily: "inherit", color: T.text, background: T.bg }}>
+      <div style={{ width: "100%", maxWidth: 1100, margin: "0 auto", padding: isMobile ? "20px 16px 40px" : "32px 32px 48px" }}>
 
-      <div style={{ width: "100%", maxWidth: isMobile ? "100%" : 1400, margin: "0 auto", background: T.shellBg || T.surface, border: isMobile ? "none" : `1px solid ${T.border}`, borderRadius: isMobile ? 0 : 22, boxShadow: T.shadow, overflow: "hidden", padding: isMobile ? "16px" : "28px 32px", boxSizing: "border-box" }}>
-
-        {/* ── HEADER (Announcements style) ── */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, color: T.subtext, marginBottom: 8, display: "flex", gap: 6, letterSpacing: "0.02em" }}>
-            <span style={{ color: "#5b5bd6", cursor: "pointer" }}>Fundamentals</span>
-            <span>›</span>
-            <span>Ownership</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, color: T.text, letterSpacing: "-0.03em", lineHeight: 1.15 }}>
-                Who's Buying, Who's Selling
-                {refreshing && (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 1.2s linear infinite", marginLeft: 10, verticalAlign: "middle" }}>
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
-                )}
-              </h1>
-              <p style={{ margin: "8px 0 0", fontSize: 15, color: T.subtext, lineHeight: 1.6 }}>
-                See which stocks foreign funds, domestic funds, and promoters have been buying or selling over the last 4 quarters.
+        {view === "home" && (
+          <>
+            <div style={{ marginBottom: isMobile ? 24 : 34 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <h1 style={{ margin: 0, fontSize: isMobile ? 21 : 25, fontWeight: 700, letterSpacing: "-0.02em", color: T.text }}>Ownership</h1>
+                {refreshing && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.subtext, ...mono }}>updating…</span>}
+              </div>
+              <p style={{ margin: 0, fontSize: 14, color: T.subtext, lineHeight: 1.6, maxWidth: 560 }}>
+                See where big investors are moving. Pick a group below to see which stocks they've been buying or selling the most. (YoY Change)
               </p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              <button onClick={handleRefresh} title="Refresh data" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: 8, border: `1.5px solid ${T.border}`, background: "transparent", color: T.subtext, cursor: "pointer" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-              </button>
+
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: isMobile ? 14 : 18 }}>
+              {Object.values(METRICS).map(m => (
+                <MetricCard
+                  key={m.id}
+                  metric={m}
+                  T={T}
+                  isDark={isDark}
+                  isMobile={isMobile}
+                  count={processed.length}
+                  risingCount={metricCounts[m.id]?.rising || 0}
+                  fallingCount={metricCounts[m.id]?.falling || 0}
+                  onSelect={openMetric}
+                />
+              ))}
             </div>
-          </div>
-
-          {!explainerDismissed && (
-            <div style={{ marginTop: 18, padding: "14px 16px", borderRadius: 12, background: isDark ? "rgba(99,102,241,0.08)" : "#eef2ff", border: `1px solid ${isDark ? "rgba(99,102,241,0.22)" : "#c7d2fe"}`, display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <div style={{ flex: 1, fontSize: 13, color: T.text, lineHeight: 1.7 }}>
-                <strong>What you're looking at:</strong> every company has owners — promoters (founders/insiders), <strong>FII</strong> (foreign investors), <strong>DII</strong> (Indian mutual funds &amp; insurers), and the general public. When FII or DII steadily raise their stake over several quarters, it's often a sign of growing institutional conviction in the stock. This page tracks those ownership shifts and flags the stocks where the shift has been strongest.
-              </div>
-              <button onClick={() => setExplainerDismissed(true)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.subtext, cursor: "pointer", fontSize: 16, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-            </div>
-          )}
-        </div>
-
-        {/* ── INTEL STRIP ── */}
-        <div style={{ marginBottom: 28 }}>
-          <InsightsStrip processed={processed} T={T} />
-        </div>
-
-        {/* ── SUMMARY STAT CARDS ── */}
-        {processed.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: isMobile ? 10 : 14, marginBottom: 28 }}>
-            {summaryCards.map(c => (
-              <div key={c.label} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "14px 16px" : "18px 20px" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.subtext, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>{c.label}</div>
-                <div style={{ fontSize: isMobile ? 26 : 30, fontWeight: 700, color: c.color, ...mono, letterSpacing: "-0.02em", marginBottom: 6, lineHeight: 1 }}>{c.value.toLocaleString()}</div>
-                <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.5 }}>{c.sub}</div>
-                <div style={{ marginTop: 10, height: 2, borderRadius: 999, background: T.border, overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: 999, width: `${Math.min(100, (c.value / Math.max(processed.length, 1)) * 100)}%`, background: c.color, opacity: 0.65, transition: "width 0.6s ease" }} />
-                </div>
-              </div>
-            ))}
-          </div>
+          </>
         )}
 
-        {/* ── FILTER BAR (Announcements style) ── */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.subtext, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.09em" }}>Show me</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "0 0 18px" }}>
-            <button style={tabStyle(filter === "all", "#6b7280")} onClick={() => commitOwnershipChange(() => { setFilter("all"); setPage(1); })}>All stocks</button>
-            <button style={tabStyle(filter === "smart", "#059669")} onClick={() => commitOwnershipChange(() => { setFilter("smart"); setPage(1); })}>Both buying</button>
-            <button style={tabStyle(filter === "exit", "#dc2626")} onClick={() => commitOwnershipChange(() => { setFilter("exit"); setPage(1); })}>Both selling</button>
-            <button style={tabStyle(filter === "recent", "#10b981")} onClick={() => commitOwnershipChange(() => { setFilter("recent"); setPage(1); })}>New buying</button>
-            <button style={tabStyle(filter === "accel", "#d97706")} onClick={() => commitOwnershipChange(() => { setFilter("accel"); setPage(1); })}>Speeding up</button>
-            <button style={tabStyle(filter === "promoter", "#2563eb")} onClick={() => commitOwnershipChange(() => { setFilter("promoter"); setPage(1); })}>Promoters buying</button>
-            <button style={tabStyle(filter === "promout", "#6366f1")} onClick={() => commitOwnershipChange(() => { setFilter("promout"); setPage(1); })}>Promoters selling, funds buying</button>
-            <button style={tabStyle(filter === "aggressive", "#059669")} onClick={() => commitOwnershipChange(() => { setFilter("aggressive"); setPage(1); })}>Heavy buying</button>
-          </div>
-          <div style={{ fontSize: 13.5, color: T.subtext, marginBottom: 4, lineHeight: 1.6 }}>
-            {filter === "smart"      && <>Stocks where <strong>both foreign and domestic funds</strong> have been buying over the last 4 quarters.</>}
-            {filter === "exit"       && <>Stocks where <strong>both foreign and domestic funds</strong> have been selling together.</>}
-            {filter === "all"        && <>All stocks in the universe, no filter applied.</>}
-            {filter === "recent"     && <>Stocks where <strong>foreign funds started buying</strong> only in the last 2 quarters — a fresh move.</>}
-            {filter === "accel"      && <>Stocks where buying from <strong>both fund types is picking up pace</strong>, not just continuing.</>}
-            {filter === "promoter"   && <>Stocks where <strong>founders/insiders have raised their own stake</strong> by more than 1% over 4 quarters.</>}
-            {filter === "promout"    && <>Stocks where <strong>promoters sold but funds bought the shares up</strong> — a handover, not a warning sign on its own.</>}
-            {filter === "aggressive" && <>Stocks with the <strong>strongest dual buying</strong> — over 5% added by both foreign and domestic funds in 4 quarters.</>}
-          </div>
-        </div>
+        {view === "table" && activeMetric && (
+          <>
+            <button onClick={goHome} style={{
+              display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 18,
+              background: "transparent", border: "none", cursor: "pointer", padding: "6px 0",
+              color: T.subtext, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5" /><path d="M11 18l-6-6 6-6" />
+              </svg>
+              All groups
+            </button>
 
-        {/* ── SEARCH ── */}
-        <div style={{ position: "relative", maxWidth: 480, marginBottom: 28 }}>
-          <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", opacity: 0.4, pointerEvents: "none" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input
-            value={searchQ}
-            onChange={e => { setSearchQ(e.target.value); setPage(1); }}
-            placeholder="Search company or ticker…"
-            style={{ width: "100%", padding: "11px 16px 11px 38px", border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.surface, color: T.text, fontSize: 15, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
-            onFocus={e => e.target.style.borderColor = "#6366f1"}
-            onBlur={e => e.target.style.borderColor = T.border}
-          />
-        </div>
-
-        {/* ── SORT ROW ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, color: T.subtext, ...mono }}>
-            {filtered.length} results{searchQ.trim() ? ` for "${searchQ.trim()}"` : ""} — sorted by <strong style={{ color: T.text }}>{activeSort}</strong>
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <select value={sortKey} onChange={e => commitOwnershipChange(() => { setSortKey(e.target.value); setSortDir("desc"); setPage(1); })}
-              style={{ background: T.surface, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
-              {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <select value={scoreMin} onChange={e => commitOwnershipChange(() => { setScoreMin(Number(e.target.value)); setPage(1); })}
-              style={{ background: T.surface, border: `1.5px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
-              {[-10,-5,0,1,2,3,5].map(v => <option key={v} value={v}>Score ≥ {v >= 0 ? "+" : ""}{v}</option>)}
-            </select>
-          </div>
-        </div>
-
-        {/* ── CONTENT ── */}
-        {filtered.length === 0 ? (
-          <div style={{ textAlign: "center", paddingTop: 80, color: T.subtext, fontSize: 15 }}>
-            No stocks match the current filter.
-            <div style={{ marginTop: 16 }}>
-              <button onClick={() => commitOwnershipChange(() => { setFilter("all"); setScoreMin(-10); setSearchQ(""); setPage(1); })} style={{ padding: "10px 20px", borderRadius: 8, border: `1.5px solid ${T.border}`, background: "transparent", color: T.subtext, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                Clear filters
-              </button>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 22, flexWrap: "wrap" }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                background: `${activeMetric.color}${isDark ? "1c" : "12"}`, border: `1px solid ${activeMetric.color}30`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {activeMetric.icon(activeMetric.color)}
+              </div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <h1 style={{ margin: "0 0 4px", fontSize: isMobile ? 18 : 21, fontWeight: 700, letterSpacing: "-0.015em", color: T.text }}>{activeMetric.tableTitle}</h1>
+                <p style={{ margin: 0, fontSize: 13, color: T.subtext, lineHeight: 1.55, maxWidth: 560 }}>{activeMetric.description}</p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filtered.slice(0, isMobile ? mobileVisibleCount : PREVIEW_SIZE + (page - 1) * PAGE_SIZE).map((stock, i) => (
-              <StockCard
-                key={stock.ticker}
-                stock={stock}
-                onSelect={setSelected}
-                T={T}
-                isDark={isDark}
-                rowNum={i + 1}
-                isMobile={isMobile}
-              />
-            ))}
 
-            {/* Load more */}
-            {filtered.length > (isMobile ? mobileVisibleCount : PREVIEW_SIZE) && (
-              <div style={{ textAlign: "center", paddingTop: 8, paddingBottom: 8 }}>
-                {isMobile ? (
-                  <button onClick={() => setMobileVisibleCount(c => c + SHOW_MORE_STEP)} style={{ padding: "12px 32px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: "transparent", color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit", transition: "background .15s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = T.surface}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    Show more +10
-                  </button>
-                ) : (
-                  <button onClick={() => setPage(p => p + 1)} style={{ padding: "12px 32px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: "transparent", color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit", transition: "background .15s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = T.surface}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    Show more +10
-                  </button>
+            {/* Search + sort */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+              <div style={{ position: "relative", flex: "1 1 260px", minWidth: 200 }}>
+                <svg style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", opacity: 0.4, pointerEvents: "none" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  value={searchQ}
+                  onChange={e => setSearchQ(e.target.value)}
+                  placeholder="Search company or ticker…"
+                  style={{ width: "100%", padding: "10px 14px 10px 36px", border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.surface, color: T.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
+                  onFocus={e => e.target.style.borderColor = activeMetric.color}
+                  onBlur={e => e.target.style.borderColor = T.border}
+                />
+              </div>
+              <div style={{ display: "flex", border: `1.5px solid ${T.border}`, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
+                <button onClick={() => commitOwnershipChange(() => setSortDir("desc"))} style={{
+                  padding: "9px 14px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "none",
+                  background: sortDir === "desc" ? (isDark ? `${activeMetric.color}28` : `${activeMetric.color}12`) : "transparent",
+                  color: sortDir === "desc" ? activeMetric.color : T.subtext,
+                }}>Rising first</button>
+                <button onClick={() => commitOwnershipChange(() => setSortDir("asc"))} style={{
+                  padding: "9px 14px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "none",
+                  borderLeft: `1.5px solid ${T.border}`,
+                  background: sortDir === "asc" ? (isDark ? `${activeMetric.color}28` : `${activeMetric.color}12`) : "transparent",
+                  color: sortDir === "asc" ? activeMetric.color : T.subtext,
+                }}>Falling first</button>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12.5, color: T.subtext, marginBottom: 10, ...mono }}>
+              {tableRows.length.toLocaleString()} results{searchQ.trim() ? ` for "${searchQ.trim()}"` : ""}
+            </div>
+
+            {/* Table */}
+            {tableRows.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "70px 20px", color: T.subtext, fontSize: 14 }}>
+                No stocks match your search.
+              </div>
+            ) : (
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden" }}>
+                {!isMobile && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 18px", background: T.tableHead, borderBottom: `1px solid ${T.border}` }}>
+                    <span style={{ width: 26, fontSize: 10.5, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em" }}>#</span>
+                    <span style={{ width: 38, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 10.5, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em" }}>Company</span>
+                    {activeMetric.id === "both" && (
+                      <>
+                        <span style={{ minWidth: 64, textAlign: "right", fontSize: 10.5, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em" }}>Foreign</span>
+                        <span style={{ minWidth: 64, textAlign: "right", fontSize: 10.5, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em" }}>Domestic</span>
+                      </>
+                    )}
+                    <span style={{ minWidth: 84, textAlign: "right", fontSize: 10.5, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.06em" }}>{activeMetric.id === "both" ? "Combined" : activeMetric.colHeader}</span>
+                  </div>
                 )}
+                <div style={{ padding: isMobile ? "0 4px" : 0 }}>
+                  {shown.map((stock, i) => (
+                    <MetricTableRow
+                      key={stock.ticker}
+                      stock={stock}
+                      metric={activeMetric}
+                      rank={i + 1}
+                      T={T}
+                      isDark={isDark}
+                      isMobile={isMobile}
+                      onSelect={setSelected}
+                    />
+                  ))}
+                </div>
               </div>
             )}
-          </div>
+
+            {tableRows.length > visibleCount && (
+              <div style={{ textAlign: "center", paddingTop: 20 }}>
+                <button onClick={() => setVisibleCount(c => c + SHOW_MORE_STEP)} style={{
+                  padding: "11px 30px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: "transparent",
+                  color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit", transition: "background .15s",
+                }}
+                  onMouseEnter={e => e.currentTarget.style.background = T.surface}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  Show more +{SHOW_MORE_STEP}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
