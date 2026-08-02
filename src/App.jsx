@@ -11859,12 +11859,14 @@ let _screensPivotCache = { rows: null, loadedAt: null };
 let _screensVolBreakCache = { rows: null, loadedAt: null };
 let _screensPullbackCache = { rows: null, loadedAt: null };
 let _screensVcpCache = { rows: null, returnMap: null, loadedAt: null };
+let _screensMinerviniCache = { rows: null, loadedAt: null };
 
 const _LS_SCR_BREAKOUT = "te_scr_breakout_v1";
 const _LS_SCR_PIVOT = "te_scr_pivot_v1";
 const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
 const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
 const _LS_SCR_VCP = "te_scr_vcp_v1";
+const _LS_SCR_MINERVINI = "te_scr_minervini_v1";
 
 // In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
 let _prefetchBreakoutPromise = null;
@@ -11872,6 +11874,7 @@ let _prefetchPivotPromise = null;
 let _prefetchVolBreakPromise = null;
 let _prefetchPullbackPromise = null;
 let _prefetchVcpPromise = null;
+let _prefetchMinerviniPromise = null;
 
 // Seed all screens caches from localStorage on module load (SWR: serve stale on first paint)
 (function _seedScreensCaches() {
@@ -11881,6 +11884,7 @@ let _prefetchVcpPromise = null;
         [_LS_SCR_VOLBREAK, v => { _screensVolBreakCache = v; }],
         [_LS_SCR_PULLBACK, v => { _screensPullbackCache = v; }],
         [_LS_SCR_VCP, v => { _screensVcpCache = v; }],
+        [_LS_SCR_MINERVINI, v => { _screensMinerviniCache = v; }],
     ];
     pairs.forEach(([key, setter]) => {
         try {
@@ -12000,6 +12004,33 @@ function _prefetchScreensPullback() {
         finally { _prefetchPullbackPromise = null; }
     })();
     return _prefetchPullbackPromise;
+}
+
+// minervini_screen is a plain table (refreshed daily by the sync pipeline),
+// not an RPC — fetch directly via PostgREST, same SWR cache/localStorage/
+// in-flight-promise pattern as the other screens above.
+function _prefetchScreensMinervini() {
+    if (_screensMinerviniCache.rows && _screensMinerviniCache.rows.length > 0 &&
+        _screensMinerviniCache.loadedAt && (Date.now() - _screensMinerviniCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
+        return Promise.resolve(_screensMinerviniCache.rows);
+    }
+    if (_prefetchMinerviniPromise) return _prefetchMinerviniPromise;
+    _prefetchMinerviniPromise = (async () => {
+        try {
+            const url = `${SUPABASE_URL}/rest/v1/minervini_screen?select=*&passes_all=eq.true&order=rs_rating.desc&limit=500`;
+            const r = await fetch(url, {
+                headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+            });
+            const rows = await r.json();
+            if (!Array.isArray(rows)) throw new Error(rows?.message || "minervini_screen returned a non-array response");
+            const cache = { rows, loadedAt: Date.now() };
+            _screensMinerviniCache = cache;
+            _lsWriteScreens(_LS_SCR_MINERVINI, cache);
+            return rows;
+        } catch (e) { console.warn("[prefetch] Minervini failed:", e); return []; }
+        finally { _prefetchMinerviniPromise = null; }
+    })();
+    return _prefetchMinerviniPromise;
 }
 
 function _prefetchScreensVcp() {
@@ -17642,6 +17673,11 @@ const ALL_COLUMNS = [
     { key: "sma200", label: "200 SMA", defaultOn: false },
 ];
 
+// minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
+// (rel_vol is normalized to rel_volume in the dMinervini mapping above), so these
+// default-on columns match what the table actually has data for.
+const MINERVINI_DEFAULT_COLS = ["close", "pct_from_52w_high", "pct_from_52w_low", "ret_3m", "ret_6m", "ret_12m", "rel_volume", "sma50", "sma150", "sma200"];
+
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
     { key: "pct_from_52w_low", label: "From 52W Low %", defaultOp: ">", num: true },
@@ -18105,6 +18141,7 @@ function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, nameMap,
 // 
 function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFundaScan, tablesLoading }) {
     const { title, subtitle, color, rows, scoreKey, scoreLabel, formatVal, vcpMode, pivotMode, pullbackMode } = detail;
+    const minerviniMode = !!detail.minerviniMode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -18166,6 +18203,9 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
             // In pullback mode, default-on the columns specified by each scan
         } else if (pullbackMode && detail.pullbackCols && detail.pullbackCols.includes(c.key)) {
             a[c.key] = true;
+            // Minervini scan: swap in the columns it actually has data for
+        } else if (minerviniMode) {
+            a[c.key] = MINERVINI_DEFAULT_COLS.includes(c.key);
         } else {
             a[c.key] = c.defaultOn;
         }
@@ -18324,7 +18364,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         { key: "sma50", label: "50 SMA" },
         { key: "sma150", label: "150 SMA" },
         { key: "sma200", label: "200 SMA" },
-    ].filter(c => visibleCols[c.key]);
+    ].filter(c => visibleCols[c.key] && c.key !== scoreKey);
     // VCP-specific extra columns (always visible in vcpMode, togglable via panel)
     const vcpColDefs = vcpMode ? VCP_EXTRA_COLS.filter(c => visibleCols[c.key] !== false) : [];
 
@@ -19547,12 +19587,68 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         [vcpRawRows, filterByUniverse]
     );
 
+    //  Minervini Trend Template scan  dedicated fetch from minervini_screen table 
+    // The table is refreshed daily by the sync pipeline and already carries the
+    // full 8-criteria Trend Template pass/fail flags (c1_above_150_200 ...
+    // c8_rs_above_70) plus criteria_passed / passes_all. We only fetch rows
+    // where passes_all = true (server-side filter), sorted by RS rating.
+    const [minerviniRawRows, setMinerviniRawRows] = useState(() => _screensMinerviniCache.rows || []);
+    const [minerviniLoading, setMinerviniLoading] = useState(!(_screensMinerviniCache.rows && _screensMinerviniCache.rows.length > 0));
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                //  SWR: serve stale cache instantly, then revalidate 
+                const _bc = _screensMinerviniCache;
+                const _bcHasData = _bc.rows && _bc.rows.length > 0;
+                if (_bcHasData) {
+                    if (!cancelled) { setMinerviniRawRows(_bc.rows); setMinerviniLoading(false); }
+                } else {
+                    setMinerviniLoading(true);
+                }
+
+                const rows = await _prefetchScreensMinervini();
+                if (!cancelled) setMinerviniRawRows(rows);
+            } catch (e) {
+                if (!cancelled) console.error("[Minervini] fetch failed:", e);
+            } finally {
+                if (!cancelled) setMinerviniLoading(false);
+            }
+        };
+
+        load();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Normalize to the shape the shared table/preview components expect
+    // (close/pct_from_52w_high/pct_from_52w_low) and apply the universe filter.
+    const dMinervini = useMemo(() => {
+        const mapped = (minerviniRawRows || []).map(r => {
+            const close = Number(r.adj_close);
+            const high = Number(r.w52_high);
+            const low = Number(r.w52_low);
+            return {
+                ...r,
+                close,
+                pct_from_52w_high: high > 0 ? ((close - high) / high) * 100 : null,
+                pct_from_52w_low: low > 0 ? ((close - low) / low) * 100 : null,
+                // minervini_screen stores this as rel_vol, but the shared table/filter/
+                // sort components everywhere else read rel_volume — normalize the key.
+                rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            };
+        });
+        return filterByUniverse(mapped);
+    }, [minerviniRawRows, filterByUniverse]);
+
     const totalCount = d52w.length + dRS3m.length + dRS6m.length + dRS12m.length +
         dMultiTF.length + dRsRating.length + dRsAccel.length;
     const techSetupsCount = dVcp.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length;
+    const minerviniCount = dMinervini.length;
 
     //  Pill navigation: consume window.__wl_openScreen set by WatchlistDashboard 
     // Effect 1: on mount, read the global and store in state
@@ -20395,6 +20491,22 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 />
                             </CategorySection>
 
+                            <CategorySection name="Minervini"
+                                desc="Stocks passing all 8 criteria of Mark Minervini's Trend Template"
+                                count={minerviniLoading ? "..." : minerviniCount}>
+                                <ScreenRow
+                                    rowKey="mv-trend"
+                                    title="Trend Template — All 8 Criteria"
+                                    subtitle="Stage 2 uptrend: price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA trending up for 1 month, 50 SMA above 150/200 and price above 50 SMA, price 30%+ above 52W low, within 25% of 52W high, RS Rating >= 70"
+                                    rows={dMinervini}
+                                    scoreKey="rs_rating"
+                                    scoreLabel="RS Rating"
+                                    formatScore={v => Math.round(Number(v)).toString()}
+                                    tfLabel="Minervini Trend Template"
+                                    loadingOverride={minerviniLoading}
+                                    detailExtra={{ minerviniMode: true }}
+                                />
+                            </CategorySection>
 
                         </div>
 

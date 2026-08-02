@@ -2162,6 +2162,294 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
     );
 }
 
+// ─── TREND TEMPLATE (MINERVINI) CARD ──────────────────────────────────────────
+// Self-contained: fetches minervini_screen directly (passes_all=true, RS-sorted)
+// rather than threading through the page's shared Market Movers / RS state.
+// Explicit column list instead of select=* — if a column (e.g. stock_name) was
+// added to minervini_screen after Supabase's PostgREST last reloaded its schema
+// cache, select=* can silently omit it even though the data exists in Postgres.
+// Naming columns explicitly matches how it's queried in the SQL editor and is
+// more resilient to that stale-cache class of bug.
+const MINERVINI_SELECT_COLS = "ticker,stock_name,rs_rating,rel_vol,ret_3m,ret_6m,ret_12m,adj_close,w52_high,w52_low,sma50,sma150,sma200,passes_all";
+const MINERVINI_PATH = `minervini_screen?select=${MINERVINI_SELECT_COLS}&passes_all=eq.true&order=rs_rating.desc&limit=500`;
+const MINERVINI_TTL = 60 * 60 * 1000; // table is refreshed once daily by the sync pipeline
+
+function normalizeMinerviniRow(r) {
+    const close = Number(r.adj_close);
+    const high = Number(r.w52_high);
+    const low = Number(r.w52_low);
+    return {
+        ...r,
+        close,
+        // minervini_screen stores the company name as stock_name, but every other
+        // table/column in the dashboard reads name — normalize the key.
+        name: r.stock_name || r.name || null,
+        pct_from_52w_high: high > 0 ? ((close - high) / high) * 100 : null,
+        pct_from_52w_low: low > 0 ? ((close - low) / low) * 100 : null,
+        // minervini_screen stores this as rel_vol; normalize to rel_volume so it
+        // matches every other table/column key in the dashboard.
+        rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+    };
+}
+
+function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
+    const _cached = useMemo(() => {
+        const hit = cacheGet(MINERVINI_PATH, MINERVINI_TTL);
+        return hit ? hit.data || [] : null;
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const [rawRows, setRawRows] = useState(() => _cached || []);
+    const [loading, setLoading] = useState(() => !_cached);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [sortKey, setSortKey] = useState("rs_rating");
+    const [sortDir, setSortDir] = useState("desc");
+    const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                if (!_cached) setLoading(true);
+                const rows = await sbFetch(MINERVINI_PATH, userToken, {
+                    ttl: MINERVINI_TTL,
+                    onStale: fresh => { if (!cancelled && Array.isArray(fresh)) setRawRows(fresh); },
+                });
+                if (Array.isArray(rows) && rows.length && !("stock_name" in rows[0])) {
+                    // If this fires, the API genuinely isn't returning stock_name for this
+                    // request (even with an explicit column select) — that points to a
+                    // Postgres-side grant/permission issue on the column for the anon/
+                    // authenticated role, not a frontend bug. Reload the PostgREST schema
+                    // cache (Supabase dashboard → Settings → API → "Reload schema") or run
+                    // NOTIFY pgrst, 'reload schema'; and re-check GRANT SELECT on the column.
+                    console.warn("[TrendTemplateCard] API response is missing stock_name — check Supabase PostgREST schema cache / column grants", rows[0]);
+                }
+                if (!cancelled && Array.isArray(rows)) setRawRows(rows);
+            } catch (e) {
+                if (!cancelled) console.error("[TrendTemplateCard] fetch failed:", e);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToken]);
+
+    const rows = useMemo(() => {
+        const allowedSet = getAllowedTickerSetSync();
+        return (rawRows || [])
+            .filter(r => isAllowedTicker(r.ticker, allowedSet))
+            .map(normalizeMinerviniRow);
+    }, [rawRows]);
+
+    const filtered = useMemo(() => {
+        const q = searchTerm.trim().toUpperCase();
+        if (!q) return rows;
+        return rows.filter(r => (r.ticker || "").toUpperCase().includes(q) || (r.name || "").toUpperCase().includes(q));
+    }, [rows, searchTerm]);
+
+    const sorted = useMemo(() => {
+        if (!filtered.length) return [];
+        return [...filtered].sort((a, b) => {
+            const aVal = a[sortKey], bVal = b[sortKey];
+            const cmp = typeof aVal === "number" && typeof bVal === "number"
+                ? aVal - bVal
+                : String(aVal || "").localeCompare(String(bVal || ""));
+            return sortDir === "asc" ? cmp : -cmp;
+        });
+    }, [filtered, sortKey, sortDir]);
+
+    useEffect(() => { setVisibleCount(MOVERS_INITIAL_ROWS); }, [searchTerm, rawRows]);
+
+    const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
+    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+
+    const handleSort = key => {
+        if (sortKey === key) {
+            setSortDir(prev => prev === "asc" ? "desc" : "asc");
+        } else {
+            setSortKey(key);
+            setSortDir(key === "name" ? "asc" : "desc");
+        }
+    };
+
+    const thBase = {
+        fontWeight: 800,
+        fontSize: 10,
+        color: T.muted,
+        textTransform: "uppercase",
+        letterSpacing: "0.10em",
+        cursor: "pointer",
+        userSelect: "none",
+        whiteSpace: "nowrap",
+        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+        fontVariantNumeric: "tabular-nums",
+        background: T.isDark ? "rgba(15,23,42,0.7)" : "rgba(248,250,252,0.95)",
+        borderBottom: `1px solid ${T.panelBorder}`,
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+    };
+
+    const Th = ({ k, label, align = "right" }) => (
+        <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "11px 16px", textAlign: align }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: align === "left" ? "flex-start" : "flex-end", gap: 2 }}>
+                <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
+                <SortIcon dir={sortKey === k ? sortDir : null} />
+            </div>
+        </th>
+    );
+
+    return (
+        <SectionCard T={T} style={{ marginBottom: 0 }}>
+            <div style={{
+                display: "flex",
+                flexDirection: isCompact ? "column" : "row",
+                justifyContent: "space-between",
+                alignItems: isCompact ? "flex-start" : "center",
+                marginBottom: 4,
+                gap: 12,
+            }}>
+                <CardHeader
+                    T={T}
+                    title="Trend Template Filter"
+                    count={sorted.length}
+                    style={{ marginBottom: 0 }}
+                />
+                <div style={{ position: "relative", width: isCompact ? "100%" : 240 }}>
+                    <input
+                        type="text"
+                        placeholder="Search ticker..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "8px 12px 8px 32px",
+                            borderRadius: 8,
+                            border: `1px solid ${T.panelBorder}`,
+                            background: T.isDark ? "rgba(255,255,255,0.06)" : "#fff",
+                            color: T.text,
+                            fontSize: 12.5,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                            outline: "none",
+                            transition: "border-color 0.15s",
+                        }}
+                        onFocus={e => e.target.style.borderColor = `${T.pos || "#10b981"}60`}
+                        onBlur={e => e.target.style.borderColor = T.panelBorder}
+                    />
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.muted }}>
+                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    {searchTerm && (
+                        <button onClick={() => setSearchTerm("")} style={{
+                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                            background: "none", border: "none", cursor: "pointer", color: T.muted, padding: 4,
+                        }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
+            </div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                Stocks passing all 8 criteria of Mark Minervini's Trend Template
+            </div>
+
+            {loading ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {[...Array(6)].map((_, i) => <Skeleton key={i} T={T} h={48} />)}
+                </div>
+            ) : !sorted.length ? (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 15 }}>
+                    {searchTerm ? "No matching stocks" : "No stocks currently pass all 8 criteria"}
+                </div>
+            ) : (
+                <>
+                    <PremiumTableShell T={T} minWidth={1020} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+                        <thead>
+                            <tr>
+                                <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
+                                <Th k="name" label="Name" align="left" />
+                                <Th k="rs_rating" label="RS" />
+                                <Th k="ret_3m" label="3M" />
+                                <Th k="ret_6m" label="6M" />
+                                <Th k="ret_12m" label="12M" />
+                                <Th k="rel_volume" label="Rel Vol" />
+                                <Th k="pct_from_52w_high" label="From High" />
+                                <Th k="sma50" label="50 SMA" />
+                                <Th k="sma150" label="150 SMA" />
+                                <Th k="sma200" label="200 SMA" />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {visibleRows.map((row, i) => (
+                                <tr
+                                    key={row.ticker}
+                                    onClick={() => onTickerClick?.(row.ticker)}
+                                    style={{
+                                        borderBottom: i < visibleRows.length - 1
+                                            ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
+                                            : "none",
+                                        cursor: onTickerClick ? "pointer" : "default",
+                                        transition: "background 0.12s ease",
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                                >
+                                    <td style={{ padding: "12px 16px", color: T.muted, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                                    <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                                        <div style={{
+                                            fontWeight: 600, fontSize: 13, color: T.text, whiteSpace: "nowrap",
+                                            overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3,
+                                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                        }}>{row.name || row.ticker}</div>
+                                        {row.name && (
+                                            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                                        <span style={{
+                                            display: "inline-block", padding: "3px 9px", borderRadius: 6,
+                                            background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
+                                            border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
+                                            color: T.pos || "#0ea67a", fontFamily: "'IBM Plex Mono', monospace",
+                                            fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums",
+                                        }}>{row.rs_rating != null ? Math.round(row.rs_rating) : EMPTY_VALUE}</span>
+                                    </td>
+                                    {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
+                                        <td key={key} style={{
+                                            padding: "12px 16px", textAlign: "right",
+                                            color: val != null ? (val >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444")) : T.muted,
+                                            fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                        }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
+                                    ))}
+                                    <td style={{
+                                        padding: "12px 16px", textAlign: "right",
+                                        color: row.rel_volume == null ? T.muted : row.rel_volume >= 2 ? (T.pos || "#0ea67a") : T.text,
+                                        fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                    }}>{row.rel_volume != null ? `${Number(row.rel_volume).toFixed(2)}x` : EMPTY_VALUE}</td>
+                                    <td style={{
+                                        padding: "12px 16px", textAlign: "right",
+                                        color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                    }}>{row.pct_from_52w_high != null ? `${Number(row.pct_from_52w_high).toFixed(1)}%` : EMPTY_VALUE}</td>
+                                    {[["sma50", row.sma50], ["sma150", row.sma150], ["sma200", row.sma200]].map(([key, val]) => (
+                                        <td key={key} style={{
+                                            padding: "12px 16px", textAlign: "right",
+                                            color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                        }}>{fmt(val)}</td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </PremiumTableShell>
+                    <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+                </>
+            )}
+        </SectionCard>
+    );
+}
+
 // â”€â”€â”€ MOVERS TABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
@@ -3922,6 +4210,12 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                         </div>
                     )}
                 </div>
+
+                {/* â”€â”€ TREND TEMPLATE (MINERVINI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+                {(!isCompact || activeMobilePanel === "movers" || activeMobilePanel === "leaders") && (
+                    <TrendTemplateCard T={D} userToken={userToken} onTickerClick={onTickerClick} isCompact={isCompact} />
+                )}
+
                 <style>{`
                 .stock-dashboard-shell * {
                     box-sizing: border-box;

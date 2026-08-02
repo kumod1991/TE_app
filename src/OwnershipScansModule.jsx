@@ -214,12 +214,14 @@ const OWNERSHIP_PREVIEW_TIMEOUT_MS = 6000;
 
 async function fetchOwnershipScans({ limit = OWNERSHIP_RPC_LIMIT, timeoutMs = OWNERSHIP_RPC_TIMEOUT_MS } = {}) {
   const rows = await rpcFetch("get_company_shareholding_scans", { p_limit: limit }, timeoutMs);
-  return normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
+  const normalized = normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
+  return enrichOwnershipNames(normalized);
 }
 
 async function fetchOwnershipPreview() {
   const rows = await rpcFetch("get_company_shareholding_scans", { p_limit: OWNERSHIP_PREVIEW_LIMIT }, OWNERSHIP_PREVIEW_TIMEOUT_MS);
-  return normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
+  const normalized = normalizeOwnershipRows(Array.isArray(rows) ? rows : []);
+  return enrichOwnershipNames(normalized);
 }
 
 // ─── ON-DEMAND PER-STOCK DETAIL (drilldown modal only) ───────────────────────
@@ -255,7 +257,7 @@ async function fetchLegacyOwnershipProcessed() {
   const rawData = buildRawData(sh, mp, cfNames);
   const processed = await buildProcessedAsync(rawData, sectorMap);
   assertCompleteUniverse(processed, sh.length);
-  return processed;
+  return enrichOwnershipNames(processed);
 }
 
 async function fetchOwnershipUniverse() {
@@ -282,6 +284,59 @@ async function fetchCompanyFinancialsMapping() {
 
   console.warn("[Ownership] company_financials mapping unavailable; continuing without sector enrichment.", lastError?.message || lastError);
   return [];
+}
+
+// ─── NAME ENRICHMENT (bhav_copy) ─────────────────────────────────────────────
+// The ownership RPC's `name` column is unreliable (often null or just the
+// ticker echoed back). bhav_copy always has real company names, so for any
+// row whose name still looks like a bare ticker after normalization, look it
+// up there. Scoped to just the tickers we need (in.() filter) rather than
+// pulling the whole bhav_copy table, which has a row per ticker per day.
+async function fetchBhavCopyNameMap(tickers) {
+  const unique = [...new Set((tickers || []).map((t) => String(t || "").trim()).filter(Boolean))];
+  if (unique.length === 0) return {};
+
+  const map = {};
+  const CHUNK = 150; // keep the in.() query string well under URL length limits
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const inList = chunk.map((t) => encodeURIComponent(t)).join(",");
+    try {
+      const rows = await fetchAllPages(
+        `bhav_copy?select=ticker,name&ticker=in.(${inList})&order=date.desc`
+      );
+      for (const r of rows) {
+        const t = String(r.ticker || "").trim();
+        if (t && !map[t] && r.name) map[t] = r.name;
+      }
+    } catch (err) {
+      console.warn("[Ownership] bhav_copy name enrichment failed for a chunk, skipping:", err?.message || err);
+    }
+  }
+  return map;
+}
+
+// A name is "missing" if it's empty or if normalizeOwnershipRow's fallback
+// left it equal to the ticker (see `name: row.name ?? row.ticker` above).
+function looksLikeMissingName(row) {
+  if (!row) return false;
+  const name = String(row.name || "").trim();
+  const ticker = String(row.ticker || "").trim();
+  return !name || name.toUpperCase() === ticker.toUpperCase();
+}
+
+async function enrichOwnershipNames(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return rows;
+  const missing = rows.filter(looksLikeMissingName);
+  if (missing.length === 0) return rows;
+
+  const nameMap = await fetchBhavCopyNameMap(missing.map((r) => r.ticker)).catch(() => ({}));
+  if (!nameMap || Object.keys(nameMap).length === 0) return rows;
+
+  return rows.map((r) => {
+    const better = nameMap[String(r.ticker || "").trim()];
+    return better ? { ...r, name: better } : r;
+  });
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
