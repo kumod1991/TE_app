@@ -27,6 +27,13 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
 const CACHE_KEY    = "ownership_processed_v10";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Temporary, cheap diagnostics — every cache/fetch decision logs a single
+// tagged line so the real bottleneck (cache miss? write failing silently?
+// slow network fetch?) shows up directly in the console instead of being
+// guessed at. Safe to flip to false once load times are confirmed fixed.
+const OWNERSHIP_DEBUG = true;
+function olog(...args) { if (OWNERSHIP_DEBUG) console.info("[Ownership]", ...args); }
+
 // This used to be a fixed floor of 500 rows, sized for the old RPC path
 // which pulled from the full raw shareholding universe. Now that data comes
 // straight from ownership_metrics (see fetchOwnershipMetricsTable), the real
@@ -56,20 +63,33 @@ function looksCompleteCount(count) {
 function cacheRead() {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
+    if (!raw) { olog("cacheRead: MISS — nothing in localStorage yet"); return null; }
     const { ts, processed } = JSON.parse(raw);
-    if (Date.now() - ts > CACHE_TTL_MS) return null;
-    if (!Array.isArray(processed) || !looksCompleteCount(processed.length)) return null;
+    const ageMin = (Date.now() - ts) / 60000;
+    if (Date.now() - ts > CACHE_TTL_MS) { olog(`cacheRead: MISS — cache expired (${ageMin.toFixed(0)}m old, TTL is ${CACHE_TTL_MS / 60000}m)`); return null; }
+    if (!Array.isArray(processed) || !looksCompleteCount(processed.length)) { olog(`cacheRead: MISS — ${processed?.length ?? 0} cached rows failed completeness check (lastGood=${getLastGoodCount()})`); return null; }
+    olog(`cacheRead: HIT — ${processed.length} rows, ${ageMin.toFixed(1)}m old`);
     return { processed, ts };
-  } catch { return null; }
+  } catch (err) { olog("cacheRead: MISS — parse error", err?.message); return null; }
 }
 
 function cacheWrite(processed) {
-  if (!Array.isArray(processed) || !looksCompleteCount(processed.length)) return;
+  if (!Array.isArray(processed) || !looksCompleteCount(processed.length)) {
+    olog(`cacheWrite: SKIPPED — ${processed?.length ?? 0} rows failed completeness check (lastGood=${getLastGoodCount()})`);
+    return;
+  }
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), processed }));
+    const payload = JSON.stringify({ ts: Date.now(), processed });
+    localStorage.setItem(CACHE_KEY, payload);
     setLastGoodCount(processed.length);
-  } catch {}
+    olog(`cacheWrite: OK — ${processed.length} rows, ${(payload.length / 1024).toFixed(0)}KB`);
+  } catch (err) {
+    // Previously a bare `catch {}` — a full/blocked localStorage (private
+    // browsing, quota exceeded, etc.) meant the cache silently never
+    // persisted, and every visit paid the full fetch cost with no trace of
+    // why. Now it's surfaced as a real warning.
+    console.warn("[Ownership] cacheWrite: FAILED — localStorage may be full, disabled, or blocked:", err?.message || err);
+  }
 }
 
 function assertCompleteUniverse(processed, sourceCount) {
@@ -120,16 +140,18 @@ const FRESH_MS = 5 * 60 * 1000;
 
 export function prefetchOwnershipData() {
   if (window.__ownershipInit && !window.__ownershipInit.loading && !window.__ownershipInit.refreshing) {
+    olog("prefetch: already have fresh in-memory data — instant, no work needed");
     return Promise.resolve();
   }
 
   initFromCacheIfPossible();
 
   if (window.__ownershipInit && !window.__ownershipInit.loading && !window.__ownershipInit.refreshing) {
+    olog("prefetch: localStorage cache satisfied the request — instant, no network needed");
     return Promise.resolve();
   }
 
-  if (_prefetchPromise) return _prefetchPromise;
+  if (_prefetchPromise) { olog("prefetch: a fetch is already in flight — reusing it"); return _prefetchPromise; }
 
   const isColdStart = !window.__ownershipInit;
   if (!window.__ownershipInit) {
@@ -148,7 +170,11 @@ export function prefetchOwnershipData() {
       .catch(() => []);
   }
 
+  const fetchStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  olog(isColdStart ? "prefetch: COLD START — no cache, no in-memory data, fetching from network…" : "prefetch: cache stale — refreshing from network in the background…");
   _prefetchPromise = fetchOwnershipUniverse().then((processed) => {
+    const elapsedMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - fetchStartedAt;
+    olog(`prefetch: network fetch finished in ${elapsedMs.toFixed(0)}ms — ${processed.length} rows`);
     assertCompleteUniverse(processed, processed.length);
     cacheWrite(processed);
     window.__ownershipInit = {
@@ -157,7 +183,8 @@ export function prefetchOwnershipData() {
       fetchedAt: Date.now(),
     };
     _previewPromise = null;
-  }).catch(() => {
+  }).catch((err) => {
+    olog("prefetch: network fetch FAILED —", err?.message || err);
     initFromCacheIfPossible();
     _prefetchPromise = null;
     _previewPromise = null;
@@ -175,22 +202,53 @@ if (typeof window !== "undefined") {
   prefetchOwnershipData();
 }
 
-// ─── PAGINATED FETCH (parallel) ───────────────────────────────────────────────
+// ─── PAGINATED FETCH (genuinely parallel) ─────────────────────────────────────
+// Previously this awaited each 250-row page one at a time in a while-loop —
+// for a table with a few thousand rows that's several sequential round trips
+// (each 100-300ms) stacking up on every non-cached load. Now the first page
+// asks Postgres for the exact total row count (via Prefer: count=exact,
+// answered in the Content-Range response header), so every remaining page
+// can be requested concurrently instead of waiting on the one before it.
 async function fetchAllPages(path) {
   const PAGE = 250;
-  let offset = 0, all = [];
-  while (true) {
-    const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: { ...sbH(), Range: `${offset}-${offset + PAGE - 1}`, "Range-Unit": "items" },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status} on ${path}`);
-    const page = await res.json();
-    if (!Array.isArray(page) || page.length === 0) break;
-    all = all.concat(page);
-    if (page.length < PAGE) break;
-    offset += PAGE;
+  const CONCURRENCY = 6; // keep parallel requests to a reasonable batch size
+
+  const pageUrl = (offset) => `${SUPABASE_URL}/rest/v1/${path}`;
+  const pageHeaders = (offset, withCount) => ({
+    ...sbH(),
+    Range: `${offset}-${offset + PAGE - 1}`,
+    "Range-Unit": "items",
+    ...(withCount ? { Prefer: "count=exact" } : {}),
+  });
+
+  const first = await fetchWithTimeout(pageUrl(0), { headers: pageHeaders(0, true) });
+  if (!first.ok) throw new Error(`HTTP ${first.status} on ${path}`);
+  const firstPage = await first.json();
+  if (!Array.isArray(firstPage) || firstPage.length === 0) return [];
+
+  const contentRange = first.headers.get("content-range"); // e.g. "0-249/1834"
+  const total = contentRange ? Number(contentRange.split("/")[1]) : NaN;
+
+  // Total unknown (header missing/blocked by a proxy) or the first page
+  // already covered everything — either way, no more pages to fetch.
+  if (!Number.isFinite(total) || total <= firstPage.length) return firstPage;
+
+  const offsets = [];
+  for (let offset = PAGE; offset < total; offset += PAGE) offsets.push(offset);
+
+  const rest = [];
+  for (let i = 0; i < offsets.length; i += CONCURRENCY) {
+    const batch = offsets.slice(i, i + CONCURRENCY);
+    const pages = await Promise.all(batch.map(async (offset) => {
+      const res = await fetchWithTimeout(pageUrl(offset), { headers: pageHeaders(offset, false) });
+      if (!res.ok) throw new Error(`HTTP ${res.status} on ${path} (offset ${offset})`);
+      const page = await res.json();
+      return Array.isArray(page) ? page : [];
+    }));
+    for (const page of pages) rest.push(...page);
   }
-  return all;
+
+  return [...firstPage, ...rest];
 }
 
 // ─── SHAREHOLDING FETCH WITH FALLBACK ─────────────────────────────────────────
@@ -1370,6 +1428,7 @@ export default function OwnershipScansModule({ T }) {
       const w = initFromCacheIfPossible() || window.__ownershipInit;
 
       if (w && !w.loading && !w.refreshing) {
+        olog("mount: instant path — data already available, no wait");
         setProcessed(w.processed);
         setLoading(false);
         setRefreshing(false);
@@ -1377,6 +1436,7 @@ export default function OwnershipScansModule({ T }) {
       }
 
       if (w && !w.loading && w.refreshing) {
+        olog("mount: showing stale-but-cached data instantly, refreshing in background");
         setProcessed(w.processed || []);
         setLoading(false);
         setRefreshing(true);
@@ -1392,6 +1452,7 @@ export default function OwnershipScansModule({ T }) {
         return;
       }
 
+      olog("mount: BLOCKING path — no usable cache or in-memory data, showing skeleton until fetch completes");
       setLoading(true);
       let previewApplied = false;
       try {
