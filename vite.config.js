@@ -32,6 +32,10 @@ export default defineConfig({
       includeAssets: ['icon-192.png', 'icon-512.png', 'tradeedge_logo.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        navigateFallbackDenylist: [
+          /^\/(?:robots\.txt|sitemap\.xml|ads\.txt|site\.webmanifest|manifest\.webmanifest|favicon\.svg|tradeedge_logo\.png|tradeedge-favicon\.svg|icon-192\.png|icon-512\.png)$/,
+          /^\/(?:sw\.js|workbox-.*\.js)$/
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
