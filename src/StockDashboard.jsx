@@ -4212,9 +4212,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 </div>
 
                 {/* â”€â”€ TREND TEMPLATE (MINERVINI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-                {(!isCompact || activeMobilePanel === "movers" || activeMobilePanel === "leaders") && (
-                    <TrendTemplateCard T={D} userToken={userToken} onTickerClick={onTickerClick} isCompact={isCompact} />
-                )}
+                {/* Own standalone card — shown regardless of which mobile tab (pulse/movers/
+                    leaders) is active, since it isn't one of the tabbed panels above. */}
+                <TrendTemplateCard T={D} userToken={userToken} onTickerClick={onTickerClick} isCompact={isCompact} />
 
                 <style>{`
                 .stock-dashboard-shell * {
