@@ -19714,7 +19714,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     @keyframes scr-expand  { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
     .scr-page-shell { width:min(100%, 1400px); margin:0 auto; padding:22px 24px 48px; display:flex; flex-direction:column; gap:18px; }
     .scr-hero {
-      position:relative; overflow:hidden; border:1px solid ${T.border}; border-radius:24px;
+      position:relative; overflow:hidden; border:1px solid ${T.border}; border-radius:20px;
       background:${isDark
             ? "linear-gradient(145deg, rgba(16,24,39,0.98) 0%, rgba(26,34,55,0.98) 46%, rgba(18,26,46,0.98) 100%)"
             : "linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(245,248,255,0.98) 42%, rgba(238,243,252,0.98) 100%)"};
@@ -19740,13 +19740,13 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     }
     .scr-hero-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; margin-top:18px; }
     .scr-overview-card {
-      padding:14px 16px; border-radius:18px; border:1px solid ${isDark ? "rgba(148,163,184,0.16)" : "rgba(148,163,184,0.18)"};
+      padding:16px 18px; border-radius:20px; border:1px solid ${isDark ? "rgba(148,163,184,0.16)" : "rgba(148,163,184,0.18)"};
       background:${isDark ? "rgba(15,23,42,0.54)" : "rgba(255,255,255,0.72)"};
       backdrop-filter: blur(10px);
     }
     .scr-overview-card strong { display:block; margin-top:8px; font-size:22px; line-height:1; letter-spacing:-.03em; color:${T.text}; }
     .scr-overview-card span { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:${T.muted}; }
-    .scr-overview-card small { display:block; margin-top:6px; font-size:12px; color:${T.subtext}; line-height:1.45; }
+    .scr-overview-card small { display:block; margin-top:6px; font-size:13px; color:${T.subtext}; line-height:1.5; }
     .scr-hero-panel {
       display:flex; flex-direction:column; gap:14px; padding:18px; border-radius:20px;
       border:1px solid ${isDark ? "rgba(129,140,248,0.18)" : "rgba(79,70,229,0.14)"};
@@ -19762,7 +19762,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     .scr-main-grid { display:grid; grid-template-columns:minmax(0, 1fr) 280px; gap:18px; align-items:start; }
     .scr-sections { display:flex; flex-direction:column; gap:14px; }
     .scr-side-panel {
-      position:sticky; top:76px; border:1px solid ${T.border}; border-radius:22px; overflow:hidden;
+      position:sticky; top:76px; border:1px solid ${T.border}; border-radius:20px; overflow:hidden;
       background:${T.card}; box-shadow:${isDark ? "0 18px 42px rgba(0,0,0,0.22)" : "0 18px 42px rgba(148,163,184,0.16)"};
     }
     .scr-side-panel-head { padding:18px 18px 14px; border-bottom:1px solid ${T.border}; }
@@ -19776,10 +19776,10 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
       border:1px solid ${isDark ? "rgba(99,102,241,0.16)" : "rgba(79,70,229,0.12)"};
     }
     .scr-section-card {
-      border:1px solid ${T.border}; border-radius:22px; overflow:hidden; background:${T.card};
+      border:1px solid ${T.border}; border-radius:20px; overflow:hidden; background:${T.card};
       box-shadow:${isDark ? "0 16px 34px rgba(0,0,0,0.16)" : "0 14px 28px rgba(148,163,184,0.12)"};
     }
-    .scr-section-content { padding:0 18px 10px; }
+    .scr-section-content { padding:0 20px 14px; }
     .scr-screen-row {
       transition:background .1s, border-color .16s, transform .16s, box-shadow .16s; cursor:pointer;
       border:1px solid transparent; border-radius:18px; margin-bottom:10px;
@@ -19830,7 +19830,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
       .scr-hero p { font-size:13px !important; }
       .scr-overview-card strong { font-size:20px; }
       .scr-hero-panel-grid { grid-template-columns:1fr; }
-      .scr-section-card { border-radius:18px; }
+      .scr-section-card { border-radius:20px; }
       .scr-screen-row { border-radius:16px; }
       .scr-preview-footer { flex-direction:column; align-items:stretch; }
       .scr-preview-actions { justify-content:stretch; }
@@ -20074,14 +20074,14 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="scr-row-head" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 6 }}>
                             <span style={{
-                                fontSize: 13, fontWeight: isExpanded ? 700 : 600,
+                                fontSize: 14, fontWeight: isExpanded ? 700 : 600,
                                 color: T.text, fontFamily: sans, lineHeight: 1.2
                             }}>
                                 {title}
                             </span>
                             {extraControls ? <div className="scr-inline-controls">{extraControls}</div> : null}
                         </div>
-                        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, lineHeight: 1.45 }} className="scr-cat-desc">{subtitle}</div>
+                        <div style={{ fontSize: 12, color: T.subtext, marginTop: 4, lineHeight: 1.5 }} className="scr-cat-desc">{subtitle}</div>
                         {!isLoading && stats && (
                             <div className="scr-mobile-stats">
                                 <div>
@@ -20091,8 +20091,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 {stats.avg != null && (
                                     <div>
                                         <div style={{
-                                            fontFamily: mono, fontSize: 12, fontWeight: 700,
-                                            color: stats.noSign ? (isDark ? "#818cf8" : "#4f46e5") : (stats.avg >= 0 ? (isDark ? "#4ade80" : "#16a34a") : T.neg)
+                                            fontFamily: mono, fontSize: 11, fontWeight: 700,
+                                            color: stats.noSign ? (isDark ? "#818cf8" : "#4f46e5") : (stats.avg >= 0 ? "#059669" : "#dc2626")
                                         }}>
                                             {stats.noSign ? stats.avg.toFixed(0) : `${stats.avg >= 0 ? "+" : ""}${stats.avg.toFixed(1)}%`}
                                         </div>
@@ -20107,7 +20107,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         <div className="scr-stat-block" style={{ display: "flex", alignItems: "center", gap: 20, marginRight: 16, flexShrink: 0 }}>
                             <div style={{ textAlign: "right" }}>
                                 <div style={{
-                                    fontFamily: mono, fontSize: 12, fontWeight: 600,
+                                    fontFamily: mono, fontSize: 11, fontWeight: 700,
                                     color: T.subtext, fontVariantNumeric: "tabular-nums"
                                 }}>
                                     {stats.count}
@@ -20120,8 +20120,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             {stats.avg != null && (
                                 <div style={{ textAlign: "right" }}>
                                     <div style={{
-                                        fontFamily: mono, fontSize: 12, fontWeight: 600,
-                                        color: stats.noSign ? (isDark ? "#818cf8" : "#4f46e5") : (stats.avg >= 0 ? (isDark ? "#4ade80" : "#16a34a") : T.neg),
+                                        fontFamily: mono, fontSize: 11, fontWeight: 700,
+                                        color: stats.noSign ? (isDark ? "#818cf8" : "#4f46e5") : (stats.avg >= 0 ? "#059669" : "#dc2626"),
                                         fontVariantNumeric: "tabular-nums"
                                     }}>
                                         {stats.noSign ? stats.avg.toFixed(0) : `${stats.avg >= 0 ? "+" : ""}${stats.avg.toFixed(1)}%`}
@@ -20180,7 +20180,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 <div onClick={() => setOpenCats(p => ({ ...p, [name]: !p[name] }))}
                     style={{
                         display: "flex", alignItems: "center", gap: 12,
-                        padding: "16px 18px", cursor: "pointer", userSelect: "none",
+                        padding: "18px 20px", cursor: "pointer", userSelect: "none",
                         borderBottom: open ? `1px solid ${T.border}` : "none",
                         transition: "background .1s"
                     }}
@@ -20188,7 +20188,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: T.text, fontFamily: sans }}>{name}</span>
+                            <span style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: sans, letterSpacing: "-0.015em" }}>{name}</span>
                             {!tablesLoading && count != null && (
                                 <span style={{
                                     fontFamily: mono, fontSize: 10, fontWeight: 700,
@@ -20199,7 +20199,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 }}>{count}</span>
                             )}
                         </div>
-                        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }} className="scr-cat-desc">{desc}</div>
+                        <div style={{ fontSize: 13, color: T.subtext, marginTop: 4, lineHeight: 1.5 }} className="scr-cat-desc">{desc}</div>
                     </div>
                     <div style={{
                         width: 26, height: 26, display: "flex", alignItems: "center",
@@ -20491,13 +20491,13 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 />
                             </CategorySection>
 
-                            <CategorySection name="Minervini"
+                            <CategorySection name="Trend Template"
                                 desc="Stocks passing all 8 criteria of Mark Minervini's Trend Template"
                                 count={minerviniLoading ? "..." : minerviniCount}>
                                 <ScreenRow
                                     rowKey="mv-trend"
                                     title="Trend Template — All 8 Criteria"
-                                    subtitle="Stage 2 uptrend: price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA trending up for 1 month, 50 SMA above 150/200 and price above 50 SMA, price 30%+ above 52W low, within 25% of 52W high, RS Rating >= 70"
+                                    subtitle="Stage 2 uptrend: price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA trending up for 1 month, 50 SMA above 150/200 and price above 50 SMA, price 30%+ above 52W low, within 25% of 52W high, RS Rating >= 80"
                                     rows={dMinervini}
                                     scoreKey="rs_rating"
                                     scoreLabel="RS Rating"
