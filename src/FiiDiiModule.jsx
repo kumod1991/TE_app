@@ -320,21 +320,17 @@ async function fetchLatestCashDate() {
 async function refreshModuleData() {
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
-    const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
+    const [cashResult, derivResult] = await Promise.allSettled([
       sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc" }),
       sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc" }),
-      sbFetchAll("fii_sector_flows", { select: "*", order: "date.desc" }),
     ]);
     if (cashResult.status !== "fulfilled") throw cashResult.reason;
     if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", derivResult.reason);
-    if (sectorResult.status === "rejected") console.warn("[FIIDII] Sector flow data unavailable; loading without sector tab data.", sectorResult.reason);
     const cash = cashResult.value || [];
     const derivRaw = derivResult.status === "fulfilled" ? derivResult.value || [] : [];
-    const sector = sectorResult.status === "fulfilled" ? sectorResult.value || [] : [];
     const data = {
       cashData: [...cash].sort((a, b) => new Date(a.date) - new Date(b.date)),
       derivData: pivotDerivData(derivRaw),
-      sectorData: sector,
     };
     writeModuleCache(data);
     return data;
@@ -775,6 +771,40 @@ const ViewToggle = ({ options, value, onChange, T, dataSpanYears }) => (
   </div>
 );
 
+const CASH_TABLE_PAGE_SIZE = 25;
+
+const TablePagination = ({ page, totalPages, onChange, T }) => {
+  if (totalPages <= 1) return null;
+  const pages = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - page) <= 1) {
+      pages.push(p);
+    } else if (pages[pages.length - 1] !== "…") {
+      pages.push("…");
+    }
+  }
+  const btnStyle = (active, disabled) => ({
+    minWidth: 28, height: 28, padding: "0 8px", borderRadius: 8,
+    border: `1px solid ${T.border}`, fontFamily: "inherit",
+    background: active ? (T.tabActiveBg || T.card) : "transparent",
+    color: active ? (T.tabActiveText || T.text) : T.subtext,
+    fontSize: 11, fontWeight: 700,
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+  });
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+      <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} style={btnStyle(false, page === 1)}>‹ Prev</button>
+      {pages.map((p, i) => (
+        p === "…"
+          ? <span key={`e${i}`} style={{ color: T.subtext, fontSize: 11, padding: "0 2px" }}>…</span>
+          : <button key={p} onClick={() => onChange(p)} style={btnStyle(p === page, false)}>{p}</button>
+      ))}
+      <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} style={btnStyle(false, page === totalPages)}>Next ›</button>
+    </div>
+  );
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -785,13 +815,9 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   const [activeTab,       setActiveTab]       = useState("Overview");
   const [cashData,        setCashData]        = useState(() => initialCache.data?.cashData || []);
   const [derivData,       setDerivData]       = useState(() => initialCache.data?.derivData || []);
-  const [sectorData,      setSectorData]      = useState(() => initialCache.data?.sectorData || []);
   const [loading,         setLoading]         = useState(() => !initialCache.data);
   const [error,           setError]           = useState(null);
   const [isMobile,        setIsMobile]        = useState(() => window.innerWidth < 768);
-  const [selectedSector,  setSelectedSector]  = useState("__ALL__");
-  const [fullscreen,      setFullscreen]      = useState(false);
-  const [selectedSectors, setSelectedSectors] = useState([]);
   // (1) Overview chart: "Daily" | "20D Rolling" — default 20D Rolling
   const [flowView,        setFlowView]        = useState("20D Rolling");
   // Default chart range
@@ -799,6 +825,11 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   const [derivRange,      setDerivRange]      = useState("3Y");
   // Table frequency toggles
   const [cashFreq,        setCashFreq]        = useState("Daily");
+  // Cash Flow table pagination — show latest CASH_TABLE_PAGE_SIZE rows per page
+  const [cashPage,        setCashPage]        = useState(1);
+
+  // Reset to page 1 whenever the frequency changes (row set changes underneath)
+  useEffect(() => { setCashPage(1); }, [cashFreq]);
 
   useEffect(() => {
     const h = () => setIsMobile(window.innerWidth < 768);
@@ -821,7 +852,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     if (cached.data) {
       setCashData(cached.data.cashData || []);
       setDerivData(cached.data.derivData || []);
-      setSectorData(cached.data.sectorData || []);
       setLoading(false);
     }
 
@@ -833,7 +863,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         if (cancelled) return;
         setCashData(data.cashData || []);
         setDerivData(data.derivData || []);
-        setSectorData(data.sectorData || []);
         setError(null);
       } catch (e) {
         if (!cancelled) {
@@ -913,82 +942,12 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return { rows, latest, lsRatio, buildUp, lsTrend };
   }, [derivData]);
 
-  // ── SECTOR MEMO ────────────────────────────────────────────────────────────
-  const sectorMemo = useMemo(() => {
-    if (!sectorData.length) return {};
-    const allSectors = [...new Set(sectorData.map(d => d.sector))].sort();
-    const latestDate = sectorData[0]?.date;
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
-    const parseNI = (d) => d.net_investment != null
-      ? parseFloat(String(d.net_investment).replace(/,/g, "")) || 0 : 0;
-
-    const ranking = allSectors.map(sector => {
-      const rows = sectorData.filter(d => d.sector === sector);
-      const total    = sum(rows.filter(d => new Date(d.date) >= cutoff).map(d => parseNI(d)));
-      const momentum = sum(rows.slice(0, 3).map(d => parseNI(d)));
-      return { sector, total, momentum };
-    }).sort((a, b) => b.total - a.total);
-
-    const sectorHistory = selectedSector === "__ALL__" ? [] :
-      sectorData.filter(d => d.sector === selectedSector)
-        .sort((a, b) => new Date(a.date) - new Date(b.date))
-        .map(d => {
-          // FIX: Robust parsing — strip commas, handle string "1,560" → 1560
-          const raw = d.net_investment;
-          const val = raw != null ? parseFloat(String(raw).replace(/,/g, "")) || 0 : 0;
-          return { date: d.date, label: fmtDateShort(d.date), value: val };
-        });
-
-    const multiSectorData = (() => {
-      if (!selectedSectors.length) return [];
-      // FIX: Normalise all dates to YYYY-MM-DD strings once for O(1) lookup
-      const normDate = (d) => {
-        if (!d) return "";
-        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-        return new Date(d).toISOString().slice(0, 10);
-      };
-      // Build a fast lookup map: "YYYY-MM-DD|SectorName" → parsed value
-      const lookup = new Map();
-      sectorData.forEach(d => {
-        const key = `${normDate(d.date)}|${(d.sector || "").trim().toLowerCase()}`;
-        // FIX: strip commas from values like "1,560"
-        const val = d.net_investment != null
-          ? parseFloat(String(d.net_investment).replace(/,/g, "")) || 0
-          : 0;
-        lookup.set(key, val);
-      });
-      const dateSet = [...new Set(sectorData.map(d => normDate(d.date)))].sort();
-      return dateSet.map(date => {
-        const row = { label: fmtDateShort(date), date };
-        selectedSectors.forEach(sec => {
-          const key = `${date}|${sec.trim().toLowerCase()}`;
-          row[sec] = lookup.get(key) ?? 0;
-        });
-        return row;
-      });
-    })();
-
-    const latestSnapshot = sectorData
-      .filter(d => d.date === latestDate)
-      .map(d => ({
-        ...d,
-        // FIX: parse robustly here too
-        net_investment: d.net_investment != null
-          ? parseFloat(String(d.net_investment).replace(/,/g, "")) || 0
-          : 0,
-      }))
-      .sort((a, b) => Math.abs(+b.net_investment||0) - Math.abs(+a.net_investment||0));
-
-    return { allSectors, latestDate, ranking, leaders: ranking.slice(0, 3), laggards: ranking.slice(-3).reverse(), sectorHistory, latestSnapshot, multiSectorData };
-  }, [sectorData, selectedSector, selectedSectors]);
-
   // ── SIGNALS MEMO ───────────────────────────────────────────────────────────
   const signals = useMemo(() => {
     if (cashMemo.fii20 == null) return {};
     const { fii20=0, dii20=0, z=0, absorption="", sellStreak=0 } = cashMemo;
     const { lsRatio="1", buildUp="" } = derivMemo;
     const lr = parseFloat(lsRatio) || 1;
-    const { latestSnapshot=[], leaders=[] } = sectorMemo;
     let regime = "Sideways / Neutral";
     if      (fii20 > 0 && lr > 1)                      regime = "Bullish Regime";
     else if (fii20 < 0 && buildUp === "Short Build-up") regime = "Bearish Regime";
@@ -1003,14 +962,9 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     if (absorption === "Both Selling")      insights.push({ type:"bearish", icon:"🔻", text:"Both institutions selling simultaneously — Rare risk-off event." });
     if (lr > 1.5) insights.push({ type:"bullish", icon:"📈", text:`FII L/S ${lr.toFixed(2)}x — heavily net-long in F&O. Bullish positioning.` });
     if (lr < 0.7) insights.push({ type:"bearish", icon:"📉", text:`FII L/S ${lr.toFixed(2)}x — net-short in F&O. Bearish positioning.` });
-    if (leaders.length) insights.push({ type:"info", icon:"🏆", text:`Top rotation: ${leaders.map(l => l.sector).join(", ")} (60D inflows).` });
-    const buying  = latestSnapshot.filter(s => +s.net_investment > 0).length;
-    const breadth = latestSnapshot.length ? Math.round(buying / latestSnapshot.length * 100) : 0;
-    if (breadth > 70) insights.push({ type:"bullish", icon:"🌐", text:`Broad buying: ${breadth}% of sectors seeing inflows.` });
-    if (breadth < 30) insights.push({ type:"bearish", icon:"🌐", text:`Narrow market: only ${breadth}% sectors with inflows.` });
     const exportText = [`📊 FII-DII Signal: ${regime}`, ``, `FII 20D: ${fmtCrShort(fii20)} | DII 20D: ${fmtCrShort(dii20)}`, `FII L/S: ${lr.toFixed(2)}x | Z-Score: ${z.toFixed(2)}`, ...insights.map(i => i.text), ``, `#FII #DII #NSE #Markets`].join("\n");
-    return { regime, insights, exportText, lsRatio: lr, z, breadth };
-  }, [cashMemo, derivMemo, sectorMemo]);
+    return { regime, insights, exportText, lsRatio: lr, z };
+  }, [cashMemo, derivMemo]);
 
   const overviewTabData = useMemo(() => {
     const daily = cashMemo.daily || [];
@@ -1054,6 +1008,14 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     });
   }, [cashData, cashFreq]);
 
+  // Cash Flow table pagination — only slice+render CASH_TABLE_PAGE_SIZE rows at a time
+  const cashPageCount = Math.max(1, Math.ceil(cashFlowTableRows.length / CASH_TABLE_PAGE_SIZE));
+  const cashPageClamped = Math.min(Math.max(1, cashPage), cashPageCount);
+  const cashFlowPageRows = useMemo(() => {
+    const start = (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE;
+    return cashFlowTableRows.slice(start, start + CASH_TABLE_PAGE_SIZE);
+  }, [cashFlowTableRows, cashPageClamped]);
+
   const derivativesTabData = useMemo(() => {
     const rows = derivMemo.rows || [];
     const lsTrend = derivMemo.lsTrend || [];
@@ -1064,11 +1026,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const derivRangeExceedsData = derivSelectedRangeYears != null && derivSelectedRangeYears > derivSpanYears;
     return { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData };
   }, [derivMemo.rows, derivMemo.lsTrend, derivRange]);
-
-  const sectorSnapshotMaxAbs = useMemo(() => {
-    const snapshot = sectorMemo.latestSnapshot || [];
-    return snapshot.reduce((max, item) => Math.max(max, Math.abs(+item.net_investment || 0)), 0);
-  }, [sectorMemo.latestSnapshot]);
 
   // ── SWIPE ──────────────────────────────────────────────────────────────────
   const card = { background: T.isDark ? T.surface : T.card, borderRadius: T.radiusLg || 24, padding: isMobile ? 14 : 18, border: `1px solid ${T.border}`, boxShadow: T.shadow, backdropFilter: "blur(16px)" };
@@ -1197,7 +1154,13 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         <div style={card}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
             <h3 style={{ ...sh, margin: 0 }}>Cash Flow Data</h3>
-            <ViewToggle options={["Daily", "Weekly", "Monthly", "Annual"]} value={cashFreq} onChange={setCashFreq} T={T} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: T.subtext }}>
+                Showing {cashFlowTableRows.length === 0 ? 0 : (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE + 1}
+                –{Math.min(cashPageClamped * CASH_TABLE_PAGE_SIZE, cashFlowTableRows.length)} of {cashFlowTableRows.length}
+              </span>
+              <ViewToggle options={["Daily", "Weekly", "Monthly", "Annual"]} value={cashFreq} onChange={setCashFreq} T={T} />
+            </div>
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -1209,7 +1172,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
                 </tr>
               </thead>
               <tbody>
-                {cashFlowTableRows.map((row, i) => {
+                {cashFlowPageRows.map((row, i) => {
                   const { fiiN, diiN, chg, abs, rowZ, label } = row;
                   const absC = abs==="Absorbed" ? GREEN : abs==="Risk-Off" ? RED : abs==="Both Buy" ? BLUE : T.subtext;
                   const rowBg = rowZ > 2 ? GREEN+"12" : rowZ < -2 ? RED+"12" : i%2===0 ? T.card : (T.surface||T.bg);
@@ -1233,6 +1196,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
               </tbody>
             </table>
           </div>
+          <TablePagination page={cashPageClamped} totalPages={cashPageCount} onChange={setCashPage} T={T} />
         </div>
       </div>
     );
@@ -1473,18 +1437,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         style={{ width:"100%", maxWidth:isMobile?"100%":1400, margin:"0 auto", minHeight:"100%", background:T.shellBg, border:isMobile?"none":`1px solid ${T.border}`, borderRadius:isMobile?0:(T.radiusLg + 6), boxShadow:T.shadow, position:"relative", overflow:"hidden" }}
       >
       <div style={{ position:"absolute", inset:0, background:T.shellOverlay, pointerEvents:"none" }} />
-      {/* Fullscreen sector chart */}
-      {fullscreen && sectorMemo.sectorHistory?.length > 0 && (
-        <div style={{ position:"fixed", inset:0, zIndex:9999, background:T.shellBg, display:"flex", flexDirection:"column" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${T.border}`, background:T.headerBg, backdropFilter:"blur(16px)", boxShadow:T.headerShadow }}>
-            <div style={{ fontSize:15, fontWeight:800, color:T.text, letterSpacing:-0.3 }}>{selectedSector} — Historical Net Flow</div>
-            <button onClick={() => setFullscreen(false)} style={{ background:T.card, border:`1px solid ${T.border}`, color:T.text, borderRadius:999, padding:"8px 16px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", boxShadow:T.shadowSoft }}>✕ Close</button>
-          </div>
-          <div style={{ flex:1, padding:16, overflowY:"auto" }}>
-            <SvgLineChart data={sectorMemo.sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={window.innerHeight-100} fill={true} T={T} />
-          </div>
-        </div>
-      )}
 
       {/* ── (5) STICKY HEADER + TAB BAR ── */}
       <div style={{
@@ -1503,7 +1455,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             <div style={{ fontSize:10, fontWeight:800, letterSpacing:1.6, textTransform:"uppercase", color:T.accent, marginBottom:6, opacity:T.isDark ? 0.9 : 1 }}>Institutional Flow Dashboard</div>
             <h1 style={{ fontSize:isMobile?22:30, fontWeight:800, color:T.text, margin:0, letterSpacing:-1 }}>FII · DII Analytics</h1>
             <p style={{ fontSize:isMobile?12:13, color:T.subtext, margin:"6px 0 0", lineHeight:1.6, maxWidth:900 }}>
-              Institutional flow intelligence for cash, derivatives, sector rotation, and regime tracking as of {fmtDate(cashData[cashData.length-1]?.date)}.
+              Institutional flow intelligence for cash, derivatives, and regime tracking as of {fmtDate(cashData[cashData.length-1]?.date)}.
             </p>
           </div>
           {signals.regime && <SignalPill signal={signals.regime} T={T} />}
