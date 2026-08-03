@@ -277,8 +277,8 @@ function cacheGetAllPages(path, ttl, pageSize = 1000, maxPages = 20) {
 //  Updated eagerly whenever batchFetchBhavNames resolves new rows.
 // ─────────────────────────────────────────────────────────────────────────────
 const _nameMap = new Map(); // ticker → name
-const MOVERS_BATCH_SIZE = 20;
-const VOLUME_SHOCKERS_BATCH_SIZE = 20;
+const MOVERS_BATCH_SIZE = 50;
+const VOLUME_SHOCKERS_BATCH_SIZE = 50;
 const MOVERS_TTL = 5 * 60 * 1000;
 const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
 const MOVERS_SELECT = "symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at";
@@ -291,8 +291,8 @@ const MOVERS_SELECT = "symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,
 const MOVERS_TAB_PATHS = {
     gainers: `market_movers?select=${MOVERS_SELECT}&rank_gainer=not.is.null&order=rank_gainer.asc.nullslast`,
     losers: `market_movers?select=${MOVERS_SELECT}&rank_loser=not.is.null&order=rank_loser.asc.nullslast`,
-    near_high: `market_movers?select=${MOVERS_SELECT}&near_high=eq.true&order=pct_from_high.desc.nullslast`,
-    near_low: `market_movers?select=${MOVERS_SELECT}&near_low=eq.true&order=pct_from_low.asc.nullslast`,
+    near_high: `market_movers?select=${MOVERS_SELECT}&order=pct_from_high.desc.nullslast`,
+    near_low: `market_movers?select=${MOVERS_SELECT}&order=pct_from_low.asc.nullslast`,
 };
 const VOLUME_SHOCKERS_BASE_PATH = "volume_shocker?select=ticker,exchange,date,open,high,low,close,today_volume,avg_volume_20d,volume_ratio&order=volume_ratio.desc.nullslast";
 
@@ -698,18 +698,18 @@ function buildDashboardTheme(T = {}) {
         accent,
         isDark,
         panelBg: isDark
-            ? `linear-gradient(180deg, ${withAlpha(card, 0.98)} 0%, ${withAlpha("#020617", 0.9)} 100%)`
+            ? `linear-gradient(180deg, ${withAlpha(card, 0.98)} 0%, ${withAlpha("#0b1220", 0.94)} 100%)`
             : `linear-gradient(180deg, ${withAlpha(card, 0.98)} 0%, ${withAlpha("#f8fafc", 0.98)} 100%)`,
         shellBg: isDark
-            ? `radial-gradient(circle at top left, ${withAlpha(accent, 0.18)} 0%, transparent 34%), radial-gradient(circle at top right, ${withAlpha(accentAlt, 0.14)} 0%, transparent 28%), ${bg}`
-            : `radial-gradient(circle at top left, ${withAlpha(accent, 0.12)} 0%, transparent 34%), radial-gradient(circle at top right, ${withAlpha(accentAlt, 0.1)} 0%, transparent 30%), linear-gradient(180deg, #f8fbff 0%, ${bg} 100%)`,
+            ? `radial-gradient(circle at top left, ${withAlpha(accent, 0.16)} 0%, transparent 30%), radial-gradient(circle at top right, ${withAlpha(accentAlt, 0.10)} 0%, transparent 26%), linear-gradient(180deg, #09111d 0%, ${bg} 100%)`
+            : `radial-gradient(circle at top left, ${withAlpha(accent, 0.10)} 0%, transparent 30%), radial-gradient(circle at top right, ${withAlpha(accentAlt, 0.08)} 0%, transparent 26%), linear-gradient(180deg, #fbfcfe 0%, ${bg} 100%)`,
         panelBorder: isDark ? withAlpha("#cbd5e1", 0.14) : withAlpha("#0f172a", 0.08),
         insetBorder: isDark ? withAlpha("#ffffff", 0.08) : withAlpha("#ffffff", 0.8),
         softFill: isDark ? withAlpha("#94a3b8", 0.1) : withAlpha("#e2e8f0", 0.7),
         hoverBg: isDark ? withAlpha(accent, 0.09) : withAlpha(accent, 0.06),
         tableHeadBg: isDark ? withAlpha("#0f172a", 0.76) : withAlpha("#f8fafc", 0.92),
-        shadowLg: isDark ? "0 24px 60px rgba(2, 6, 23, 0.45)" : "0 24px 60px rgba(15, 23, 42, 0.10)",
-        shadowMd: isDark ? "0 14px 34px rgba(2, 6, 23, 0.34)" : "0 14px 34px rgba(15, 23, 42, 0.08)",
+        shadowLg: isDark ? "0 24px 60px rgba(2, 6, 23, 0.32)" : "0 24px 60px rgba(15, 23, 42, 0.08)",
+        shadowMd: isDark ? "0 14px 34px rgba(2, 6, 23, 0.24)" : "0 14px 34px rgba(15, 23, 42, 0.06)",
         ring: withAlpha(accent, isDark ? 0.32 : 0.18),
         pillBg: isDark ? withAlpha("#0f172a", 0.72) : withAlpha("#ffffff", 0.8),
         pillBorder: isDark ? withAlpha("#cbd5e1", 0.12) : withAlpha("#0f172a", 0.08),
@@ -742,15 +742,15 @@ function SectionCard({ T, children, style = {}, className = "" }) {
             className={className}
             style={{
                 background: T.isDark
-                    ? `linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(15,23,42,0.6) 100%)`
+                    ? `linear-gradient(180deg, rgba(15,23,42,0.84) 0%, rgba(2,6,23,0.82) 100%)`
                     : `linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.92) 100%)`,
                 border: `1px solid ${T.panelBorder}`,
                 boxShadow: T.shadowMd,
-                borderRadius: 22,
-                padding: 20,
-                marginBottom: 18,
-                backdropFilter: "blur(18px)",
-                WebkitBackdropFilter: "blur(18px)",
+                borderRadius: 28,
+                padding: 24,
+                marginBottom: 20,
+                backdropFilter: "blur(22px)",
+                WebkitBackdropFilter: "blur(22px)",
                 position: "relative",
                 overflow: "hidden",
                 ...style,
@@ -759,7 +759,7 @@ function SectionCard({ T, children, style = {}, className = "" }) {
             <div style={{
                 position: "absolute",
                 inset: 1,
-                borderRadius: 21,
+                borderRadius: 27,
                 border: `1px solid ${T.insetBorder}`,
                 pointerEvents: "none",
             }} />
@@ -934,8 +934,8 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 
     return (
         <section style={{
-            marginBottom: isCompact ? 14 : 18,
-            borderRadius: 22,
+            marginBottom: isCompact ? 16 : 20,
+            borderRadius: 28,
             border: `1px solid ${D.panelBorder}`,
             background: D.isDark
                 ? `linear-gradient(135deg, ${withAlpha("#020617", 0.96)} 0%, ${withAlpha("#0f172a", 0.94)} 52%, ${withAlpha(D.accent, 0.16)} 100%)`
@@ -950,10 +950,10 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                 background: `linear-gradient(90deg, transparent, ${withAlpha(D.accent, D.isDark ? 0.08 : 0.05)}, transparent)`,
                 pointerEvents: "none",
             }} />
-            <div style={{ position: "relative", padding: isCompact ? "18px 16px" : "24px 26px" }}>
+            <div style={{ position: "relative", padding: isCompact ? "20px 18px" : "30px 30px" }}>
                 <div style={{
                     display: "grid",
-                    gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 1fr) minmax(580px, 1.1fr)",
+                    gridTemplateColumns: isCompact ? "1fr" : "minmax(260px, 0.72fr) minmax(860px, 1.58fr)",
                     gap: isCompact ? 18 : 24,
                     alignItems: "stretch",
                 }}>
@@ -962,12 +962,12 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 8,
-                            padding: "6px 10px",
+                            padding: "7px 12px",
                             borderRadius: 999,
                             background: toneBg,
                             border: `1px solid ${withAlpha(toneColor, 0.22)}`,
                             color: toneColor,
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: 700,
                             letterSpacing: "0.08em",
                             textTransform: "uppercase",
@@ -980,20 +980,20 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                         <h1 style={{
                             margin: 0,
                             color: D.text,
-                            fontSize: isCompact ? 24 : 36,
-                            lineHeight: 1.05,
+                            fontSize: isCompact ? 28 : 44,
+                            lineHeight: 1.04,
                             fontWeight: 800,
-                            letterSpacing: "-0.03em",
-                            maxWidth: 760,
+                            letterSpacing: "-0.04em",
+                            maxWidth: 520,
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                         }}>
                             Dashboard
                         </h1>
                         <p style={{
-                            margin: "10px 0 0",
+                            margin: "12px 0 0",
                             color: D.subtext,
-                            fontSize: 13,
-                            lineHeight: 1.6,
+                            fontSize: isCompact ? 14.5 : 16,
+                            lineHeight: 1.65,
                             maxWidth: 720,
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                         }}>
@@ -1003,28 +1003,29 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "minmax(140px, 1fr) minmax(140px, 1fr) minmax(280px, 2fr)",
-                        gap: 10,
+                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "minmax(240px, 1.05fr) minmax(240px, 1.05fr) minmax(420px, 1.45fr)",
+                        gap: 18,
+                        alignItems: "stretch",
                     }}>
                         {heroMetrics.map(metric => (
                             <div key={metric.label} style={{
                                 minWidth: 0,
-                                borderRadius: 10,
-                                padding: isCompact ? "12px 12px" : "14px 14px",
+                                borderRadius: 16,
+                                padding: isCompact ? "14px 14px" : "18px 24px",
                                 background: D.isDark ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.72)",
                                 border: `1px solid ${D.panelBorder}`,
                                 ...(metric.fiiDii && isCompact ? { gridColumn: "span 2" } : {}),
                             }}>
-                                <div style={{ fontSize: 10, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.10em", marginBottom: 7, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{metric.label}</div>
+                                <div style={{ fontSize: 11, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{metric.label}</div>
                                 {metric.fiiDii ? (
                                     <FiiDiiFlowBars D={D} data={fiiDiiData} isCompact={isCompact} />
                                 ) : metric.breadth ? (
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
                                         {metric.breadth.map(item => (
                                             <div key={item.label} style={{ minWidth: 0 }}>
                                                 <div style={{
                                                     color: D.subtext,
-                                                    fontSize: isCompact ? 9 : 10,
+                                                    fontSize: isCompact ? 10 : 11.5,
                                                     lineHeight: 1.2,
                                                     whiteSpace: "nowrap",
                                                     overflow: "hidden",
@@ -1035,7 +1036,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                                 <div style={{
                                                     color: item.color,
                                                     fontFamily: "'IBM Plex Mono', monospace",
-                                                    fontSize: isCompact ? 13 : 15,
+                                                    fontSize: isCompact ? 14 : 17,
                                                     fontWeight: 800,
                                                     marginTop: 3,
                                                 }}>{item.value}</div>
@@ -1043,13 +1044,13 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                         ))}
                                     </div>
                                 ) : metric.sectors ? (
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                         {metric.sectors.length ? metric.sectors.map((sector, idx) => (
-                                            <div key={sector.industry || idx} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                            <div key={sector.industry || idx} style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                                                 <span style={{
-                                                    width: 18,
-                                                    height: 18,
-                                                    borderRadius: 6,
+                                                    width: 22,
+                                                    height: 22,
+                                                    borderRadius: 7,
                                                     display: "inline-flex",
                                                     alignItems: "center",
                                                     justifyContent: "center",
@@ -1057,7 +1058,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                                     background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10),
                                                     color: D.accent,
                                                     fontFamily: "'IBM Plex Mono', monospace",
-                                                    fontSize: 10,
+                                                    fontSize: 11.5,
                                                     fontWeight: 800,
                                                 }}>{idx + 1}</span>
                                                 <span style={{
@@ -1067,19 +1068,19 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                                     textOverflow: "ellipsis",
                                                     whiteSpace: "nowrap",
                                                     color: D.text,
-                                                    fontSize: isCompact ? 11 : 12,
+                                                    fontSize: isCompact ? 12.5 : 14,
                                                     fontWeight: 700,
                                                 }}>{sector.industry}</span>
                                                 <span style={{
                                                     flexShrink: 0,
                                                     color: D.accent,
                                                     fontFamily: "'IBM Plex Mono', monospace",
-                                                    fontSize: isCompact ? 12 : 13,
+                                                    fontSize: isCompact ? 13 : 14.5,
                                                     fontWeight: 800,
                                                 }}>{sector.count}</span>
                                             </div>
                                         )) : (
-                                            <div style={{ color: D.subtext, fontSize: 11 }}>waiting for RS data</div>
+                                            <div style={{ color: D.subtext, fontSize: 12.5 }}>waiting for RS data</div>
                                         )}
                                     </div>
                                 ) : (
@@ -1087,14 +1088,14 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                         <div style={{
                                             color: metric.color,
                                             fontFamily: "'IBM Plex Mono', monospace",
-                                            fontSize: isCompact ? 15 : 18,
+                                            fontSize: isCompact ? 17 : 20,
                                             fontWeight: 800,
                                             lineHeight: 1.2,
                                             overflow: "hidden",
                                             textOverflow: "ellipsis",
                                             whiteSpace: "nowrap",
                                         }}>{metric.value}</div>
-                                        <div style={{ color: D.subtext, fontSize: 11, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{metric.sub}</div>
+                                        <div style={{ color: D.subtext, fontSize: 12, marginTop: 7, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{metric.sub}</div>
                                     </>
                                 )}
                             </div>
@@ -1105,39 +1106,39 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                 <div style={{
                     display: "grid",
                     gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
-                    gap: 8,
-                    marginTop: isCompact ? 18 : 22,
+                    gap: 10,
+                    marginTop: isCompact ? 20 : 24,
                 }}>
                     {lenses.map(lens => (
                         <button key={lens.title} onClick={lens.onClick} type="button" style={{
                             minWidth: 0,
-                            minHeight: isCompact ? 86 : 94,
+                            minHeight: isCompact ? 92 : 102,
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "flex-start",
                             justifyContent: "space-between",
                             gap: 10,
                             textAlign: "left",
-                            borderRadius: 12,
+                            borderRadius: 16,
                             border: `1px solid ${D.panelBorder}`,
                             background: D.isDark ? "rgba(15,23,42,0.54)" : "rgba(255,255,255,0.70)",
                             color: D.text,
                             cursor: "pointer",
-                            padding: "12px",
+                            padding: "14px",
                             fontFamily: "inherit",
                             transition: "transform .14s ease, border-color .14s ease, background .14s ease",
                         }}
                             onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(D.accent, 0.42); }}
                             onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
                         >
-                            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent }}>
+                            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 10, background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent }}>
                                 <DashboardLensIcon type={lens.type} />
                             </span>
                             <span style={{ minWidth: 0, width: "100%" }}>
-                                <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.title}</span>
-                                <span style={{ display: "block", fontSize: 11, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.meta}</span>
+                                <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.title}</span>
+                                <span style={{ display: "block", fontSize: 12, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.meta}</span>
                             </span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: D.accent, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.action}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: D.accent, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.action}</span>
                         </button>
                     ))}
                 </div>
@@ -1533,11 +1534,11 @@ function PremiumTableShell({ T, children, minWidth, maxHeight, isScrollable }) {
             overflowX: "auto",
             overflowY: isScrollable ? "auto" : "visible",
             maxHeight: isScrollable ? maxHeight : "none",
-            borderRadius: 14,
+            borderRadius: 20,
             border: `1px solid ${T.panelBorder}`,
             background: T.isDark
-                ? "linear-gradient(180deg, rgba(15,23,42,0.7) 0%, rgba(15,23,42,0.5) 100%)"
-                : "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.92) 100%)",
+                ? "linear-gradient(180deg, rgba(15,23,42,0.68) 0%, rgba(15,23,42,0.5) 100%)"
+                : "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(248,250,252,0.96) 100%)",
             boxShadow: T.isDark
                 ? "inset 0 1px 0 rgba(255,255,255,0.06)"
                 : "inset 0 1px 0 rgba(255,255,255,0.9)",
@@ -1549,7 +1550,7 @@ function PremiumTableShell({ T, children, minWidth, maxHeight, isScrollable }) {
                 minWidth,
                 tableLayout: "auto",
                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                fontSize: 13,
+                fontSize: 14.5,
             }}>
                 {children}
             </table>
@@ -1563,14 +1564,14 @@ function CardHeader({ T, title, count, right, style = {} }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10, flexWrap: "wrap", ...style }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0, flex: 1 }}>
                 <span style={{
-                    fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
+                    fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em",
                     color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
                 }}>{title}</span>
                 {typeof count === "number" && (
                     <span style={{
-                        fontSize: 10, fontWeight: 700, color: accentGrn,
-                        padding: "2px 8px", borderRadius: 20,
+                        fontSize: 11, fontWeight: 700, color: accentGrn,
+                        padding: "3px 10px", borderRadius: 999,
                         background: withAlpha(accentGrn, T.isDark ? 0.18 : 0.10),
                         border: `1px solid ${withAlpha(accentGrn, 0.30)}`,
                         fontFamily: "'IBM Plex Mono', monospace",
@@ -1590,10 +1591,10 @@ function TabButton({ T, active, label, count, onClick, hideCount }) {
             style={{
                 position: "relative",
                 flex: "0 0 auto",
-                padding: "6px 14px",
-                fontSize: 12,
+                padding: "10px 16px",
+                fontSize: 13,
                 fontWeight: active ? 700 : 500,
-                letterSpacing: active ? "0.005em" : "0.01em",
+                letterSpacing: active ? "0.002em" : "0.01em",
                 color: active ? accentGrn : T.muted,
                 background: active
                     ? T.isDark
@@ -1601,7 +1602,7 @@ function TabButton({ T, active, label, count, onClick, hideCount }) {
                         : `linear-gradient(135deg, ${withAlpha(accentGrn, 0.12)} 0%, ${withAlpha(accentGrn, 0.05)} 100%)`
                     : "transparent",
                 border: "none",
-                borderRadius: 8,
+                borderRadius: 12,
                 cursor: "pointer",
                 transition: "color 0.18s ease, background 0.18s ease",
                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
@@ -1619,10 +1620,10 @@ function TabButton({ T, active, label, count, onClick, hideCount }) {
                     alignItems: "center",
                     justifyContent: "center",
                     minWidth: 20,
-                    height: 18,
+                    height: 20,
                     padding: "0 5px",
-                    borderRadius: 5,
-                    fontSize: 10,
+                    borderRadius: 999,
+                    fontSize: 11,
                     fontWeight: 700,
                     fontFamily: "'IBM Plex Mono', monospace",
                     letterSpacing: "0.02em",
@@ -1660,13 +1661,13 @@ function TabBar({ T, children, style = {} }) {
             display: "inline-flex",
             alignItems: "center",
             gap: 2,
-            padding: "4px",
+            padding: "5px",
             background: T.isDark
                 ? "rgba(15,23,42,0.55)"
                 : "rgba(248,250,252,0.90)",
             backdropFilter: "blur(10px)",
             WebkitBackdropFilter: "blur(10px)",
-            borderRadius: 12,
+            borderRadius: 16,
             border: `1px solid ${T.panelBorder}`,
             boxShadow: T.isDark
                 ? "inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 4px rgba(0,0,0,0.18)"
@@ -1760,7 +1761,7 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
         padding: "11px 16px",
         textAlign: "left",
         fontWeight: 800,
-        fontSize: 10,
+        fontSize: 11,
         color: T.muted,
         textTransform: "uppercase",
         letterSpacing: "0.10em",
@@ -1800,10 +1801,10 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                             }}
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
-                            <td style={{ padding: "13px 16px", color: T.text, fontWeight: 500, fontSize: 13, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                            <td style={{ padding: "15px 18px", color: T.text, fontWeight: 500, fontSize: 14.5, lineHeight: 1.45, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                 {row.industry}
                             </td>
-                            <td style={{ padding: "13px 16px" }}>
+                            <td style={{ padding: "15px 18px" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
                                     <div style={{
                                         width: 90, height: 4, borderRadius: 999,
@@ -1820,11 +1821,11 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                                     </div>
                                     <span style={{
                                         fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
-                                        fontSize: 13, color, minWidth: 40, textAlign: "right",
+                                        fontSize: 14, color, minWidth: 44, textAlign: "right",
                                     }}>{pct.toFixed(1)}%</span>
                                     <span style={{
-                                        fontFamily: "'IBM Plex Mono', monospace", fontSize: 12,
-                                        color: T.muted, minWidth: 50, textAlign: "right",
+                                        fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                        color: T.muted, minWidth: 54, textAlign: "right",
                                     }}>{row.count}/{row.total}</span>
                                 </div>
                             </td>
@@ -1885,7 +1886,7 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
 
     const thBaseRT = {
         fontWeight: 800,
-        fontSize: 10,
+        fontSize: 11,
         color: T.muted,
         textTransform: "uppercase",
         letterSpacing: "0.10em",
@@ -1903,7 +1904,7 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
     const RTTh = ({ k, label }) => {
         const a = k === "ticker" ? "left" : "right";
         return (
-            <th onClick={() => handleSort(k)} style={{ ...thBaseRT, padding: "11px 16px", textAlign: a }}>
+            <th onClick={() => handleSort(k)} style={{ ...thBaseRT, padding: "13px 18px", textAlign: a }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: a === "left" ? "flex-start" : "flex-end", gap: 2 }}>
                     <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
                     <SortIcon dir={sortKey === k ? sortDir : null} />
@@ -1939,10 +1940,10 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
                         onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                     >
                         {/* Name + ticker cell – mirrors MoversTable layout */}
-                        <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                        <td style={{ padding: "14px 18px", maxWidth: 260, minWidth: 180 }}>
                             <div style={{
                                 fontWeight: 600,
-                                fontSize: 13,
+                                fontSize: 14.5,
                                 color: T.text,
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
@@ -1953,35 +1954,35 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
                             {row.name && (
                                 <div style={{
                                     fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     color: T.muted,
                                     marginTop: 2,
                                     letterSpacing: "0.03em",
                                 }}>{row.ticker}</div>
                             )}
                         </td>
-                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                        <td style={{ padding: "14px 18px", textAlign: "right" }}>
                             <span style={{
                                 display: "inline-block",
-                                padding: "3px 9px",
-                                borderRadius: 6,
+                                padding: "4px 10px",
+                                borderRadius: 999,
                                 background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
                                 border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
                                 color: T.pos || "#0ea67a",
                                 fontFamily: "'IBM Plex Mono', monospace",
                                 fontWeight: 700,
-                                fontSize: 13,
+                                fontSize: 14,
                                 fontVariantNumeric: "tabular-nums",
                             }}>{row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}</span>
                         </td>
                         {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
                             <td key={key} style={{
-                                padding: "12px 16px",
+                                padding: "14px 18px",
                                 textAlign: "right",
                                 color: val != null ? (val >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444")) : T.muted,
                                 fontWeight: 600,
                                 fontFamily: "'IBM Plex Mono', monospace",
-                                fontSize: 13,
+                                fontSize: 14,
                             }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
                         ))}
                     </tr>
@@ -2053,7 +2054,7 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
 
     const thBaseAR = {
         fontWeight: 800,
-        fontSize: 10,
+        fontSize: 11,
         color: T.muted,
         textTransform: "uppercase",
         letterSpacing: "0.10em",
@@ -2070,7 +2071,7 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
     };
 
     const ARTh = ({ k, label, align = "right" }) => (
-        <th onClick={() => handleSort(k)} style={{ ...thBaseAR, padding: "11px 16px", textAlign: align }}>
+        <th onClick={() => handleSort(k)} style={{ ...thBaseAR, padding: "13px 18px", textAlign: align }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: align === "left" ? "flex-start" : "flex-end", gap: 2 }}>
                 <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
                 <SortIcon dir={sortKey === k ? sortDir : null} />
@@ -2083,7 +2084,7 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
         <PremiumTableShell T={T} minWidth={660} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
-                    <th style={{ ...thBaseAR, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
+                    <th style={{ ...thBaseAR, padding: "13px 18px", textAlign: "left", width: 40 }}>#</th>
                     <ARTh k="name" label="Name" align="left" />
                     <ARTh k="rs_rating" label="RS" />
                     <ARTh k="ret_3m" label="3M" />
@@ -2106,12 +2107,12 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
                         onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; }}
                         onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                     >
-                        <td style={{ padding: "12px 16px", color: T.muted, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                        <td style={{ padding: "14px 18px", color: T.muted, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 40, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                         {/* Name + ticker cell – mirrors MoversTable layout */}
-                        <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                        <td style={{ padding: "14px 18px", maxWidth: 260, minWidth: 180 }}>
                             <div style={{
                                 fontWeight: 600,
-                                fontSize: 13,
+                                fontSize: 14.5,
                                 color: T.text,
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
@@ -2122,35 +2123,35 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
                             {row.name && (
                                 <div style={{
                                     fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     color: T.muted,
                                     marginTop: 2,
                                     letterSpacing: "0.03em",
                                 }}>{row.ticker}</div>
                             )}
                         </td>
-                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                        <td style={{ padding: "14px 18px", textAlign: "right" }}>
                             <span style={{
                                 display: "inline-block",
-                                padding: "3px 9px",
-                                borderRadius: 6,
+                                padding: "4px 10px",
+                                borderRadius: 999,
                                 background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
                                 border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
                                 color: T.pos || "#0ea67a",
                                 fontFamily: "'IBM Plex Mono', monospace",
                                 fontWeight: 700,
-                                fontSize: 13,
+                                fontSize: 14,
                                 fontVariantNumeric: "tabular-nums",
                             }}>{row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}</span>
                         </td>
                         {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
                             <td key={key} style={{
-                                padding: "12px 16px",
+                                padding: "14px 18px",
                                 textAlign: "right",
                                 color: val != null ? (val >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444")) : T.muted,
                                 fontWeight: 600,
                                 fontFamily: "'IBM Plex Mono', monospace",
-                                fontSize: 13,
+                                fontSize: 14,
                             }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
                         ))}
                     </tr>
@@ -2274,7 +2275,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
 
     const thBase = {
         fontWeight: 800,
-        fontSize: 10,
+        fontSize: 11,
         color: T.muted,
         textTransform: "uppercase",
         letterSpacing: "0.10em",
@@ -2291,7 +2292,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
     };
 
     const Th = ({ k, label, align = "right" }) => (
-        <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "11px 16px", textAlign: align }}>
+        <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "13px 18px", textAlign: align }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: align === "left" ? "flex-start" : "flex-end", gap: 2 }}>
                 <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
                 <SortIcon dir={sortKey === k ? sortDir : null} />
@@ -2323,12 +2324,12 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                         onChange={e => setSearchTerm(e.target.value)}
                         style={{
                             width: "100%",
-                            padding: "8px 12px 8px 32px",
-                            borderRadius: 8,
+                            padding: "11px 14px 11px 36px",
+                            borderRadius: 14,
                             border: `1px solid ${T.panelBorder}`,
                             background: T.isDark ? "rgba(255,255,255,0.06)" : "#fff",
                             color: T.text,
-                            fontSize: 12.5,
+                            fontSize: 14,
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                             outline: "none",
                             transition: "border-color 0.15s",
@@ -2337,7 +2338,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                         onBlur={e => e.target.style.borderColor = T.panelBorder}
                     />
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.muted }}>
+                        style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.muted }}>
                         <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
                     {searchTerm && (
@@ -2352,7 +2353,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                     )}
                 </div>
             </div>
-            <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                                <div style={{ fontSize: 13.5, color: T.muted, marginBottom: 16, lineHeight: 1.55 }}>
                 Stocks passing all 8 criteria of Mark Minervini's Trend Template
             </div>
 
@@ -2361,7 +2362,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                     {[...Array(6)].map((_, i) => <Skeleton key={i} T={T} h={48} />)}
                 </div>
             ) : !sorted.length ? (
-                <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 15 }}>
+                <div style={{ padding: "48px 24px", textAlign: "center", color: T.muted, fontSize: 16 }}>
                     {searchTerm ? "No matching stocks" : "No stocks currently pass all 8 criteria"}
                 </div>
             ) : (
@@ -2369,7 +2370,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                     <PremiumTableShell T={T} minWidth={1110} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
                         <thead>
                             <tr>
-                                <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
+                                <th style={{ ...thBase, padding: "13px 18px", textAlign: "left", width: 40 }}>#</th>
                                 <Th k="name" label="Name" align="left" />
                                 <Th k="close" label="Price" />
                                 <Th k="rs_rating" label="RS" />
@@ -2398,50 +2399,50 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                                     onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; }}
                                     onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                                 >
-                                    <td style={{ padding: "12px 16px", color: T.muted, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
-                                    <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                                    <td style={{ padding: "14px 18px", color: T.muted, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 40, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                                    <td style={{ padding: "14px 18px", maxWidth: 260, minWidth: 180 }}>
                                         <div style={{
-                                            fontWeight: 600, fontSize: 13, color: T.text, whiteSpace: "nowrap",
+                                            fontWeight: 600, fontSize: 14.5, color: T.text, whiteSpace: "nowrap",
                                             overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3,
                                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                         }}>{row.name || row.ticker}</div>
                                         {row.name && (
-                                            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>
+                                            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>
                                         )}
                                     </td>
                                     <td style={{
-                                        padding: "12px 16px", textAlign: "right",
-                                        color: T.text, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                        padding: "14px 18px", textAlign: "right",
+                                        color: T.text, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14.5,
                                     }}>{row.close != null ? `₹${fmt(row.close)}` : EMPTY_VALUE}</td>
-                                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                                    <td style={{ padding: "14px 18px", textAlign: "right" }}>
                                         <span style={{
-                                            display: "inline-block", padding: "3px 9px", borderRadius: 6,
+                                            display: "inline-block", padding: "4px 10px", borderRadius: 999,
                                             background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
                                             border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
                                             color: T.pos || "#0ea67a", fontFamily: "'IBM Plex Mono', monospace",
-                                            fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums",
+                                            fontWeight: 700, fontSize: 14, fontVariantNumeric: "tabular-nums",
                                         }}>{row.rs_rating != null ? Math.round(row.rs_rating) : EMPTY_VALUE}</span>
                                     </td>
                                     {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
                                         <td key={key} style={{
-                                            padding: "12px 16px", textAlign: "right",
+                                            padding: "14px 18px", textAlign: "right",
                                             color: val != null ? (val >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444")) : T.muted,
-                                            fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                            fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14,
                                         }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
                                     ))}
                                     <td style={{
-                                        padding: "12px 16px", textAlign: "right",
+                                        padding: "14px 18px", textAlign: "right",
                                         color: row.rel_volume == null ? T.muted : row.rel_volume >= 2 ? (T.pos || "#0ea67a") : T.text,
-                                        fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                        fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14,
                                     }}>{row.rel_volume != null ? `${Number(row.rel_volume).toFixed(2)}x` : EMPTY_VALUE}</td>
                                     <td style={{
-                                        padding: "12px 16px", textAlign: "right",
-                                        color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                        padding: "14px 18px", textAlign: "right",
+                                        color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14,
                                     }}>{row.pct_from_52w_high != null ? `${Number(row.pct_from_52w_high).toFixed(1)}%` : EMPTY_VALUE}</td>
                                     {[["sma50", row.sma50], ["sma150", row.sma150], ["sma200", row.sma200]].map(([key, val]) => (
                                         <td key={key} style={{
-                                            padding: "12px 16px", textAlign: "right",
-                                            color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                            padding: "14px 18px", textAlign: "right",
+                                            color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14,
                                         }}>{fmt(val)}</td>
                                     ))}
                                 </tr>
@@ -2997,16 +2998,16 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
                             onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
-                            <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
-                                <div style={{ fontWeight: 600, fontSize: 13, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{row.name || row.ticker}</div>
-                                {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>}
+                            <td style={{ padding: "14px 18px", maxWidth: 260, minWidth: 180 }}>
+                                <div style={{ fontWeight: 600, fontSize: 14.5, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{row.name || row.ticker}</div>
+                                {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>}
                             </td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "14px 18px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
+                            <td style={{ padding: "14px 18px", textAlign: "right", whiteSpace: "nowrap" }}>
                                 <span style={{
                                     display: "inline-block",
-                                    padding: "3px 8px",
-                                    borderRadius: 6,
+                                    padding: "4px 10px",
+                                    borderRadius: 999,
                                     background: isPos
                                         ? withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10)
                                         : isNeg
@@ -3015,13 +3016,13 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
                                     color: chgColor,
                                     fontFamily: "'IBM Plex Mono', monospace",
                                     fontWeight: 700,
-                                    fontSize: 13,
+                                    fontSize: 14,
                                     minWidth: 64,
                                     textAlign: "right",
                                 }}>{fmtPct(chg)}</span>
                             </td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13 }}>{fmtVol(row.today_volume)}</td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 13, color: vrColor }}>
+                            <td style={{ padding: "14px 18px", textAlign: "right", color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14 }}>{fmtVol(row.today_volume)}</td>
+                            <td style={{ padding: "14px 18px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 14, color: vrColor }}>
                                 {vr != null ? `${Number(vr).toFixed(2)}x` : EMPTY_VALUE}
                             </td>
                         </tr>
@@ -3936,8 +3937,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     return (
         <div className={`stock-dashboard-shell ${D.isDark ? "is-dark" : "is-light"} ${isCompact ? "is-compact" : ""}`} style={{
             flex: 1, overflow: "auto", minHeight: 0,
-            background: D.shellBg, padding: isCompact ? "12px 10px 24px" : "24px 24px 40px",
+            background: D.shellBg, padding: isCompact ? "14px 12px 28px" : "28px 28px 44px",
             fontFamily: "'IBM Plex Sans', 'Segoe UI', sans-serif",
+            fontSize: 14.5,
             animation: "sdFadeIn 0.3s ease",
         }}>
 
@@ -3946,10 +3948,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 {error && (
                     <div style={{
                         display: "flex", alignItems: "flex-start", gap: 10,
-                        padding: "12px 16px", marginBottom: 16, borderRadius: 18,
+                        padding: "14px 18px", marginBottom: 18, borderRadius: 20,
                         background: D.negSoft,
                         border: `1px solid ${withAlpha(D.neg || "#ef4444", 0.22)}`,
-                        fontSize: 14, color: D.negText || D.neg,
+                        fontSize: 15, lineHeight: 1.55, color: D.negText || D.neg,
                         boxShadow: D.shadowMd,
                     }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -3979,15 +3981,15 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 />
 
                 {isCompact && (
-                    <div style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                        gap: 4,
-                        marginBottom: 12,
-                        padding: 4,
-                        borderRadius: 13,
-                        background: D.isDark ? "rgba(15,23,42,0.72)" : "rgba(248,250,252,0.92)",
-                        border: `1px solid ${D.panelBorder}`,
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 4,
+                    marginBottom: 14,
+                    padding: 4,
+                    borderRadius: 16,
+                    background: D.isDark ? "rgba(15,23,42,0.72)" : "rgba(248,250,252,0.92)",
+                    border: `1px solid ${D.panelBorder}`,
                         position: "sticky",
                         top: 0,
                         zIndex: 20,
@@ -4007,9 +4009,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                             return (
                                 <button key={tab.id} onClick={() => setActiveMobilePanel(tab.id)} style={{
                                     position: "relative",
-                                    minHeight: 38,
+                                    minHeight: 42,
                                     border: "none",
-                                    borderRadius: 9,
+                                    borderRadius: 12,
                                     background: active
                                         ? D.isDark
                                             ? `linear-gradient(135deg, ${withAlpha(accentGrn, 0.20)} 0%, ${withAlpha(accentGrn, 0.09)} 100%)`
@@ -4018,10 +4020,10 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                     color: active ? accentGrn : D.muted,
                                     cursor: "pointer",
                                     fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                    fontSize: 11,
+                                    fontSize: 12.5,
                                     fontWeight: active ? 700 : 500,
                                     letterSpacing: active ? "0.005em" : "0.01em",
-                                    padding: "8px 6px",
+                                    padding: "10px 8px",
                                     whiteSpace: "normal",
                                     lineHeight: 1.2,
                                     transition: "color 0.18s ease, background 0.18s ease",
@@ -4052,9 +4054,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 <div style={{
                     display: isCompact ? "block" : "grid",
                     gridTemplateColumns: isTablet ? "1fr 1fr" : "420px 1fr",
-                    gap: 18,
+                    gap: 20,
                     alignItems: "stretch",
-                    marginBottom: 18,
+                    marginBottom: 20,
                 }}>
                     {/* Market Pulse */}
                     {(!isCompact || activeMobilePanel === "pulse") && (
@@ -4075,7 +4077,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                         title="Market Movers"
                                         count={currentMoversData.length}
                                     />
-                                    <TabBar T={D} style={{ marginBottom: 16, flexWrap: "wrap" }}>
+                                    <TabBar T={D} style={{ marginBottom: 18, flexWrap: "wrap" }}>
                                         <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
                                         <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
                                         <TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />
@@ -4090,15 +4092,15 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                             )}
 
                             {/* -- RS RATING CARD -- */}
-                            <SectionCard T={D} style={{ marginBottom: 0, flex: 1 }}>
-                                <div style={{
-                                    display: "flex",
-                                    flexDirection: isCompact ? "column" : "row",
-                                    justifyContent: "space-between",
-                                    alignItems: isCompact ? "flex-start" : "center",
-                                    marginBottom: 16,
-                                    gap: 12
-                                }}>
+                                <SectionCard T={D} style={{ marginBottom: 0, flex: 1 }}>
+                                    <div style={{
+                                        display: "flex",
+                                        flexDirection: isCompact ? "column" : "row",
+                                        justifyContent: "space-between",
+                                        alignItems: isCompact ? "flex-start" : "center",
+                                        marginBottom: 18,
+                                        gap: 12
+                                    }}>
                                     <CardHeader
                                         T={D}
                                         title={
@@ -4128,12 +4130,12 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                             onChange={e => setSearchTerm(e.target.value)}
                                             style={{
                                                 width: "100%",
-                                                padding: "8px 12px 8px 32px",
-                                                borderRadius: 8,
+                                                padding: "11px 14px 11px 36px",
+                                                borderRadius: 14,
                                                 border: `1px solid ${D.panelBorder}`,
                                                 background: D.isDark ? "rgba(255,255,255,0.06)" : "#fff",
                                                 color: D.text,
-                                                fontSize: 12.5,
+                                                fontSize: 14,
                                                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                                 outline: "none",
                                                 transition: "border-color 0.15s",
@@ -4144,16 +4146,16 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                         <svg
                                             width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                                            style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: D.muted }}
+                                            style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: D.muted }}
                                         >
                                             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                                         </svg>
                                         {searchTerm && (
                                             <button
                                                 onClick={() => setSearchTerm("")}
-                                                style={{
-                                                    position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                                                    background: "none", border: "none", cursor: "pointer", color: D.muted, padding: 4
+                                            style={{
+                                                position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                                                background: "none", border: "none", cursor: "pointer", color: D.muted, padding: 4
                                                 }}
                                             >
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
@@ -4166,9 +4168,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                     {activeRsTab === "sector" && industry && (
                                         <button
                                             onClick={() => setIndustry("")}
-                                            style={{
-                                                padding: isCompact ? "8px 12px" : "10px 14px",
-                                                fontSize: 14,
+                                        style={{
+                                                padding: isCompact ? "9px 13px" : "11px 15px",
+                                                fontSize: 14.5,
                                                 fontWeight: 600,
                                                 color: D.text,
                                                 background: D.pillBg,

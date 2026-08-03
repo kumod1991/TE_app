@@ -20497,7 +20497,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 <ScreenRow
                                     rowKey="mv-trend"
                                     title="Trend Template — All 8 Criteria"
-                                    subtitle="Stage 2 uptrend: price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA trending up for 1 month, 50 SMA above 150/200 and price above 50 SMA, price 30%+ above 52W low, within 25% of 52W high, RS Rating >= 80"
+                                    subtitle="Stage 2 uptrend: price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA trending up for 1 month, 50 SMA above 150/200 and price above 50 SMA, price 30%+ above 52W low, within 25% of 52W high, RS Rating >= 70"
                                     rows={dMinervini}
                                     scoreKey="rs_rating"
                                     scoreLabel="RS Rating"
