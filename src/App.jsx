@@ -20461,7 +20461,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 <ScreenRow
                                     rowKey="pb-50dma"
                                     title="Pullback to 50 DMA"
-                                    subtitle="Close within +/-3% of 50 SMA with Stage 2 trend (close > SMA200, SMA50 > SMA200) and RS >= 70"
+                                    subtitle="Close within +/-3% of 50 SMA with Stage 2 trend (close > SMA200, SMA50 > SMA200) and RS >= 85"
                                     rows={dPb50dma}
                                     scoreKey="pct_from_sma50"
                                     scoreLabel="% From 50 SMA"
@@ -20473,7 +20473,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 <ScreenRow
                                     rowKey="pb-pivotretest"
                                     title="Pivot Retest"
-                                    subtitle={`Stock retests ${PIVOT_TF_OPTIONS.find(o => o.value === pbRetestTF)?.label || "20D"} pivot high (+/-3%) before resuming - close > SMA50 > SMA200 and RS >= 75`}
+                                    subtitle={`Stock retests ${PIVOT_TF_OPTIONS.find(o => o.value === pbRetestTF)?.label || "20D"} pivot high (+/-3%) before resuming - close > SMA50 > SMA200 and RS >= 85`}
                                     rows={dPbPivotRetest}
                                     scoreKey="pct_from_pivot"
                                     scoreLabel="% From Pivot"
@@ -20571,26 +20571,26 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
                         </div>
 
-                        <aside className="scr-side-panel">
-                            <div className="scr-side-panel-head">
-                                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em", color: T.muted, fontWeight: 700 }}>How to use</div>
-                                <div style={{ marginTop: 8, fontSize: 19, fontWeight: 700, color: T.text, lineHeight: 1.35 }}>
-                                    Faster review flow
-                                </div>
-                            </div>
-                            <div className="scr-side-panel-body">
-                                {[
-                                    ["01", "Start with Market Leaders to identify where institutional strength is already concentrated."],
-                                    ["02", "Open Breakouts when you want confirmation, then drill into full tables for validation."],
-                                    ["03", "Use Pullbacks for lower-risk entries and run TechnoFunda on names worth deeper work."],
-                                ].map(([idx, text]) => (
-                                    <div className="scr-side-item" key={idx}>
-                                        <div className="scr-side-badge">{idx}</div>
-                                        <div style={{ fontSize: 13, lineHeight: 1.65, color: T.subtext }}>{text}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </aside>
+                        {/*<aside className="scr-side-panel">*/}
+                        {/*    <div className="scr-side-panel-head">*/}
+                        {/*        <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em", color: T.muted, fontWeight: 700 }}>How to use</div>*/}
+                        {/*        <div style={{ marginTop: 8, fontSize: 19, fontWeight: 700, color: T.text, lineHeight: 1.35 }}>*/}
+                        {/*            Faster review flow*/}
+                        {/*        </div>*/}
+                        {/*    </div>*/}
+                        {/*    <div className="scr-side-panel-body">*/}
+                        {/*        {[*/}
+                        {/*            ["01", "Start with Market Leaders to identify where institutional strength is already concentrated."],*/}
+                        {/*            ["02", "Open Breakouts when you want confirmation, then drill into full tables for validation."],*/}
+                        {/*            ["03", "Use Pullbacks for lower-risk entries and run TechnoFunda on names worth deeper work."],*/}
+                        {/*        ].map(([idx, text]) => (*/}
+                        {/*            <div className="scr-side-item" key={idx}>*/}
+                        {/*                <div className="scr-side-badge">{idx}</div>*/}
+                        {/*                <div style={{ fontSize: 13, lineHeight: 1.65, color: T.subtext }}>{text}</div>*/}
+                        {/*            </div>*/}
+                        {/*        ))}*/}
+                        {/*    </div>*/}
+                        {/*</aside>*/}
                     </div>
                 </div>
             </div>
