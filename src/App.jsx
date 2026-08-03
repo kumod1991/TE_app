@@ -12152,24 +12152,30 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
     return (
         <div style={{
             display: "inline-flex", alignItems: "stretch",
-            height: 34, borderRadius: 8,
+            minHeight: 38, borderRadius: 999,
             border: `1px solid ${DS.border}`,
-            background: DS.card,
+            background: DS.isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)",
             overflow: "hidden", flexShrink: 0,
-            fontSize: 13, fontFamily: DS.sans,
-            boxShadow: `0 1px 3px ${DS.shadow}`,
-            transition: "border-color .13s, box-shadow .13s",
+            fontSize: 12.5, fontFamily: DS.sans,
+            boxShadow: DS.isDark ? "0 1px 0 rgba(255,255,255,0.03)" : "0 8px 20px rgba(15,23,42,0.05)",
+            transition: "border-color .13s, box-shadow .13s, transform .13s",
         }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "66"; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; }}>
+            onMouseEnter={e => {
+                e.currentTarget.style.borderColor = DS.accent + "55";
+                e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={e => {
+                e.currentTarget.style.borderColor = DS.border;
+                e.currentTarget.style.transform = "translateY(0)";
+            }}>
 
             {/* Metric name */}
             <div style={{
                 position: "relative", display: "flex", alignItems: "center",
-                background: DS.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"
+                background: DS.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.015)"
             }}>
                 <select value={filter.col} onChange={e => onUpdate(idx, { col: e.target.value })}
-                    style={{ ...selBase, fontSize: 13, fontWeight: 600, padding: "0 24px 0 12px", height: 34 }}>
+                    style={{ ...selBase, fontSize: 12.5, fontWeight: 600, padding: "0 26px 0 14px", height: 38 }}>
                     {SCREENER_GROUPS.map(grp => (
                         <optgroup key={grp} label={grp}>
                             {SCREENER_COLS.filter(c => c.group === grp).map(c => (
@@ -12189,7 +12195,7 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
                     style={{
                         ...selBase, fontSize: 12, fontWeight: 700,
                         fontFamily: DS.mono, color: DS.accent,
-                        padding: "0 18px 0 10px", height: 34, letterSpacing: ".03em"
+                        padding: "0 18px 0 10px", height: 38, letterSpacing: ".03em"
                     }}>
                     {OPS.map(op => <option key={op} value={op}>{op}</option>)}
                 </select>
@@ -12208,9 +12214,9 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
                     onBlur={commit}
                     onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
                     style={{
-                        width: 62, height: 34, border: "none", outline: "none",
+                        width: 68, height: 38, border: "none", outline: "none",
                         background: "transparent", fontFamily: DS.mono,
-                        fontSize: 13, fontWeight: 600, color: DS.text,
+                        fontSize: 12.5, fontWeight: 600, color: DS.text,
                         padding: "0 10px", textAlign: "right",
                         fontVariantNumeric: "tabular-nums"
                     }}
@@ -12220,7 +12226,7 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
                     <input type="number" value={filter.rhsMul ?? 1}
                         onChange={e => onUpdate(idx, { rhsMul: e.target.value })}
                         style={{
-                            width: 30, height: 34, border: "none", outline: "none",
+                            width: 30, height: 38, border: "none", outline: "none",
                             background: "transparent", fontFamily: DS.mono,
                             fontSize: 12, fontWeight: 700, color: DS.isDark ? "#fb923c" : "#c2410c",
                             padding: "0 2px", textAlign: "right"
@@ -12231,7 +12237,7 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
                             style={{
                                 ...selBase, fontSize: 12, fontWeight: 600,
                                 color: DS.isDark ? "#fb923c" : "#c2410c",
-                                padding: "0 18px 0 4px", height: 34
+                                padding: "0 18px 0 4px", height: 38
                             }}>
                             {SCREENER_GROUPS.map(grp => (
                                 <optgroup key={grp} label={grp}>
@@ -12252,7 +12258,7 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
             <button title={isColMode ? "Fixed value" : "Compare column"}
                 onClick={() => onUpdate(idx, { valType: isColMode ? "number" : "column" })}
                 style={{
-                    width: 28, border: "none", padding: 0, background: "transparent", cursor: "pointer",
+                    width: 30, border: "none", padding: 0, background: "transparent", cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: isColMode ? (DS.isDark ? "#fb923c" : "#c2410c") : DS.textMuted,
                     transition: "color .12s"
@@ -12272,7 +12278,7 @@ function FilterPill({ filter, idx, onUpdate, onRemove, DS }) {
             {/* Remove */}
             <button onClick={() => onRemove(idx)}
                 style={{
-                    width: 28, border: "none", padding: 0, background: "transparent",
+                    width: 30, border: "none", padding: 0, background: "transparent",
                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                     color: DS.textMuted, transition: "color .12s, background .12s"
                 }}
@@ -12294,25 +12300,25 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
     );
     return (
         <div style={{
-            position: "fixed", top: 0, right: 0, bottom: 0, width: 296, zIndex: 9999,
+            position: "fixed", top: 0, right: 0, bottom: 0, width: 320, zIndex: 9999,
             background: DS.card, borderLeft: `1px solid ${DS.border}`,
             display: "flex", flexDirection: "column", fontFamily: DS.sans,
-            boxShadow: DS.isDark ? "-8px 0 32px rgba(0,0,0,0.55)" : "-8px 0 24px rgba(0,0,0,0.10)",
+            boxShadow: DS.isDark ? "-12px 0 40px rgba(0,0,0,0.55)" : "-12px 0 34px rgba(15,23,42,0.10)",
         }}>
             <div style={{
-                flexShrink: 0, padding: "14px 16px", borderBottom: `1px solid ${DS.border}`,
+                flexShrink: 0, padding: "18px 18px 14px", borderBottom: `1px solid ${DS.border}`,
                 display: "flex", alignItems: "center", justifyContent: "space-between"
             }}>
                 <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: DS.text }}>Columns</div>
-                    <div style={{ fontSize: 11, color: DS.textMuted, marginTop: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: DS.text, letterSpacing: "-0.01em" }}>Columns</div>
+                    <div style={{ fontSize: 11.5, color: DS.textMuted, marginTop: 2 }}>
                         {visibleCols.length} of {SCREENER_COLS.length} shown
                     </div>
                 </div>
                 <button onClick={onClose}
                     style={{
-                        width: 28, height: 28, border: `1px solid ${DS.border}`, borderRadius: 7,
-                        background: "transparent", color: DS.textSub, cursor: "pointer",
+                        width: 32, height: 32, border: `1px solid ${DS.border}`, borderRadius: 999,
+                        background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)", color: DS.textSub, cursor: "pointer",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         transition: "border-color .12s, color .12s"
                     }}
@@ -12322,7 +12328,7 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
                 </button>
             </div>
 
-            <div style={{ padding: "10px 16px 6px", flexShrink: 0 }}>
+            <div style={{ padding: "12px 18px 8px", flexShrink: 0 }}>
                 <div style={{ position: "relative" }}>
                     <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke={DS.textMuted}
                         strokeWidth="1.5" strokeLinecap="round"
@@ -12333,8 +12339,8 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
                         onChange={e => setColSearch(e.target.value)} autoFocus
                         style={{
                             width: "100%", boxSizing: "border-box", fontFamily: DS.sans,
-                            fontSize: 13, padding: "8px 10px 8px 28px",
-                            borderRadius: 8, border: `1px solid ${DS.border}`,
+                            fontSize: 13, padding: "10px 12px 10px 30px",
+                            borderRadius: 12, border: `1px solid ${DS.border}`,
                             background: DS.inputBg, color: DS.text, outline: "none",
                             transition: "border-color .15s"
                         }}
@@ -12343,16 +12349,16 @@ function ColPickerPanel({ visibleCols, onSave, onClose, colSearch, setColSearch,
                 </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: "4px 16px 12px" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "4px 18px 16px" }}>
                 {SCREENER_GROUPS.map(grp => {
                     const cols = filteredDefs.filter(c => c.group === grp);
                     if (!cols.length) return null;
                     return (
                         <div key={grp} style={{ marginBottom: 16 }}>
                             <div style={{
-                                fontSize: 10, fontWeight: 700, color: DS.textMuted,
+                                fontSize: 10.5, fontWeight: 700, color: DS.textMuted,
                                 textTransform: "uppercase", letterSpacing: ".07em",
-                                marginBottom: 7, paddingBottom: 5,
+                                marginBottom: 8, paddingBottom: 6,
                                 borderBottom: `1px solid ${DS.border}`
                             }}>
                                 {grp}
@@ -12666,20 +12672,23 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     // Ghost button  matches portfolio page style exactly
     const ghostBtn = (active = false) => ({
         display: "inline-flex", alignItems: "center", gap: 7,
-        padding: "7px 13px",
-        background: active ? DS.accentDim : DS.card,
+        minHeight: 36, padding: "0 14px",
+        background: active ? DS.accentDim : (DS.isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)"),
         border: `1px solid ${active ? DS.accent + "55" : DS.border}`,
-        borderRadius: 8, color: active ? DS.accent : DS.textSub,
-        cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 400,
+        borderRadius: 999, color: active ? DS.accent : DS.textSub,
+        cursor: "pointer", fontSize: 12.5, fontWeight: active ? 600 : 500,
         fontFamily: DS.sans, transition: ".13s", whiteSpace: "nowrap",
+        boxShadow: active
+            ? (DS.isDark ? "0 1px 0 rgba(255,255,255,0.04)" : "0 8px 20px rgba(37,99,235,0.08)")
+            : (DS.isDark ? "0 1px 0 rgba(255,255,255,0.02)" : "0 6px 18px rgba(15,23,42,0.04)"),
     });
     const mobileGhostBtn = (active = false) => ({
         ...ghostBtn(active),
         justifyContent: "center",
-        minHeight: 36,
-        borderRadius: 10,
+        minHeight: 38,
+        borderRadius: 12,
         fontWeight: active ? 700 : 500,
-        boxShadow: active ? `0 10px 24px ${DS.shadow}` : "none",
+        boxShadow: active ? `0 12px 24px ${DS.isDark ? "rgba(0,0,0,0.24)" : "rgba(15,23,42,0.08)"}` : "none",
     });
 
     //  LIBRARY VIEW  screener.in-style landing grid of saved screens 
@@ -12688,59 +12697,87 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
         return (
             <div style={{
                 display: "flex", flexDirection: "column", width: "100%",
-                background: DS.bg, color: DS.text, fontFamily: DS.sans,
+                background: DS.isDark
+                    ? "linear-gradient(180deg, #0b1120 0%, #101827 100%)"
+                    : "linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%)",
+                color: DS.text, fontFamily: DS.sans,
                 flex: 1, minHeight: 0, overflow: "auto"
             }}>
                 <div style={{
-                    padding: isScreenerMobile ? "20px 16px 16px" : "30px 32px 18px",
-                    display: "flex", alignItems: "flex-end", justifyContent: "space-between",
-                    gap: 16, flexWrap: "wrap", borderBottom: `1px solid ${DS.border}`
+                    maxWidth: 1400,
+                    width: "100%",
+                    margin: "0 auto",
+                    padding: isScreenerMobile ? "18px 16px 0" : "28px 28px 0",
+                    boxSizing: "border-box"
                 }}>
-                    <div>
+                    <div style={{
+                        position: "relative",
+                        background: DS.card,
+                        border: `1px solid ${DS.border}`,
+                        borderRadius: 24,
+                        boxShadow: DS.isDark ? "0 18px 50px rgba(2,6,23,0.28)" : "0 14px 34px rgba(15,23,42,0.07)",
+                        padding: isScreenerMobile ? "18px 18px 16px" : "22px 24px",
+                        display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+                        gap: 16, flexWrap: "wrap",
+                        overflow: "hidden"
+                    }}>
                         <div style={{
-                            fontSize: 10.5, fontWeight: 700, color: DS.accent, fontFamily: DS.mono,
-                            textTransform: "uppercase", letterSpacing: ".12em", marginBottom: 7
-                        }}>
-                            Screener
+                            position: "absolute", inset: 0, pointerEvents: "none",
+                            background: DS.isDark
+                                ? "radial-gradient(circle at top right, rgba(79,126,237,0.10), transparent 30%), radial-gradient(circle at bottom left, rgba(16,185,129,0.06), transparent 30%)"
+                                : "radial-gradient(circle at top right, rgba(37,99,235,0.07), transparent 28%), radial-gradient(circle at bottom left, rgba(16,185,129,0.05), transparent 28%)"
+                        }} />
+                        <div style={{ position: "relative", minWidth: 0 }}>
+                            <div style={{
+                                fontSize: 10.5, fontWeight: 700, color: DS.accent, fontFamily: DS.mono,
+                                textTransform: "uppercase", letterSpacing: ".14em", marginBottom: 9
+                            }}>
+                                Screener
+                            </div>
+                            <div style={{
+                                fontSize: isScreenerMobile ? 22 : 28, fontWeight: 700, color: DS.text,
+                                letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 8
+                            }}>
+                                Stock Screens
+                            </div>
+                            <div style={{
+                                fontSize: 13, color: DS.textSub, lineHeight: 1.65, maxWidth: 620,
+                                display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap"
+                            }}>
+                                <span style={{ whiteSpace: "nowrap" }}>
+                                    {screensSyncing ? "Syncing your saved screens" : session?.user?.id ? "Saved to your account" : "Saved on this device"}
+                                </span>
+                                <span style={{ width: 4, height: 4, borderRadius: "50%", background: DS.textMuted, opacity: .4 }} />
+                                <span>{librayScreens.length} screen{librayScreens.length === 1 ? "" : "s"}</span>
+                            </div>
                         </div>
-                        <div style={{ fontSize: isScreenerMobile ? 20 : 23, fontWeight: 700, color: DS.text, letterSpacing: "-0.015em", lineHeight: 1.15 }}>
-                            Stock Screens
-                        </div>
-                        <div style={{ fontSize: 12.5, color: DS.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 7 }}>
-                            {screensSyncing ? (
-                                <>
-                                    <span style={{
-                                        width: 11, height: 11, border: `2px solid ${DS.border}`,
-                                        borderTopColor: DS.accent, borderRadius: "50%",
-                                        display: "inline-block", animation: "finspin .7s linear infinite"
-                                    }} />
-                                    Syncing your saved screens
-                                </>
-                            ) : session?.user?.id
-                                ? <>{librayScreens.length} screen{librayScreens.length === 1 ? "" : "s"}  synced to your account</>
-                                : <>{librayScreens.length} screen{librayScreens.length === 1 ? "" : "s"} on this device</>}
-                        </div>
+                        <button onClick={addScreen}
+                            style={{
+                                display: "inline-flex", alignItems: "center", gap: 7,
+                                padding: isScreenerMobile ? "10px 16px" : "10px 18px",
+                                background: DS.accent, border: `1px solid ${DS.accent}`, borderRadius: 999, color: "#fff",
+                                fontSize: 12.5, fontWeight: 600, fontFamily: DS.sans, cursor: "pointer",
+                                transition: "transform .15s, opacity .15s, box-shadow .15s", whiteSpace: "nowrap",
+                                boxShadow: DS.isDark ? "0 10px 28px rgba(37,99,235,0.28)" : "0 12px 26px rgba(37,99,235,0.18)",
+                                position: "relative"
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = "0.95"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
+                            Create New Screen
+                        </button>
                     </div>
-                    <button onClick={addScreen}
-                        style={{
-                            display: "inline-flex", alignItems: "center", gap: 7,
-                            padding: isScreenerMobile ? "9px 15px" : "8px 16px",
-                            background: DS.accent, border: `1px solid ${DS.accent}`, borderRadius: 8, color: "#fff",
-                            fontSize: 12.5, fontWeight: 600, fontFamily: DS.sans, cursor: "pointer",
-                            transition: "opacity .12s", whiteSpace: "nowrap"
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
-                        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
-                        Create New Screen
-                    </button>
                 </div>
 
                 <div style={{
-                    padding: isScreenerMobile ? "16px 16px 32px" : "22px 32px 44px",
+                    maxWidth: 1400,
+                    width: "100%",
+                    margin: "0 auto",
+                    padding: isScreenerMobile ? "16px 16px 36px" : "20px 28px 52px",
+                    boxSizing: "border-box",
                     display: "grid",
-                    gridTemplateColumns: isScreenerMobile ? "1fr" : "repeat(auto-fill, minmax(272px, 1fr))",
-                    gap: 14
+                    gridTemplateColumns: isScreenerMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))",
+                    gap: 16
                 }}>
                     {librayScreens.map(sc => {
                         const fCount = (sc.filters || []).length;
@@ -12752,13 +12789,15 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                 onClick={() => openScreen(sc.id)}
                                 style={{
                                     position: "relative", overflow: "hidden",
-                                    padding: "16px 18px 16px 20px", background: DS.card, border: `1px solid ${DS.border}`,
-                                    borderRadius: 10, cursor: "pointer", transition: "border-color .15s, background .15s",
-                                    display: "flex", flexDirection: "column", gap: 9
+                                    padding: "20px 20px 18px", background: DS.card, border: `1px solid ${DS.border}`,
+                                    borderRadius: 22, cursor: "pointer", transition: "border-color .15s, background .15s, transform .15s",
+                                    display: "flex", flexDirection: "column", gap: 12,
+                                    boxShadow: DS.isDark ? "0 1px 0 rgba(255,255,255,0.03)" : "0 12px 28px rgba(15,23,42,0.05)"
                                 }}
                                 onMouseEnter={e => {
-                                    e.currentTarget.style.borderColor = DS.isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.14)";
-                                    e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.008)";
+                                    e.currentTarget.style.borderColor = DS.accent + "40";
+                                    e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.98)";
+                                    e.currentTarget.style.transform = "translateY(-2px)";
                                     const bar = e.currentTarget.querySelector("[data-accent-bar]");
                                     if (bar) bar.style.background = DS.accent;
                                     const arrow = e.currentTarget.querySelector("[data-hover-arrow]");
@@ -12767,15 +12806,16 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                 onMouseLeave={e => {
                                     e.currentTarget.style.borderColor = DS.border;
                                     e.currentTarget.style.background = DS.card;
+                                    e.currentTarget.style.transform = "translateY(0)";
                                     const bar = e.currentTarget.querySelector("[data-accent-bar]");
                                     if (bar) bar.style.background = "transparent";
                                     const arrow = e.currentTarget.querySelector("[data-hover-arrow]");
                                     if (arrow) { arrow.style.opacity = "0"; arrow.style.transform = "translateX(-3px)"; }
                                 }}>
                                 {/* Signature left accent bar  fills in on hover */}
-                                <div data-accent-bar style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "transparent", transition: "background .15s" }} />
+                                <div data-accent-bar style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "transparent", transition: "background .15s" }} />
 
-                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, position: "relative" }}>
                                     {editingLibId === sc.id ? (
                                         <input autoFocus value={libNameInput}
                                             onClick={e => e.stopPropagation()}
@@ -12786,13 +12826,13 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                                 if (e.key === "Escape") setEditingLibId(null);
                                             }}
                                             style={{
-                                                flex: 1, fontSize: 14.5, fontWeight: 650, color: DS.accent,
-                                                padding: "3px 7px", border: `1px solid ${DS.accent}`,
-                                                borderRadius: 6, background: DS.accentDim,
+                                                flex: 1, fontSize: 15.5, fontWeight: 650, color: DS.accent,
+                                                padding: "4px 10px", border: `1px solid ${DS.accent}`,
+                                                borderRadius: 10, background: DS.accentDim,
                                                 fontFamily: DS.sans, outline: "none", minWidth: 0
                                             }} />
                                     ) : (
-                                        <span style={{ fontSize: 14.5, fontWeight: 650, color: DS.text, letterSpacing: "-0.005em", lineHeight: 1.3 }}>
+                                        <span style={{ fontSize: 16, fontWeight: 650, color: DS.text, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
                                             {sc.name}
                                         </span>
                                     )}
@@ -12800,7 +12840,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                         <button onClick={e => { e.stopPropagation(); setLibNameInput(sc.name); setEditingLibId(sc.id); }}
                                             style={{
                                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                                width: 20, height: 20, marginTop: -1,
+                                                width: 22, height: 22, marginTop: -1,
                                                 background: "none", border: "none", color: DS.textMuted,
                                                 cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
                                                 transition: "opacity .12s, background .12s"
@@ -12814,12 +12854,12 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                         </button>
                                         {librayScreens.length > 1 && (
                                             <button onClick={e => { e.stopPropagation(); deleteScreen(sc.id); }}
-                                                style={{
-                                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                                    width: 20, height: 20, marginTop: -1,
-                                                    background: "none", border: "none", color: DS.textMuted,
-                                                    cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
-                                                    transition: "opacity .12s, background .12s"
+                                            style={{
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                                width: 22, height: 22, marginTop: -1,
+                                                background: "none", border: "none", color: DS.textMuted,
+                                                cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
+                                                transition: "opacity .12s, background .12s"
                                                 }}
                                                 onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"; }}
                                                 onMouseLeave={e => { e.currentTarget.style.opacity = "0.38"; e.currentTarget.style.background = "transparent"; }}
@@ -12830,20 +12870,21 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                     </div>
                                 </div>
 
-                                <div style={{ height: 1, background: DS.border, opacity: .6 }} />
+                                <div style={{ height: 1, background: DS.border, opacity: .7 }} />
 
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                                     <span style={{
                                         fontSize: 10.5, color: DS.textSub, fontFamily: DS.mono,
-                                        textTransform: "uppercase", letterSpacing: ".04em",
+                                        textTransform: "uppercase", letterSpacing: ".08em",
                                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                                     }}>
-                                        {preview.length > 0 ? preview.join("  ") : "No filters yet"}
+                                        {preview.length > 0 ? preview.join(" · ") : "No filters yet"}
                                     </span>
                                     <span style={{
                                         flexShrink: 0, fontSize: 10, color: DS.textMuted, fontFamily: DS.mono,
                                         fontVariantNumeric: "tabular-nums", border: `1px solid ${DS.border}`,
-                                        borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap"
+                                        borderRadius: 999, padding: "4px 8px", whiteSpace: "nowrap",
+                                        background: DS.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.92)"
                                     }}>
                                         {fCount} filter{fCount === 1 ? "" : "s"}
                                     </span>
@@ -12859,10 +12900,10 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
                     <div onClick={addScreen}
                         style={{
-                            padding: "16px 18px", background: "transparent", border: `1px dashed ${DS.border}`,
-                            borderRadius: 10, cursor: "pointer", display: "flex", alignItems: "center",
+                            padding: "18px 18px", background: "transparent", border: `1px dashed ${DS.border}`,
+                            borderRadius: 22, cursor: "pointer", display: "flex", alignItems: "center",
                             justifyContent: "center", gap: 7, color: DS.textMuted, fontSize: 12.5,
-                            fontWeight: 500, minHeight: 78, transition: "border-color .13s, color .13s, background .13s"
+                            fontWeight: 500, minHeight: 90, transition: "border-color .13s, color .13s, background .13s"
                         }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "77"; e.currentTarget.style.color = DS.accent; e.currentTarget.style.background = DS.accentDim; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
@@ -12878,18 +12919,34 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
     return (
         <div style={{
             display: "flex", flexDirection: "column", width: "100%",
-            background: DS.bg, color: DS.text, fontFamily: DS.sans,
+            background: DS.isDark
+                ? "linear-gradient(180deg, #0b1120 0%, #101827 100%)"
+                : "linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%)",
+            color: DS.text, fontFamily: DS.sans,
             flex: 1, minHeight: 0, overflow: "hidden"
         }}>
+            <div style={{
+                width: "100%",
+                maxWidth: 1400,
+                margin: "0 auto",
+                padding: isScreenerMobile ? "16px 16px 28px" : "24px 28px 36px",
+                boxSizing: "border-box",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+                gap: 14
+            }}>
 
             {/*  ROW 1: Screen tabs + toolbar  */}
             <div style={{
                 flexShrink: 0, background: DS.card,
-                borderBottom: `1px solid ${DS.border}`,
-                padding: isScreenerMobile ? "12px 14px" : "0 16px", display: isScreenerMobile ? "none" : "flex", alignItems: "stretch",
+                border: `1px solid ${DS.border}`,
+                borderRadius: 24,
+                boxShadow: DS.isDark ? "0 16px 44px rgba(2,6,23,0.24)" : "0 12px 30px rgba(15,23,42,0.06)",
+                padding: isScreenerMobile ? "12px 14px" : "10px 14px", display: isScreenerMobile ? "none" : "flex", alignItems: "stretch",
                 flexDirection: "row",
                 gap: 0,
-                minHeight: 44, overflow: "hidden"
+                minHeight: 54, overflow: "hidden"
             }}>
 
                 {/* Tabs */}
@@ -13131,9 +13188,10 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
             {/*  FILTER BAR  */}
             <div style={{
-                flexShrink: 0, borderBottom: `1px solid ${DS.border}`,
-                padding: "8px 16px", display: "flex", alignItems: "center",
-                gap: 7, flexWrap: "wrap", minHeight: 50, background: DS.bg
+                flexShrink: 0, border: `1px solid ${DS.border}`,
+                padding: "14px 16px", display: "flex", alignItems: "center",
+                gap: 10, flexWrap: "wrap", minHeight: 60, background: DS.card,
+                borderRadius: 22, boxShadow: DS.isDark ? "0 12px 34px rgba(2,6,23,0.20)" : "0 10px 26px rgba(15,23,42,0.05)"
             }}>
 
                 {isScreenerMobile && (
@@ -13244,8 +13302,10 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
             {/*  TABLE AREA  */}
             <div style={{
-                flex: 1, overflow: "hidden", background: DS.bg,
-                minHeight: 0, display: "flex", flexDirection: "column"
+                flex: 1, overflow: "hidden", background: DS.card,
+                minHeight: 0, display: "flex", flexDirection: "column",
+                border: `1px solid ${DS.border}`, borderRadius: 24,
+                boxShadow: DS.isDark ? "0 16px 44px rgba(2,6,23,0.20)" : "0 12px 30px rgba(15,23,42,0.06)"
             }}>
 
                 {/* Not yet applied  results stay hidden until "Apply Filter" is clicked */}
@@ -13352,7 +13412,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                         {/* # */}
                                         <th style={{
                                             padding: "9px 0 9px 16px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                                        fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
                                             letterSpacing: ".07em", color: DS.textMuted,
                                             position: "sticky", left: 0, zIndex: 11,
                                             background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
@@ -13362,7 +13422,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                         {/* Company */}
                                         <th style={{
                                             padding: "9px 16px 9px 10px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                                            fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
                                             letterSpacing: ".07em", color: DS.textMuted,
                                             position: "sticky", left: 40, zIndex: 11,
                                             background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
@@ -13375,8 +13435,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                             return (
                                                 <th key={col.key} onClick={() => handleSort(col.key)}
                                                     style={{
-                                                        padding: "9px 13px", textAlign: "right",
-                                                        fontSize: 10, fontWeight: 700,
+                                                        padding: "10px 14px", textAlign: "right",
+                                                        fontSize: 10.5, fontWeight: 700,
                                                         textTransform: "uppercase", letterSpacing: ".07em",
                                                         color: isSort ? DS.accent : DS.textMuted,
                                                         background: isSort ? DS.accentDim : DS.tableHead,
@@ -13400,8 +13460,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
                                                 {/* # */}
                                                 <td data-sticky="1" style={{
-                                                    padding: "9px 0 9px 16px",
-                                                    fontSize: 13, color: DS.textMuted,
+                                                    padding: "10px 0 10px 16px",
+                                                    fontSize: 13.5, color: DS.textMuted,
                                                     fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
                                                     position: "sticky", left: 0,
                                                     background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
@@ -13411,14 +13471,14 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
                                                 {/* Company */}
                                                 <td data-sticky="1" style={{
-                                                    padding: "9px 16px 9px 10px",
+                                                    padding: "10px 16px 10px 10px",
                                                     position: "sticky", left: 40,
                                                     background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
                                                     borderRight: `1px solid ${DS.border}`,
                                                     minWidth: 140,
                                                 }}>
                                                     <div style={{
-                                                        fontSize: 13, fontWeight: 600,
+                                                        fontSize: 13.5, fontWeight: 600,
                                                         color: DS.text, whiteSpace: "nowrap",
                                                         overflow: "hidden", textOverflow: "ellipsis",
                                                         fontFamily: DS.mono, letterSpacing: ".02em",
@@ -13435,8 +13495,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                                     const color = cellColor(col, raw);
                                                     return (
                                                         <td key={col.key} style={{
-                                                            padding: "9px 13px",
-                                                            textAlign: "right", fontSize: 13,
+                                                            padding: "10px 14px",
+                                                            textAlign: "right", fontSize: 13.5,
                                                             fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
                                                             color: formatted === "" ? DS.textMuted : color,
                                                             whiteSpace: "nowrap",
@@ -13470,7 +13530,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                         {/* # */}
                                         <th style={{
                                             padding: "9px 0 9px 16px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                                        fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
                                             letterSpacing: ".07em", color: DS.textMuted,
                                             position: "sticky", left: 0, zIndex: 11,
                                             background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
@@ -13480,7 +13540,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                         {/* Company */}
                                         <th style={{
                                             padding: "9px 16px 9px 10px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+                                            fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
                                             letterSpacing: ".07em", color: DS.textMuted,
                                             position: "sticky", left: 40, zIndex: 11,
                                             background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
@@ -13493,8 +13553,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                             return (
                                                 <th key={col.key} onClick={() => handleSort(col.key)}
                                                     style={{
-                                                        padding: "9px 13px", textAlign: "right",
-                                                        fontSize: 10, fontWeight: 700,
+                                                        padding: "10px 14px", textAlign: "right",
+                                                        fontSize: 10.5, fontWeight: 700,
                                                         textTransform: "uppercase", letterSpacing: ".07em",
                                                         color: isSort ? DS.accent : DS.textMuted,
                                                         background: isSort ? DS.accentDim : DS.tableHead,
@@ -13539,8 +13599,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
                                                 {/* # */}
                                                 <td data-sticky="1" style={{
-                                                    padding: compactRow ? "5px 0 5px 16px" : "9px 0 9px 16px",
-                                                    fontSize: 13, color: DS.textMuted,
+                                                    padding: compactRow ? "6px 0 6px 16px" : "10px 0 10px 16px",
+                                                    fontSize: 13.5, color: DS.textMuted,
                                                     fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
                                                     position: "sticky", left: 0,
                                                     background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
@@ -13550,14 +13610,14 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
 
                                                 {/* Company */}
                                                 <td data-sticky="1" style={{
-                                                    padding: compactRow ? "5px 13px 5px 10px" : "9px 13px 9px 10px",
+                                                    padding: compactRow ? "6px 13px 6px 10px" : "10px 13px 10px 10px",
                                                     position: "sticky", left: 40,
                                                     background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
                                                     borderRight: `1px solid ${DS.border}`,
                                                     minWidth: 140,
                                                 }}>
                                                     <div style={{
-                                                        fontSize: 13, fontWeight: 600,
+                                                        fontSize: 13.5, fontWeight: 600,
                                                         color: DS.text, whiteSpace: "nowrap",
                                                         overflow: "hidden", textOverflow: "ellipsis",
                                                         fontFamily: DS.mono, letterSpacing: ".02em",
@@ -13574,8 +13634,8 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                                     const color = cellColor(col, raw);
                                                     return (
                                                         <td key={col.key} style={{
-                                                            padding: compactRow ? "5px 13px" : "9px 13px",
-                                                            textAlign: "right", fontSize: 13,
+                                                            padding: compactRow ? "6px 13px" : "10px 14px",
+                                                            textAlign: "right", fontSize: 13.5,
                                                             fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
                                                             color: formatted === "" ? DS.textMuted : color,
                                                             whiteSpace: "nowrap", position: "relative",
@@ -13687,6 +13747,7 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                     colSearch={colSearch} setColSearch={setColSearch} DS={DS} />,
                 document.body
             )}
+            </div>
         </div>
     );
 }

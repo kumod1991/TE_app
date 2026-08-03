@@ -1003,7 +1003,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "minmax(240px, 1.05fr) minmax(240px, 1.05fr) minmax(420px, 1.45fr)",
+                        gridTemplateColumns: isCompact ? "1fr" : "minmax(240px, 1.05fr) minmax(240px, 1.05fr) minmax(420px, 1.45fr)",
                         gap: 18,
                         alignItems: "stretch",
                     }}>
@@ -1014,7 +1014,6 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                                 padding: isCompact ? "14px 14px" : "18px 24px",
                                 background: D.isDark ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.72)",
                                 border: `1px solid ${D.panelBorder}`,
-                                ...(metric.fiiDii && isCompact ? { gridColumn: "span 2" } : {}),
                             }}>
                                 <div style={{ fontSize: 11, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{metric.label}</div>
                                 {metric.fiiDii ? (

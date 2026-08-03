@@ -9,39 +9,6 @@ const SB_H = {
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 };
 
-const FIIDII_RPC_TIMEOUT_MS = 15000;
-
-function isTimeoutLikeError(err) {
-  const msg = String(err?.message || err || "");
-  return err?.code === "57014" || /statement timeout|cancelling statement|timeout|retry/i.test(msg);
-}
-
-async function RPC(fn, params = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FIIDII_RPC_TIMEOUT_MS);
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-      method: "POST",
-      headers: SB_H,
-      body: JSON.stringify(params),
-      signal: controller.signal,
-    });
-    if (!r.ok) {
-      const text = await r.text();
-      if (isTimeoutLikeError(text)) throw new Error("Institutional flow data is still loading.");
-      throw new Error(text);
-    }
-    return r.json();
-  } catch (e) {
-    if (e?.name === "AbortError" || isTimeoutLikeError(e)) {
-      throw new Error("Institutional flow data is still loading.");
-    }
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 // Paginated fetch — Supabase PostgREST caps responses at 1000 rows by default.
 // We use the HTTP Range header (PostgREST standard) to page through all rows.
 const PAGE_SIZE = 1000;
@@ -87,7 +54,7 @@ async function sbFetchAll(table, params = {}) {
   return allRows;
 }
 
-const MODULE_CACHE_KEY = "fiidii-module-cache-v2";
+const MODULE_CACHE_KEY = "fiidii-module-cache-v1";
 const MODULE_CACHE_TTL_MS = 15 * 60 * 1000;
 let fiidiiMemoryCache = null;
 let fiidiiMemoryCacheTs = 0;
@@ -337,30 +304,37 @@ function writeModuleCache(data) {
   } catch {}
 }
 
+function latestCashDate(data) {
+  return data?.cashData?.[data.cashData.length - 1]?.date || null;
+}
+
+async function fetchLatestCashDate() {
+  const rows = await sbFetchAll("fii_dii_activity", {
+    select: "date",
+    order: "date.desc",
+    limit: 1,
+  });
+  return rows?.[0]?.date || null;
+}
+
 async function refreshModuleData() {
   if (fiidiiInflightPromise) return fiidiiInflightPromise;
   fiidiiInflightPromise = (async () => {
-    const [bundleResult, sectorResult] = await Promise.allSettled([
-      RPC("get_fii_dii_bundle", { p_limit: 5000 }),
+    const [cashResult, derivResult, sectorResult] = await Promise.allSettled([
+      sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc" }),
+      sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc" }),
       sbFetchAll("fii_sector_flows", { select: "*", order: "date.desc" }),
     ]);
-    if (bundleResult.status !== "fulfilled") {
-      if (isTimeoutLikeError(bundleResult.reason)) {
-        const cached = readModuleCache();
-        if (cached.data) return cached.data;
-      }
-      throw bundleResult.reason;
-    }
+    if (cashResult.status !== "fulfilled") throw cashResult.reason;
+    if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", derivResult.reason);
     if (sectorResult.status === "rejected") console.warn("[FIIDII] Sector flow data unavailable; loading without sector tab data.", sectorResult.reason);
-    const bundle = bundleResult.value || {};
-    const cash = Array.isArray(bundle.cash) ? bundle.cash : [];
-    const deriv = Array.isArray(bundle.fo) ? bundle.fo : [];
+    const cash = cashResult.value || [];
+    const derivRaw = derivResult.status === "fulfilled" ? derivResult.value || [] : [];
     const sector = sectorResult.status === "fulfilled" ? sectorResult.value || [] : [];
     const data = {
       cashData: [...cash].sort((a, b) => new Date(a.date) - new Date(b.date)),
-      derivData: [...deriv].sort((a, b) => new Date(a.date) - new Date(b.date)),
+      derivData: pivotDerivData(derivRaw),
       sectorData: sector,
-      latestSnapshot: bundle.latest || null,
     };
     writeModuleCache(data);
     return data;
@@ -371,6 +345,11 @@ async function refreshModuleData() {
 async function fetchModuleData({ preferCache = true } = {}) {
   const cached = readModuleCache();
   if (preferCache && cached.data && !cached.stale) {
+    fetchLatestCashDate()
+      .then(remoteLatest => {
+        if (remoteLatest && remoteLatest > latestCashDate(cached.data)) refreshModuleData().catch(() => null);
+      })
+      .catch(() => null);
     return cached.data;
   }
   if (preferCache && cached.data && cached.stale) {
@@ -800,7 +779,7 @@ const ViewToggle = ({ options, value, onChange, T, dataSpanYears }) => (
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
-  const TABS = ["Overview", "Cash Flow", "Derivatives", "Sector Rotation", "Signals"];
+  const TABS = ["Overview", "Cash Flow", "Derivatives"];
   const T = useMemo(() => buildTheme(themeProp), [themeProp]);
   const initialCache = useMemo(() => readModuleCache(), []);
   const [activeTab,       setActiveTab]       = useState("Overview");
@@ -828,6 +807,16 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   }, []);
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (document.getElementById("fiidii-module-fonts")) return;
+    const link = document.createElement("link");
+    link.id = "fiidii-module-fonts";
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap";
+    document.head.appendChild(link);
+  }, []);
+
+  useEffect(() => {
     const cached = initialCache;
     if (cached.data) {
       setCashData(cached.data.cashData || []);
@@ -852,7 +841,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             console.warn("[FIIDII] Refresh failed; keeping cached module data.", e);
             setError(null);
           } else {
-            setError(isTimeoutLikeError(e) ? null : e.message);
+            setError(e.message);
           }
         }
       } finally {
@@ -870,23 +859,19 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const last   = (n) => cashData.slice(-n);
     const S      = (arr, k) => sum(arr.map(d => +d[k] || 0));
     const fii1 = +latest.fii_net || 0, dii1 = +latest.dii_net || 0;
-    const fii5  = latest.fii_net_5d  != null ? +latest.fii_net_5d  : S(last(5),  "fii_net");
-    const dii5  = latest.dii_net_5d  != null ? +latest.dii_net_5d  : S(last(5),  "dii_net");
-    const fii20 = latest.fii_net_20d != null ? +latest.fii_net_20d : S(last(20), "fii_net");
-    const dii20 = latest.dii_net_20d != null ? +latest.dii_net_20d : S(last(20), "dii_net");
-    const z     = latest.fii_zscore_20d != null ? +latest.fii_zscore_20d : zScore(fii1, last(20).map(d => +d.fii_net || 0));
+    const fii5  = S(last(5),  "fii_net"), dii5  = S(last(5),  "dii_net");
+    const fii20 = S(last(20), "fii_net"), dii20 = S(last(20), "dii_net");
+    const z     = zScore(fii1, last(20).map(d => +d.fii_net || 0));
 
     // Full-history daily + rolling arrays (ASC order, date field preserved)
     const daily = cashData.map(d => ({
       date: d.date, label: fmtDateShort(d.date),
       fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
     }));
-    const rolling = cashData.map((d) => ({
-      date: d.date,
-      label: fmtDateShort(d.date),
-      fiiRoll: d.fii_net_20d != null ? +d.fii_net_20d : (+d.fii_net || 0),
-      diiRoll: d.dii_net_20d != null ? +d.dii_net_20d : (+d.dii_net || 0),
-    }));
+    const rolling = cashData.map((d, i) => {
+      const slice = cashData.slice(Math.max(0, i - 19), i + 1);
+      return { date: d.date, label: fmtDateShort(d.date), fiiRoll: S(slice, "fii_net"), diiRoll: S(slice, "dii_net") };
+    });
 
     const participation = (fii1 === 0 && dii1 === 0) ? 0.5 : Math.abs(fii1) / (Math.abs(fii1) + Math.abs(dii1));
     let absorption = "Mixed";
@@ -1302,172 +1287,172 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   // ══════════════════════════════════════════════════════════════════════════
   // SECTOR ROTATION TAB
   // ══════════════════════════════════════════════════════════════════════════
-  const SectorTab = () => {
-    if (!sectorMemo.ranking) return noData("No sector data.");
-    const { allSectors, ranking, leaders, laggards, sectorHistory, latestSnapshot, latestDate, multiSectorData } = sectorMemo;
-    const SECTOR_COLORS = [GREEN, BLUE, AMBER, PURPLE, RED, "#06b6d4", "#f97316", "#84cc16"];
-    const toggleSector = (sec) => setSelectedSectors(prev => prev.includes(sec) ? prev.filter(s => s!==sec) : prev.length<5 ? [...prev,sec] : prev);
+  //const SectorTab = () => {
+  //  if (!sectorMemo.ranking) return noData("No sector data.");
+  //  const { allSectors, ranking, leaders, laggards, sectorHistory, latestSnapshot, latestDate, multiSectorData } = sectorMemo;
+  //  const SECTOR_COLORS = [GREEN, BLUE, AMBER, PURPLE, RED, "#06b6d4", "#f97316", "#84cc16"];
+  //  const toggleSector = (sec) => setSelectedSectors(prev => prev.includes(sec) ? prev.filter(s => s!==sec) : prev.length<5 ? [...prev,sec] : prev);
 
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile?"1fr":"1fr 1fr", gap: 14 }}>
-          {[{ title:"🏆 Top 3 Leaders (60D)", list:leaders, color:GREEN }, { title:"📉 Bottom 3 Laggards (60D)", list:laggards, color:RED }].map(({ title, list, color }) => (
-            <div key={title} style={card}>
-              <h3 style={{ ...sh, color }}>{title}</h3>
-              {list.map((s, i) => (
-                <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:i<2?`1px solid ${T.border}`:"none" }}>
-                  <div style={{ fontSize:13, color:T.text, fontWeight:500 }}><span style={{ color, fontWeight:700, marginRight:6 }}>#{i+1}</span>{s.sector}</div>
-                  <div style={{ fontFamily:"monospace", fontWeight:700, color, fontSize:13 }}>{fmtCrShort(s.total)}</div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+  //  return (
+  //    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+  //      <div style={{ display: "grid", gridTemplateColumns: isMobile?"1fr":"1fr 1fr", gap: 14 }}>
+  //        {[{ title:"🏆 Top 3 Leaders (60D)", list:leaders, color:GREEN }, { title:"📉 Bottom 3 Laggards (60D)", list:laggards, color:RED }].map(({ title, list, color }) => (
+  //          <div key={title} style={card}>
+  //            <h3 style={{ ...sh, color }}>{title}</h3>
+  //            {list.map((s, i) => (
+  //              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:i<2?`1px solid ${T.border}`:"none" }}>
+  //                <div style={{ fontSize:13, color:T.text, fontWeight:500 }}><span style={{ color, fontWeight:700, marginRight:6 }}>#{i+1}</span>{s.sector}</div>
+  //                <div style={{ fontFamily:"monospace", fontWeight:700, color, fontSize:13 }}>{fmtCrShort(s.total)}</div>
+  //              </div>
+  //            ))}
+  //          </div>
+  //        ))}
+  //      </div>
 
-        <div style={card}>
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
-            <h3 style={{ ...sh, margin:0 }}>Sector Historical Flow</h3>
-            <select value={selectedSector} onChange={e => setSelectedSector(e.target.value)}
-              style={{ background:T.card, color:T.text, border:`1px solid ${T.border}`, borderRadius:6, padding:"5px 10px", fontSize:13, fontFamily:"inherit", cursor:"pointer" }}>
-              <option value="__ALL__">— Select Sector —</option>
-              {allSectors.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            {sectorHistory.length > 0 && <button onClick={() => setFullscreen(true)} style={{ background:T.card, border:`1px solid ${T.border}`, color:T.text, borderRadius:6, padding:"5px 12px", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>⛶ Fullscreen</button>}
-          </div>
-          {sectorHistory.length > 0
-            ? <SvgLineChart data={sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={isMobile?200:280} fill={true} T={T} />
-            : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:24 }}>Select a sector above to view full historical flow</div>
-          }
-        </div>
+  //      <div style={card}>
+  //        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+  //          <h3 style={{ ...sh, margin:0 }}>Sector Historical Flow</h3>
+  //          <select value={selectedSector} onChange={e => setSelectedSector(e.target.value)}
+  //            style={{ background:T.card, color:T.text, border:`1px solid ${T.border}`, borderRadius:6, padding:"5px 10px", fontSize:13, fontFamily:"inherit", cursor:"pointer" }}>
+  //            <option value="__ALL__">— Select Sector —</option>
+  //            {allSectors.map(s => <option key={s} value={s}>{s}</option>)}
+  //          </select>
+  //          {sectorHistory.length > 0 && <button onClick={() => setFullscreen(true)} style={{ background:T.card, border:`1px solid ${T.border}`, color:T.text, borderRadius:6, padding:"5px 12px", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>⛶ Fullscreen</button>}
+  //        </div>
+  //        {sectorHistory.length > 0
+  //          ? <SvgLineChart data={sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={isMobile?200:280} fill={true} T={T} />
+  //          : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:24 }}>Select a sector above to view full historical flow</div>
+  //        }
+  //      </div>
 
-        <div style={card}>
-          <h3 style={{ ...sh, marginBottom:6 }}>Multi-Sector Overlay</h3>
-          <div style={{ fontSize:12, color:T.subtext, marginBottom:10 }}>Select up to 5 sectors to compare</div>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:14 }}>
-            {allSectors.map(sec => {
-              const active = selectedSectors.includes(sec);
-              const clr    = SECTOR_COLORS[selectedSectors.indexOf(sec) % SECTOR_COLORS.length] || T.border;
-              return (
-                <button key={sec} onClick={() => toggleSector(sec)} style={{ padding:"4px 10px", fontSize:11, borderRadius:20, border:`1.5px solid ${active?clr:T.border}`, background:active?clr+"22":"transparent", color:active?clr:T.subtext, cursor:"pointer", fontFamily:"inherit", fontWeight:active?700:400, transition:"all 0.15s" }}>{sec}</button>
-              );
-            })}
-          </div>
-          {selectedSectors.length > 0 && multiSectorData.length > 0
-            ? <SvgLineChart data={multiSectorData} series={selectedSectors.map((sec, i) => ({ key:sec, color:SECTOR_COLORS[i%SECTOR_COLORS.length], name:sec }))} height={isMobile?220:300} T={T} />
-            : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:20 }}>{selectedSectors.length===0?"Click sectors above to compare them":"Loading…"}</div>
-          }
-        </div>
+  //      <div style={card}>
+  //        <h3 style={{ ...sh, marginBottom:6 }}>Multi-Sector Overlay</h3>
+  //        <div style={{ fontSize:12, color:T.subtext, marginBottom:10 }}>Select up to 5 sectors to compare</div>
+  //        <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:14 }}>
+  //          {allSectors.map(sec => {
+  //            const active = selectedSectors.includes(sec);
+  //            const clr    = SECTOR_COLORS[selectedSectors.indexOf(sec) % SECTOR_COLORS.length] || T.border;
+  //            return (
+  //              <button key={sec} onClick={() => toggleSector(sec)} style={{ padding:"4px 10px", fontSize:11, borderRadius:20, border:`1.5px solid ${active?clr:T.border}`, background:active?clr+"22":"transparent", color:active?clr:T.subtext, cursor:"pointer", fontFamily:"inherit", fontWeight:active?700:400, transition:"all 0.15s" }}>{sec}</button>
+  //            );
+  //          })}
+  //        </div>
+  //        {selectedSectors.length > 0 && multiSectorData.length > 0
+  //          ? <SvgLineChart data={multiSectorData} series={selectedSectors.map((sec, i) => ({ key:sec, color:SECTOR_COLORS[i%SECTOR_COLORS.length], name:sec }))} height={isMobile?220:300} T={T} />
+  //          : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:20 }}>{selectedSectors.length===0?"Click sectors above to compare them":"Loading…"}</div>
+  //        }
+  //      </div>
 
-        <div style={card}>
-          <h3 style={sh}>Full Sector Ranking — 60D Net Flows</h3>
-          <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-              <thead><tr style={{ background:T.surface||T.bg }}>
-                {["#","Sector","60D Flow","Momentum","Signal"].map((h,i) => (
-                  <th key={h} style={{ padding:"8px 10px", textAlign:i<2?"left":"right", fontSize:10, fontWeight:700, textTransform:"uppercase", color:T.subtext, borderBottom:`1px solid ${T.border}` }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {ranking.map((s, i) => (
-                  <tr key={i} style={{ background:i%2===0?T.card:(T.surface||T.bg) }}>
-                    <td style={{ padding:"8px 10px", color:T.subtext, borderBottom:`1px solid ${T.border}`, fontWeight:700, width:32 }}>{i+1}</td>
-                    <td style={{ padding:"8px 10px", color:T.text,    borderBottom:`1px solid ${T.border}`, fontWeight:500 }}>{s.sector}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:getColor(s.total), borderBottom:`1px solid ${T.border}` }}>{fmtCrShort(s.total)}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"right", fontFamily:"monospace", color:getColor(s.momentum), borderBottom:`1px solid ${T.border}` }}>{fmtCrShort(s.momentum)}</td>
-                    <td style={{ padding:"8px 10px", textAlign:"right", borderBottom:`1px solid ${T.border}`, fontSize:11, fontWeight:700, color:s.momentum>0&&s.total>0?GREEN:s.momentum<0&&s.total<0?RED:AMBER }}>
-                      {s.momentum>0&&s.total>0?"▲ Accelerating":s.momentum<0&&s.total<0?"▼ Declining":"~ Turning"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+  //      <div style={card}>
+  //        <h3 style={sh}>Full Sector Ranking — 60D Net Flows</h3>
+  //        <div style={{ overflowX:"auto" }}>
+  //          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+  //            <thead><tr style={{ background:T.surface||T.bg }}>
+  //              {["#","Sector","60D Flow","Momentum","Signal"].map((h,i) => (
+  //                <th key={h} style={{ padding:"8px 10px", textAlign:i<2?"left":"right", fontSize:10, fontWeight:700, textTransform:"uppercase", color:T.subtext, borderBottom:`1px solid ${T.border}` }}>{h}</th>
+  //              ))}
+  //            </tr></thead>
+  //            <tbody>
+  //              {ranking.map((s, i) => (
+  //                <tr key={i} style={{ background:i%2===0?T.card:(T.surface||T.bg) }}>
+  //                  <td style={{ padding:"8px 10px", color:T.subtext, borderBottom:`1px solid ${T.border}`, fontWeight:700, width:32 }}>{i+1}</td>
+  //                  <td style={{ padding:"8px 10px", color:T.text,    borderBottom:`1px solid ${T.border}`, fontWeight:500 }}>{s.sector}</td>
+  //                  <td style={{ padding:"8px 10px", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:getColor(s.total), borderBottom:`1px solid ${T.border}` }}>{fmtCrShort(s.total)}</td>
+  //                  <td style={{ padding:"8px 10px", textAlign:"right", fontFamily:"monospace", color:getColor(s.momentum), borderBottom:`1px solid ${T.border}` }}>{fmtCrShort(s.momentum)}</td>
+  //                  <td style={{ padding:"8px 10px", textAlign:"right", borderBottom:`1px solid ${T.border}`, fontSize:11, fontWeight:700, color:s.momentum>0&&s.total>0?GREEN:s.momentum<0&&s.total<0?RED:AMBER }}>
+  //                    {s.momentum>0&&s.total>0?"▲ Accelerating":s.momentum<0&&s.total<0?"▼ Declining":"~ Turning"}
+  //                  </td>
+  //                </tr>
+  //              ))}
+  //            </tbody>
+  //          </table>
+  //        </div>
+  //      </div>
 
-        <div style={card}>
-          <h3 style={sh}>Latest Snapshot — {fmtDate(latestDate)}</h3>
-          {latestSnapshot.map((s, i) => {
-            const pct = sectorSnapshotMaxAbs ? Math.abs(+s.net_investment||0)/sectorSnapshotMaxAbs*100 : 0;
-            const val = +s.net_investment || 0;
-            return (
-              <div key={i} style={{ marginBottom:8 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
-                  <span style={{ color:T.text, fontWeight:500 }}>{s.sector}</span>
-                  <span style={{ color:getColor(val), fontWeight:700, fontFamily:"monospace" }}>{fmtCrShort(val)}</span>
-                </div>
-                <div style={{ background:T.border, borderRadius:2, height:4, overflow:"hidden" }}>
-                  <div style={{ width:`${pct}%`, height:"100%", background:val>=0?GREEN:RED, borderRadius:2, transition:"width 0.4s ease" }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
+  //      <div style={card}>
+  //        <h3 style={sh}>Latest Snapshot — {fmtDate(latestDate)}</h3>
+  //        {latestSnapshot.map((s, i) => {
+  //          const pct = sectorSnapshotMaxAbs ? Math.abs(+s.net_investment||0)/sectorSnapshotMaxAbs*100 : 0;
+  //          const val = +s.net_investment || 0;
+  //          return (
+  //            <div key={i} style={{ marginBottom:8 }}>
+  //              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+  //                <span style={{ color:T.text, fontWeight:500 }}>{s.sector}</span>
+  //                <span style={{ color:getColor(val), fontWeight:700, fontFamily:"monospace" }}>{fmtCrShort(val)}</span>
+  //              </div>
+  //              <div style={{ background:T.border, borderRadius:2, height:4, overflow:"hidden" }}>
+  //                <div style={{ width:`${pct}%`, height:"100%", background:val>=0?GREEN:RED, borderRadius:2, transition:"width 0.4s ease" }} />
+  //              </div>
+  //            </div>
+  //          );
+  //        })}
+  //      </div>
+  //    </div>
+  //  );
+  //};
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // SIGNALS TAB
-  // ══════════════════════════════════════════════════════════════════════════
-  const SignalsTab = () => {
-    const { regime, insights=[], exportText, lsRatio, z, breadth } = signals;
-    const [copied, setCopied] = useState(false);
-    const copy = () => { navigator.clipboard?.writeText(exportText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
+  //// ══════════════════════════════════════════════════════════════════════════
+  //// SIGNALS TAB
+  //// ══════════════════════════════════════════════════════════════════════════
+  //const SignalsTab = () => {
+  //  const { regime, insights=[], exportText, lsRatio, z, breadth } = signals;
+  //  const [copied, setCopied] = useState(false);
+  //  const copy = () => { navigator.clipboard?.writeText(exportText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
 
-    return (
-      <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-        <div style={{ ...card, background:regime==="Bullish Regime"?GREEN+"12":regime==="Bearish Regime"?RED+"12":AMBER+"12", borderColor:regime==="Bullish Regime"?GREEN+"44":regime==="Bearish Regime"?RED+"44":AMBER+"44", textAlign:"center", padding:28 }}>
-          <div style={{ fontSize:11, color:T.subtext, fontWeight:600, textTransform:"uppercase", marginBottom:8 }}>Current Market Regime</div>
-          <SignalPill signal={regime} T={T} />
-          <div style={{ marginTop:12, fontSize:12, color:T.subtext }}>Based on FII 20D · F&O L/S ratio · DII absorption · Sector breadth</div>
-        </div>
+  //  return (
+  //    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+  //      <div style={{ ...card, background:regime==="Bullish Regime"?GREEN+"12":regime==="Bearish Regime"?RED+"12":AMBER+"12", borderColor:regime==="Bullish Regime"?GREEN+"44":regime==="Bearish Regime"?RED+"44":AMBER+"44", textAlign:"center", padding:28 }}>
+  //        <div style={{ fontSize:11, color:T.subtext, fontWeight:600, textTransform:"uppercase", marginBottom:8 }}>Current Market Regime</div>
+  //        <SignalPill signal={regime} T={T} />
+  //        <div style={{ marginTop:12, fontSize:12, color:T.subtext }}>Based on FII 20D · F&O L/S ratio · DII absorption · Sector breadth</div>
+  //      </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4, 1fr)", gap:10 }}>
-          <StatCard label="FII 20D Flow"   value={fmtCrShort(cashMemo.fii20)}  color={getColor(cashMemo.fii20)}  T={T} />
-          <StatCard label="DII 20D Flow"   value={fmtCrShort(cashMemo.dii20)}  color={getColor(cashMemo.dii20)}  T={T} />
-          <StatCard label="FII L/S Ratio"  value={typeof lsRatio==="number"?lsRatio.toFixed(2):"—"} color={parseFloat(lsRatio)>1?GREEN:RED} sub={parseFloat(lsRatio)>1?"Net Long":"Net Short"} T={T} />
-          <StatCard label="Sector Breadth" value={`${breadth??0}%`} color={breadth>60?GREEN:breadth<40?RED:AMBER} sub="sectors with inflows" T={T} />
-        </div>
+  //      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4, 1fr)", gap:10 }}>
+  //        <StatCard label="FII 20D Flow"   value={fmtCrShort(cashMemo.fii20)}  color={getColor(cashMemo.fii20)}  T={T} />
+  //        <StatCard label="DII 20D Flow"   value={fmtCrShort(cashMemo.dii20)}  color={getColor(cashMemo.dii20)}  T={T} />
+  //        <StatCard label="FII L/S Ratio"  value={typeof lsRatio==="number"?lsRatio.toFixed(2):"—"} color={parseFloat(lsRatio)>1?GREEN:RED} sub={parseFloat(lsRatio)>1?"Net Long":"Net Short"} T={T} />
+  //        <StatCard label="Sector Breadth" value={`${breadth??0}%`} color={breadth>60?GREEN:breadth<40?RED:AMBER} sub="sectors with inflows" T={T} />
+  //      </div>
 
-        <div style={card}>
-          <h3 style={sh}>🧠 Insight Engine</h3>
-          {insights.length===0
-            ? <div style={{ color:T.subtext, fontSize:13 }}>No significant signals currently.</div>
-            : <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {insights.map((ins, i) => (
-                  <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start", padding:"12px 14px", borderRadius:8, background:ins.type==="bullish"?GREEN+"12":ins.type==="bearish"?RED+"12":ins.type==="alert"?AMBER+"12":(T.surface||T.bg), border:`1px solid ${ins.type==="bullish"?GREEN+"33":ins.type==="bearish"?RED+"33":ins.type==="alert"?AMBER+"33":T.border}` }}>
-                    <span style={{ fontSize:20 }}>{ins.icon}</span>
-                    <div style={{ fontSize:13, color:T.text, lineHeight:1.5 }}>{ins.text}</div>
-                  </div>
-                ))}
-              </div>
-          }
-        </div>
+  //      <div style={card}>
+  //        <h3 style={sh}>🧠 Insight Engine</h3>
+  //        {insights.length===0
+  //          ? <div style={{ color:T.subtext, fontSize:13 }}>No significant signals currently.</div>
+  //          : <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+  //              {insights.map((ins, i) => (
+  //                <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start", padding:"12px 14px", borderRadius:8, background:ins.type==="bullish"?GREEN+"12":ins.type==="bearish"?RED+"12":ins.type==="alert"?AMBER+"12":(T.surface||T.bg), border:`1px solid ${ins.type==="bullish"?GREEN+"33":ins.type==="bearish"?RED+"33":ins.type==="alert"?AMBER+"33":T.border}` }}>
+  //                  <span style={{ fontSize:20 }}>{ins.icon}</span>
+  //                  <div style={{ fontSize:13, color:T.text, lineHeight:1.5 }}>{ins.text}</div>
+  //                </div>
+  //              ))}
+  //            </div>
+  //        }
+  //      </div>
 
-        {/*<div style={card}>*/}
-        {/*  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>*/}
-        {/*    <h3 style={{ ...sh, margin:0 }}>📤 Export Insight</h3>*/}
-        {/*    <button onClick={copy} style={{ background:BLUE, color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>*/}
-        {/*      {copied?"✓ Copied!":"Copy for X / Twitter"}*/}
-        {/*    </button>*/}
-        {/*  </div>*/}
-        {/*  <pre style={{ background:T.surface||T.bg, borderRadius:8, padding:14, fontSize:12, color:T.text, whiteSpace:"pre-wrap", lineHeight:1.7, margin:0, border:`1px solid ${T.border}` }}>{exportText||"Loading…"}</pre>*/}
-        {/*</div>*/}
+  //      {/*<div style={card}>*/}
+  //      {/*  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>*/}
+  //      {/*    <h3 style={{ ...sh, margin:0 }}>📤 Export Insight</h3>*/}
+  //      {/*    <button onClick={copy} style={{ background:BLUE, color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>*/}
+  //      {/*      {copied?"✓ Copied!":"Copy for X / Twitter"}*/}
+  //      {/*    </button>*/}
+  //      {/*  </div>*/}
+  //      {/*  <pre style={{ background:T.surface||T.bg, borderRadius:8, padding:14, fontSize:12, color:T.text, whiteSpace:"pre-wrap", lineHeight:1.7, margin:0, border:`1px solid ${T.border}` }}>{exportText||"Loading…"}</pre>*/}
+  //      {/*</div>*/}
 
-        {derivMemo.buildUp && derivMemo.buildUp !== "Neutral" && (
-          <div style={{ ...card, borderLeft:`4px solid ${derivMemo.buildUp==="Long Build-up"?GREEN:RED}` }}>
-            <div style={{ fontSize:11, color:T.subtext, fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>F&O Build-up Alert</div>
-            <div style={{ fontSize:15, fontWeight:700, color:derivMemo.buildUp==="Long Build-up"?GREEN:RED }}>
-              {derivMemo.buildUp==="Long Build-up"?"📈 Long Build-up Detected":"📉 Short Build-up Detected"}
-            </div>
-            <div style={{ fontSize:12, color:T.subtext, marginTop:4 }}>
-              {derivMemo.buildUp==="Long Build-up"?"FII adding longs, reducing shorts — Bullish":"FII adding shorts, reducing longs — Bearish"}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
+  //      {derivMemo.buildUp && derivMemo.buildUp !== "Neutral" && (
+  //        <div style={{ ...card, borderLeft:`4px solid ${derivMemo.buildUp==="Long Build-up"?GREEN:RED}` }}>
+  //          <div style={{ fontSize:11, color:T.subtext, fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>F&O Build-up Alert</div>
+  //          <div style={{ fontSize:15, fontWeight:700, color:derivMemo.buildUp==="Long Build-up"?GREEN:RED }}>
+  //            {derivMemo.buildUp==="Long Build-up"?"📈 Long Build-up Detected":"📉 Short Build-up Detected"}
+  //          </div>
+  //          <div style={{ fontSize:12, color:T.subtext, marginTop:4 }}>
+  //            {derivMemo.buildUp==="Long Build-up"?"FII adding longs, reducing shorts — Bullish":"FII adding shorts, reducing longs — Bearish"}
+  //          </div>
+  //        </div>
+  //      )}
+  //    </div>
+  //  );
+  //};
 
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER — (5) Sticky header + tab bar
@@ -1476,8 +1461,8 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     "Overview":        <OverviewTab />,
     "Cash Flow":       <CashFlowTab />,
     "Derivatives":     <DerivativesTab />,
-    "Sector Rotation": <SectorTab />,
-    "Signals":         <SignalsTab />,
+    //"Sector Rotation": <SectorTab />,
+    //"Signals":         <SignalsTab />,
   };
 
   return (

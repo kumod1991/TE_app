@@ -560,25 +560,25 @@ export default function IPOModule({ T }) {
                 </div>
 
                 {/* Summary Cards */}
-                <div style={S.cardsGrid}>
-                    {[
-                        { label: "Total IPOs", value: summary.total },
-                        { label: "Open", value: summary.open },
-                        { label: "Pre Apply", value: summary.preApply },
-                        { label: "Closed", value: summary.closed },
-                        { label: "Mainboard", value: summary.mainboard },
-                        { label: "SME", value: summary.sme },
-                        { label: "Highest Sub.", value: summary.highestSub != null ? `${summary.highestSub.toFixed(1)}×` : "—" },
-                        { label: "Avg. Sub.", value: summary.avgSub != null ? `${summary.avgSub.toFixed(1)}×` : "—" },
-                    ].map(c => (
-                        <div key={c.label} style={S.card}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderStrong; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "none"; }}>
-                            <div style={S.cardLabel}>{c.label}</div>
-                            <div style={S.cardValue}>{loading ? "—" : c.value}</div>
-                        </div>
-                    ))}
-                </div>
+                {/*<div style={S.cardsGrid}>*/}
+                {/*    {[*/}
+                {/*        { label: "Total IPOs", value: summary.total },*/}
+                {/*        { label: "Open", value: summary.open },*/}
+                {/*        { label: "Pre Apply", value: summary.preApply },*/}
+                {/*        { label: "Closed", value: summary.closed },*/}
+                {/*        { label: "Mainboard", value: summary.mainboard },*/}
+                {/*        { label: "SME", value: summary.sme },*/}
+                {/*        { label: "Highest Sub.", value: summary.highestSub != null ? `${summary.highestSub.toFixed(1)}×` : "—" },*/}
+                {/*        { label: "Avg. Sub.", value: summary.avgSub != null ? `${summary.avgSub.toFixed(1)}×` : "—" },*/}
+                {/*    ].map(c => (*/}
+                {/*        <div key={c.label} style={S.card}*/}
+                {/*            onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderStrong; e.currentTarget.style.transform = "translateY(-1px)"; }}*/}
+                {/*            onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "none"; }}>*/}
+                {/*            <div style={S.cardLabel}>{c.label}</div>*/}
+                {/*            <div style={S.cardValue}>{loading ? "—" : c.value}</div>*/}
+                {/*        </div>*/}
+                {/*    ))}*/}
+                {/*</div>*/}
 
                 {/* Tabs */}
                 <div style={S.tabRow}>

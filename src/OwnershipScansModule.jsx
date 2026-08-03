@@ -1614,7 +1614,7 @@ export default function OwnershipScansModule({ T }) {
   // ─── MAIN RENDER ─────────────────────────────────────────────────────────────
   return (
     <div style={{ width: "100%", minHeight: "100%", overflowY: "auto", boxSizing: "border-box", fontFamily: "inherit", color: T.text, background: T.bg }}>
-      <div style={{ width: "100%", maxWidth: 1100, margin: "0 auto", padding: isMobile ? "20px 16px 40px" : "32px 32px 48px" }}>
+      <div style={{ width: "100%", maxWidth: 1400, margin: "0 auto", padding: isMobile ? "20px 16px 40px" : "32px 32px 48px" }}>
 
         {view === "home" && (
           <>
