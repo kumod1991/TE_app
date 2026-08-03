@@ -2366,11 +2366,12 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                 </div>
             ) : (
                 <>
-                    <PremiumTableShell T={T} minWidth={1020} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+                    <PremiumTableShell T={T} minWidth={1110} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
                         <thead>
                             <tr>
                                 <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
                                 <Th k="name" label="Name" align="left" />
+                                <Th k="close" label="Price" />
                                 <Th k="rs_rating" label="RS" />
                                 <Th k="ret_3m" label="3M" />
                                 <Th k="ret_6m" label="6M" />
@@ -2408,6 +2409,10 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                                             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>
                                         )}
                                     </td>
+                                    <td style={{
+                                        padding: "12px 16px", textAlign: "right",
+                                        color: T.text, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13,
+                                    }}>{row.close != null ? `₹${fmt(row.close)}` : EMPTY_VALUE}</td>
                                     <td style={{ padding: "12px 16px", textAlign: "right" }}>
                                         <span style={{
                                             display: "inline-block", padding: "3px 9px", borderRadius: 6,
