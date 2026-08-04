@@ -659,7 +659,7 @@ function hexToRgb(hex) {
     };
 }
 
-function withAlpha(color, alpha) {
+export function withAlpha(color, alpha) {
     if (!color || typeof color !== "string") return `rgba(15, 23, 42, ${alpha})`;
     if (color.startsWith("rgba")) {
         return color.replace(/rgba\(([^,]+),([^,]+),([^,]+),[^)]+\)/, `rgba($1,$2,$3,${alpha})`);
@@ -682,7 +682,7 @@ function luminance(color) {
     return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
 }
 
-function buildDashboardTheme(T = {}) {
+export function buildDashboardTheme(T = {}) {
     const bg = T.bg || "#f6f7f5";
     const isDark = luminance(bg) < 0.32;
     // Deep navy/indigo accent for buttons, active states, links.
@@ -1521,6 +1521,13 @@ function PremiumTableShell({ T, children, minWidth, maxHeight, isScrollable }) {
             borderRadius: 14,
             border: `1px solid ${T.panelBorder}`,
             background: T.panelBg,
+            // Without this, dragging past the horizontal (or vertical, when
+            // isScrollable) edge on mobile lets the elastic bounce chain up to
+            // the page itself — the table visually detaches/floats past its
+            // own rounded border. `contain` keeps the rubber-band effect
+            // local to this box instead of propagating to the parent scroll.
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
         }}>
             <table style={{
                 width: "100%",
@@ -3293,9 +3300,19 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         },
     };
 
-    // Fetches one page for one movers tab. isLoadMore=false always fetches page 1
-    // (used for the initial load and for cache revalidation); isLoadMore=true
-    // fetches the next page starting at that tab's own offset.
+    // Fetches page(s) for one movers tab. isLoadMore=false always starts at
+    // offset 0 (used for the initial load and for cache revalidation);
+    // isLoadMore=true continues from that tab's own offset.
+    //
+    // A single MOVERS_BATCH_SIZE page of raw rows can shrink well below that
+    // once ETFs, liquid funds, and disallowed tickers are filtered out client-
+    // side (processMoversRows) — e.g. a "gainers" page stuffed with ETFs could
+    // leave only a handful of real stocks. Rather than surface that half-empty
+    // page, keep pulling subsequent pages until we've collected at least
+    // MOVERS_INITIAL_ROWS (initial load) / MOVERS_LOAD_MORE_ROWS (load more)
+    // *filtered* rows, or the table genuinely runs out. Capped at 6 pages
+    // (~120 raw rows) so a tab that's almost entirely filtered can't loop
+    // forever on every load.
     const fetchMoversTabPage = async (tabKey, { isLoadMore = false, isCancelled = () => false } = {}) => {
         const cfg = MOVERS_TAB_CONFIG[tabKey];
         if (!cfg) return;
@@ -3307,35 +3324,63 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         }
         try {
             const allowedSet = await ensureAllowedTickerSet();
-            const offset = isLoadMore ? cfg.offsetRef.current : 0;
-            const pagePath = withPageParams(cfg.path, MOVERS_BATCH_SIZE, offset);
+            let offset = isLoadMore ? cfg.offsetRef.current : 0;
+            const target = isLoadMore ? MOVERS_LOAD_MORE_ROWS : MOVERS_INITIAL_ROWS;
 
-            const applyPage = (rawRows, replace) => {
-                if (isCancelled() || !Array.isArray(rawRows)) return;
-                const processed = processMoversRows(tabKey, rawRows, allowedSet);
-                if (replace) {
-                    cfg.setData(processed);
-                    cfg.offsetRef.current = rawRows.length;
-                } else {
-                    cfg.setData(prev => mergeUniqueByTicker(prev, processed));
-                    cfg.offsetRef.current += rawRows.length;
-                }
-                cfg.setHasMore(rawRows.length >= MOVERS_BATCH_SIZE);
+            const applyFreshPage = fresh => {
+                if (isCancelled() || !Array.isArray(fresh)) return;
+                const processed = processMoversRows(tabKey, fresh, allowedSet);
+                cfg.setData(processed);
+                cfg.offsetRef.current = fresh.length;
+                cfg.setHasMore(fresh.length >= MOVERS_BATCH_SIZE);
                 cfg.loadedRef.current = true;
-                if (!isLoadMore && rawRows[0]?.created_at) {
-                    setLastUpdated(new Date(rawRows[0].created_at).toLocaleString("en-IN", {
+                if (fresh[0]?.created_at) {
+                    setLastUpdated(new Date(fresh[0].created_at).toLocaleString("en-IN", {
                         day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true,
                     }));
                 }
             };
 
-            const rawRows = await sbFetch(pagePath, userToken, {
-                ttl: MOVERS_TTL,
-                onStale: isLoadMore ? undefined : fresh => applyPage(fresh, true),
-            });
+            let accumulated = [];
+            let hasMoreRaw = true;
+            let firstRawRows = null;
+            let page = 0;
+            while (accumulated.length < target && hasMoreRaw && page < 6) {
+                const pagePath = withPageParams(cfg.path, MOVERS_BATCH_SIZE, offset);
+                // Only the very first page participates in SWR background
+                // revalidation (onStale) — matches the previous single-page
+                // behavior for cache freshness without complicating the
+                // backfill loop's later pages.
+                const rawRows = page === 0
+                    ? await sbFetch(pagePath, userToken, {
+                        ttl: MOVERS_TTL,
+                        onStale: isLoadMore ? undefined : applyFreshPage,
+                    })
+                    : await sbFetch(pagePath, userToken, { ttl: MOVERS_TTL });
+
+                if (isCancelled() || !Array.isArray(rawRows)) break;
+                if (page === 0) firstRawRows = rawRows;
+                offset += rawRows.length;
+                hasMoreRaw = rawRows.length >= MOVERS_BATCH_SIZE;
+                accumulated = accumulated.concat(processMoversRows(tabKey, rawRows, allowedSet));
+                page++;
+            }
 
             if (isCancelled()) return;
-            applyPage(rawRows, !isLoadMore);
+
+            if (isLoadMore) {
+                cfg.setData(prev => mergeUniqueByTicker(prev, accumulated));
+            } else {
+                cfg.setData(accumulated);
+            }
+            cfg.offsetRef.current = offset;
+            cfg.setHasMore(hasMoreRaw);
+            cfg.loadedRef.current = true;
+            if (!isLoadMore && firstRawRows?.[0]?.created_at) {
+                setLastUpdated(new Date(firstRawRows[0].created_at).toLocaleString("en-IN", {
+                    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true,
+                }));
+            }
         } catch (err) {
             if (!isCancelled()) {
                 console.error(`Error fetching movers (${tabKey}):`, err);
@@ -3389,7 +3434,6 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
     // FETCH VOLUME SHOCKERS
     // ─────────────────────────────────────────────────────────────────────────
     useEffect(() => {
-        const pagePath = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, 0);
         let cancelled = false;
         (async () => {
             try {
@@ -3416,25 +3460,51 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                     }
                 };
 
-                const vsData = await sbFetch(pagePath, userToken, {
-                    ttl: VOLUME_SHOCKERS_TTL,
-                    // Stale cache is returned instantly above, but this fires a
-                    // background refetch and pushes the fresh DB rows into state
-                    // once they land — otherwise a stale localStorage snapshot
-                    // could be shown indefinitely even after the DB updates.
-                    onStale: fresh => {
-                        if (cancelled) return;
-                        setVolumeShockers(applyFilter(fresh));
-                        setVolumeShockersHasMore((fresh || []).length >= VOLUME_SHOCKERS_BATCH_SIZE);
-                        volumeShockersOffsetRef.current = (fresh || []).length;
-                        enrichNames(fresh);
-                    },
-                });
+                // A single VOLUME_SHOCKERS_BATCH_SIZE page can shrink well below
+                // that once ETFs / disallowed tickers are filtered out — keep
+                // pulling subsequent pages until we've collected at least
+                // MOVERS_INITIAL_ROWS filtered rows, or the table runs out
+                // (capped at 6 pages, matching the movers tabs' backfill).
+                let offset = 0;
+                let accumulatedRaw = [];
+                let accumulatedFiltered = [];
+                let hasMoreRaw = true;
+                let page = 0;
+                while (accumulatedFiltered.length < MOVERS_INITIAL_ROWS && hasMoreRaw && page < 6) {
+                    const pagePath = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, offset);
+                    // Only the very first page participates in SWR background
+                    // revalidation (onStale), matching the previous single-page
+                    // behavior for cache freshness.
+                    const vsData = page === 0
+                        ? await sbFetch(pagePath, userToken, {
+                            ttl: VOLUME_SHOCKERS_TTL,
+                            // Stale cache is returned instantly above, but this fires a
+                            // background refetch and pushes the fresh DB rows into state
+                            // once they land — otherwise a stale localStorage snapshot
+                            // could be shown indefinitely even after the DB updates.
+                            onStale: fresh => {
+                                if (cancelled) return;
+                                setVolumeShockers(applyFilter(fresh));
+                                setVolumeShockersHasMore((fresh || []).length >= VOLUME_SHOCKERS_BATCH_SIZE);
+                                volumeShockersOffsetRef.current = (fresh || []).length;
+                                enrichNames(fresh);
+                            },
+                        })
+                        : await sbFetch(pagePath, userToken, { ttl: VOLUME_SHOCKERS_TTL });
+
+                    if (cancelled || !Array.isArray(vsData)) break;
+                    accumulatedRaw = accumulatedRaw.concat(vsData);
+                    accumulatedFiltered = accumulatedFiltered.concat(applyFilter(vsData));
+                    offset += vsData.length;
+                    hasMoreRaw = vsData.length >= VOLUME_SHOCKERS_BATCH_SIZE;
+                    page++;
+                }
+
                 if (cancelled) return;
-                setVolumeShockers(applyFilter(vsData));
-                setVolumeShockersHasMore((vsData || []).length >= VOLUME_SHOCKERS_BATCH_SIZE);
-                volumeShockersOffsetRef.current = (vsData || []).length;
-                await enrichNames(vsData);
+                setVolumeShockers(accumulatedFiltered);
+                setVolumeShockersHasMore(hasMoreRaw);
+                volumeShockersOffsetRef.current = offset;
+                await enrichNames(accumulatedRaw);
             } catch (err) {
                 if (!cancelled) console.error("Error fetching volume shockers:", err);
             } finally {
@@ -3650,23 +3720,43 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
         setLoadingMoreVolumeShockers(true);
         try {
             const allowedSet = await ensureAllowedTickerSet();
-            const pagePath = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, volumeShockersOffsetRef.current);
-            const batch = await sbFetch(pagePath, userToken, { ttl: VOLUME_SHOCKERS_TTL });
-            if (!Array.isArray(batch) || batch.length === 0) {
-                setVolumeShockersHasMore(false);
-                return;
-            }
-            const processed = applyNamesFromMap(batch.map(r => ({
+            const applyFilter = rows => (rows || []).map(r => ({
                 ...r,
                 name: _nameMap.get(r.ticker) || r.name || null,
                 change_pct: r.open > 0 ? ((r.close - r.open) / r.open) * 100 : null,
-            }))).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet));
-            setVolumeShockers(prev => mergeUniqueByTicker(prev, processed));
-            volumeShockersOffsetRef.current += batch.length;
-            setVolumeShockersHasMore(batch.length >= VOLUME_SHOCKERS_BATCH_SIZE);
+            })).filter(r => !isETF(r) && isAllowedTicker(r.ticker, allowedSet));
+
+            // Same backfill logic as the initial load: an ETF/disallowed-heavy
+            // raw page can leave far fewer than MOVERS_LOAD_MORE_ROWS filtered
+            // rows, so keep paging until we've added a full batch or the table
+            // runs out (capped at 6 pages).
+            let offset = volumeShockersOffsetRef.current;
+            let accumulatedRaw = [];
+            let accumulatedFiltered = [];
+            let hasMoreRaw = true;
+            let page = 0;
+            while (accumulatedFiltered.length < MOVERS_LOAD_MORE_ROWS && hasMoreRaw && page < 6) {
+                const pagePath = withPageParams(VOLUME_SHOCKERS_BASE_PATH, VOLUME_SHOCKERS_BATCH_SIZE, offset);
+                const batch = await sbFetch(pagePath, userToken, { ttl: VOLUME_SHOCKERS_TTL });
+                if (!Array.isArray(batch) || batch.length === 0) { hasMoreRaw = false; break; }
+                accumulatedRaw = accumulatedRaw.concat(batch);
+                accumulatedFiltered = accumulatedFiltered.concat(applyFilter(batch));
+                offset += batch.length;
+                hasMoreRaw = batch.length >= VOLUME_SHOCKERS_BATCH_SIZE;
+                page++;
+            }
+
+            if (accumulatedRaw.length === 0) {
+                setVolumeShockersHasMore(false);
+                return;
+            }
+
+            setVolumeShockers(prev => mergeUniqueByTicker(prev, accumulatedFiltered));
+            volumeShockersOffsetRef.current = offset;
+            setVolumeShockersHasMore(hasMoreRaw);
 
             try {
-                const allTickers = [...new Set(batch.map(r => r.ticker).filter(Boolean))];
+                const allTickers = [...new Set(accumulatedRaw.map(r => r.ticker).filter(Boolean))];
                 const missingTickers = allTickers.filter(t => !_nameMap.has(t));
                 if (missingTickers.length) {
                     await batchFetchBhavNames(missingTickers, userToken);

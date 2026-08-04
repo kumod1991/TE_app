@@ -6,7 +6,7 @@ import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule";
 import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule";
 import AnnouncementsModule from "./AnnouncementsModule";
 import IPOModule from "./IPOModule";
-import StockDashboard, { warmStockDashboardCaches } from "./StockDashboard";
+import StockDashboard, { warmStockDashboardCaches, buildDashboardTheme, withAlpha } from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 
 
@@ -18206,6 +18206,9 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
+    // Same derived theme StockDashboard's Trend Template table uses (tableHeadBg,
+    // panelBorder, shadows, etc.) so this table matches it in fonts/colors/spacing.
+    const D = useMemo(() => buildDashboardTheme(T), [T]);
 
     // retestMode: same frozen-snapshot problem as pivotMode  local TF state needed
     const retestMode = !!detail.retestMode;
@@ -18389,6 +18392,20 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         });
         return r;
     }, [activeRows, filters, sortKey, sortDir, vcpMode, vcpCatFilter, vcpNearPivot]);
+
+    // Paginate instead of rendering every row — keeps the DOM small so large
+    // screens (500+ rows) mount and scroll smoothly. Resets to page 1 any time
+    // the underlying filtered/sorted set changes (new filters, sort, screen).
+    const PAGE_SIZE = 25;
+    const [page, setPage] = useState(1);
+    useEffect(() => { setPage(1); }, [filteredRows]);
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+    const pageStart = (page - 1) * PAGE_SIZE;
+    const pagedRows = useMemo(
+        () => filteredRows.slice(pageStart, pageStart + PAGE_SIZE),
+        [filteredRows, pageStart]
+    );
+    const goToPage = p => setPage(Math.min(Math.max(1, p), totalPages));
 
     const handleSort = key => {
         if (sortKey === key) setSortDir(d => d === "desc" ? "asc" : "desc");
@@ -18949,34 +18966,34 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                 <thead>
                                     <tr style={{
                                         position: "sticky", top: 0, zIndex: 10,
-                                        background: T.tableHead, borderBottom: `1px solid ${T.border}`
+                                        background: D.tableHeadBg, borderBottom: `1px solid ${D.panelBorder}`
                                     }}>
                                         <th style={{
-                                            padding: "9px 0 9px 16px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: T.muted,
+                                            padding: "11px 0 11px 16px", textAlign: "left",
+                                            fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                            letterSpacing: ".12em", color: T.muted,
                                             position: "sticky", left: 0, zIndex: 11,
-                                            background: T.tableHead, borderRight: `1px solid ${T.border}`,
+                                            background: D.tableHeadBg, borderRight: `1px solid ${D.panelBorder}`,
                                             width: 40, whiteSpace: "nowrap"
                                         }}>#</th>
                                         <th style={{
-                                            padding: "9px 16px 9px 10px", textAlign: "left",
-                                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: T.muted,
+                                            padding: "11px 16px 11px 10px", textAlign: "left",
+                                            fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                            letterSpacing: ".12em", color: T.muted,
                                             position: "sticky", left: 40, zIndex: 11,
-                                            background: T.tableHead, borderRight: `1px solid ${T.border}`,
+                                            background: D.tableHeadBg, borderRight: `1px solid ${D.panelBorder}`,
                                             minWidth: 140, whiteSpace: "nowrap"
                                         }}>Company</th>
 
                                         {visibleCols.close && (
                                             <th onClick={() => handleSort("close")}
                                                 style={{
-                                                    padding: "9px 13px", textAlign: "right",
-                                                    fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                                    letterSpacing: ".07em", whiteSpace: "nowrap",
+                                                    padding: "11px 16px", textAlign: "right",
+                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                                    letterSpacing: ".12em", whiteSpace: "nowrap",
                                                     cursor: "pointer", userSelect: "none",
                                                     color: sortKey === "close" ? accentOrFallback : T.muted,
-                                                    background: sortKey === "close" ? (isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`) : T.tableHead,
+                                                    background: sortKey === "close" ? (isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`) : D.tableHeadBg,
                                                     borderBottom: sortKey === "close" ? `2px solid ${accentOrFallback}` : "none"
                                                 }}>
                                                 Price <SortArrow k="close" />
@@ -18985,9 +19002,9 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                         {scoreKey && (
                                             <th onClick={() => handleSort(scoreKey)}
                                                 style={{
-                                                    padding: "9px 13px", textAlign: "right",
-                                                    fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                                    letterSpacing: ".07em", whiteSpace: "nowrap",
+                                                    padding: "11px 16px", textAlign: "right",
+                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                                    letterSpacing: ".12em", whiteSpace: "nowrap",
                                                     cursor: "pointer", userSelect: "none", color: accentOrFallback,
                                                     background: isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`,
                                                     borderBottom: `2px solid ${accentOrFallback}`,
@@ -18999,12 +19016,12 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                         {dynColDefs.map(c => (
                                             <th key={c.key} onClick={() => handleSort(c.key)}
                                                 style={{
-                                                    padding: "9px 13px", textAlign: "right",
-                                                    fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                                    letterSpacing: ".07em", whiteSpace: "nowrap",
+                                                    padding: "11px 16px", textAlign: "right",
+                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                                    letterSpacing: ".12em", whiteSpace: "nowrap",
                                                     cursor: "pointer", userSelect: "none",
                                                     color: sortKey === c.key ? accentOrFallback : T.muted,
-                                                    background: sortKey === c.key ? (isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`) : T.tableHead,
+                                                    background: sortKey === c.key ? (isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`) : D.tableHeadBg,
                                                     borderBottom: sortKey === c.key ? `2px solid ${accentOrFallback}` : "none",
                                                     transition: "background .1s, color .1s"
                                                 }}>
@@ -19014,13 +19031,13 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                         {vcpColDefs.map(c => (
                                             <th key={c.key} onClick={() => handleSort(c.key)}
                                                 style={{
-                                                    padding: "9px 13px",
+                                                    padding: "11px 16px",
                                                     textAlign: ["volume_dryup", "tight_range", "near_pivot"].includes(c.key) ? "center" : "right",
-                                                    fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                                                    letterSpacing: ".07em", whiteSpace: "nowrap",
+                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                                    letterSpacing: ".12em", whiteSpace: "nowrap",
                                                     cursor: "pointer", userSelect: "none",
                                                     color: sortKey === c.key ? accentOrFallback : T.muted,
-                                                    background: sortKey === c.key ? (isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`) : T.tableHead,
+                                                    background: sortKey === c.key ? (isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`) : D.tableHeadBg,
                                                     borderBottom: sortKey === c.key ? `2px solid ${accentOrFallback}` : "none",
                                                     transition: "background .1s, color .1s"
                                                 }}>
@@ -19037,19 +19054,24 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                         }}>
                                             No stocks match the current filters
                                         </td></tr>
-                                    ) : filteredRows.map((row, idx) => {
+                                    ) : pagedRows.map((row, i) => {
+                                        const idx = pageStart + i;
                                         const hue = row.ticker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
                                         const badgeBg = isDark ? `hsl(${hue},18%,18%)` : `hsl(${hue},28%,90%)`;
                                         const badgeColor = isDark ? `hsl(${hue},40%,62%)` : `hsl(${hue},35%,32%)`;
                                         const stickyBg = isDark ? T.bg : T.card;
+                                        const rowHoverBg = isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)";
                                         return (
                                             <tr key={row.ticker}
-                                                style={{ borderTop: `1px solid ${T.border}`, transition: "background .07s", cursor: "pointer" }}
+                                                style={{
+                                                    borderTop: `1px solid ${isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`,
+                                                    transition: "background .12s ease", cursor: "pointer"
+                                                }}
                                                 onMouseEnter={e => {
                                                     // Desktop-only  skip on touch devices
                                                     if (window.matchMedia("(hover: none)").matches) return;
-                                                    e.currentTarget.style.background = T.hover;
-                                                    e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = T.hover);
+                                                    e.currentTarget.style.background = rowHoverBg;
+                                                    e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = rowHoverBg);
                                                     const companyTd = e.currentTarget.querySelectorAll("[data-sticky]")[1];
                                                     if (companyTd) {
                                                         const rect = companyTd.getBoundingClientRect();
@@ -19075,18 +19097,18 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     }
                                                 }}>
                                                 <td data-sticky="1" style={{
-                                                    padding: "9px 0 9px 16px",
-                                                    fontSize: 13, color: T.muted, fontFamily: mono,
+                                                    padding: "12px 0 12px 16px",
+                                                    fontSize: 13.5, color: T.muted, fontFamily: mono,
                                                     fontVariantNumeric: "tabular-nums", textAlign: "left",
                                                     position: "sticky", left: 0, background: stickyBg, zIndex: 2,
-                                                    borderRight: `1px solid ${T.border}`, width: 40
+                                                    borderRight: `1px solid ${D.panelBorder}`, width: 40
                                                 }}>
                                                     {idx + 1}
                                                 </td>
                                                 <td data-sticky="1" style={{
-                                                    padding: "9px 13px 9px 10px",
+                                                    padding: "12px 16px 12px 10px",
                                                     position: "sticky", left: 40, background: stickyBg, zIndex: 2,
-                                                    borderRight: `1px solid ${T.border}`, minWidth: 140
+                                                    borderRight: `1px solid ${D.panelBorder}`, minWidth: 140
                                                 }}>
                                                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                                         <div style={{
@@ -19099,10 +19121,10 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                             {row.ticker.slice(0, 5)}
                                                         </div>
                                                         <span style={{
-                                                            fontSize: 13, fontWeight: 600, color: T.text,
+                                                            fontSize: 15.5, fontWeight: 600, color: T.text,
                                                             whiteSpace: "nowrap", overflow: "hidden",
                                                             textOverflow: "ellipsis", maxWidth: 120,
-                                                            fontFamily: mono, letterSpacing: ".02em"
+                                                            fontFamily: sans, letterSpacing: "0"
                                                         }}>
                                                             {row.ticker}
                                                         </span>
@@ -19111,8 +19133,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
 
                                                 {visibleCols.close && (
                                                     <td style={{
-                                                        padding: "9px 13px", fontFamily: mono, fontSize: 13,
-                                                        color: T.text,
+                                                        padding: "12px 16px", fontFamily: mono, fontSize: 15.5,
+                                                        color: T.text, fontWeight: 600,
                                                         textAlign: "right", fontVariantNumeric: "tabular-nums",
                                                         position: "relative"
                                                     }}>
@@ -19123,13 +19145,13 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     const sv = Number(row[scoreKey] ?? 0);
                                                     const sl = formatVal ? formatVal(sv, row) : sv.toFixed(2);
                                                     return (
-                                                        <td style={{
-                                                            padding: "9px 13px", textAlign: "right",
-                                                            borderLeft: `2px solid ${accentOrFallback}22`
-                                                        }}>
+                                                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
                                                             <span style={{
-                                                                fontFamily: mono, fontSize: 13, fontWeight: 700,
-                                                                color: accentOrFallback, fontVariantNumeric: "tabular-nums"
+                                                                display: "inline-block", padding: "3px 9px", borderRadius: 6,
+                                                                background: withAlpha(accentOrFallback, isDark ? 0.18 : 0.10),
+                                                                border: `1px solid ${withAlpha(accentOrFallback, 0.28)}`,
+                                                                color: accentOrFallback, fontFamily: mono,
+                                                                fontWeight: 700, fontSize: 15.5, fontVariantNumeric: "tabular-nums"
                                                             }}>
                                                                 {sl}
                                                             </span>
@@ -19155,8 +19177,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     }
                                                     return (
                                                         <td key={c.key} style={{
-                                                            padding: "9px 13px", fontFamily: mono,
-                                                            fontSize: 13, fontWeight: (isRet || isRating || isRelVol) ? 600 : 400,
+                                                            padding: "12px 16px", fontFamily: mono,
+                                                            fontSize: 15.5, fontWeight: (isRet || isRating || isRelVol) ? 600 : 400,
                                                             textAlign: "right", fontVariantNumeric: "tabular-nums",
                                                             color: fmt == null ? T.muted : cellColor,
                                                             whiteSpace: "nowrap"
@@ -19185,8 +19207,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     }
                                                     return (
                                                         <td key={c.key} style={{
-                                                            padding: "9px 13px", fontFamily: mono,
-                                                            fontSize: isBool ? 14 : 13,
+                                                            padding: "12px 16px", fontFamily: mono,
+                                                            fontSize: isBool ? 16 : 15.5,
                                                             fontWeight: (isScore || isCat) ? 700 : 400,
                                                             textAlign: isBool ? "center" : "right",
                                                             fontVariantNumeric: "tabular-nums",
@@ -19205,15 +19227,54 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                         )}
                     </div>
 
-                    {/*  PRICE SOURCE FOOTER  */}
+                    {/* ── PRICE SOURCE + PAGINATION FOOTER ── */}
                     <div style={{
                         flexShrink: 0, borderTop: `1px solid ${T.border}`,
-                        padding: "5px 16px", display: "flex", alignItems: "center", gap: 6,
+                        padding: "5px 16px", display: "flex", alignItems: "center",
+                        justifyContent: "space-between", flexWrap: "wrap", gap: 8,
                         background: T.surface || T.card
                     }}>
                         <span className="sdv-price-footer" style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace" }}>
                             Prices from Bhav Copy (EOD)
                         </span>
+
+                        {filteredRows.length > 0 && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span style={{ fontSize: 11.5, color: T.subtext, fontFamily: mono, fontVariantNumeric: "tabular-nums" }}>
+                                    {pageStart + 1}{"\u2013"}{Math.min(pageStart + PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                    <button
+                                        onClick={() => goToPage(page - 1)}
+                                        disabled={page <= 1}
+                                        style={{
+                                            padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: sans,
+                                            borderRadius: 6, border: `1px solid ${D.panelBorder}`,
+                                            background: "transparent", color: page <= 1 ? T.muted : T.text,
+                                            cursor: page <= 1 ? "default" : "pointer", opacity: page <= 1 ? 0.5 : 1
+                                        }}>
+                                        Prev
+                                    </button>
+                                    <span style={{
+                                        fontSize: 11.5, color: T.text, fontFamily: mono, fontWeight: 600,
+                                        padding: "0 6px", fontVariantNumeric: "tabular-nums"
+                                    }}>
+                                        {page} / {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => goToPage(page + 1)}
+                                        disabled={page >= totalPages}
+                                        style={{
+                                            padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: sans,
+                                            borderRadius: 6, border: `1px solid ${D.panelBorder}`,
+                                            background: "transparent", color: page >= totalPages ? T.muted : T.text,
+                                            cursor: page >= totalPages ? "default" : "pointer", opacity: page >= totalPages ? 0.5 : 1
+                                        }}>
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
