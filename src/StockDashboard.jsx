@@ -2518,80 +2518,9 @@ function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadi
 
     const showDist = type === "near_high" || type === "near_low";
 
-    if (isCompact) {
-        return (
-            <>
-                <div style={{
-                    display: "grid",
-                    gap: 12,
-                }}>
-                    {visibleRows.map(row => {
-                        const chg = row.change_pct;
-                        const isPos = chg != null && chg > 0;
-                        const isNeg = chg != null && chg < 0;
-                        const tone = isPos ? (T.pos || "#10b981") : isNeg ? (T.neg || "#ef4444") : T.text;
-                        const toneBg = isPos ? T.posSoft : isNeg ? T.negSoft : T.softFill;
-                        return (
-                            <div
-                                key={`${type}:${row.ticker}`}
-                                style={{
-                                    padding: 16,
-                                    borderRadius: 14,
-                                    border: `1px solid ${T.panelBorder}`,
-                                    background: T.pillBg,
-                                }}
-                            >
-                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                                    <div style={{ minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontWeight: 700, fontSize: 17, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
-                                        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5, color: T.muted, marginTop: 2 }}>{row.ticker}</div>
-                                    </div>
-                                <div style={{
-                                    padding: "6px 10px",
-                                    borderRadius: 999,
-                                    background: toneBg,
-                                    color: tone,
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontWeight: 700,
-                                    fontSize: 15.5,
-                                    flexShrink: 0,
-                                }}>
-                                        {fmtPct(chg)}
-                                    </div>
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
-                                    <div>
-                                        <div style={{ color: T.muted, fontSize: 12.5, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.ltp)}</div>
-                                    </div>
-                                    {showDist && (
-                                        <div>
-                                            <div style={{ color: T.muted, fontSize: 12.5, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                                                {type === "near_high" ? "From 52W High" : "From 52W Low"}
-                                            </div>
-                                            <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
-                                                {row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <div style={{ color: T.muted, fontSize: 12.5, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>52W High</div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{row.high_52w != null ? fmt(row.high_52w) : EMPTY_VALUE}</div>
-                                    </div>
-                                    <div>
-                                        <div style={{ color: T.muted, fontSize: 12.5, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>52W Low</div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{row.low_52w != null ? fmt(row.low_52w) : EMPTY_VALUE}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
-            </>
-        );
-    }
-
+    // Mobile and desktop now share the exact same table (matches Trend Template's
+    // approach) — PremiumTableShell handles horizontal scroll on narrow viewports,
+    // so there's no separate card layout to keep in sync anymore.
     const thBase = {
         fontWeight: 800,
         fontSize: 12,
@@ -2623,9 +2552,10 @@ function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadi
 
     return (
         <>
-        <PremiumTableShell T={T} minWidth={showDist ? 980 : 840} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={showDist ? 1010 : 870} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
+                    <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
                     <MTh k="name" label="Name" />
                     <MTh k="ltp" label="LTP" />
                     <MTh k="change_pct" label="Chg %" />
@@ -2653,6 +2583,8 @@ function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadi
                             onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
+                            {/* Row index */}
+                            <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                             {/* Name cell */}
                             <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
                                 <div style={{
@@ -2826,68 +2758,9 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
         </th>
     );
 
-    if (isCompact) {
-        return (
-            <>
-                <div style={{
-                    display: "grid",
-                    gap: 12,
-                }}>
-                    {visibleRows.map(row => {
-                        const chg = row.change_pct;
-                        const isPos = chg != null && chg > 0;
-                        const isNeg = chg != null && chg < 0;
-                        const tone = isPos ? (T.pos || "#10b981") : isNeg ? (T.neg || "#ef4444") : T.text;
-                        const toneBg = isPos ? T.posSoft : isNeg ? T.negSoft : T.softFill;
-                        return (
-                            <div key={`volume_shockers:${row.ticker}`} style={{
-                                padding: 16,
-                                borderRadius: 14,
-                                border: `1px solid ${T.panelBorder}`,
-                                background: T.pillBg,
-                            }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                                    <div style={{ minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontWeight: 700, fontSize: 17, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.name || row.ticker}</div>
-                                        {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5, color: T.muted, marginTop: 2 }}>{row.ticker}</div>}
-                                    </div>
-                                    <div style={{ padding: "7px 10px", borderRadius: 999, background: toneBg, color: tone, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 16.5, flexShrink: 0 }}>
-                                        {fmtPct(chg)}
-                                    </div>
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 14 }}>
-                                    <div>
-                                        <div style={{ color: T.muted, fontSize: 12.5, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>LTP</div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</div>
-                                    </div>
-                                    <div>
-                                        <div style={{ color: T.muted, fontSize: 12.5, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Volume</div>
-                                        <div style={{ marginTop: 4, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: "tabular-nums" }}>{fmtVol(row.today_volume)}</div>
-                                    </div>
-                                    <div>
-                                        <div style={{ color: T.muted, fontSize: 12.5, letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 800, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Rel Vol</div>
-                                        <div style={{
-                                            marginTop: 4,
-                                            fontFamily: "'IBM Plex Mono', monospace",
-                                            fontWeight: 600,
-                                            color: row.volume_ratio == null ? T.muted
-                                                : row.volume_ratio >= 10 ? (T.pos || "#10b981")
-                                                    : row.volume_ratio >= 5 ? "#f59e0b"
-                                                        : T.text,
-                                        }}>
-                                            {row.volume_ratio != null ? `${Number(row.volume_ratio).toFixed(2)}x` : EMPTY_VALUE}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
-            </>
-        );
-    }
-
+    // Mobile and desktop now share the exact same table (matches Trend Template's
+    // approach) — PremiumTableShell handles horizontal scroll on narrow viewports,
+    // so there's no separate card layout to keep in sync anymore.
     const thBase = {
         fontWeight: 800,
         fontSize: 12,
@@ -2919,9 +2792,10 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
 
     return (
         <>
-        <PremiumTableShell T={T} minWidth={680} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={720} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
+                    <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
                     <VTh k="name" label="Name" />
                     <VTh k="close" label="LTP" />
                     <VTh k="change_pct" label="Chg %" />
@@ -2950,19 +2824,20 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
                                     : "none",
                                 transition: "background 0.12s ease",
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.84)"; }}
+                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
-                            <td style={{ padding: "11px 14px", maxWidth: 240, minWidth: 160 }}>
-                                <div style={{ fontWeight: 600, fontSize: 15, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{row.name || row.ticker}</div>
-                                {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>}
+                            <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                            <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
+                                <div style={{ fontWeight: 600, fontSize: 15.5, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{row.name || row.ticker}</div>
+                                {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>}
                             </td>
-                            <td style={{ padding: "11px 14px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
-                            <td style={{ padding: "11px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
                                 <span style={{
                                     display: "inline-block",
                                     padding: "3px 8px",
-                                    borderRadius: 999,
+                                    borderRadius: 6,
                                     background: isPos
                                         ? withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10)
                                         : isNeg
@@ -2971,13 +2846,13 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
                                     color: chgColor,
                                     fontFamily: "'IBM Plex Mono', monospace",
                                     fontWeight: 700,
-                                    fontSize: 15,
+                                    fontSize: 15.5,
                                     minWidth: 64,
                                     textAlign: "right",
                                 }}>{fmtPct(chg)}</span>
                             </td>
-                            <td style={{ padding: "11px 14px", textAlign: "right", color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15 }}>{fmtVol(row.today_volume)}</td>
-                            <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 15, color: vrColor }}>
+                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.subtext || T.muted, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5 }}>{fmtVol(row.today_volume)}</td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 15.5, color: vrColor }}>
                                 {vr != null ? `${Number(vr).toFixed(2)}x` : EMPTY_VALUE}
                             </td>
                         </tr>
