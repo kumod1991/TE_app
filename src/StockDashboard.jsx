@@ -281,7 +281,7 @@ const MOVERS_BATCH_SIZE = 20;
 const VOLUME_SHOCKERS_BATCH_SIZE = 20;
 const MOVERS_TTL = 5 * 60 * 1000;
 const VOLUME_SHOCKERS_TTL = 5 * 60 * 1000;
-const MOVERS_SELECT = "symbol,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at";
+const MOVERS_SELECT = "symbol,name,ltp,pchange,volume,high_52w,low_52w,pct_from_high,pct_from_low,near_high,near_low,rank_gainer,rank_loser,created_at";
 // Each Market Movers tab is backed by its own correctly-ordered, independently
 // paginated query — no more fetching one shared batch and slicing it four ways.
 //   Gainers:   ORDER BY rank_gainer
@@ -2964,7 +2964,7 @@ function numOrNull(v) {
 function mapMoverRow(p) {
     return {
         ticker: p.symbol,
-        name: _nameMap.get(p.symbol) || null,
+        name: p.name || _nameMap.get(p.symbol) || null,
         ltp: Number(p.ltp) || 0,
         change_pct: numOrNull(p.pchange),
         high_52w: numOrNull(p.high_52w),
@@ -3009,7 +3009,7 @@ function seedMoversTabFromCache(tabKey) {
     const rawRows = hit ? hit.data || [] : null;
     return {
         rawRows,
-        data: rawRows ? applyNamesFromMap(processMoversRows(tabKey, rawRows)) : [],
+        data: rawRows ? processMoversRows(tabKey, rawRows) : [],
         hasMore: (rawRows?.length || 0) >= MOVERS_BATCH_SIZE,
     };
 }
@@ -3312,7 +3312,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
 
             const applyPage = (rawRows, replace) => {
                 if (isCancelled() || !Array.isArray(rawRows)) return;
-                const processed = applyNamesFromMap(processMoversRows(tabKey, rawRows, allowedSet));
+                const processed = processMoversRows(tabKey, rawRows, allowedSet);
                 if (replace) {
                     cfg.setData(processed);
                     cfg.offsetRef.current = rawRows.length;
@@ -3336,19 +3336,6 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
 
             if (isCancelled()) return;
             applyPage(rawRows, !isLoadMore);
-
-            try {
-                const allTickers = [...new Set((rawRows || []).map(r => r.symbol).filter(Boolean))];
-                const missingTickers = allTickers.filter(t => !_nameMap.has(t));
-                if (missingTickers.length) {
-                    const nameRows = await batchFetchBhavNames(missingTickers, userToken);
-                    if (nameRows.length && !isCancelled()) {
-                        cfg.setData(prev => applyNamesFromMap(prev).filter(r => isAllowedTicker(r.ticker, allowedSet)));
-                    }
-                }
-            } catch (nameErr) {
-                console.warn(`Could not enrich ${tabKey} mover names from bhav_copy:`, nameErr.message);
-            }
         } catch (err) {
             if (!isCancelled()) {
                 console.error(`Error fetching movers (${tabKey}):`, err);
