@@ -1441,28 +1441,27 @@ a:hover { text-decoration: underline; }
 .page-header { margin-bottom: 24px; }
 .page-title {
   font-size: 22px; font-weight: 800; color: ${T.text};
-  letter-spacing: -.03em; margin-bottom: 4px;
-  font-family: 'Inter', sans-serif;
+  letter-spacing: -.04em; margin-bottom: 4px;
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
 }
 .page-sub { font-size: 13px; color: ${T.subtext}; }
 
 .stat-card {
-  position: relative; overflow: hidden;
-  background: ${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92))"};
-  border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
-  border-radius: 22px; padding: 18px 18px;
-  transition: box-shadow .15s, transform .15s, border-color .15s;
-  animation: slideUp .2s cubic-bezier(.16,1,.3,1);
-  box-shadow: ${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 16px 34px rgba(15,23,42,.05)"};
+  position: relative;
+  background: ${T.card};
+  border: 1px solid ${T.border};
+  border-radius: 14px; padding: 16px 16px;
+  transition: box-shadow .14s ease, transform .14s ease, border-color .14s ease;
+  box-shadow: ${D ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"};
 }
-.stat-card:hover { box-shadow: 0 22px 46px ${T.shadow}; transform: translateY(-2px); border-color: ${D ? "rgba(255,255,255,.12)" : "rgba(15,23,42,.12)"}; }
-.stat-card.hero { border-color: rgba(5,150,105,.28); background: ${D ? "linear-gradient(180deg, rgba(16,185,129,.10), rgba(255,255,255,.025))" : "linear-gradient(180deg, rgba(16,185,129,.08), rgba(255,255,255,.96))"}; }
-.stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: ${T.muted}; margin-bottom: 6px; }
-.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: ${T.text}; letter-spacing: -.03em; }
-.stat-value.hero.green { color: #059669; }
-.stat-sub { font-size: 11px; color: ${T.subtext}; margin-top: 6px; line-height: 1.6; }
+.stat-card:hover { transform: translateY(-1px); border-color: ${D ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"}; }
+.stat-card.hero { border-color: ${T.border}; background: ${D ? "rgba(52,211,153,0.08)" : "rgba(5,150,105,0.06)"}; }
+.stat-label { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .11em; color: ${T.muted}; margin-bottom: 7px; font-family: 'IBM Plex Sans', -apple-system, sans-serif; }
+.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 800; color: ${T.text}; letter-spacing: -.03em; }
+.stat-value.hero.green { color: ${T.pos}; }
+.stat-sub { font-size: 13px; color: ${T.subtext}; margin-top: 6px; line-height: 1.6; }
 @media (max-width:480px) {
-  .stat-card { padding: 16px 16px; border-radius: 18px; }
+  .stat-card { padding: 14px 14px; border-radius: 12px; }
   .stat-value { font-size: 18px; }
   .stat-value.hero { font-size: 22px; }
 }
@@ -1600,7 +1599,7 @@ a:hover { text-decoration: underline; }
 
 .cs-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; background: ${T.bg}; }
 .cs-icon { font-size: 40px; margin-bottom: 16px; }
-.cs-title { font-family: 'Inter', sans-serif; font-size: 26px; font-weight: 800; color: ${T.text}; letter-spacing: -.03em; margin-bottom: 8px; }
+.cs-title { font-family: 'IBM Plex Sans', -apple-system, sans-serif; font-size: 26px; font-weight: 800; color: ${T.text}; letter-spacing: -.04em; margin-bottom: 8px; }
 .cs-desc { font-size: 14px; color: ${T.subtext}; max-width: 480px; line-height: 1.6; margin-bottom: 24px; }
 .cs-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .cs-pill { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid ${T.border}; color: ${T.subtext}; background: ${T.card}; }
@@ -1616,90 +1615,76 @@ a:hover { text-decoration: underline; }
 .journal-nav-item.active .journal-nav-icon { opacity: 1; }
 .journal-main {
   flex: 1; overflow-y: auto; padding: 20px 22px 34px;
-  background:
-    ${D
-            ? "radial-gradient(circle at top left, rgba(16,185,129,0.10), transparent 24%), radial-gradient(circle at top right, rgba(59,130,246,0.10), transparent 26%), linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))"
-            : "radial-gradient(circle at top left, rgba(5,150,105,0.08), transparent 24%), radial-gradient(circle at top right, rgba(37,99,235,0.08), transparent 26%), linear-gradient(180deg, rgba(15,23,42,0.02), rgba(15,23,42,0))"},
-    ${T.bg};
+  background: ${T.bg};
 }
 .journal-main-inner { width: 100%; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
 .journal-hero {
-  position: relative; overflow: hidden; isolation: isolate;
+  position: relative;
   display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(290px, .95fr); gap: 18px;
-  padding: 22px 22px 20px; border-radius: 24px;
-  border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
-  background: ${D ? "linear-gradient(180deg, rgba(9,15,26,.92), rgba(7,12,22,.90))" : "linear-gradient(180deg, rgba(255,255,255,.985), rgba(247,250,252,.96))"};
-  box-shadow: ${D ? "0 18px 42px rgba(2,6,23,.28)" : "0 18px 40px rgba(15,23,42,.06)"};
+  padding: 22px 24px; border-radius: 16px;
+  border: 1px solid ${T.border};
+  background: ${T.card};
+  box-shadow: ${D ? "0 12px 32px rgba(0,0,0,0.34)" : "0 1px 2px rgba(15,23,42,0.04), 0 12px 28px rgba(15,23,42,0.05)"};
 }
-.journal-hero::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background:
-    ${D
-            ? "radial-gradient(circle at 12% 18%, rgba(16,185,129,.16), transparent 26%), radial-gradient(circle at 88% 6%, rgba(59,130,246,.16), transparent 24%)"
-            : "radial-gradient(circle at 12% 18%, rgba(5,150,105,.13), transparent 26%), radial-gradient(circle at 88% 6%, rgba(37,99,235,.12), transparent 24%)"};
-  opacity: .95;
-}
-.journal-hero-copy, .journal-hero-aside { position: relative; z-index: 1; }
 .journal-hero-copy { min-width: 0; }
 .journal-hero-aside {
   display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
-  padding: 16px; border-radius: 18px;
-  border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
-  background: ${D ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.76)"};
-  box-shadow: inset 0 1px 0 ${D ? "rgba(255,255,255,.04)" : "rgba(255,255,255,.85)"};
+  padding: 16px; border-radius: 10px;
+  border: 1px solid ${T.border};
+  background: ${D ? "rgba(148,163,184,0.08)" : "rgba(226,232,240,0.45)"};
 }
 .journal-kicker-row, .journal-chip-row, .journal-action-row, .journal-hero-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .journal-kicker {
-  display: inline-flex; align-items: center; gap: 8px; padding: 7px 11px; border-radius: 999px;
-  font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
-  color: ${T.subtext};
-  background: ${D ? "rgba(255,255,255,.045)" : "rgba(255,255,255,.88)"};
-  border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: ${T.accent};
+  background: ${D ? "rgba(96,165,250,0.16)" : "rgba(37,99,235,0.09)"};
+  border: 1px solid ${D ? "rgba(96,165,250,0.22)" : "rgba(37,99,235,0.22)"};
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
 }
 .journal-kicker::before {
-  content: ""; width: 7px; height: 7px; border-radius: 50%;
-  background: linear-gradient(135deg, #10b981, #3b82f6);
-  box-shadow: 0 0 0 4px ${D ? "rgba(255,255,255,.03)" : "rgba(15,23,42,.04)"};
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: ${T.accent};
 }
 .journal-hero-title {
-  font-size: clamp(26px, 3.7vw, 34px); line-height: 1.02; letter-spacing: -.05em;
+  font-size: clamp(25px, 3.4vw, 31px); line-height: 1.05; letter-spacing: -.04em;
   font-weight: 800; color: ${T.text}; max-width: 760px; margin: 14px 0 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
 }
 .journal-hero-subtitle {
-  max-width: 760px; color: ${T.subtext}; font-size: 13.2px; line-height: 1.68; margin-bottom: 16px;
+  max-width: 720px; color: ${T.subtext}; font-size: 15px; line-height: 1.6; margin-bottom: 16px;
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
 }
 .journal-chip {
-  min-width: 0; padding: 9px 11px 10px; border-radius: 16px;
-  border: 1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"};
-  background: ${D ? "rgba(255,255,255,.04)" : "rgba(255,255,255,.78)"};
-  box-shadow: inset 0 1px 0 ${D ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.8)"};
+  min-width: 0; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid ${T.border};
+  background: ${D ? "rgba(148,163,184,0.08)" : "rgba(226,232,240,0.45)"};
 }
 .journal-chip-label {
-  display: block; margin-bottom: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .10em;
+  display: block; margin-bottom: 6px; font-size: 12px; font-weight: 800; letter-spacing: .11em;
   text-transform: uppercase; color: ${T.muted};
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
 }
-.journal-chip-value { display: block; font-size: 15px; font-weight: 700; color: ${T.text}; font-family: 'IBM Plex Mono', monospace; }
-.journal-chip-sub { display: block; margin-top: 4px; font-size: 11px; color: ${T.subtext}; }
+.journal-chip-value { display: block; font-size: 16.5px; font-weight: 800; color: ${T.text}; font-family: 'IBM Plex Mono', monospace; }
+.journal-chip-sub { display: block; margin-top: 6px; font-size: 13px; color: ${T.subtext}; }
 .journal-btn-ghost {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px 16px; border-radius: 999px; border: 1px solid ${T.border};
-  background: ${D ? "rgba(255,255,255,.035)" : "rgba(255,255,255,.82)"};
+  background: ${T.card};
   color: ${T.subtext}; cursor: pointer; font-size: 12.5px; font-weight: 700;
-  font-family: inherit; transition: all .15s ease;
+  font-family: inherit; transition: all .14s ease;
 }
-.journal-btn-ghost:hover { border-color: ${T.green}; color: ${T.greenText}; transform: translateY(-1px); }
+.journal-btn-ghost:hover { border-color: ${T.accent}; color: ${T.text}; transform: translateY(-1px); }
 .journal-pill-filter {
   padding: 8px 14px; border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 12px;
-  background: ${D ? "rgba(255,255,255,.035)" : "rgba(255,255,255,.72)"};
-  border: 1px solid ${T.border}; color: ${T.subtext}; transition: all .15s ease;
+  background: ${T.card};
+  border: 1px solid ${T.border}; color: ${T.subtext}; transition: all .14s ease;
 }
-.journal-pill-filter.active { background: ${T.greenGlow}; border-color: ${T.green}; color: ${T.greenText}; box-shadow: 0 10px 22px ${T.shadow}; }
+.journal-pill-filter.active { background: ${T.accentFill || T.greenGlow}; border-color: ${T.accent}; color: ${T.accent}; }
 .journal-toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  padding: 14px 16px; border-radius: 20px; border: 1px solid ${T.border};
-  background: ${D ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.68)"};
-  box-shadow: ${D ? "0 12px 30px rgba(2,6,23,.18)" : "0 12px 28px rgba(15,23,42,.05)"};
+  padding: 14px 16px; border-radius: 14px; border: 1px solid ${T.border};
+  background: ${T.card};
 }
 @media (max-width: 1120px) {
   .journal-main { padding: 18px 16px 28px; }
@@ -2009,11 +1994,11 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
 .chart-grid .chart-card[style*="span 2"] { grid-column: span 2; }
 .chart-grid .chart-card { min-width: 0; }
 .chart-card {
-  background:${D ? "linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02))" : "linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92))"};
-  border:1px solid ${D ? "rgba(255,255,255,.08)" : "rgba(15,23,42,.08)"}; border-radius:20px; padding:18px;
-  box-shadow:${D ? "0 18px 40px rgba(2,6,23,.18)" : "0 14px 28px rgba(15,23,42,.05)"};
+  background:${T.card};
+  border:1px solid ${T.border}; border-radius:14px; padding:16px;
+  box-shadow:${D ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"};
 }
-.chart-title { font-size:10px; font-weight:700; color:${T.muted}; margin-bottom:14px; text-transform:uppercase; letter-spacing:.07em; }
+.chart-title { font-size:12px; font-weight:800; color:${T.muted}; margin-bottom:14px; text-transform:uppercase; letter-spacing:.11em; font-family:'IBM Plex Sans', -apple-system, sans-serif; }
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
 .form-divider { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:${T.muted}; margin:16px 0 10px; font-weight:700; display:flex; align-items:center; gap:8px; }
 .form-divider::after { content:''; flex:1; height:1px; background:${T.border}; }
@@ -2067,7 +2052,7 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
 .port-label { font-size:12px; color:${T.muted}; }
 .port-val { font-size:13px; font-weight:500; color:${T.text}; font-family:'IBM Plex Mono',monospace; }
 .page-header { margin-bottom:20px; }
-.page-title { font-family:'Inter',sans-serif; font-size:20px; font-weight:700; color:${T.text}; letter-spacing:-.02em; margin-bottom:3px; }
+.page-title { font-family:'IBM Plex Sans', -apple-system, sans-serif; font-size:20px; font-weight:800; color:${T.text}; letter-spacing:-.03em; margin-bottom:3px; }
 .page-sub { color:${T.subtext}; font-size:13px; margin-top:3px; }
 .stat-card.green { border-left:3px solid ${T.pos}; }
 .stat-card.red   { border-left:3px solid ${T.neg}; }
@@ -4724,7 +4709,7 @@ function Portfolio({ trades, T, embedded = false }) {
                             letterSpacing: "-.04em",
                             color: T.text,
                         }}>
-                            Current Holding
+                         
                         </div>
                     </div>
                     <button className="btn-add" onClick={fetchAll} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
@@ -21475,7 +21460,12 @@ function getSignalConfidence(signal) {
  * ============================================================================ */
 
 function SectorRotationModule({ T }) {
-    const isDark = T.bg === "#0f1117" || T.bg === "#13151a" || T.bg?.startsWith("#0") || T.bg?.startsWith("#1");
+    const sans = "'IBM Plex Sans', -apple-system, sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+    // Same derived theme StockDashboard uses (panelBg, softFill, shadows, tableHeadBg,
+    // IBM Plex fonts) so this module matches it in colors/fonts/card style/spacing.
+    const D = useMemo(() => buildDashboardTheme(T), [T]);
+    const isDark = D.isDark;
     const { subtext, text, bg, green } = T;
 
     const [snapshot, setSnapshot] = useState([]);
@@ -21945,7 +21935,7 @@ function SectorRotationModule({ T }) {
             { text: "LAGGING", x: PAD.left + 6, y: PAD.top + ph - 8, align: "left", col: "#ef4444" },
             { text: "IMPROVING", x: PAD.left + 6, y: PAD.top + 16, align: "left", col: "#eab308" },
         ];
-        ctx.font = `bold 12px 'Inter', sans-serif`;
+        ctx.font = `700 12px 'IBM Plex Sans', sans-serif`;
         qLabels.forEach(l => {
             ctx.fillStyle = l.col; ctx.globalAlpha = 0.45;
             ctx.textAlign = l.align; ctx.fillText(l.text, l.x, l.y);
@@ -21953,7 +21943,7 @@ function SectorRotationModule({ T }) {
         ctx.globalAlpha = 1;
 
         // Axis labels
-        ctx.font = `12px 'Inter', sans-serif`;
+        ctx.font = `12px 'IBM Plex Sans', sans-serif`;
         ctx.fillStyle = isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)";
         ctx.textAlign = "center";
         ctx.fillText(`RS Spread (vs ${({ "10D": 10, "1M": 21, "3M": 63, "6M": 126 }[timeframe] || 63)}D avg)`, PAD.left + pw / 2, PAD.top + ph + 30);
@@ -21962,7 +21952,7 @@ function SectorRotationModule({ T }) {
         ctx.fillText("Momentum", 0, 0); ctx.restore();
 
         // Tick values
-        ctx.font = `11px 'JetBrains Mono', monospace`;
+        ctx.font = `11px 'IBM Plex Mono', monospace`;
         ctx.fillStyle = isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.22)";
         ctx.textAlign = "center";
         [xMin, xMid, xMax].forEach(v => ctx.fillText(v.toFixed(3), toX(v), PAD.top + ph + 14));
@@ -22050,7 +22040,7 @@ function SectorRotationModule({ T }) {
             ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.ellipse(cx, cy, dzRx, dzRy, 0, 0, Math.PI * 2); ctx.stroke();
             ctx.setLineDash([]);
-            ctx.font = `11px 'Inter', sans-serif`;
+            ctx.font = `11px 'IBM Plex Sans', sans-serif`;
             ctx.fillStyle = isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.18)";
             ctx.textAlign = "center";
             ctx.fillText("DEAD ZONE", cx, cy + dzRy + 10);
@@ -22088,7 +22078,7 @@ function SectorRotationModule({ T }) {
 
             // Label  show only for top3, hovered, or focused
             if (isHov || isFocus || isTop3B) {
-                ctx.font = isFocus || isHov ? `bold 13px 'Inter', sans-serif` : `12px 'Inter', sans-serif`;
+                ctx.font = isFocus || isHov ? `700 13px 'IBM Plex Sans', sans-serif` : `600 12px 'IBM Plex Sans', sans-serif`;
                 ctx.fillStyle = isHov || isFocus
                     ? (isDark ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.9)")
                     : (isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)");
@@ -22142,26 +22132,23 @@ function SectorRotationModule({ T }) {
         return <span style={{ fontSize: 11, marginLeft: 2, color: text }}>{sortDir === "asc" ? "" : ""}</span>;
     };
 
-    const cardBg = isDark ? "#1a1d27" : "#f8f9fc";
-    const border = isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.08)";
-    const shellBg = isDark
-        ? "radial-gradient(circle at top left, rgba(16,185,129,0.16), transparent 34%), radial-gradient(circle at top right, rgba(59,130,246,0.16), transparent 28%), linear-gradient(180deg, #0b111f 0%, #0f172a 48%, #0b1220 100%)"
-        : "radial-gradient(circle at top left, rgba(16,185,129,0.14), transparent 32%), radial-gradient(circle at top right, rgba(59,130,246,0.12), transparent 26%), linear-gradient(180deg, #f7fbff 0%, #eef4fb 52%, #e8eff8 100%)";
-    const heroBg = isDark
-        ? "linear-gradient(135deg, rgba(8,15,31,0.96) 0%, rgba(17,24,39,0.94) 52%, rgba(7,12,24,0.98) 100%)"
-        : "linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(246,250,255,0.98) 55%, rgba(236,244,252,0.98) 100%)";
-    const heroBorder = isDark ? "rgba(148,163,184,0.18)" : "rgba(148,163,184,0.24)";
-    const heroShadow = isDark
-        ? "0 24px 80px rgba(2,6,23,0.52), inset 0 1px 0 rgba(255,255,255,0.05)"
-        : "0 24px 64px rgba(148,163,184,0.22), inset 0 1px 0 rgba(255,255,255,0.85)";
-    const panelBg = isDark ? "rgba(8,15,31,0.76)" : "rgba(255,255,255,0.78)";
-    const panelBorder = isDark ? "rgba(148,163,184,0.16)" : "rgba(148,163,184,0.22)";
-    const panelShadow = isDark ? "0 16px 44px rgba(2,6,23,0.42)" : "0 18px 40px rgba(148,163,184,0.16)";
-    const insetLine = isDark ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.06)";
-    const segmentedBg = isDark ? "rgba(15,23,42,0.7)" : "rgba(241,245,249,0.9)";
-    const accentSoft = isDark ? "rgba(16,185,129,0.18)" : "rgba(16,185,129,0.12)";
-    const focusSoft = isDark ? "rgba(96,165,250,0.16)" : "rgba(59,130,246,0.10)";
-    const premiumRadius = isMobile ? 18 : 24;
+    // Flat surfaces only  no layered gradients or blur, matching StockDashboard's
+    // design system: a card is just its background color, depth comes from a
+    // single soft shadow (D.shadowLg / D.shadowMd).
+    const cardBg = D.card;
+    const border = D.border;
+    const shellBg = D.bg;
+    const heroBg = D.panelBg;
+    const heroBorder = D.panelBorder;
+    const heroShadow = D.shadowLg;
+    const panelBg = D.softFill;
+    const panelBorder = D.panelBorder;
+    const panelShadow = "none";
+    const insetLine = D.border;
+    const segmentedBg = D.pillBg;
+    const accentSoft = D.posSoft;
+    const focusSoft = withAlpha(D.accent, isDark ? 0.16 : 0.10);
+    const premiumRadius = 16;
     const qBadgeStyles = {
         LEADING: { bg: isDark ? "rgba(34,197,94,0.16)" : "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.30)" },
         IMPROVING: { bg: isDark ? "rgba(234,179,8,0.16)" : "rgba(234,179,8,0.12)", border: "rgba(234,179,8,0.28)" },
@@ -22180,13 +22167,7 @@ function SectorRotationModule({ T }) {
         { label: "Strongest Momentum", value: stats.strongest?.label || "-", tone: text, note: stats.strongest ? `${Math.abs(stats.strongest.momentum ?? 0).toFixed(2)}% momentum` : "Awaiting data" },
         { label: "Fastest Improving", value: stats.fastestImproving?.label || "-", tone: "#eab308", note: stats.fastestImproving ? `${Math.abs(stats.fastestImproving.momentum ?? 0).toFixed(2)}% momentum` : "No improving leaders yet" },
     ] : [];
-    const topSectorSummary = (stats?.topOpp ?? []).slice(0, 3).map((s, idx) => ({
-        label: s.label,
-        value: `${(s.opportunity_score ?? 0) > 0 ? "+" : ""}${(s.opportunity_score ?? 0).toFixed(2)}`,
-        rank: idx + 1,
-        tone: idx === 0 ? "#22c55e" : idx === 1 ? "#38bdf8" : "#eab308",
-    }));
-    const desktopBodyHeight = 640;
+    const desktopBodyHeight = 720;
     const mobileChartMinHeight = 430;
     const mobileTableMinHeight = 420;
 
@@ -22289,14 +22270,12 @@ function SectorRotationModule({ T }) {
                     flex-shrink: 0;
                     font-family: inherit;
                     transition: all 160ms ease;
-                    backdrop-filter: blur(12px);
                 }
             `}</style>
 
             <div style={{ width: "100%", maxWidth: isMobile ? "100%" : 1400, margin: "0 auto" }}>
                 <div style={{ flexShrink: 0, padding: isMobile ? "12px 12px 0" : "18px 20px 0" }}>
                     <div style={{ borderRadius: premiumRadius, border: `1px solid ${heroBorder}`, background: heroBg, boxShadow: heroShadow, overflow: "hidden", position: "relative" }}>
-                        <div style={{ position: "absolute", inset: 0, background: isDark ? "radial-gradient(circle at 15% 18%, rgba(16,185,129,0.18), transparent 26%), radial-gradient(circle at 80% 14%, rgba(56,189,248,0.16), transparent 24%)" : "radial-gradient(circle at 15% 18%, rgba(16,185,129,0.15), transparent 24%), radial-gradient(circle at 82% 14%, rgba(59,130,246,0.12), transparent 22%)", pointerEvents: "none" }} />
                         <div style={{ position: "relative", padding: isMobile ? 14 : 20 }}>
                             <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 14 : 20, justifyContent: "space-between" }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -22309,7 +22288,7 @@ function SectorRotationModule({ T }) {
                                             </span>
                                         )}
                                     </div>
-                                    <div style={{ fontSize: isMobile ? 24 : 30, fontWeight: 800, color: text, letterSpacing: "-0.04em", lineHeight: 1.05 }}>Sector Rotation</div>
+                                    <div style={{ fontSize: isMobile ? 25 : 31, fontWeight: 800, color: text, letterSpacing: "-0.04em", lineHeight: 1.05, fontFamily: sans }}>Sector Rotation</div>
 
                                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
                                         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, color: text, boxShadow: panelShadow }}>
@@ -22331,7 +22310,7 @@ function SectorRotationModule({ T }) {
 
                                 <div style={{ width: isMobile ? "100%" : 360, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
                                     {heroMetrics.map((item) => (
-                                        <div key={item.label} style={{ padding: isMobile ? "12px 12px" : "14px 14px", borderRadius: 18, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow, minWidth: 0 }}>
+                                        <div key={item.label} style={{ padding: isMobile ? "12px 12px" : "14px 14px", borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow, minWidth: 0 }}>
                                             <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{item.label}</div>
                                             <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: item.tone, lineHeight: 1.2, wordBreak: "break-word" }}>{item.value}</div>
                                             <div style={{ marginTop: 6, fontSize: 12, color: subtext, lineHeight: 1.45 }}>{item.note}</div>
@@ -22341,7 +22320,7 @@ function SectorRotationModule({ T }) {
                             </div>
 
                             <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.15fr) minmax(0, 1fr)", gap: 12 }}>
-                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 18, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
+                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
                                     <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Segment Focus</div>
                                     <div className="rrg-scroll-x" style={{ paddingBottom: 2, width: "100%" }}>
                                         <div className="rrg-scroll-inner" style={{ gap: 8 }}>
@@ -22360,7 +22339,7 @@ function SectorRotationModule({ T }) {
                                     </div>
                                 </div>
 
-                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 18, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
+                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
                                     <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Lookback Window</div>
                                     <div className="rrg-scroll-x" style={{ paddingBottom: 2, width: "100%" }}>
                                         <div className="rrg-scroll-inner" style={{ gap: 8 }}>
@@ -22379,47 +22358,6 @@ function SectorRotationModule({ T }) {
                                             })}
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 0.9fr)", gap: 12 }}>
-                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 18, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
-                                    <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Quadrant Breadth</div>
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-                                        {[
-                                            { key: "LEADING", label: "Leading", col: "#22c55e" },
-                                            { key: "IMPROVING", label: "Improving", col: "#eab308" },
-                                            { key: "WEAKENING", label: "Weakening", col: "#f97316" },
-                                            { key: "LAGGING", label: "Lagging", col: "#ef4444" },
-                                        ].map((q) => (
-                                            <div key={q.key} style={{ borderRadius: 14, padding: isMobile ? "10px 9px" : "12px 10px", background: isDark ? `${q.col}12` : `${q.col}10`, border: `1px solid ${isDark ? `${q.col}2c` : `${q.col}26`}`, minWidth: 0 }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                                                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: q.col, display: "inline-block", flexShrink: 0 }} />
-                                                    <span style={{ fontSize: 11, color: subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{isMobile ? q.label.slice(0, 4) : q.label}</span>
-                                                </div>
-                                                <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: text }}>{stats?.counts?.[q.key] ?? 0}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 18, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
-                                    <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Top Opportunity Ladder</div>
-                                    {topSectorSummary.length === 0 ? (
-                                        <div style={{ fontSize: 13, color: subtext, opacity: 0.7 }}>Ranking signals will appear here once the rotation board is loaded.</div>
-                                    ) : (
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                            {topSectorSummary.map((item) => (
-                                                <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 14, background: segmentedBg, border: `1px solid ${panelBorder}` }}>
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                                                        <span style={{ width: 24, height: 24, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", background: `${item.tone}20`, color: item.tone, fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{item.rank}</span>
-                                                        <span style={{ fontSize: 13, fontWeight: 700, color: text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
-                                                    </div>
-                                                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 700, color: item.tone }}>{item.value}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
@@ -22451,9 +22389,9 @@ function SectorRotationModule({ T }) {
                     <div style={{
                         ...(isMobile
                             ? { display: mobileTab === "chart" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileChartMinHeight }
-                            : { flex: "0 0 580px", maxWidth: 620, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
+                            : { flex: "0 0 680px", maxWidth: 760, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
                         border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden",
-                        background: panelBg, boxShadow: panelShadow, backdropFilter: "blur(14px)"
+                        background: panelBg, boxShadow: panelShadow
                     }}>
                         {/* Chart header */}
                         <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 14px 12px", borderBottom: `1px solid ${insetLine}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
@@ -22493,7 +22431,7 @@ function SectorRotationModule({ T }) {
 
                         {/* Canvas */}
                         <canvas ref={canvasRef}
-                            style={{ flex: 1, width: "100%", cursor: hoveredSector ? "pointer" : "default", minHeight: isMobile ? 320 : 500, background: isDark ? "rgba(2,6,23,0.18)" : "rgba(255,255,255,0.4)" }}
+                            style={{ flex: 1, width: "100%", cursor: hoveredSector ? "pointer" : "default", minHeight: isMobile ? 320 : 580, background: isDark ? "rgba(2,6,23,0.18)" : "rgba(255,255,255,0.4)" }}
                             onMouseMove={handleCanvasMouseMove}
                             onMouseLeave={() => setHoveredSector(null)}
                             onClick={handleCanvasClick}
@@ -22537,7 +22475,7 @@ function SectorRotationModule({ T }) {
                         ...(isMobile
                             ? { display: mobileTab === "table" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileTableMinHeight }
                             : { flex: 1, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
-                        border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden", minWidth: 0, background: panelBg, boxShadow: panelShadow, backdropFilter: "blur(14px)"
+                        border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden", minWidth: 0, background: panelBg, boxShadow: panelShadow
                     }}>
                         {/* Table header */}
                         <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 16px 12px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
@@ -22585,7 +22523,7 @@ function SectorRotationModule({ T }) {
                                                 style={{
                                                     margin: "10px 10px 0",
                                                     padding: "14px 14px 13px",
-                                                    borderRadius: 18,
+                                                    borderRadius: 14,
                                                     border: `1px solid ${isFocus ? "rgba(96,165,250,0.28)" : panelBorder}`,
                                                     boxShadow: isFocus ? `0 14px 30px ${isDark ? "rgba(37,99,235,0.16)" : "rgba(59,130,246,0.14)"}` : "none",
                                                     background: isFocus
@@ -22597,7 +22535,7 @@ function SectorRotationModule({ T }) {
                                                 }}>
                                                 {/* Top row: rank + name + quadrant badge */}
                                                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                                                    <span style={{ width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: isTop3 ? text : subtext, fontWeight: 800, background: isTop3 ? accentSoft : segmentedBg, border: `1px solid ${isTop3 ? "rgba(16,185,129,0.22)" : panelBorder}`, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{i + 1}</span>
+                                                    <span style={{ width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontFamily: mono, color: isTop3 ? text : subtext, fontWeight: 800, background: isTop3 ? accentSoft : segmentedBg, border: `1px solid ${isTop3 ? "rgba(16,185,129,0.22)" : panelBorder}`, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{i + 1}</span>
                                                     <span style={{ fontSize: 15, fontWeight: isFocus ? 800 : isTop3 ? 700 : 600, color: isFocus ? (isDark ? "#e2eaf4" : "#0a0f1e") : text, flex: 1 }}>
                                                         {d.label}
                                                         {inDeadZone && <span style={{ fontSize: 10, color: subtext, opacity: 0.45, marginLeft: 6 }}>Dead zone</span>}
@@ -22615,35 +22553,14 @@ function SectorRotationModule({ T }) {
                                                         {d.quadrant.charAt(0) + d.quadrant.slice(1, 4).toLowerCase()}
                                                     </span>
                                                 </div>
-                                                {/* Bottom row: metrics */}
-                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: trend ? 10 : 0 }}>
-                                                    {/* Opp score */}
-                                                    <div style={{ minWidth: 0, padding: "10px 10px 9px", borderRadius: 14, background: segmentedBg, border: `1px solid ${panelBorder}` }}>
-                                                        <div style={{ fontSize: 10, color: subtext, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>Opp</div>
-                                                        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 700, color: text, fontVariantNumeric: "tabular-nums" }}>
-                                                            {opp > 0 ? "+" : ""}{opp.toFixed(3)}
-                                                        </div>
-                                                        <div style={{ width: oppBarW, height: 2, borderRadius: 2, background: opp > 0.1 ? "#22c55e" : opp > 0 ? "#eab308" : "#ef4444", opacity: 0.5, marginTop: 3, minWidth: 2 }} />
-                                                    </div>
-                                                    {/* RS Spread */}
-                                                    <div style={{ minWidth: 0, padding: "10px 10px 9px", borderRadius: 14, background: segmentedBg, border: `1px solid ${panelBorder}` }}>
-                                                        <div style={{ fontSize: 10, color: subtext, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>RS</div>
-                                                        <div style={{
-                                                            fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontVariantNumeric: "tabular-nums",
-                                                            color: rsVal >= 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#f87171" : "#b91c1c")
-                                                        }}>
-                                                            {rsVal >= 0 ? "+" : ""}{rsVal.toFixed(3)}
-                                                        </div>
-                                                    </div>
-                                                    {/* Momentum */}
-                                                    <div style={{ minWidth: 0, padding: "10px 10px 9px", borderRadius: 14, background: segmentedBg, border: `1px solid ${panelBorder}` }}>
-                                                        <div style={{ fontSize: 10, color: subtext, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>Mom</div>
-                                                        <div style={{
-                                                            fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums",
-                                                            color: momVal > 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#f87171" : "#b91c1c")
-                                                        }}>
-                                                            {momVal > 0 ? "" : ""}{Math.abs(momVal).toFixed(2)}%
-                                                        </div>
+                                                {/* Bottom row: momentum */}
+                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 9px", borderRadius: 14, background: segmentedBg, border: `1px solid ${panelBorder}`, marginBottom: trend ? 10 : 0 }}>
+                                                    <div style={{ fontSize: 10, color: subtext, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.4px" }}>Momentum</div>
+                                                    <div style={{
+                                                        fontFamily: mono, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                                                        color: momVal > 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#f87171" : "#b91c1c")
+                                                    }}>
+                                                        {momVal > 0 ? "" : ""}{Math.abs(momVal).toFixed(2)}%
                                                     </div>
                                                 </div>
                                                 {trend && (
@@ -22661,34 +22578,28 @@ function SectorRotationModule({ T }) {
                                 (() => {
                                     const maxOpp = filtered.length ? Math.max(...filtered.map(d => Math.abs(d.opportunity_score ?? 0))) || 1 : 1;
                                     return (
-                                        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
+                                        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, fontFamily: sans, tableLayout: "fixed" }}>
                                             <thead>
                                                 <tr style={{
-                                                    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.8)",
+                                                    background: D.tableHeadBg,
                                                     position: "sticky", top: 0, zIndex: 1,
-                                                    boxShadow: `inset 0 -1px 0 ${insetLine}`,
+                                                    borderBottom: `1px solid ${panelBorder}`,
                                                 }}>
-                                                    <th style={{ padding: "8px 6px 8px 14px", textAlign: "left", fontWeight: 500, fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.5px", width: 32, userSelect: "none" }}>#</th>
-                                                    <th style={{ padding: "8px 12px 8px 6px", textAlign: "left", fontWeight: 500, fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.5px", cursor: "pointer", userSelect: "none" }} onClick={() => toggleSort("label")}>
+                                                    <th style={{ padding: "10px 6px 10px 14px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", width: "6%", userSelect: "none", fontFamily: sans }}>#</th>
+                                                    <th style={{ padding: "10px 12px 10px 6px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", cursor: "pointer", userSelect: "none", fontFamily: sans, width: "28%", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => toggleSort("label")}>
                                                         <span style={{ color: sortCol === "label" ? text : subtext }}>Sector</span> <SortIcon col="label" />
                                                     </th>
-                                                    <th style={{ padding: "8px 12px", textAlign: "right", fontWeight: 500, fontSize: 11, color: sortCol === "opportunity_score" ? text : subtext, textTransform: "uppercase", letterSpacing: "0.5px", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }} onClick={() => toggleSort("opportunity_score")}>
-                                                        Opp Score <SortIcon col="opportunity_score" />
-                                                    </th>
-                                                    <th style={{ padding: "8px 12px", textAlign: "right", fontWeight: 500, fontSize: 11, color: sortCol === "rs_spread" ? text : subtext, textTransform: "uppercase", letterSpacing: "0.5px", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }} onClick={() => toggleSort("rs_spread")}>
-                                                        RS Spread <SortIcon col="rs_spread" />
-                                                    </th>
-                                                    <th style={{ padding: "8px 12px", textAlign: "right", fontWeight: 500, fontSize: 11, color: sortCol === "momentum" ? text : subtext, textTransform: "uppercase", letterSpacing: "0.5px", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }} onClick={() => toggleSort("momentum")}>
+                                                    <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 800, fontSize: 12, color: sortCol === "momentum" ? text : subtext, textTransform: "uppercase", letterSpacing: "0.12em", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", fontFamily: sans, width: "18%" }} onClick={() => toggleSort("momentum")}>
                                                         Momentum <SortIcon col="momentum" />
                                                     </th>
-                                                    <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 500, fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.5px", whiteSpace: "nowrap", userSelect: "none" }}>Quadrant</th>
-                                                    <th style={{ padding: "8px 14px 8px 8px", textAlign: "left", fontWeight: 500, fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.5px", whiteSpace: "nowrap", userSelect: "none" }}>Trend</th>
+                                                    <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", whiteSpace: "nowrap", userSelect: "none", fontFamily: sans, width: "20%" }}>Quadrant</th>
+                                                    <th style={{ padding: "10px 14px 10px 8px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", whiteSpace: "nowrap", userSelect: "none", fontFamily: sans, width: "28%" }}>Trend</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {filtered.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={7} style={{ padding: "40px 16px", textAlign: "center", color: subtext, fontSize: 13, opacity: 0.45 }}>
+                                                        <td colSpan={5} style={{ padding: "40px 16px", textAlign: "center", color: subtext, fontSize: 13, opacity: 0.45 }}>
                                                             No sectors in this category
                                                         </td>
                                                     </tr>
@@ -22736,6 +22647,7 @@ function SectorRotationModule({ T }) {
                                                             <td style={{
                                                                 padding: "12px 6px 12px 10px",
                                                                 fontSize: 12,
+                                                                fontFamily: mono,
                                                                 fontWeight: isTop3 ? 700 : 400,
                                                                 color: isTop3 ? (isDark ? "#94a3b8" : "#475569") : subtext,
                                                                 opacity: isTop3 ? 1 : 0.4,
@@ -22745,7 +22657,7 @@ function SectorRotationModule({ T }) {
                                                             }}>{i + 1}</td>
 
                                                             {/* Sector name */}
-                                                            <td style={{ padding: "12px 12px 12px 8px", whiteSpace: "nowrap" }}>
+                                                            <td style={{ padding: "12px 12px 12px 8px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                                 <span style={{
                                                                     fontSize: 14,
                                                                     fontWeight: isFocus ? 700 : isTop3 ? 600 : 500,
@@ -22755,45 +22667,6 @@ function SectorRotationModule({ T }) {
                                                                     {d.label}
                                                                 </span>
                                                                 {inDeadZone && <span style={{ fontSize: 10, color: subtext, opacity: 0.35, marginLeft: 5 }}></span>}
-                                                            </td>
-
-                                                            {/* Opp Score + micro-bar */}
-                                                            <td style={{ padding: "12px 12px", textAlign: "right", whiteSpace: "nowrap" }}>
-                                                                <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                                                                    <span style={{
-                                                                        fontFamily: "'IBM Plex Mono', monospace",
-                                                                        fontSize: 13,
-                                                                        fontWeight: 600,
-                                                                        fontVariantNumeric: "tabular-nums",
-                                                                        color: text,
-                                                                    }}>
-                                                                        {opp > 0 ? "+" : ""}{opp.toFixed(3)}
-                                                                    </span>
-                                                                    {/* Micro-bar */}
-                                                                    <div style={{
-                                                                        width: oppBarW,
-                                                                        height: 2,
-                                                                        borderRadius: 2,
-                                                                        background: opp > 0.1 ? "#22c55e" : opp > 0 ? "#eab308" : "#ef4444",
-                                                                        opacity: 0.45,
-                                                                        minWidth: 2,
-                                                                    }} />
-                                                                </div>
-                                                            </td>
-
-                                                            {/* RS Spread  muted color */}
-                                                            <td style={{
-                                                                padding: "12px 12px",
-                                                                textAlign: "right",
-                                                                fontFamily: "'IBM Plex Mono', monospace",
-                                                                fontSize: 13,
-                                                                fontVariantNumeric: "tabular-nums",
-                                                                color: rsVal >= 0
-                                                                    ? (isDark ? "#15803d" : "#166534")
-                                                                    : (isDark ? "#b91c1c" : "#991b1b"),
-
-                                                            }}>
-                                                                {rsVal >= 0 ? "+" : ""}{rsVal.toFixed(3)}
                                                             </td>
 
                                                             {/* Momentum  primary color signal */}

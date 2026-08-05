@@ -283,7 +283,7 @@ function WlCandleSection({ ticker, T, width }) {
         <div style={{ background: T.card, borderRadius: 8, padding: "10px 10px 8px", overflow: "hidden" }}>
             <div style={{
                 fontSize: 9, color: T.subtext, fontWeight: 500, textTransform: "uppercase",
-                letterSpacing: "0.1em", marginBottom: 8, opacity: 0.55, fontFamily: "'DM Sans',sans-serif"
+                letterSpacing: "0.1em", marginBottom: 8, opacity: 0.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
             }}>
                 Weekly Chart · 52W
             </div>
@@ -771,14 +771,14 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
             <div style={{ padding: isMobile ? "0 16px 0" : 18, overflowY: isMobile ? "auto" : "visible", flex: isMobile ? 1 : "none" }}>
                 {isMobile && (
                     <div style={{ marginBottom: 18 }}>
-                        <div style={{ fontSize: 18, fontWeight: 500, color: T.text, marginBottom: 4, letterSpacing: "-0.03em", fontFamily: "'DM Sans', sans-serif" }}>Filters</div>
-                        <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.45, fontFamily: "'DM Sans', sans-serif" }}>Refine quality, momentum, and trend structure for this watchlist.</div>
+                        <div style={{ fontSize: 18, fontWeight: 500, color: T.text, marginBottom: 4, letterSpacing: "-0.03em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Filters</div>
+                        <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.45, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Refine quality, momentum, and trend structure for this watchlist.</div>
                     </div>
                 )}
                 {!isMobile && (
                     <div style={{ marginBottom: 14 }}>
                         <div style={{ fontSize: 10, fontWeight: 500, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>Filters</div>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: T.text, fontFamily: "'DM Sans', sans-serif" }}>Screen for leaders with cleaner structure</div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Screen for leaders with cleaner structure</div>
                     </div>
                 )}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: isMobile ? 12 : 12, marginBottom: isMobile ? 18 : 14 }}>
@@ -801,7 +801,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
                                         background: active ? `${T.green}15` : "transparent",
                                         color: active ? T.green : T.subtext,
                                         border: `1px solid ${active ? T.green : T.border}`,
-                                        borderRadius: isMobile ? 12 : 10, cursor: "pointer", textAlign: "left", fontFamily: "'DM Sans', sans-serif",
+                                        borderRadius: isMobile ? 12 : 10, cursor: "pointer", textAlign: "left", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                         minHeight: isMobile ? 52 : 44, lineHeight: 1.3
                                     }}>
                                     {label}
@@ -818,7 +818,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
                         minHeight: isMobile ? 48 : 40,
                         fontSize: isMobile ? 14 : 12, fontWeight: 700, cursor: "pointer",
                         boxShadow: "0 10px 24px rgba(15,23,42,0.16)",
-                        fontFamily: "'DM Sans', sans-serif"
+                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
                     }}>Apply</button>
                     <button onClick={onClear} style={{
                         flex: 1, padding: isMobile ? "12px 0" : "10px 0",
@@ -826,7 +826,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
                         border: `1px solid ${T.border}`, borderRadius: isMobile ? 12 : 10,
                         minHeight: isMobile ? 48 : 40,
                         fontSize: isMobile ? 14 : 12, cursor: "pointer",
-                        fontFamily: "'DM Sans', sans-serif"
+                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
                     }}>Clear</button>
                 </div>
             </div>
@@ -1110,7 +1110,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                     fontWeight: 500,
                     letterSpacing: "0.06em",
                     color: T.text,
-                    fontFamily: "'DM Mono', monospace",
+                    fontFamily: "'IBM Plex Mono', monospace",
                 }}>
                     {row.ticker}
                 </span>
@@ -1121,7 +1121,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                             fontSize: isMobile ? 11 : 12,
                             fontWeight: 500,
                             color: rsVal >= 90 ? T.green : T.subtext,
-                            fontFamily: "'DM Mono', monospace",
+                            fontFamily: "'IBM Plex Mono', monospace",
                             letterSpacing: "0.04em",
                         }}>
                             RS {rsVal}
@@ -1132,7 +1132,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                         fontSize: isMobile ? 14 : 16,
                         fontWeight: 500,
                         color: T.text,
-                        fontFamily: "'DM Mono', monospace",
+                        fontFamily: "'IBM Plex Mono', monospace",
                         letterSpacing: "0.01em",
                         transition: "color 0.25s",
                     }}>
@@ -1168,7 +1168,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 alignItems: "center",
                 fontSize: isMobile ? 12 : 13,
                 fontWeight: 500,
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'IBM Plex Mono', monospace",
                 gap: 0,
             }}>
                 <span style={{ color: rc(row.ret_3m), letterSpacing: "0.02em" }}>
@@ -1240,7 +1240,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                                         background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
                                         whiteSpace: "nowrap", letterSpacing: "0.05em", textTransform: "uppercase",
                                         flexShrink: 0, cursor: canNav ? "pointer" : "default", transition: "opacity 0.12s",
-                                        fontFamily: "'DM Sans', sans-serif",
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                     }}
                                     onMouseEnter={canNav ? e => { e.currentTarget.style.opacity = "0.65"; } : undefined}
                                     onMouseLeave={canNav ? e => { e.currentTarget.style.opacity = "1"; } : undefined}
@@ -1251,14 +1251,14 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                             <span onClick={e => { e.stopPropagation(); setShowAllSignals(true); }}
                                 style={{
                                     fontSize: isMobile ? 9 : 10, color: T.green, flexShrink: 0, cursor: "pointer", fontWeight: 500,
-                                    fontFamily: "'DM Mono',monospace", opacity: 0.7
+                                    fontFamily: "'IBM Plex Mono', monospace", opacity: 0.7
                                 }}>+{hiddenCount}</span>
                         )}
                         {showAllSignals && sortedScreens.length > MAX_VISIBLE && (
                             <span onClick={e => { e.stopPropagation(); setShowAllSignals(false); }}
                                 style={{
                                     fontSize: isMobile ? 9 : 10, color: T.subtext, flexShrink: 0, cursor: "pointer",
-                                    fontFamily: "'DM Mono',monospace", opacity: 0.5
+                                    fontFamily: "'IBM Plex Mono', monospace", opacity: 0.5
                                 }}>less</span>
                         )}
                     </div>
@@ -1283,12 +1283,12 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                             fontSize: isMobile ? 9 : 10, fontWeight: 500, padding: "2px 6px", borderRadius: 3,
                             background: `${urgColor}15`, border: `1px solid ${urgColor}40`,
                             color: urgColor, whiteSpace: "nowrap", letterSpacing: "0.04em",
-                            fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", flexShrink: 0,
                         }}>
                             📅 Results {dateStr}
                         </span>
                         <span style={{
-                            fontSize: isMobile ? 9 : 10, color: urgColor, fontFamily: "'DM Mono', monospace",
+                            fontSize: isMobile ? 9 : 10, color: urgColor, fontFamily: "'IBM Plex Mono', monospace",
                             letterSpacing: "0.04em", opacity: 0.75, flexShrink: 0,
                         }}>
                             {label}
@@ -2181,8 +2181,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: T.bg, flexDirection: "column", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: T.subtext, opacity: 0.3 }}>◈</div>
             <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 500, color: T.text, marginBottom: 4, opacity: 0.7, fontFamily: "'DM Sans',sans-serif" }}>Sign in to use Watchlists</div>
-                <div style={{ fontSize: 12, color: T.subtext, opacity: 0.4, fontFamily: "'DM Sans',sans-serif" }}>Track and analyse your favourite stocks.</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: T.text, marginBottom: 4, opacity: 0.7, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Sign in to use Watchlists</div>
+                <div style={{ fontSize: 12, color: T.subtext, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Track and analyse your favourite stocks.</div>
             </div>
         </div>
     );
@@ -2220,35 +2220,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         .wl-sort-btn{transition:all 0.15s ease}
         .wl-sort-btn:hover{color:${T.text}!important;border-color:${T.subtext}!important}
         .wl-announce-row:hover{background:${T.hover}!important}
-        .wl-premium-shell{position:relative;isolation:isolate}
-        .wl-premium-shell::before{
-          content:"";
-          position:absolute;
-          inset:0;
-          pointer-events:none;
-          background:
-            radial-gradient(circle at top left, ${dark ? "rgba(16,185,129,0.12)" : "rgba(5,150,105,0.10)"} 0, transparent 28%),
-            radial-gradient(circle at top right, ${dark ? "rgba(99,102,241,0.14)" : "rgba(37,99,235,0.10)"} 0, transparent 34%);
-          z-index:-1;
-        }
-        .wl-glass-panel{
-          background:${dark ? "linear-gradient(180deg, rgba(15,23,42,0.88), rgba(15,23,42,0.76))" : "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92))"};
-          border:1px solid ${dark ? "rgba(148,163,184,0.14)" : "rgba(148,163,184,0.20)"};
-          box-shadow:${dark ? "0 18px 40px rgba(2,6,23,0.34)" : "0 18px 40px rgba(15,23,42,0.08)"};
-          backdrop-filter:blur(18px);
-        }
-        .wl-insight-card{position:relative;overflow:hidden}
-        .wl-insight-card::after{
-          content:"";
-          position:absolute;
-          inset:auto -24px -36px auto;
-          width:88px;
-          height:88px;
-          border-radius:999px;
-          background:${dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.72)"};
-          filter:blur(2px);
-          pointer-events:none;
-        }
+        .wl-premium-shell{position:relative}
         /* Mobile touch improvements */
         @media (max-width: 767px) {
           .wl-stock-row { padding: 12px 12px 12px 10px !important; }
@@ -2256,11 +2228,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
           .wl-mobile-bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; }
           .wl-mobile-sidebar-shell { will-change: transform; }
           .wl-toolbar-btn { min-width: 36px; min-height: 36px; }
-          .wl-premium-shell::before{
-            background:
-              radial-gradient(circle at top center, ${dark ? "rgba(16,185,129,0.12)" : "rgba(5,150,105,0.10)"} 0, transparent 34%),
-              radial-gradient(circle at bottom right, ${dark ? "rgba(99,102,241,0.14)" : "rgba(37,99,235,0.10)"} 0, transparent 36%);
-          }
         }
         @media (prefers-reduced-motion: reduce) {
           .wl-mobile-sidebar-shell,
@@ -2274,7 +2241,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                 flex: 1,
                 display: "flex",
                 overflow: "hidden",
-                background: dark ? "linear-gradient(180deg, #08111f 0%, #0b1423 100%)" : "linear-gradient(180deg, #eef4f8 0%, #f7fafc 100%)",
+                background: T.bg,
                 height: "100%",
                 minHeight: 0,
                 fontSize: 14,
@@ -2304,18 +2271,16 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     width: isMobile ? "min(86vw, 340px)" : (sidebarOpen ? 240 : 0),
                     maxWidth: isMobile ? 340 : 240,
                     flexShrink: 0,
-                    background: isMobile
-                        ? (dark ? "linear-gradient(180deg, #0a1422 0%, #0d1829 100%)" : "linear-gradient(180deg, #fdfefe 0%, #f4f8fb 100%)")
-                        : T.surface,
-                    borderRight: `1px solid ${T.border}`,
-                    borderRadius: isMobile ? 0 : 24,
+                    background: T.surface,
+                    border: `1px solid ${T.border}`,
+                    borderRadius: isMobile ? 0 : 16,
                     display: "flex",
                     flexDirection: "column",
                     overflow: "hidden",
                     transition: isMobile
                         ? "transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease"
                         : "width 0.22s cubic-bezier(0.4,0,0.2,1)",
-                    boxShadow: isMobile ? "none" : (dark ? "0 16px 34px rgba(2,6,23,0.28)" : "0 12px 28px rgba(15,23,42,0.08)"),
+                    boxShadow: isMobile ? "none" : (dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"),
 
                     ...(isMobile ? {
                         position: "fixed",
@@ -2508,7 +2473,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     borderRadius: 5,
                                                     padding: isMobile ? "5px 7px" : "2px 6px",
                                                     outline: "none",
-                                                    fontFamily: "'DM Sans', sans-serif",
+                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                                 }}
                                             />
                                         ) : (
@@ -2644,7 +2609,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     color: atWatchlistLimit ? T.subtext : T.text,
                                     opacity: atWatchlistLimit ? 0.45 : 1,
                                     outline: "none",
-                                    fontFamily: "'DM Sans', sans-serif",
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                     fontSize: isMobile ? 15 : 12,
                                     transition: "border-color 0.16s ease, box-shadow 0.16s ease",
                                 }}
@@ -2679,7 +2644,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             </button>
                         </div>
                         {wlError && (
-                            <div style={{ marginTop: 7, fontSize: 11, color: "#ef4444", fontFamily: "'DM Sans', sans-serif" }}>
+                            <div style={{ marginTop: 7, fontSize: 11, color: "#ef4444", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                 {wlError}
                             </div>
                         )}
@@ -2696,10 +2661,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     minWidth: 0,
                     minHeight: 0,
                     overflow: "hidden",
-                    borderRadius: isMobile ? 0 : 30,
-                    border: isMobile ? "none" : `1px solid ${dark ? "rgba(148,163,184,0.10)" : "rgba(148,163,184,0.16)"}`,
-                    background: isMobile ? "transparent" : (dark ? "rgba(8,15,28,0.58)" : "rgba(255,255,255,0.52)"),
-                    backdropFilter: isMobile ? "none" : "blur(18px)"
+                    borderRadius: isMobile ? 0 : 16,
+                    border: isMobile ? "none" : `1px solid ${T.border}`,
+                    background: isMobile ? "transparent" : T.card,
+                    boxShadow: isMobile ? "none" : (dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"),
                 }}>
                     {/* ── TOOLBAR ─────────────────────────────────────────── */}
                     <div style={{
@@ -2749,7 +2714,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             letterSpacing: "0.14em",
                                             marginBottom: 3,
                                             opacity: 0.7,
-                                            fontFamily: "'DM Sans', sans-serif",
+                                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                         }}>
                                             Active Watchlist
                                         </div>
@@ -2759,7 +2724,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             fontSize: isMobile ? 13 : 18,
                                             fontWeight: isMobile ? 600 : 700,
                                             color: T.text,
-                                            fontFamily: "'DM Sans', sans-serif",
+                                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                                             maxWidth: isMobile ? "45vw" : undefined,
                                             letterSpacing: "-0.02em",
@@ -2770,7 +2735,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             <span style={{
                                                 fontSize: 11,
                                                 color: T.subtext,
-                                                fontFamily: "'DM Mono', monospace",
+                                                fontFamily: "'IBM Plex Mono', monospace",
                                                 opacity: 0.75,
                                                 flexShrink: 0,
                                                 padding: "3px 8px",
@@ -2796,7 +2761,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     <span style={{
                                         fontSize: 11,
                                         color: T.subtext,
-                                        fontFamily: "'DM Mono', monospace",
+                                        fontFamily: "'IBM Plex Mono', monospace",
                                         padding: "4px 8px",
                                         borderRadius: 999,
                                         border: `1px solid ${T.border}`,
@@ -2808,7 +2773,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 <span style={{
                                     fontSize: 11,
                                     color: T.subtext,
-                                    fontFamily: "'DM Mono', monospace",
+                                    fontFamily: "'IBM Plex Mono', monospace",
                                     padding: "4px 8px",
                                     borderRadius: 999,
                                     border: `1px solid ${T.border}`,
@@ -2924,8 +2889,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: T.subtext, opacity: 0.3
                             }}>◈</div>
                             <div style={{ textAlign: "center" }}>
-                                <div style={{ fontSize: 14, fontWeight: 500, color: T.text, marginBottom: 4, opacity: 0.7, fontFamily: "'DM Sans',sans-serif" }}>No watchlist selected</div>
-                                <div style={{ fontSize: 12, color: T.subtext, opacity: 0.4, fontFamily: "'DM Sans',sans-serif" }}>Create or select a watchlist to get started.</div>
+                                <div style={{ fontSize: 14, fontWeight: 500, color: T.text, marginBottom: 4, opacity: 0.7, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>No watchlist selected</div>
+                                <div style={{ fontSize: 12, color: T.subtext, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Create or select a watchlist to get started.</div>
                             </div>
                         </div>
                     ) : (
@@ -2991,16 +2956,16 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             style={{
                                                 padding: "4px 12px", background: "transparent", border: `1px solid ${T.border}`,
                                                 borderRadius: 4, color: T.subtext, fontSize: 14, cursor: page === 0 ? "not-allowed" : "pointer",
-                                                opacity: page === 0 ? 0.25 : 0.6, transition: "opacity 0.15s", fontFamily: "'DM Mono',monospace"
+                                                opacity: page === 0 ? 0.25 : 0.6, transition: "opacity 0.15s", fontFamily: "'IBM Plex Mono', monospace"
                                             }}>‹</button>
-                                        <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'DM Mono',monospace", opacity: 0.9, letterSpacing: "0.04em" }}>
+                                        <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.9, letterSpacing: "0.04em" }}>
                                             {page + 1} / {totalPages}
                                         </span>
                                         <button onClick={() => setPage(p => Math.min(p + 1, totalPages - 1))} disabled={page === totalPages - 1}
                                             style={{
                                                 padding: "4px 12px", background: "transparent", border: `1px solid ${T.border}`,
                                                 borderRadius: 4, color: T.subtext, fontSize: 14, cursor: page === totalPages - 1 ? "not-allowed" : "pointer",
-                                                opacity: page === totalPages - 1 ? 0.25 : 0.6, transition: "opacity 0.15s", fontFamily: "'DM Mono',monospace"
+                                                opacity: page === totalPages - 1 ? 0.25 : 0.6, transition: "opacity 0.15s", fontFamily: "'IBM Plex Mono', monospace"
                                             }}>›</button>
                                     </div>
                                 )}
@@ -3029,17 +2994,17 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             <div style={{ padding: "12px 18px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
                                                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                                                     <div>
-                                                        <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, opacity: 0.5 }}>Detail</div>
-                                                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
-                                                        <div style={{ fontSize: 24, fontWeight: 400, color: T.text, fontFamily: "'DM Mono',monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
+                                                        <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, opacity: 0.5 }}>Detail</div>
+                                                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
+                                                        <div style={{ fontSize: 24, fontWeight: 400, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
                                                             {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
                                                         </div>
                                                         <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
                                                             {expandedRow.rs_rating != null && (
-                                                                <span style={{ fontSize: 12, fontWeight: 600, color: T.green, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>RS {Math.round(expandedRow.rs_rating)}</span>
+                                                                <span style={{ fontSize: 12, fontWeight: 600, color: T.green, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>RS {Math.round(expandedRow.rs_rating)}</span>
                                                             )}
                                                             {expandedRow.trend && (
-                                                                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 5, border: `1px solid ${T.border}`, color: T.subtext, fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.04em" }}>
+                                                                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 5, border: `1px solid ${T.border}`, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.04em" }}>
                                                                     {expandedRow.trend === "stage2" ? "Stage 2 ↑" : expandedRow.trend === "stage1" ? "Stage 1 →" : "Stage 4 ↓"}
                                                                 </span>
                                                             )}
@@ -3075,11 +3040,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     },
                                                 ].map(section => (
                                                     <div key={section.label}>
-                                                        <div style={{ fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, opacity: 0.4, fontFamily: "'DM Sans',sans-serif" }}>{section.label}</div>
+                                                        <div style={{ fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
                                                         {section.rows.map(([l, v, c]) => (
                                                             <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
-                                                                <span style={{ fontSize: 14, color: T.subtext, fontFamily: "'DM Sans',sans-serif", opacity: 0.7 }}>{l}</span>
-                                                                <span style={{ fontSize: 14, fontWeight: 500, color: c, fontFamily: "'DM Mono',monospace" }}>{v}</span>
+                                                                <span style={{ fontSize: 14, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7 }}>{l}</span>
+                                                                <span style={{ fontSize: 14, fontWeight: 500, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -3101,20 +3066,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             {/* Header */}
                                             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                                                 <div>
-                                                    <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'DM Mono',monospace", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, opacity: 0.5 }}>Detail</div>
-                                                    <div style={{ fontSize: 17, fontWeight: 600, color: T.text, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
-                                                    <div style={{ fontSize: 22, fontWeight: 400, color: T.text, fontFamily: "'DM Mono',monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
+                                                    <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, opacity: 0.5 }}>Detail</div>
+                                                    <div style={{ fontSize: 17, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
+                                                    <div style={{ fontSize: 22, fontWeight: 400, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
                                                         {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
                                                     </div>
                                                     <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
                                                         {expandedRow.rs_rating != null && (
-                                                            <span style={{ fontSize: 11, fontWeight: 500, color: T.green, fontFamily: "'DM Mono',monospace", letterSpacing: "0.04em" }}>RS {Math.round(expandedRow.rs_rating)}</span>
+                                                            <span style={{ fontSize: 11, fontWeight: 500, color: T.green, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>RS {Math.round(expandedRow.rs_rating)}</span>
                                                         )}
                                                         {expandedRow.trend && (
                                                             <span style={{
                                                                 fontSize: 10, padding: "2px 6px", borderRadius: 3,
                                                                 border: `1px solid ${T.border}`, color: T.subtext,
-                                                                fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.04em"
+                                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.04em"
                                                             }}>
                                                                 {expandedRow.trend === "stage2" ? "S2 ↑" : expandedRow.trend === "stage1" ? "S1 →" : "S4 ↓"}
                                                             </span>
@@ -3167,11 +3132,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 },
                                             ].map(section => (
                                                 <div key={section.label}>
-                                                    <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.4, fontFamily: "'DM Sans',sans-serif" }}>{section.label}</div>
+                                                    <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
                                                     {section.rows.map(([l, v, c]) => (
                                                         <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
-                                                            <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'DM Sans',sans-serif", opacity: 0.6 }}>{l}</span>
-                                                            <span style={{ fontSize: 11, fontWeight: 500, color: c, fontFamily: "'DM Mono',monospace" }}>{v}</span>
+                                                            <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.6 }}>{l}</span>
+                                                            <span style={{ fontSize: 11, fontWeight: 500, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -3180,7 +3145,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             {/* Screen pills */}
                                             {screenMembership[expandedRow.ticker]?.length > 0 && (
                                                 <div>
-                                                    <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.4, fontFamily: "'DM Sans',sans-serif" }}>Screens</div>
+                                                    <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Screens</div>
                                                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                                                         {screenMembership[expandedRow.ticker].map(s => (
                                                             <span key={s}
@@ -3188,7 +3153,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                                 style={{
                                                                     fontSize: 9, padding: "2px 6px", borderRadius: 3, border: `1px solid ${T.border}`, color: T.subtext,
                                                                     cursor: onNavigateToScreen ? "pointer" : "default", transition: "all 0.12s",
-                                                                    textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'DM Sans',sans-serif", fontWeight: 600
+                                                                    textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", fontWeight: 600
                                                                 }}
                                                                 onMouseEnter={onNavigateToScreen ? e => { e.currentTarget.style.color = T.green; e.currentTarget.style.borderColor = `${T.green}50`; } : undefined}
                                                                 onMouseLeave={onNavigateToScreen ? e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.borderColor = T.border; } : undefined}
@@ -3310,7 +3275,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             borderRadius: 8,
                             color: feedOpen ? T.green : T.subtext,
                             fontSize: 11, fontWeight: 600, cursor: "pointer",
-                            fontFamily: "'DM Sans', sans-serif",
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                             letterSpacing: "0.03em",
                             transition: "all 0.15s",
                             display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
@@ -3325,7 +3290,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             borderRadius: 8,
                             color: earningsOpen ? "#f59e0b" : T.subtext,
                             fontSize: 11, fontWeight: 600, cursor: "pointer",
-                            fontFamily: "'DM Sans', sans-serif",
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                             letterSpacing: "0.03em",
                             transition: "all 0.15s",
                             display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
@@ -3447,11 +3412,11 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
             <div style={{ flexShrink: 0, padding: isMobile ? "10px 18px 12px" : "14px 16px 10px", borderBottom: `1px solid ${T.border}` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 600, color: T.text, fontFamily: "'DM Sans', sans-serif" }}>
+                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                             Announcements
                         </span>
                         {announcements.length > 0 && (
-                            <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 500, color: T.subtext, fontFamily: "'DM Mono', monospace" }}>{announcements.length}</span>
+                            <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 500, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{announcements.length}</span>
                         )}
                         {refreshing && !loading && (
                             <span style={{ fontSize: 14, color: T.subtext, fontWeight: 400, animation: "spin 1s linear infinite", display: "inline-block" }}>↻</span>
@@ -3473,7 +3438,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                 background: filter === f.key ? `${T.green}12` : "transparent",
                                 color: filter === f.key ? T.green : T.subtext,
                                 border: `1px solid ${filter === f.key ? `${T.green}40` : T.border}`,
-                                transition: "all 0.15s", fontFamily: "'DM Sans', sans-serif",
+                                transition: "all 0.15s", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                 letterSpacing: "0.04em",
                             }}>
                             {f.label}
@@ -3507,7 +3472,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                     padding: "8px 16px 4px", position: "sticky", top: 0, zIndex: 2,
                                     background: T.surface, borderBottom: `1px solid ${T.border}`
                                 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: "'DM Sans', sans-serif" }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                         {dateLabel}
                                     </span>
                                 </div>
@@ -3531,10 +3496,10 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                         >
                                             {/* Symbol + time */}
                                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
-                                                <span style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: "'DM Mono',monospace", letterSpacing: "0.05em" }}>
+                                                <span style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.05em" }}>
                                                     {ann.symbol}
                                                 </span>
-                                                <span style={{ fontSize: 13, color: T.subtext, fontFamily: "'DM Mono',monospace" }}>
+                                                <span style={{ fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
                                                     {fmtTime(ann.announcement_datetime)}
                                                     {ann.attachment_url && <span style={{ marginLeft: 5, opacity: 0.6 }}>↗</span>}
                                                 </span>
@@ -3545,14 +3510,14 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                                 <span style={{
                                                     fontSize: 12, fontWeight: 600, padding: "2px 7px", borderRadius: 3,
                                                     background: badge.bg, border: `1px solid ${badge.border}`, color: badge.color,
-                                                    letterSpacing: "0.04em", textTransform: "uppercase", fontFamily: "'DM Sans',sans-serif"
+                                                    letterSpacing: "0.04em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
                                                 }}>
                                                     {shortCat(ann.category)}
                                                 </span>
                                             </div>
 
                                             {/* Text */}
-                                            <div style={{ fontSize: 14, color: T.subtext, lineHeight: 1.55, fontFamily: "'DM Sans',sans-serif" }}>
+                                            <div style={{ fontSize: 14, color: T.subtext, lineHeight: 1.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                                 {truncate(ann.announcement_text)}
                                             </div>
                                         </div>
@@ -3572,7 +3537,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                         border: `1px solid ${T.border}`,
                                         borderRadius: 6, color: T.subtext,
                                         fontSize: 14, fontWeight: 500,
-                                        cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                                        cursor: "pointer", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                         letterSpacing: "0.03em", transition: "color 0.15s, border-color 0.15s",
                                     }}
                                     onMouseEnter={e => { e.currentTarget.style.color = T.green; e.currentTarget.style.borderColor = `${T.green}50`; e.currentTarget.style.opacity = "1"; }}
@@ -3741,11 +3706,11 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
             <div style={{ flexShrink: 0, padding: isMobile ? "10px 18px 12px" : "14px 16px 10px", borderBottom: `1px solid ${T.border}` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 600, color: T.text, fontFamily: "'DM Sans', sans-serif" }}>
+                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                             Earnings Calendar
                         </span>
                         {!loading && (
-                            <span style={{ fontSize: 13, color: T.subtext, fontFamily: "'DM Mono', monospace" }}>
+                            <span style={{ fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
                                 {filtered.length}
                             </span>
                         )}
@@ -3769,7 +3734,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                 background: mode === k ? `${T.green}15` : "transparent",
                                 color: mode === k ? T.green : T.subtext,
                                 border: `1px solid ${mode === k ? T.green : T.border}`,
-                                transition: "all 0.15s", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.02em",
+                                transition: "all 0.15s", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.02em",
                                 opacity: mode === k ? 1 : (k === "watchlist" && watchlistTickers.length === 0 ? 0.35 : 1)
                             }}>
                             {l}
@@ -3789,7 +3754,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                             background: T.card, border: `1px solid ${T.border}`,
                             borderRadius: isMobile ? 8 : 6, color: T.text,
                             fontSize: isMobile ? 15 : 14,
-                            outline: "none", fontFamily: "'DM Sans', sans-serif", transition: "border-color 0.15s",
+                            outline: "none", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", transition: "border-color 0.15s",
                             boxSizing: "border-box"
                         }}
                         onFocus={e => e.currentTarget.style.borderColor = T.green}
@@ -3819,11 +3784,11 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                         ))}
                     </div>
                 ) : error ? (
-                    <div style={{ padding: "32px 16px", textAlign: "center", color: "#f87171", fontSize: 15, fontFamily: "'DM Sans', sans-serif" }}>
+                    <div style={{ padding: "32px 16px", textAlign: "center", color: "#f87171", fontSize: 15, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                         {error}
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div style={{ padding: "32px 16px", textAlign: "center", color: T.subtext, fontSize: 15, fontFamily: "'DM Sans', sans-serif" }}>
+                    <div style={{ padding: "32px 16px", textAlign: "center", color: T.subtext, fontSize: 15, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                         {mode === "watchlist" ? "No upcoming earnings for your watchlist stocks." : search ? "No results match your search." : "No upcoming earnings found."}
                     </div>
                 ) : (
@@ -3841,14 +3806,14 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                     }}>
                                         <span style={{
                                             fontSize: 12, fontWeight: 600, color: T.subtext,
-                                            textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: "'DM Sans', sans-serif"
+                                            textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
                                         }}>
                                             {fmtDate(dateKey)}
                                         </span>
                                         {days !== null && (
                                             <span style={{
                                                 fontSize: 12, fontWeight: 600, color: urgColor,
-                                                fontFamily: "'DM Mono', monospace", letterSpacing: "0.04em"
+                                                fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em"
                                             }}>
                                                 {days === 0 ? "Today" : days === 1 ? "Tomorrow" : `in ${days}d`}
                                             </span>
@@ -3876,7 +3841,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                                                             <span style={{
                                                                 fontSize: 14, fontWeight: 700, color: T.text,
-                                                                fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em", flexShrink: 0
+                                                                fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.05em", flexShrink: 0
                                                             }}>
                                                                 {item.ticker || "—"}
                                                             </span>
@@ -3885,14 +3850,14 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                                                     fontSize: 11, fontWeight: 600, padding: "1px 5px", borderRadius: 3,
                                                                     background: `${T.green}15`, border: `1px solid ${T.green}50`,
                                                                     color: T.green, textTransform: "uppercase", letterSpacing: "0.06em",
-                                                                    fontFamily: "'DM Sans', sans-serif", flexShrink: 0
+                                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", flexShrink: 0
                                                                 }}>
                                                                     WL
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <div style={{
-                                                            fontSize: 14, color: T.subtext, fontFamily: "'DM Sans', sans-serif",
+                                                            fontSize: 14, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                                             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                                                         }}>
                                                             {item.company_name || "—"}
@@ -3904,14 +3869,14 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                                         {item.meeting_type && (
                                                             <div style={{
                                                                 fontSize: 12, fontWeight: 600, color: "#f59e0b",
-                                                                fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.04em",
+                                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.04em",
                                                                 textTransform: "uppercase", marginBottom: 2
                                                             }}>
                                                                 {item.meeting_type}
                                                             </div>
                                                         )}
                                                         {item.result_type && (
-                                                            <div style={{ fontSize: 12, color: T.subtext, fontFamily: "'DM Sans', sans-serif" }}>
+                                                            <div style={{ fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                                                 {item.result_type}
                                                             </div>
                                                         )}
@@ -3925,7 +3890,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                                             <span style={{
                                                                 fontSize: 11, fontWeight: 500, padding: "1px 5px", borderRadius: 3,
                                                                 background: T.card, border: `1px solid ${T.border}`, color: T.subtext,
-                                                                fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em"
+                                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", textTransform: "uppercase", letterSpacing: "0.05em"
                                                             }}>
                                                                 {item.exchange}
                                                             </span>
@@ -3934,7 +3899,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                                             <span style={{
                                                                 fontSize: 11, fontWeight: 500, padding: "1px 5px", borderRadius: 3,
                                                                 background: T.card, border: `1px solid ${T.border}`, color: T.subtext,
-                                                                fontFamily: "'DM Sans', sans-serif"
+                                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
                                                             }}>
                                                                 {item.market_cap_category}
                                                             </span>
@@ -3956,7 +3921,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                         width: "100%", padding: "7px 0", background: "transparent",
                                         border: `1px solid ${T.border}`, borderRadius: 6, color: T.subtext,
                                         fontSize: 14, fontWeight: 500, cursor: "pointer",
-                                        fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.03em",
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.03em",
                                         transition: "color 0.15s, border-color 0.15s"
                                     }}
                                     onMouseEnter={e => { e.currentTarget.style.color = "#f59e0b"; e.currentTarget.style.borderColor = "rgba(245,158,11,0.5)"; }}

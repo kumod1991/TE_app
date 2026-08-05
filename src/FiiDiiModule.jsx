@@ -54,11 +54,7 @@ async function sbFetchAll(table, params = {}) {
   return allRows;
 }
 
-const MODULE_CACHE_KEY = "fiidii-module-cache-v1";
-const MODULE_CACHE_TTL_MS = 15 * 60 * 1000;
-let fiidiiMemoryCache = null;
-let fiidiiMemoryCacheTs = 0;
-let fiidiiInflightPromise = null;
+const CACHE_TTL_MS = 15 * 60 * 1000;
 
 // ─── FORMAT ───────────────────────────────────────────────────────────────────
 const fmtCrShort = (v) => {
@@ -275,93 +271,120 @@ function pivotDerivData(rows) {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
-function readModuleCache() {
-  const now = Date.now();
-  if (fiidiiMemoryCache && now - fiidiiMemoryCacheTs < MODULE_CACHE_TTL_MS) {
-    return { data: fiidiiMemoryCache, stale: false };
-  }
-  if (typeof window === "undefined") return { data: fiidiiMemoryCache, stale: true };
-  try {
-    const raw = window.localStorage.getItem(MODULE_CACHE_KEY);
-    if (!raw) return { data: null, stale: true };
-    const parsed = JSON.parse(raw);
-    if (!parsed?.data) return { data: null, stale: true };
-    fiidiiMemoryCache = parsed.data;
-    fiidiiMemoryCacheTs = parsed.ts || 0;
-    return { data: parsed.data, stale: now - (parsed.ts || 0) >= MODULE_CACHE_TTL_MS };
-  } catch {
-    return { data: null, stale: true };
-  }
+// Small helper — a localStorage + in-memory TTL cache keyed by name, reused for
+// both the cash and derivatives datasets below so each has its own independent
+// freshness window and doesn't force-refetch the other.
+function makeCache(storageKey) {
+  let memData = null, memTs = 0;
+  return {
+    read() {
+      const now = Date.now();
+      if (memData && now - memTs < CACHE_TTL_MS) return { data: memData, stale: false };
+      if (typeof window === "undefined") return { data: memData, stale: true };
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) return { data: null, stale: true };
+        const parsed = JSON.parse(raw);
+        if (!parsed?.data) return { data: null, stale: true };
+        memData = parsed.data;
+        memTs = parsed.ts || 0;
+        return { data: parsed.data, stale: now - (parsed.ts || 0) >= CACHE_TTL_MS };
+      } catch {
+        return { data: null, stale: true };
+      }
+    },
+    write(data) {
+      memData = data;
+      memTs = Date.now();
+      if (typeof window === "undefined") return;
+      try { window.localStorage.setItem(storageKey, JSON.stringify({ data, ts: memTs })); } catch {}
+    },
+  };
 }
 
-function writeModuleCache(data) {
-  const payload = { data, ts: Date.now() };
-  fiidiiMemoryCache = data;
-  fiidiiMemoryCacheTs = payload.ts;
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(MODULE_CACHE_KEY, JSON.stringify(payload));
-  } catch {}
-}
-
-function latestCashDate(data) {
-  return data?.cashData?.[data.cashData.length - 1]?.date || null;
-}
+// ─── CASH DATA — fii_dii_activity_mv ───────────────────────────────────────────
+// The mv already carries precomputed 5D/20D rolling sums, 20D avg/std, and
+// z-score per row (window functions run once in Postgres), so we only select
+// the columns the UI actually reads instead of `select=*` (which also pulled
+// down created_at and prev_*/*_change columns nobody renders).
+const cashCache = makeCache("fiidii-cash-cache-v2");
+let cashInflight = null;
+const CASH_SELECT = [
+  "date", "fii_buy", "fii_sell", "fii_net", "dii_buy", "dii_sell", "dii_net",
+  "fii_net_5d", "fii_net_20d", "dii_net_5d", "dii_net_20d",
+  "fii_net_20d_avg", "fii_net_20d_std", "fii_zscore_20d", "regime",
+].join(",");
 
 async function fetchLatestCashDate() {
-  const rows = await sbFetchAll("fii_dii_activity", {
-    select: "date",
-    order: "date.desc",
-    limit: 1,
-  });
+  const rows = await sbFetchAll("fii_dii_activity_mv", { select: "date", order: "date.desc", limit: 1 });
   return rows?.[0]?.date || null;
 }
 
-async function refreshModuleData() {
-  if (fiidiiInflightPromise) return fiidiiInflightPromise;
-  fiidiiInflightPromise = (async () => {
-    const [cashResult, derivResult] = await Promise.allSettled([
-      sbFetchAll("fii_dii_activity", { select: "*", order: "date.asc" }),
-      sbFetchAll("fii_dii_fo",       { select: "*", order: "date.asc" }),
-    ]);
-    if (cashResult.status !== "fulfilled") throw cashResult.reason;
-    if (derivResult.status === "rejected") console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", derivResult.reason);
-    const cash = cashResult.value || [];
-    const derivRaw = derivResult.status === "fulfilled" ? derivResult.value || [] : [];
-    const data = {
-      cashData: [...cash].sort((a, b) => new Date(a.date) - new Date(b.date)),
-      derivData: pivotDerivData(derivRaw),
-    };
-    writeModuleCache(data);
+async function refreshCashData() {
+  if (cashInflight) return cashInflight;
+  cashInflight = (async () => {
+    const rows = await sbFetchAll("fii_dii_activity_mv", { select: CASH_SELECT, order: "date.asc" });
+    const data = [...rows].sort((a, b) => new Date(a.date) - new Date(b.date));
+    cashCache.write(data);
     return data;
-  })().finally(() => { fiidiiInflightPromise = null; });
-  return fiidiiInflightPromise;
+  })().finally(() => { cashInflight = null; });
+  return cashInflight;
 }
 
-async function fetchModuleData({ preferCache = true } = {}) {
-  const cached = readModuleCache();
+async function fetchCashData({ preferCache = true } = {}) {
+  const cached = cashCache.read();
   if (preferCache && cached.data && !cached.stale) {
     fetchLatestCashDate()
       .then(remoteLatest => {
-        if (remoteLatest && remoteLatest > latestCashDate(cached.data)) refreshModuleData().catch(() => null);
+        const localLatest = cached.data[cached.data.length - 1]?.date;
+        if (remoteLatest && remoteLatest > localLatest) refreshCashData().catch(() => null);
       })
       .catch(() => null);
     return cached.data;
   }
   if (preferCache && cached.data && cached.stale) {
-    refreshModuleData().catch(() => null);
+    refreshCashData().catch(() => null);
     return cached.data;
   }
-  return refreshModuleData();
+  return refreshCashData();
+}
+
+// ─── DERIVATIVES DATA — fii_dii_fo ─────────────────────────────────────────────
+// Lazy: only fetched the first time the Derivatives tab is actually opened (see
+// the component effect below), since most sessions never touch it.
+const derivCache = makeCache("fiidii-deriv-cache-v2");
+let derivInflight = null;
+
+async function refreshDerivData() {
+  if (derivInflight) return derivInflight;
+  derivInflight = (async () => {
+    const rows = await sbFetchAll("fii_dii_fo", { select: "*", order: "date.asc" });
+    const data = pivotDerivData(rows);
+    derivCache.write(data);
+    return data;
+  })().finally(() => { derivInflight = null; });
+  return derivInflight;
+}
+
+async function fetchDerivData({ preferCache = true } = {}) {
+  const cached = derivCache.read();
+  if (preferCache && cached.data && !cached.stale) return cached.data;
+  if (preferCache && cached.data && cached.stale) {
+    refreshDerivData().catch(() => null);
+    return cached.data;
+  }
+  return refreshDerivData();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PURE SVG CHARTS
 // ═══════════════════════════════════════════════════════════════════════════════
+// Called on hover/route-preload from outside the module — only warms the cash
+// dataset (Overview/Cash Flow), which covers the tabs people actually land on.
 export function prefetchFiiDiiData() {
-  const cached = readModuleCache();
+  const cached = cashCache.read();
   if (cached.data && !cached.stale) return Promise.resolve(cached.data);
-  return fetchModuleData({ preferCache: false }).catch(() => null);
+  return fetchCashData({ preferCache: false }).catch(() => null);
 }
 
 const PAD = { top: 10, right: 12, bottom: 30, left: 56 };
@@ -811,11 +834,11 @@ const TablePagination = ({ page, totalPages, onChange, T }) => {
 const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   const TABS = ["Overview", "Cash Flow", "Derivatives"];
   const T = useMemo(() => buildTheme(themeProp), [themeProp]);
-  const initialCache = useMemo(() => readModuleCache(), []);
+  const initialCashCache = useMemo(() => cashCache.read(), []);
   const [activeTab,       setActiveTab]       = useState("Overview");
-  const [cashData,        setCashData]        = useState(() => initialCache.data?.cashData || []);
-  const [derivData,       setDerivData]       = useState(() => initialCache.data?.derivData || []);
-  const [loading,         setLoading]         = useState(() => !initialCache.data);
+  const [cashData,        setCashData]        = useState(() => initialCashCache.data || []);
+  const [derivData,       setDerivData]       = useState(() => derivCache.read().data || []);
+  const [loading,         setLoading]         = useState(() => !initialCashCache.data);
   const [error,           setError]           = useState(null);
   const [isMobile,        setIsMobile]        = useState(() => window.innerWidth < 768);
   // (1) Overview chart: "Daily" | "20D Rolling" — default 20D Rolling
@@ -847,11 +870,11 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     document.head.appendChild(link);
   }, []);
 
+  // ── Cash data (fii_dii_activity_mv) — loaded eagerly; drives Overview + Cash Flow ──
   useEffect(() => {
-    const cached = initialCache;
+    const cached = initialCashCache;
     if (cached.data) {
-      setCashData(cached.data.cashData || []);
-      setDerivData(cached.data.derivData || []);
+      setCashData(cached.data);
       setLoading(false);
     }
 
@@ -859,15 +882,14 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     (async () => {
       try {
         if (!cached.data) setLoading(true);
-        const data = await fetchModuleData({ preferCache: !cached.data });
+        const data = await fetchCashData({ preferCache: !cached.data });
         if (cancelled) return;
-        setCashData(data.cashData || []);
-        setDerivData(data.derivData || []);
+        setCashData(data);
         setError(null);
       } catch (e) {
         if (!cancelled) {
           if (cached.data) {
-            console.warn("[FIIDII] Refresh failed; keeping cached module data.", e);
+            console.warn("[FIIDII] Cash refresh failed; keeping cached data.", e);
             setError(null);
           } else {
             setError(e.message);
@@ -879,28 +901,52 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     })();
 
     return () => { cancelled = true; };
-  }, [initialCache]);
+  }, [initialCashCache]);
+
+  // ── Derivatives data (fii_dii_fo) — lazy: fetched the first time the tab opens ──
+  const derivRequestedRef = useRef(false);
+  useEffect(() => {
+    if (activeTab !== "Derivatives" || derivRequestedRef.current) return;
+    const cached = derivCache.read();
+    if (cached.data && !cached.stale) { setDerivData(cached.data); derivRequestedRef.current = true; return; }
+    derivRequestedRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchDerivData({ preferCache: !!cached.data });
+        if (!cancelled) setDerivData(data);
+      } catch (e) {
+        if (!cancelled) console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", e);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [activeTab]);
 
   // ── CASH MEMO ──────────────────────────────────────────────────────────────
+  // fii5/dii5/fii20/dii20/z come straight off the mv's precomputed rolling
+  // columns instead of re-slicing and re-summing the full history on every
+  // recalculation.
   const cashMemo = useMemo(() => {
     if (!cashData.length) return {};
     const latest = cashData[cashData.length - 1];
-    const last   = (n) => cashData.slice(-n);
-    const S      = (arr, k) => sum(arr.map(d => +d[k] || 0));
     const fii1 = +latest.fii_net || 0, dii1 = +latest.dii_net || 0;
-    const fii5  = S(last(5),  "fii_net"), dii5  = S(last(5),  "dii_net");
-    const fii20 = S(last(20), "fii_net"), dii20 = S(last(20), "dii_net");
-    const z     = zScore(fii1, last(20).map(d => +d.fii_net || 0));
+    const fii5  = +latest.fii_net_5d  || 0, dii5  = +latest.dii_net_5d  || 0;
+    const fii20 = +latest.fii_net_20d || 0, dii20 = +latest.dii_net_20d || 0;
+    const z     = +latest.fii_zscore_20d || 0;
 
     // Full-history daily + rolling arrays (ASC order, date field preserved)
     const daily = cashData.map(d => ({
       date: d.date, label: fmtDateShort(d.date),
       fiiNet: +d.fii_net || 0, diiNet: +d.dii_net || 0,
     }));
-    const rolling = cashData.map((d, i) => {
-      const slice = cashData.slice(Math.max(0, i - 19), i + 1);
-      return { date: d.date, label: fmtDateShort(d.date), fiiRoll: S(slice, "fii_net"), diiRoll: S(slice, "dii_net") };
-    });
+    // fii_net_20d / dii_net_20d are already 20-day rolling sums from the mv —
+    // no need for the O(n×20) slice+sum pass this used to do per row.
+    const rolling = cashData.map(d => ({
+      date: d.date, label: fmtDateShort(d.date),
+      fiiRoll: +d.fii_net_20d || 0, diiRoll: +d.dii_net_20d || 0,
+    }));
 
     const participation = (fii1 === 0 && dii1 === 0) ? 0.5 : Math.abs(fii1) / (Math.abs(fii1) + Math.abs(dii1));
     let absorption = "Mixed";
@@ -981,17 +1027,35 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return { isRolling, spanYears, chartData, chartSeries, rangeExceedsData };
   }, [cashMemo.daily, cashMemo.rolling, flowView, overviewRange]);
 
-  const cashFlowTableRows = useMemo(() => {
+  // Aggregation only — needed to know the full row/page count. Cheap: O(n) bucket
+  // pass, no per-row derived stats yet.
+  const cashFlowAggRows = useMemo(() => {
     const rawReverse = [...cashData].reverse();
-    const aggRows = aggregateCashRows(rawReverse, cashFreq);
-    const allFii = cashData.map(d => +d.fii_net || 0);
-    const avgFii = allFii.length ? mean(allFii) : 0;
-    const stdFii = allFii.length ? std(allFii) : 0;
+    return aggregateCashRows(rawReverse, cashFreq);
+  }, [cashData, cashFreq]);
 
-    return aggRows.map((row, i) => {
+  // Full-history mean/std only feeds the Daily-frequency z-score column — skip
+  // the O(n) pass entirely for Weekly/Monthly/Annual views where it's discarded.
+  const dailyFiiStats = useMemo(() => {
+    if (cashFreq !== "Daily") return { avgFii: 0, stdFii: 0 };
+    const allFii = cashData.map(d => +d.fii_net || 0);
+    return { avgFii: allFii.length ? mean(allFii) : 0, stdFii: allFii.length ? std(allFii) : 0 };
+  }, [cashData, cashFreq]);
+
+  // Cash Flow table pagination — only slice+render CASH_TABLE_PAGE_SIZE rows at a time
+  const cashPageCount = Math.max(1, Math.ceil(cashFlowAggRows.length / CASH_TABLE_PAGE_SIZE));
+  const cashPageClamped = Math.min(Math.max(1, cashPage), cashPageCount);
+
+  // Per-row derived stats (chg/abs/rowZ/label) — only computed for the page
+  // actually on screen, instead of every aggregated row up front.
+  const cashFlowPageRows = useMemo(() => {
+    const { avgFii, stdFii } = dailyFiiStats;
+    const start = (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE;
+    return cashFlowAggRows.slice(start, start + CASH_TABLE_PAGE_SIZE).map((row, localI) => {
+      const i = start + localI;
       const fiiN = +row.fii_net || 0;
       const diiN = +row.dii_net || 0;
-      const prev = aggRows[i + 1];
+      const prev = cashFlowAggRows[i + 1];
       const prevFii = prev ? +prev.fii_net || 0 : null;
       const chg = prevFii ? ((fiiN - prevFii) / Math.abs(prevFii) * 100) : null;
       const abs = fiiN < 0 && diiN > Math.abs(fiiN) ? "Absorbed" : fiiN < 0 && diiN < 0 ? "Risk-Off" : fiiN > 0 && diiN > 0 ? "Both Buy" : "—";
@@ -1006,15 +1070,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
         label: fmtPeriodLabel(row.endDate || row.date, cashFreq),
       };
     });
-  }, [cashData, cashFreq]);
-
-  // Cash Flow table pagination — only slice+render CASH_TABLE_PAGE_SIZE rows at a time
-  const cashPageCount = Math.max(1, Math.ceil(cashFlowTableRows.length / CASH_TABLE_PAGE_SIZE));
-  const cashPageClamped = Math.min(Math.max(1, cashPage), cashPageCount);
-  const cashFlowPageRows = useMemo(() => {
-    const start = (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE;
-    return cashFlowTableRows.slice(start, start + CASH_TABLE_PAGE_SIZE);
-  }, [cashFlowTableRows, cashPageClamped]);
+  }, [cashFlowAggRows, cashPageClamped, cashFreq, dailyFiiStats]);
 
   const derivativesTabData = useMemo(() => {
     const rows = derivMemo.rows || [];
@@ -1156,8 +1212,8 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             <h3 style={{ ...sh, margin: 0 }}>Cash Flow Data</h3>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={{ fontSize: 11, color: T.subtext }}>
-                Showing {cashFlowTableRows.length === 0 ? 0 : (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE + 1}
-                –{Math.min(cashPageClamped * CASH_TABLE_PAGE_SIZE, cashFlowTableRows.length)} of {cashFlowTableRows.length}
+                Showing {cashFlowAggRows.length === 0 ? 0 : (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE + 1}
+                –{Math.min(cashPageClamped * CASH_TABLE_PAGE_SIZE, cashFlowAggRows.length)} of {cashFlowAggRows.length}
               </span>
               <ViewToggle options={["Daily", "Weekly", "Monthly", "Annual"]} value={cashFreq} onChange={setCashFreq} T={T} />
             </div>
