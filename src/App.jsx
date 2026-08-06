@@ -21294,191 +21294,42 @@ const SECTOR_GROUPS = {
     transport: "thematic", tourism: "thematic", railway_psu: "thematic",
     cpse: "thematic",
 };
-const Q_CONFIG = {
-    LEADING: { color: "#22c55e", bg: "rgba(34,197,94,0.12)", label: "Leading", emoji: "\u2197" },
-    WEAKENING: { color: "#f97316", bg: "rgba(249,115,22,0.12)", label: "Weakening", emoji: "\u2198" },
-    LAGGING: { color: "#ef4444", bg: "rgba(239,68,68,0.12)", label: "Lagging", emoji: "\u2199" },
-    IMPROVING: { color: "#eab308", bg: "rgba(234,179,8,0.12)", label: "Improving", emoji: "\u2196" },
+//  STATUS META (plain-English, replaces quadrant/RS/opportunity jargon) 
+const STATUS_META = {
+    LEADING: { label: "Leading", desc: "Strong, and still rising", color: "#22c55e", short: "Leading" },
+    IMPROVING: { label: "Improving", desc: "Was weak, now gaining strength", color: "#eab308", short: "Improving" },
+    WEAKENING: { label: "Weakening", desc: "Was strong, now losing steam", color: "#f97316", short: "Weakening" },
+    LAGGING: { label: "Lagging", desc: "Weak, and still falling behind", color: "#ef4444", short: "Lagging" },
 };
-
-//  SIGNAL CONFIG 
-const SIGNAL_CONFIG = {
-    STRONG_BREAKOUT: { color: "#10b981", bg: "rgba(16,185,129,0.18)", label: "Strong Breakout", icon: "", priority: 1 },
-    BREAKOUT: { color: "#22c55e", bg: "rgba(34,197,94,0.15)", label: "Breakout", icon: "", priority: 2 },
-    EARLY_STRENGTH: { color: "#818cf8", bg: "rgba(129,140,248,0.15)", label: "Early Strength", icon: "", priority: 3 },
-    EARLY_REVERSAL: { color: "#a78bfa", bg: "rgba(167,139,250,0.15)", label: "Early Reversal", icon: "", priority: 4 },
-    DISTRIBUTION: { color: "#f97316", bg: "rgba(249,115,22,0.15)", label: "Distribution", icon: "", priority: 5 },
-    STRONG_DISTRIBUTION: { color: "#ef4444", bg: "rgba(239,68,68,0.18)", label: "Strong Dist.", icon: "", priority: 5 },
-    NONE: { color: null, bg: null, label: null, icon: null, priority: 6 },
-};
-const SIGNAL_PRIORITY = { STRONG_BREAKOUT: 1, BREAKOUT: 2, EARLY_STRENGTH: 3, EARLY_REVERSAL: 4, DISTRIBUTION: 5, STRONG_DISTRIBUTION: 5, NONE: 6 };
-
-//  MARKET PHASE 
-function getMarketPhase(coreL, cyclL, themeL, total) {
-    // Normalise to proportions  works for any sector universe size
-    const t = total || 1;
-    const core = coreL / t;
-    const cycl = cyclL / t;
-    const theme = themeL / t;
-
-    // Strong Bull  broad participation: cyclicals AND core both strong
-    if (cycl > 0.35 && core > 0.25)
-        return { phase: "STRONG BULL", color: "#10b981", icon: "\u2197", desc: "Cyclicals + core leading - broad bull participation" };
-
-    // Expansion  cyclicals dominating, risk-on
-    if (cycl > 0.35)
-        return { phase: "EXPANSION", color: "#22c55e", icon: "\u21D7", desc: "Cyclicals dominating - risk-on, broad growth" };
-
-    // Early Rotation  thematic clearly ahead of cyclical and material in size
-    if (theme > cycl && theme > 0.25)
-        return { phase: "EARLY ROTATION", color: "#eab308", icon: "\u2196", desc: "Thematic sectors leading - selective rotation" };
-
-    // Defensive Strength  core defensives carrying the market
-    if (core > 0.35)
-        return { phase: "DEFENSIVE STRENGTH", color: "#60a5fa", icon: "\u25A0", desc: "Core sectors leading - quality over risk" };
-
-    // Distribution  weak participation across all groups
-    if (cycl < 0.20 && core < 0.20 && theme < 0.20)
-        return { phase: "DISTRIBUTION", color: "#ef4444", icon: "\u2198", desc: "Broad weakness - few sectors leading" };
-
-    // Default: mixed or transitional
-    return { phase: "DEFENSIVE", color: "#f97316", icon: "\u26A0", desc: "No clear leader - stay cautious" };
-}
-
-//  DIRECTION LABEL 
-function getDirectionLabel(dx, dy) {
-    if (!isFinite(dx) || !isFinite(dy)) return null;
-    const speed = Math.sqrt(dx * dx + dy * dy);
-    if (dx > 0 && dy > 0 && speed > 0.02) return { arrow: "\u2197", label: "Strong Entry", color: "#22c55e" };
-    if (dx > 0 && dy > 0) return { arrow: "\u2191", label: "Strengthening", color: "#22c55e" };
-    if (dx < 0 && dy > 0) return { arrow: "\u2196", label: "Improving", color: "#eab308" };
-    if (dx < 0 && dy < 0 && speed > 0.02) return { arrow: "\u2199", label: "Breakdown", color: "#ef4444" };
-    if (dx < 0 && dy < 0) return { arrow: "\u2193", label: "Weakening", color: "#f97316" };
-    if (dx > 0 && dy < 0) return { arrow: "\u2198", label: "Distribution", color: "#ef4444" };
-    return null;
-}
-
-//  DECISION ENGINE (v3  signal-aware, no false Best Setups) 
-function getDecision(quadrant, momentum, dir, signal) {
-    const dirLabel = dir?.label || "";
-    // LEADING but breaking down  override to REDUCE
-    if (quadrant === "LEADING" && dirLabel === "Breakdown")
-        return { key: "REDUCE", label: " Reduce", color: "#f97316", bg: "rgba(249,115,22,0.12)" };
-    // LEADING with distribution signal  REDUCE
-    if (quadrant === "LEADING" && signal === "DISTRIBUTION")
-        return { key: "REDUCE", label: " Reduce", color: "#f97316", bg: "rgba(249,115,22,0.12)" };
-    if (quadrant === "LEADING" && signal === "STRONG_DISTRIBUTION")
-        return { key: "REDUCE", label: " Reduce", color: "#f97316", bg: "rgba(249,115,22,0.12)" };
-    // LEADING + strong direction + no bad signal  BEST SETUP
-    if (quadrant === "LEADING" && momentum > 3 && (dirLabel === "Strong Entry" || dirLabel === "Strengthening"))
-        return { key: "BEST_SETUP", label: " Best Setup", color: "#22c55e", bg: "rgba(34,197,94,0.12)" };
-    // LEADING but weak/no direction
-    if (quadrant === "LEADING" && momentum > 3)
-        return { key: "BEST_SETUP", label: " Best Setup", color: "#22c55e", bg: "rgba(34,197,94,0.12)" };
-    if (quadrant === "LEADING")
-        return { key: "HOLD", label: " Hold", color: "#60a5fa", bg: "rgba(96,165,250,0.12)" };
-    // IMPROVING
-    if (quadrant === "IMPROVING" && momentum > 1)
-        return { key: "WATCHLIST", label: " Watchlist", color: "#eab308", bg: "rgba(234,179,8,0.12)" };
-    if (quadrant === "IMPROVING")
-        return { key: "WATCHLIST", label: " Watchlist", color: "#eab308", bg: "rgba(234,179,8,0.12)" };
-    if (quadrant === "WEAKENING")
-        return { key: "REDUCE", label: " Reduce", color: "#f97316", bg: "rgba(249,115,22,0.12)" };
-    if (quadrant === "LAGGING")
-        return { key: "AVOID", label: " Avoid", color: "#ef4444", bg: "rgba(239,68,68,0.12)" };
-    return { key: "NEUTRAL", label: " Neutral", color: "#6b7280", bg: "rgba(107,114,128,0.1)" };
-}
-
-//  RISK SCORE 
-function getRiskScore(quadrant, momentum) {
-    if (quadrant === "LEADING" && momentum > 5) return { val: 0.2, label: "Low", color: "#22c55e" };
-    if (quadrant === "LEADING") return { val: 0.3, label: "Low", color: "#22c55e" };
-    if (quadrant === "IMPROVING") return { val: 0.5, label: "Medium", color: "#eab308" };
-    if (quadrant === "WEAKENING") return { val: 0.7, label: "High", color: "#f97316" };
-    if (quadrant === "LAGGING") return { val: 0.9, label: "High", color: "#ef4444" };
-    return { val: 0.5, label: "Medium", color: "#eab308" };
-}
-
-//  CAPITAL ALLOCATION WEIGHT 
-function getAllocationWeight(opportunityScore) {
-    if (opportunityScore > 0.4) return { pct: 100, label: "100%", color: "#22c55e" };
-    if (opportunityScore > 0.3) return { pct: 70, label: "70%", color: "#84cc16" };
-    if (opportunityScore > 0.2) return { pct: 40, label: "40%", color: "#eab308" };
-    return { pct: 10, label: "10%", color: "#6b7280" };
-}
-
-//  FLOW STATE (upgraded) 
-function getFlowState(rs, rs_60, momentum) {
-    if (rs > rs_60 && momentum > 5) return { label: "Strong Inflow", color: "#10b981" };
-    if (rs > rs_60) return { label: "Inflow", color: "#22c55e" };
-    if (rs < rs_60 && momentum < 0) return { label: "Outflow", color: "#ef4444" };
-    return { label: "Neutral", color: "#6b7280" };
-}
-
-//  STABILITY SCORE 
-function getStabilityScore(stabilityScore) {
-    // stabilityScore = AVG(quadrant='LEADING') over 10 rows  0.0 to 1.0
-    if (stabilityScore == null) return null;
-    if (stabilityScore >= 0.8) return { label: "Strong Trend", color: "#22c55e" };
-    if (stabilityScore >= 0.5) return { label: "Developing", color: "#eab308" };
-    return { label: "Weak", color: "#f97316" };
-}
-
-//  SIGNAL CONFIDENCE 
-function getSignalConfidence(signal) {
-    const map = { STRONG_BREAKOUT: 1.0, BREAKOUT: 0.8, EARLY_STRENGTH: 0.6, EARLY_REVERSAL: 0.5, DISTRIBUTION: 0.3, STRONG_DISTRIBUTION: 0.2 };
-    const val = map[signal] ?? 0.1;
-    const label = val >= 0.8 ? "High" : val >= 0.5 ? "Med" : "Low";
-    const color = val >= 0.8 ? "#22c55e" : val >= 0.5 ? "#eab308" : "#ef4444";
-    return { val, label, color };
-}
+const STATUS_ORDER = { LEADING: 0, IMPROVING: 1, WEAKENING: 2, LAGGING: 3 };
 
 /* ============================================================================
- * REVISED: SectorRotationModule
+ * SectorRotationModule  simplified
  * ----------------------------------------------------------------------------
- * Finding: unlike the Ownership/Breadth pages, the RRG math here (SMA,
- * momentum, velocity, opportunity score in computeForLookback/buildTrails)
- * is NOT the bottleneck  it runs on ~24 sectors x ~280 daily points and
- * completes in well under a millisecond. There's nothing worth moving to
- * the backend on the calculation side.
- *
- * The real slowness was an N+1 network pattern: the original code fired
- * one `sector_rs` fetch PER sector (~24 parallel requests, repeated on
- * every 5-min auto-refresh). Browsers cap concurrent connections per
- * origin, so these queue instead of running truly in parallel  that
- * queuing, not JS compute, is what made the tab feel slow to load.
- *
- * Fix: a single `sector=in.(...)` query fetches all sectors' RS history
- * in one round trip (paginated defensively via Range/count in case the
- * project's PostgREST max-rows setting is below the ~6-7k rows this can
- * return). In practice this is 1-2 requests instead of 25. Everything
- * downstream (computeForLookback, buildTrails, timeframe switching,
- * rendering) is unchanged.
+ * Redesigned to show only two things: the RRG chart and a plain table, both
+ * readable at a glance without knowing what "RS score", "opportunity score"
+ * or "quadrant" mean. All the underlying math (SMA / momentum / RS spread)
+ * is unchanged  it just drives colors and a plain-English status word
+ * instead of being surfaced as raw numbers.
  * ============================================================================ */
 
 function SectorRotationModule({ T }) {
     const sans = "'IBM Plex Sans', -apple-system, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
-    // Same derived theme StockDashboard uses (panelBg, softFill, shadows, tableHeadBg,
-    // IBM Plex fonts) so this module matches it in colors/fonts/card style/spacing.
     const D = useMemo(() => buildDashboardTheme(T), [T]);
     const isDark = D.isDark;
-    const { subtext, text, bg, green } = T;
+    const { subtext, text } = T;
 
     const [snapshot, setSnapshot] = useState([]);
     const [trails, setTrails] = useState({});
     const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false); // SWR: background refresh indicator
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
-    const [filter, setFilter] = useState("all");
-    const [sortCol, setSortCol] = useState("opportunity_score");
-    const [sortDir, setSortDir] = useState("desc");
+    const [statusFilter, setStatusFilter] = useState("all"); // all | LEADING | IMPROVING | WEAKENING | LAGGING
     const [hoveredSector, setHoveredSector] = useState(null);
     const [focusSector, setFocusSector] = useState(null);
     const [lastDate, setLastDate] = useState(null);
     const [timeframe, setTimeframe] = useState("3M");
-    const [hideDeadZone, setHideDeadZone] = useState(false);
-    const [chartView, setChartView] = useState("all"); // "all" | "leaders" | "improving"
     const canvasRef = useRef(null);
     const rawHistRef = useRef(null); // { sector: [{date, rs}] }  raw RS ratios, full history
     const [insufficientSectors, setInsufficientSectors] = useState({}); // { sector: true } for sectors excluded from current tf
@@ -21494,54 +21345,39 @@ function SectorRotationModule({ T }) {
 
     // Trading-day lookback for each timeframe (approx trading days)
     const TIMEFRAME_MAP = { "10D": 10, "1M": 21, "3M": 63, "6M": 126 };
-    // Calendar days to fetch from DB (add buffer for non-trading days)
-    const TIMEFRAME_FETCH = { "10D": 30, "1M": 60, "3M": 140, "6M": 280 };
 
     const H = { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
 
     //  Core computation: recompute everything from raw RS for the given lookback 
     function computeForLookback(rawHist, lookback) {
-        // rawHist: { sector: [{date, rs}] } sorted ascending by date
-        // Returns { sector: {...values} } for sectors with SUFFICIENT data only.
-        // Sectors with < lookback points are excluded  no silent truncation.
         const result = {};
         Object.entries(rawHist).forEach(([sector, pts]) => {
             const n = pts.length;
-
             //  STRICT DATA SUFFICIENCY GUARD 
-            // Need lookback+1 points: lookback for SMA window + 1 for the current value
-            if (n < lookback + 1) {
-                console.log(`[RRG] ${sector}: insufficient data (${n} pts, need ${lookback + 1} for ${lookback}D lookback)  excluded`);
-                return; // sector will be absent from result  kept at snapshot defaults
-            }
+            if (n < lookback + 1) return; // excluded  kept at snapshot defaults, shown faded
 
             const last = pts[n - 1];
             const rsNow = last.rs;
 
-            // RS Spread = (rs - SMA(rs, lookback)) / SMA   exact lookback window, no truncation
-            const smaWindow = pts.slice(n - lookback); // exactly `lookback` points
+            const smaWindow = pts.slice(n - lookback);
             const sma = smaWindow.reduce((s, p) => s + p.rs, 0) / lookback;
             const rs_spread = (rsNow - sma) / (sma || 1);
 
-            // Momentum = (rs_now / rs_exactly_lookback_periods_ago) - 1
-            // prevIdx must be exactly n-1-lookback  no Math.max fallback
-            const prevIdx = n - 1 - lookback;  // guaranteed  0 because n  lookback+1
+            const prevIdx = n - 1 - lookback;
             const rsPrev = pts[prevIdx].rs;
             const momentum = rsPrev ? ((rsNow / rsPrev) - 1) * 100 : 0;
 
-            // RS Velocity = change over last 5 points (short-term acceleration)
-            const vel5Idx = Math.max(0, n - 6); // velocity window is always short, no guard needed
+            const vel5Idx = Math.max(0, n - 6);
             const rs_velocity = rsNow - pts[vel5Idx].rs;
 
-            // Quadrant
             const quadrant =
                 rs_spread > 0 && momentum > 0 ? "LEADING" :
                     rs_spread > 0 && momentum <= 0 ? "WEAKENING" :
                         rs_spread <= 0 && momentum > 0 ? "IMPROVING" :
                             "LAGGING";
 
-            // Opportunity score
-            const opportunity_score = (
+            // Internal ranking score (never shown to the user  drives default sort only)
+            const _rank = (
                 0.35 * rs_spread +
                 0.25 * (momentum / 10) +
                 0.15 * rs_velocity +
@@ -21554,7 +21390,7 @@ function SectorRotationModule({ T }) {
                 momentum: +momentum.toFixed(2),
                 rs_velocity: +rs_velocity.toFixed(5),
                 quadrant,
-                opportunity_score: +opportunity_score.toFixed(4),
+                _rank: +_rank.toFixed(4),
                 lastDate: last.date,
             };
         });
@@ -21566,24 +21402,15 @@ function SectorRotationModule({ T }) {
         const trails = {};
         Object.entries(rawHist).forEach(([sector, pts]) => {
             const n = pts.length;
-            // Same strict guard as computeForLookback  need lookback+1 minimum
             if (n < lookback + 1) { trails[sector] = []; return; }
-
-            // Walk backwards through the last ~20 trail points, each computed
-            // with the exact same lookback window  no truncation anywhere.
             const computed = [];
-            // Start from the earliest index where we have a full lookback window
-            const firstValid = lookback; // pts[lookback] is the first point with a full window
-            // Show up to 20 trail points (enough visual history without clutter)
+            const firstValid = lookback;
             const trailStart = Math.max(firstValid, n - 20);
-
             for (let i = trailStart; i < n; i++) {
                 const rsNow = pts[i].rs;
-                // Exact SMA: lookback points ending at i (exclusive of i itself for spread)
                 const smaWin = pts.slice(i - lookback, i);
                 const sma = smaWin.reduce((s, p) => s + p.rs, 0) / lookback;
                 const x = (rsNow - sma) / (sma || 1);
-                // Exact momentum: price exactly lookback periods ago
                 const prevRs = pts[i - lookback].rs;
                 const y = prevRs ? ((rsNow / prevRs) - 1) * 100 : 0;
                 if (isFinite(x) && isFinite(y))
@@ -21602,27 +21429,22 @@ function SectorRotationModule({ T }) {
         const computed = computeForLookback(rawHistRef.current, lookback);
         const newTrails = buildTrails(rawHistRef.current, lookback);
 
-        // Track which sectors had insufficient data for this timeframe
         const insuf = {};
         Object.keys(rawHistRef.current).forEach(sector => {
             if (!computed[sector]) insuf[sector] = true;
         });
-        const insufCount = Object.keys(insuf).length;
-        console.log(`[RRG] Timeframe: ${tf} | Lookback: ${lookback}D | Computed: ${Object.keys(computed).length} sectors | Insufficient: ${insufCount}`);
         setInsufficientSectors(insuf);
 
-        // Merge: sectors with sufficient data get recomputed values;
-        // sectors without enough history keep their snapshot defaults (shown faded)
         setSnapshot(prev => prev.map(d => {
             const c = computed[d.sector];
-            if (!c) return d; // keep snapshot default  will be shown faded in UI
+            if (!c) return d; // keep snapshot default  shown faded in UI
             return {
                 ...d,
                 rs_spread: c.rs_spread,
                 momentum: c.momentum,
                 rs_velocity: c.rs_velocity,
                 quadrant: c.quadrant,
-                opportunity_score: c.opportunity_score,
+                _rank: c._rank,
             };
         }));
         setTrails(newTrails);
@@ -21635,26 +21457,19 @@ function SectorRotationModule({ T }) {
             const cacheAge = _sectorRotCache.loadedAt ? Date.now() - _sectorRotCache.loadedAt : Infinity;
             const hasStale = !!(_sectorRotCache.snapshot && _sectorRotCache.rawHist);
 
-            //  STEP 1: serve stale data immediately (no loading spinner) 
             if (hasStale) {
                 setSnapshot(_sectorRotCache.snapshot);
                 setLastDate(_sectorRotCache.snapshot[0]?.date || null);
                 rawHistRef.current = _sectorRotCache.rawHist;
                 applyTimeframe("3M");
                 setLoading(false);
-
-                // If fresh enough, skip network entirely
                 if (cacheAge < _SECTOR_ROT_TTL_MS) return;
-
-                // Stale but usable  revalidate silently in background
                 setRefreshing(true);
             } else {
-                // No cache at all  show spinner
                 setLoading(true);
             }
             setError(null);
 
-            //  STEP 2: fetch fresh data 
             try {
                 const since = new Date();
                 since.setDate(since.getDate() - 280);
@@ -21662,38 +21477,18 @@ function SectorRotationModule({ T }) {
                 const RH = { ...H, "Cache-Control": "max-age=300" };
                 const knownSectors = Object.keys(SECTOR_GROUPS).filter(k => !k.startsWith("nifty_"));
 
-                // Was: one fetch PER sector (~24 parallel HTTP round trips every load
-                // and every 5-min auto-refresh). The RRG math itself (SMA/momentum/
-                // velocity in computeForLookback/buildTrails) is cheap  it runs on
-                // ~24 sectors x ~280 points and finishes in well under a millisecond,
-                // so there's nothing worth moving to the backend there. The actual
-                // slowness is network overhead: the browser can only run a handful of
-                // connections to the same origin at once, so 24 requests queue up
-                // instead of running truly in parallel.
-                //
-                // Fix: one query for ALL sectors' RS history (sector=in.(...) instead
-                // of 24x sector=eq.X), paginated defensively in case the project's
-                // PostgREST max-rows setting is below the ~6-7k rows this can return
-                // for 24 sectors x 280 days. In practice this resolves to 1-2 requests
-                // total instead of 25.
                 const sectorInFilter = `sector=in.(${knownSectors.map(encodeURIComponent).join(",")})`;
+                // Single request, no count=exact (avoids a blocking COUNT(*) on the server)
+                // and no offset pagination (avoids a serial round-trip before the real fetch
+                // can start). ~22 sectors * ~190 trading days is a few thousand rows, so one
+                // generous limit comfortably covers it in a single call that runs fully in
+                // parallel with the snapshot fetch below.
                 const fetchAllSectorRS = async () => {
-                    const PAGE = 1000;
-                    const base = `${SUPABASE_URL}/rest/v1/sector_rs?select=date,sector,rs&${sectorInFilter}&date=gte.${sinceStr}&order=date.asc`;
-                    const pageHeaders = { ...RH, Prefer: "count=exact" };
-                    const firstRes = await fetch(`${base}&limit=${PAGE}&offset=0`, { headers: pageHeaders });
-                    if (!firstRes.ok) return [];
-                    const total = parseInt(firstRes.headers.get("content-range")?.split("/")[1] || "0", 10);
-                    const firstPage = await firstRes.json();
-                    const offsets = [];
-                    for (let o = PAGE; o < total; o += PAGE) offsets.push(o);
-                    const restPages = await Promise.all(
-                        offsets.map(o =>
-                            fetch(`${base}&limit=${PAGE}&offset=${o}`, { headers: pageHeaders })
-                                .then(r => r.ok ? r.json() : []).catch(() => [])
-                        )
-                    );
-                    return [firstPage, ...restPages].flat().filter(Boolean);
+                    const url = `${SUPABASE_URL}/rest/v1/sector_rs?select=date,sector,rs&${sectorInFilter}&date=gte.${sinceStr}&order=date.asc&limit=10000`;
+                    const res = await fetch(url, { headers: RH });
+                    if (!res.ok) return [];
+                    const rows = await res.json();
+                    return Array.isArray(rows) ? rows : [];
                 };
 
                 const [snapRes, sectorRows] = await Promise.all([
@@ -21718,16 +21513,7 @@ function SectorRotationModule({ T }) {
                         rs_spread: +parseFloat(d.rs_spread ?? d.rs_ratio ?? 0).toFixed(4),
                         momentum: +parseFloat(d.momentum || 0).toFixed(2),
                         rs_velocity: +parseFloat(d.rs_velocity || 0).toFixed(5),
-                        acceleration: +parseFloat(d.acceleration || 0).toFixed(5),
-                        opportunity_score: +parseFloat(d.opportunity_score ?? 0).toFixed(4),
-                        signal_confidence: +parseFloat(d.signal_confidence ?? 0).toFixed(2),
-                        risk_score: d.risk_score != null ? +parseFloat(d.risk_score).toFixed(2) : null,
-                        stability_score: d.stability_score != null ? +parseFloat(d.stability_score).toFixed(2) : null,
-                        leading_days: d.leading_days != null ? +d.leading_days : null,
-                        allocation_weight: d.allocation_weight != null ? +parseFloat(d.allocation_weight).toFixed(2) : null,
-                        flow_state: d.flow_state || null,
-                        early_signal: d.early_signal || null,
-                        signal: d.signal && d.signal !== "NONE" ? d.signal : null,
+                        _rank: +parseFloat(d.opportunity_score ?? 0).toFixed(4),
                     };
                 });
 
@@ -21739,21 +21525,12 @@ function SectorRotationModule({ T }) {
                     rawHist[row.sector].push({ date: row.date, rs });
                 });
 
-                const counts = Object.entries(rawHist).map(([s, pts]) => `${s}:${pts.length}`).join(", ");
-                console.log(`[RRG] Loaded ${Object.keys(rawHist).length} sectors. Points: ${counts}`);
-                if (Object.keys(rawHist).length === 0) {
-                    console.error("[RRG] sector_rs returned no data  verify the view exists.");
-                }
-
-                // If the DB has a newer date than what's cached, force a full cache bust
                 const newDate = snapRows[0]?.date || null;
                 const cachedDate = _sectorRotCache.snapshot?.[0]?.date || null;
                 if (newDate && cachedDate && newDate !== cachedDate) {
-                    // New trading day data  wipe localStorage so stale day never shows again
                     try { localStorage.removeItem(_LS_SECTOR_KEY); } catch { }
                 }
 
-                // Update in-memory cache + persist to localStorage
                 _sectorRotCache = { snapshot: mapped, rawHist, loadedAt: Date.now() };
                 _lsWrite(_LS_SECTOR_KEY, { snapshot: mapped, rawHist, loadedAt: Date.now() });
 
@@ -21764,14 +21541,13 @@ function SectorRotationModule({ T }) {
                     applyTimeframe(timeframe);
                 }
             } catch (e) {
-                if (!cancelled && !hasStale) setError(e.message); // only show error if no stale data shown
+                if (!cancelled && !hasStale) setError(e.message);
                 else if (!cancelled) console.warn("[RRG] Background refresh failed:", e.message);
             } finally {
                 if (!cancelled) { setLoading(false); setRefreshing(false); }
             }
         }
         load();
-        // Auto-refresh every 5 min  no manual refresh needed
         const interval = setInterval(load, 5 * 60 * 1000);
         return () => { cancelled = true; clearInterval(interval); };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -21783,105 +21559,46 @@ function SectorRotationModule({ T }) {
         }
     }, [timeframe]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const isDeadZone = (d) => Math.abs(d.rs_spread) < 0.01 && Math.abs(d.momentum) < 1;
     const isInsufficient = (d) => !!insufficientSectors[d.sector];
 
-    // Group resolver  uses only SECTOR_GROUPS map (same as load-time mapping)
-    const resolveGroup = (d) =>
-        d.group || SECTOR_GROUPS[d.sector] || SECTOR_GROUPS["nifty_" + d.sector] || "core";
-
+    //  Filtered + grouped-by-status list drives BOTH the chart and the table 
     const filtered = useMemo(() => {
         let d = snapshot;
-        if (filter !== "all") {
-            d = snapshot.filter(r => {
-                const grp = resolveGroup(r);
-                return grp === filter;
-            });
-        }
-        // chartView tab: quadrant-level filter (Leaders / Improving)
-        if (chartView === "leaders") d = d.filter(r => r.quadrant === "LEADING");
-        if (chartView === "improving") d = d.filter(r => r.quadrant === "IMPROVING");
-        if (chartView === "weakening") d = d.filter(r => r.quadrant === "WEAKENING");
-        if (chartView === "lagging") d = d.filter(r => r.quadrant === "LAGGING");
-        if (hideDeadZone) d = d.filter(r => !isDeadZone(r));
-        const QUAD_ORDER = { LEADING: 0, IMPROVING: 1, WEAKENING: 2, LAGGING: 3 };
+        if (statusFilter !== "all") d = d.filter(r => r.quadrant === statusFilter);
         return [...d].sort((a, b) => {
-            let av, bv;
-            if (sortCol === "opportunity_score") { av = a.opportunity_score; bv = b.opportunity_score; }
-            else if (sortCol === "signal") { av = SIGNAL_PRIORITY[a.signal || "NONE"] ?? 6; bv = SIGNAL_PRIORITY[b.signal || "NONE"] ?? 6; }
-            else if (sortCol === "quadrant") { av = QUAD_ORDER[a.quadrant] ?? 9; bv = QUAD_ORDER[b.quadrant] ?? 9; }
-            else if (sortCol === "momentum") { av = a.momentum; bv = b.momentum; }
-            else if (sortCol === "rs_spread") { av = a.rs_spread; bv = b.rs_spread; }
-            else { av = a.label?.toLowerCase(); bv = b.label?.toLowerCase(); }
-            if (av < bv) return sortDir === "asc" ? -1 : 1;
-            if (av > bv) return sortDir === "asc" ? 1 : -1;
-            return 0;
+            const sa = STATUS_ORDER[a.quadrant] ?? 9, sb = STATUS_ORDER[b.quadrant] ?? 9;
+            if (sa !== sb) return sa - sb;
+            return (b._rank ?? 0) - (a._rank ?? 0);
         });
-    }, [snapshot, filter, chartView, sortCol, sortDir, hideDeadZone]);
+    }, [snapshot, statusFilter]);
 
-    // Summary stats + market phase
-    const stats = useMemo(() => {
-        if (!snapshot.length) return null;
-        const total = snapshot.length;
-        const counts = { LEADING: 0, WEAKENING: 0, LAGGING: 0, IMPROVING: 0 };
-        snapshot.forEach(d => { if (counts[d.quadrant] !== undefined) counts[d.quadrant]++; });
-        const sorted_mom = [...snapshot].sort((a, b) => b.momentum - a.momentum);
-        const coreLeading = snapshot.filter(d => resolveGroup(d) === "core" && d.quadrant === "LEADING").length;
-        const cyclLeading = snapshot.filter(d => resolveGroup(d) === "cyclical" && d.quadrant === "LEADING").length;
-        const themeLeading = snapshot.filter(d => resolveGroup(d) === "thematic" && d.quadrant === "LEADING").length;
-        const phase = getMarketPhase(coreLeading, cyclLeading, themeLeading, total);
-        const signals = snapshot.filter(d => d.signal).sort((a, b) => (SIGNAL_PRIORITY[a.signal] || 6) - (SIGNAL_PRIORITY[b.signal] || 6));
-        const alerts = snapshot.filter(d =>
-            (d.signal === "STRONG_BREAKOUT" || d.signal === "EARLY_STRENGTH") &&
-            d.opportunity_score > 0.5
-        ).sort((a, b) => b.opportunity_score - a.opportunity_score);
-        const earlyRotation = snapshot.filter(d =>
-            d.quadrant === "IMPROVING" && d.momentum > 1 && (d.rs_velocity || 0) > 0
-        ).sort((a, b) => b.momentum - a.momentum);
-        // Portfolio output
-        const portfolio = [...snapshot]
-            .sort((a, b) => b.opportunity_score - a.opportunity_score)
-            .map(d => {
-                const alloc = getAllocationWeight(d.opportunity_score);
-                const dec = getDecision(d.quadrant, d.momentum, null, d.signal);
-                const action = dec.key === "BEST_SETUP" ? "BUY"
-                    : dec.key === "WATCHLIST" ? "WATCH"
-                        : dec.key === "HOLD" ? "HOLD"
-                            : dec.key === "REDUCE" ? "REDUCE"
-                                : "AVOID";
-                return { sector: d.label, action, weight: alloc.pct / 100, decision: dec };
-            });
-        const fastestImproving = [...snapshot.filter(d => d.quadrant === "IMPROVING")].sort((a, b) => b.momentum - a.momentum)[0];
-        // Top 3 by opportunity score
-        const topOpp = [...snapshot].sort((a, b) => b.opportunity_score - a.opportunity_score).slice(0, 3);
-        return {
-            counts, total,
-            pctLeading: total ? Math.round((counts.LEADING / total) * 100) : 0,
-            strongest: sorted_mom[0],
-            fastestImproving,
-            coreLeading, cyclLeading, themeLeading,
-            phase, signals, alerts, topOpp, earlyRotation, portfolio,
-        };
+    const counts = useMemo(() => {
+        const c = { LEADING: 0, IMPROVING: 0, WEAKENING: 0, LAGGING: 0 };
+        snapshot.forEach(d => { if (c[d.quadrant] !== undefined) c[d.quadrant]++; });
+        return c;
     }, [snapshot]);
 
-    //  RRG Canvas 
+    const top3Sectors = useMemo(() =>
+        [...snapshot].sort((a, b) => (b._rank ?? 0) - (a._rank ?? 0)).slice(0, 3).map(d => d.sector),
+        [snapshot]);
+
+    //  RRG Canvas  simplified: no numeric ticks, no dead-zone ring, no signal dots 
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas || !filtered.length) return;
         const dpr = window.devicePixelRatio || 1;
         const W = canvas.clientWidth || canvas.offsetWidth || 520;
         const H_c = canvas.clientHeight || canvas.offsetHeight || 420;
-        if (W < 10 || H_c < 10) return; // not yet laid out
+        if (W < 10 || H_c < 10) return;
         canvas.width = W * dpr; canvas.height = H_c * dpr;
         const ctx = canvas.getContext("2d");
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, W, H_c);
 
-        const PAD = { top: 28, right: 28, bottom: 42, left: 48 };
+        const PAD = { top: 28, right: 24, bottom: 40, left: 24 };
         const pw = W - PAD.left - PAD.right;
         const ph = H_c - PAD.top - PAD.bottom;
 
-        // Axis ranges  use rs_spread (centred at 0) + trail points
         const allX = [], allY = [];
         filtered.forEach(d => {
             if (isFinite(d.rs_spread)) allX.push(d.rs_spread);
@@ -21898,7 +21615,6 @@ function SectorRotationModule({ T }) {
         const toX = v => PAD.left + ((v - xMin) / (xMax - xMin)) * pw;
         const toY = v => PAD.top + ((yMax - v) / (yMax - yMin)) * ph;
 
-        // Quadrant backgrounds
         const cx = toX(xMid), cy = toY(yMid);
         const quadBg = [
             { x: cx, y: PAD.top, w: PAD.left + pw - cx, h: cy - PAD.top, c: "rgba(34,197,94,0.07)" }, // LEADING
@@ -21908,63 +21624,44 @@ function SectorRotationModule({ T }) {
         ];
         quadBg.forEach(q => { ctx.fillStyle = q.c; ctx.fillRect(q.x, q.y, q.w, q.h); });
 
-        // Grid lines
-        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)";
-        ctx.lineWidth = 1;
-        for (let i = 1; i < 4; i++) {
-            const gx = PAD.left + (pw / 4) * i;
-            const gy = PAD.top + (ph / 4) * i;
-            ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top + ph); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(PAD.left, gy); ctx.lineTo(PAD.left + pw, gy); ctx.stroke();
-        }
-
-        // Center axes
+        // Center axes only  no grid lines, no numeric ticks (kept intentionally simple)
         ctx.strokeStyle = isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)";
         ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
         ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, PAD.top + ph); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(PAD.left + pw, cy); ctx.stroke();
         ctx.setLineDash([]);
 
-        // Quadrant labels
+        // Plain-English quadrant labels
         const qLabels = [
-            { text: "LEADING", x: PAD.left + pw - 6, y: PAD.top + 16, align: "right", col: "#22c55e" },
-            { text: "WEAKENING", x: PAD.left + pw - 6, y: PAD.top + ph - 8, align: "right", col: "#f97316" },
-            { text: "LAGGING", x: PAD.left + 6, y: PAD.top + ph - 8, align: "left", col: "#ef4444" },
-            { text: "IMPROVING", x: PAD.left + 6, y: PAD.top + 16, align: "left", col: "#eab308" },
+            { text: "LEADING", x: PAD.left + pw - 6, y: PAD.top + 16, align: "right", col: STATUS_META.LEADING.color },
+            { text: "WEAKENING", x: PAD.left + pw - 6, y: PAD.top + ph - 8, align: "right", col: STATUS_META.WEAKENING.color },
+            { text: "LAGGING", x: PAD.left + 6, y: PAD.top + ph - 8, align: "left", col: STATUS_META.LAGGING.color },
+            { text: "IMPROVING", x: PAD.left + 6, y: PAD.top + 16, align: "left", col: STATUS_META.IMPROVING.color },
         ];
         ctx.font = `700 12px 'IBM Plex Sans', sans-serif`;
         qLabels.forEach(l => {
-            ctx.fillStyle = l.col; ctx.globalAlpha = 0.45;
+            ctx.fillStyle = l.col; ctx.globalAlpha = 0.55;
             ctx.textAlign = l.align; ctx.fillText(l.text, l.x, l.y);
         });
         ctx.globalAlpha = 1;
 
-        // Axis labels
-        ctx.font = `12px 'IBM Plex Sans', sans-serif`;
-        ctx.fillStyle = isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)";
+        // Simple axis captions  no jargon, no numbers
+        ctx.font = `11px 'IBM Plex Sans', sans-serif`;
+        ctx.fillStyle = isDark ? "rgba(255,255,255,0.32)" : "rgba(0,0,0,0.32)";
         ctx.textAlign = "center";
-        ctx.fillText(`RS Spread (vs ${({ "10D": 10, "1M": 21, "3M": 63, "6M": 126 }[timeframe] || 63)}D avg)`, PAD.left + pw / 2, PAD.top + ph + 30);
-        ctx.save(); ctx.translate(13, PAD.top + ph / 2);
+        ctx.fillText("Weaker \u2190  Strength vs Market  \u2192 Stronger", PAD.left + pw / 2, PAD.top + ph + 26);
+        ctx.save(); ctx.translate(12, PAD.top + ph / 2);
         ctx.rotate(-Math.PI / 2); ctx.textAlign = "center";
-        ctx.fillText("Momentum", 0, 0); ctx.restore();
-
-        // Tick values
-        ctx.font = `11px 'IBM Plex Mono', monospace`;
-        ctx.fillStyle = isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.22)";
-        ctx.textAlign = "center";
-        [xMin, xMid, xMax].forEach(v => ctx.fillText(v.toFixed(3), toX(v), PAD.top + ph + 14));
-        ctx.textAlign = "right";
-        [yMin, yMid, yMax].forEach(v => ctx.fillText(v.toFixed(1), PAD.left - 5, toY(v) + 4));
+        ctx.fillText("Slowing \u2190  Speed of Move  \u2192 Speeding up", 0, 0); ctx.restore();
 
         //  DRAW TRAILS 
         filtered.forEach(d => {
             const pts = (trails[d.sector] || []).filter(p => isFinite(p.x) && isFinite(p.y));
             if (pts.length < 2) return;
-            const qc = Q_CONFIG[d.quadrant] || Q_CONFIG.LAGGING;
+            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
             const isHov = hoveredSector === d.sector;
             const isFocus = focusSector === d.sector;
             const isOther = focusSector && !isFocus;
-            const inDeadZone = isDeadZone(d);
             const notEnoughData = isInsufficient(d);
             const isTop3Sector = top3Sectors.includes(d.sector);
             const isFaded = !isHov && !isFocus && !isTop3Sector;
@@ -21979,9 +21676,7 @@ function SectorRotationModule({ T }) {
                             ? 0.02
                             : isFaded
                                 ? 0.03 + (i / pts.length) * 0.07
-                                : inDeadZone
-                                    ? 0.04 + (i / pts.length) * 0.12
-                                    : 0.08 + (i / pts.length) * 0.32;
+                                : 0.08 + (i / pts.length) * 0.32;
                 ctx.strokeStyle = qc.color;
                 ctx.globalAlpha = alpha;
                 ctx.lineWidth = isFocus ? 2.5 : isHov ? 2 : 1.2;
@@ -22004,18 +21699,17 @@ function SectorRotationModule({ T }) {
             const x2 = toX(p2.x), y2 = toY(p2.y);
             const dist = Math.hypot(x2 - x1, y2 - y1);
             if (dist < 2) return;
-            const qc = Q_CONFIG[d.quadrant] || Q_CONFIG.LAGGING;
+            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
             const isHov = hoveredSector === d.sector;
             const isFocus = focusSector === d.sector;
             const isOther = focusSector && !isFocus;
-            const inDeadZone = isDeadZone(d);
             const angle = Math.atan2(y2 - y1, x2 - x1);
             const arrowLen = 8, arrowAngle = Math.PI / 6;
 
             ctx.save();
             ctx.strokeStyle = qc.color;
             ctx.fillStyle = qc.color;
-            ctx.globalAlpha = isOther ? 0.08 : inDeadZone ? 0.15 : isHov || isFocus ? 0.95 : 0.55;
+            ctx.globalAlpha = isOther ? 0.08 : isHov || isFocus ? 0.95 : 0.55;
             ctx.lineWidth = isFocus ? 2.5 : isHov ? 2 : 1.5;
 
             ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
@@ -22028,35 +21722,18 @@ function SectorRotationModule({ T }) {
             ctx.restore();
         });
 
-        //  DEAD ZONE ring (subtle dotted circle around origin) 
-        const dzRx = toX(0.01) - toX(-0.01);
-        const dzRy = toY(-1) - toY(1);
-        if (dzRx > 4 && dzRy > 4) {
-            ctx.save();
-            ctx.strokeStyle = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
-            ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
-            ctx.beginPath(); ctx.ellipse(cx, cy, dzRx, dzRy, 0, 0, Math.PI * 2); ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.font = `11px 'IBM Plex Sans', sans-serif`;
-            ctx.fillStyle = isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.18)";
-            ctx.textAlign = "center";
-            ctx.fillText("DEAD ZONE", cx, cy + dzRy + 10);
-            ctx.restore();
-        }
-
         //  DRAW BUBBLES (current position) 
         filtered.forEach(d => {
             if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) return;
             const bx = toX(d.rs_spread), by = toY(d.momentum);
-            const qc = Q_CONFIG[d.quadrant] || Q_CONFIG.LAGGING;
+            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
             const isHov = hoveredSector === d.sector;
             const isFocus = focusSector === d.sector;
             const isOther = focusSector && !isFocus;
-            const inDeadZone = isDeadZone(d);
             const notEnoughData = isInsufficient(d);
             const isTop3B = top3Sectors.includes(d.sector);
             const r = isFocus || isHov ? 10 : isTop3B ? 8 : 6;
-            const alpha = isOther ? 0.18 : notEnoughData ? 0.15 : (!isTop3B && !isHov && !isFocus) ? 0.2 : inDeadZone ? 0.35 : isHov || isFocus ? 1 : 0.88;
+            const alpha = isOther ? 0.18 : notEnoughData ? 0.15 : (!isTop3B && !isHov && !isFocus) ? 0.35 : isHov || isFocus ? 1 : 0.88;
 
             if (isHov || isFocus) { ctx.shadowColor = qc.color; ctx.shadowBlur = 18; }
             ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
@@ -22066,14 +21743,7 @@ function SectorRotationModule({ T }) {
             ctx.lineWidth = isFocus ? 3 : isHov ? 2.5 : 1.5; ctx.stroke();
             ctx.shadowBlur = 0;
 
-            // Signal dot overlay
-            if (d.signal && SIGNAL_CONFIG[d.signal]?.color && !isOther) {
-                ctx.beginPath(); ctx.arc(bx + r - 2, by - r + 2, 3.5, 0, Math.PI * 2);
-                ctx.fillStyle = SIGNAL_CONFIG[d.signal].color; ctx.globalAlpha = 0.95; ctx.fill();
-                ctx.globalAlpha = 1;
-            }
-
-            // Label  show only for top3, hovered, or focused
+            // Label  show only for top3, hovered, or focused (keeps chart readable at a glance)
             if (isHov || isFocus || isTop3B) {
                 ctx.font = isFocus || isHov ? `700 13px 'IBM Plex Sans', sans-serif` : `600 12px 'IBM Plex Sans', sans-serif`;
                 ctx.fillStyle = isHov || isFocus
@@ -22083,7 +21753,7 @@ function SectorRotationModule({ T }) {
                 ctx.fillText(d.label, bx, by - r - 4);
             }
         });
-    }, [filtered, trails, hoveredSector, focusSector, isDark]);
+    }, [filtered, trails, hoveredSector, focusSector, isDark, top3Sectors]);
 
     //  Canvas hover + click 
     function _getHitSector(e) {
@@ -22093,7 +21763,7 @@ function SectorRotationModule({ T }) {
         const mx = e.clientX - rect.left, my = e.clientY - rect.top;
         const W = canvas.clientWidth || canvas.offsetWidth || 520;
         const H_c = canvas.clientHeight || canvas.offsetHeight || 420;
-        const PAD = { top: 28, right: 28, bottom: 42, left: 48 };
+        const PAD = { top: 28, right: 24, bottom: 40, left: 24 };
         const pw = W - PAD.left - PAD.right, ph = H_c - PAD.top - PAD.bottom;
         const allX = [], allY = [];
         filtered.forEach(d => {
@@ -22119,20 +21789,17 @@ function SectorRotationModule({ T }) {
         const hit = _getHitSector(e);
         setFocusSector(f => f === hit ? null : hit);
     }
-
-    function toggleSort(col) {
-        if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-        else { setSortCol(col); setSortDir("desc"); }
+    function handleCanvasTouch(e) {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        const synth = { clientX: touch.clientX, clientY: touch.clientY };
+        const hit = _getHitSector(synth);
+        if (hit) { e.preventDefault(); setFocusSector(f => f === hit ? null : hit); }
     }
-    const SortIcon = ({ col }) => {
-        if (sortCol !== col) return <span style={{ opacity: 0.2, fontSize: 10, marginLeft: 2 }}></span>;
-        return <span style={{ fontSize: 11, marginLeft: 2, color: text }}>{sortDir === "asc" ? "" : ""}</span>;
-    };
 
     // Flat surfaces only  no layered gradients or blur, matching StockDashboard's
     // design system: a card is just its background color, depth comes from a
     // single soft shadow (D.shadowLg / D.shadowMd).
-    const cardBg = D.card;
     const border = D.border;
     const shellBg = D.bg;
     const heroBg = D.panelBg;
@@ -22143,54 +21810,25 @@ function SectorRotationModule({ T }) {
     const panelShadow = "none";
     const insetLine = D.border;
     const segmentedBg = D.pillBg;
-    const accentSoft = D.posSoft;
     const focusSoft = withAlpha(D.accent, isDark ? 0.16 : 0.10);
     const premiumRadius = 16;
-    const qBadgeStyles = {
+    const statusBadgeStyles = {
         LEADING: { bg: isDark ? "rgba(34,197,94,0.16)" : "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.30)" },
         IMPROVING: { bg: isDark ? "rgba(234,179,8,0.16)" : "rgba(234,179,8,0.12)", border: "rgba(234,179,8,0.28)" },
         WEAKENING: { bg: isDark ? "rgba(249,115,22,0.16)" : "rgba(249,115,22,0.12)", border: "rgba(249,115,22,0.28)" },
         LAGGING: { bg: isDark ? "rgba(239,68,68,0.16)" : "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.28)" },
     };
-    const filterMeta = {
-        all: { label: "All sectors", caption: "Full rotation board", mobileCaption: "Full board" },
-        core: { label: "Core", caption: "Institutional leadership", mobileCaption: "Institutional" },
-        cyclical: { label: "Cyclical", caption: "Growth-sensitive rotation", mobileCaption: "Growth-led" },
-        thematic: { label: "Thematic", caption: "High-beta leadership", mobileCaption: "High-beta" },
-    };
-    const heroMetrics = stats ? [
-        { label: "Market Phase", value: stats.phase?.phase || "Neutral", tone: stats.phase?.color || text, note: stats.phase?.desc || "Rotation pulse" },
-        { label: "Leading", value: `${stats.counts?.LEADING ?? 0}/${stats.total ?? 0}`, tone: "#22c55e", note: `${stats.pctLeading ?? 0}% of board` },
-        { label: "Strongest Momentum", value: stats.strongest?.label || "-", tone: text, note: stats.strongest ? `${Math.abs(stats.strongest.momentum ?? 0).toFixed(2)}% momentum` : "Awaiting data" },
-        { label: "Fastest Improving", value: stats.fastestImproving?.label || "-", tone: "#eab308", note: stats.fastestImproving ? `${Math.abs(stats.fastestImproving.momentum ?? 0).toFixed(2)}% momentum` : "No improving leaders yet" },
-    ] : [];
-    const desktopBodyHeight = 720;
-    const mobileChartMinHeight = 430;
+    const desktopBodyHeight = 840;
+    const mobileChartMinHeight = 400;
     const mobileTableMinHeight = 420;
 
-    //  Derived display data (must be before early returns  Rules of Hooks) 
-    const chartViewSectors = useMemo(() => {
-        if (chartView === "leaders") return snapshot.filter(d => d.quadrant === "LEADING");
-        if (chartView === "improving") return snapshot.filter(d => d.quadrant === "IMPROVING");
-        if (chartView === "weakening") return snapshot.filter(d => d.quadrant === "WEAKENING");
-        if (chartView === "lagging") return snapshot.filter(d => d.quadrant === "LAGGING");
-        return snapshot;
-    }, [snapshot, chartView]);
-
-    const top3Sectors = useMemo(() =>
-        [...snapshot].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 3).map(d => d.sector),
-        [snapshot]);
-
-    const focusStrip = useMemo(() => {
-        if (!snapshot.length) return null;
-        const leaders = [...snapshot].filter(d => d.quadrant === "LEADING")
-            .sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 3);
-        const laggards = [...snapshot].filter(d => d.quadrant === "LAGGING")
-            .sort((a, b) => (a.opportunity_score ?? 0) - (b.opportunity_score ?? 0)).slice(0, 2);
-        const rotating = [...snapshot].filter(d => d.quadrant === "IMPROVING" && d.momentum > 1)
-            .sort((a, b) => b.momentum - a.momentum).slice(0, 2);
-        return { leaders, laggards, rotating };
-    }, [snapshot]);
+    const statusChips = [
+        { key: "all", label: "All sectors" },
+        { key: "LEADING", label: STATUS_META.LEADING.label },
+        { key: "IMPROVING", label: STATUS_META.IMPROVING.label },
+        { key: "WEAKENING", label: STATUS_META.WEAKENING.label },
+        { key: "LAGGING", label: STATUS_META.LAGGING.label },
+    ];
 
     if (loading) return (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: T.bg }}>
@@ -22208,36 +21846,12 @@ function SectorRotationModule({ T }) {
                 <div style={{ fontSize: 28, marginBottom: 12 }}>{"\u26A0"}</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: text, marginBottom: 8 }}>Sector Rotation Unavailable</div>
                 <div style={{ fontSize: 12, color: subtext, marginBottom: 16, lineHeight: 1.7 }}>
-                    The <code style={{ background: isDark ? "#ffffff0f" : "#0000000a", padding: "1px 6px", borderRadius: 3 }}>sector_rotation_snapshot</code> view is not yet set up.
+                    Sector data isn't ready yet. Please try again shortly.
                 </div>
                 <div style={{ fontSize: 11, color: subtext, opacity: 0.55, fontFamily: "monospace", background: isDark ? "#ffffff08" : "#0000000a", padding: "8px 12px", borderRadius: 6 }}>{error}</div>
             </div>
         </div>
     );
-
-    // Trend state (neutral observation, no advisory language)
-    const getTrendState = (d, trails) => {
-        const pts = (trails[d.sector] || []).filter(p => isFinite(p.x) && isFinite(p.y));
-        if (pts.length < 2) return null;
-        const dx = pts[pts.length - 1].x - pts[pts.length - 2].x;
-        const dy = pts[pts.length - 1].y - pts[pts.length - 2].y;
-        if (dx > 0 && dy > 0) return { label: "Rising Mom + RS", color: "#22c55e" };
-        if (dx < 0 && dy < 0) return { label: "Falling Momentum", color: "#ef4444" };
-        if (dx > 0 && dy < 0) return { label: "Positive Divergence", color: "#f59e0b" };
-        if (dx < 0 && dy > 0) return { label: "RS rising", color: "#60a5fa" };
-        return null;
-    };
-
-    const Q_DOT = { LEADING: "#22c55e", IMPROVING: "#eab308", WEAKENING: "#f97316", LAGGING: "#ef4444" };
-
-    //  Touch support for canvas 
-    function handleCanvasTouch(e) {
-        if (e.touches.length !== 1) return;
-        const touch = e.touches[0];
-        const synth = { clientX: touch.clientX, clientY: touch.clientY };
-        const hit = _getHitSector(synth);
-        if (hit) { e.preventDefault(); setFocusSector(f => f === hit ? null : hit); }
-    }
 
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowX: "hidden", overflowY: "auto", WebkitOverflowScrolling: "touch", minHeight: 0, background: shellBg }}>
@@ -22270,105 +21884,74 @@ function SectorRotationModule({ T }) {
                 }
             `}</style>
 
-            <div style={{ width: "100%", maxWidth: isMobile ? "100%" : 1400, margin: "0 auto" }}>
-                <div style={{ flexShrink: 0, padding: isMobile ? "12px 12px 0" : "18px 20px 0" }}>
-                    <div style={{ borderRadius: premiumRadius, border: `1px solid ${heroBorder}`, background: heroBg, boxShadow: heroShadow, overflow: "hidden", position: "relative" }}>
-                        <div style={{ position: "relative", padding: isMobile ? 14 : 20 }}>
-                            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 14 : 20, justifyContent: "space-between" }}>
+            <div style={{ width: "100%", maxWidth: 1400, margin: "0 auto" }}>
+                {/*  Header  simple, no jargon  */}
+                <div style={{ flexShrink: 0, padding: isMobile ? "12px 10px 0" : "20px 20px 0" }}>
+                    <div style={{ borderRadius: premiumRadius, border: `1px solid ${heroBorder}`, background: heroBg, boxShadow: heroShadow, overflow: "hidden" }}>
+                        <div style={{ padding: isMobile ? 14 : 20 }}>
+                            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 12 : 20, justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center" }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
-                                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999, background: accentSoft, border: `1px solid ${isDark ? "rgba(16,185,129,0.24)" : "rgba(16,185,129,0.20)"}`, color: T.green, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Rotation Intelligence</span>
-                                        {refreshing && (
-                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: subtext }}>
-                                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.green, display: "inline-block", animation: "pulse 1.2s ease-in-out infinite" }} />
-                                                Live refresh in progress
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div style={{ fontSize: isMobile ? 25 : 31, fontWeight: 800, color: text, letterSpacing: "-0.04em", lineHeight: 1.05, fontFamily: sans }}>Sector Rotation</div>
-
-                                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                                        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, color: text, boxShadow: panelShadow }}>
-                                            <span style={{ fontSize: 12, color: subtext }}>Benchmark</span>
-                                            <span style={{ fontSize: 13, fontWeight: 700 }}>NIFTY 50</span>
-                                        </div>
-                                        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, color: text, boxShadow: panelShadow }}>
-                                            <span style={{ fontSize: 12, color: subtext }}>As of</span>
-                                            <span style={{ fontSize: 13, fontWeight: 700 }}>{lastDate || "Latest session"}</span>
-                                        </div>
-                                        {stats?.phase && (
-                                            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, color: stats.phase.color, boxShadow: panelShadow, fontWeight: 700 }}>
-                                                <span>{stats.phase.icon}</span>
-                                                <span>{stats.phase.phase}</span>
-                                            </div>
-                                        )}
+                                    <div style={{ fontSize: isMobile ? 25 : 31, fontWeight: 800, color: text, letterSpacing: "-0.03em", lineHeight: 1.1, fontFamily: sans }}>Sector Rotation</div>
+                                    <div style={{ fontSize: 13, color: subtext, marginTop: 6, lineHeight: 1.5 }}>
+                                        Which sectors are leading the market  and which are falling behind.
+                                        {refreshing && <span style={{ marginLeft: 8, color: T.green }}>Updating</span>}
                                     </div>
                                 </div>
-
-                                <div style={{ width: isMobile ? "100%" : 360, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                                    {heroMetrics.map((item) => (
-                                        <div key={item.label} style={{ padding: isMobile ? "12px 12px" : "14px 14px", borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow, minWidth: 0 }}>
-                                            <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{item.label}</div>
-                                            <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: item.tone, lineHeight: 1.2, wordBreak: "break-word" }}>{item.value}</div>
-                                            <div style={{ marginTop: 6, fontSize: 12, color: subtext, lineHeight: 1.45 }}>{item.note}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.15fr) minmax(0, 1fr)", gap: 12 }}>
-                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
-                                    <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Segment Focus</div>
-                                    <div className="rrg-scroll-x" style={{ paddingBottom: 2, width: "100%" }}>
-                                        <div className="rrg-scroll-inner" style={{ gap: 8 }}>
-                                            {[["all", "All"], ["core", "Core"], ["cyclical", "Cyclical"], ["thematic", "Thematic"]].map(([val, lbl]) => {
-                                                const active = filter === val;
-                                                const meta = filterMeta[val];
-                                                return (
-                                                    <button key={val} onClick={() => setFilter(val)} className="rrg-btn-pill"
-                                                        style={{ padding: isMobile ? "9px 12px" : "11px 16px", border: `1px solid ${active ? T.green : panelBorder}`, background: active ? accentSoft : segmentedBg, color: active ? T.green : text, minWidth: isMobile ? 112 : 142, textAlign: "left" }}>
-                                                        <div style={{ fontSize: 12, fontWeight: 700 }}>{lbl}</div>
-                                                        <div style={{ fontSize: isMobile ? 10 : 11, color: active ? T.green : subtext, opacity: active ? 0.9 : 0.72, marginTop: 3, whiteSpace: "nowrap" }}>{isMobile ? meta.mobileCaption : meta.caption}</div>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div style={{ padding: isMobile ? 12 : 14, borderRadius: 14, background: panelBg, border: `1px solid ${panelBorder}`, boxShadow: panelShadow }}>
-                                    <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Lookback Window</div>
-                                    <div className="rrg-scroll-x" style={{ paddingBottom: 2, width: "100%" }}>
-                                        <div className="rrg-scroll-inner" style={{ gap: 8 }}>
-                                            {[["10D", 10], ["1M", 21], ["3M", 63], ["6M", 126]].map(([tf, lb]) => {
-                                                const sc = rawHistRef.current ? Object.keys(rawHistRef.current).length : 0;
-                                                const ok = sc === 0 || (rawHistRef.current && Object.values(rawHistRef.current).filter(p => p.length >= lb + 1).length >= Math.ceil(sc * 0.5));
-                                                const active = timeframe === tf;
-                                                return (
-                                                    <button key={tf} onClick={() => setTimeframe(tf)} className="rrg-btn-pill"
-                                                        title={`${lb}-day lookback`}
-                                                        style={{ padding: isMobile ? "9px 12px" : "11px 16px", border: `1px solid ${active ? "#60a5fa" : panelBorder}`, background: active ? focusSoft : segmentedBg, color: active ? "#60a5fa" : ok ? text : `${subtext}aa`, opacity: ok ? 1 : 0.55, minWidth: isMobile ? 74 : 84 }}>
-                                                        <div style={{ fontSize: 12, fontWeight: 700 }}>{tf}</div>
-                                                        <div style={{ fontSize: isMobile ? 10 : 11, color: active ? "#60a5fa" : subtext, opacity: 0.78, marginTop: 3, whiteSpace: "nowrap" }}>{isMobile ? `${lb} days` : `${lb} trading days`}</div>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                                    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 12, background: panelBg, border: `1px solid ${panelBorder}`, color: text }}>
+                                        <span style={{ fontSize: 12, color: subtext }}>As of</span>
+                                        <span style={{ fontSize: 13, fontWeight: 700 }}>{lastDate || "Latest session"}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {!isMobile && focusStrip && (
-                                <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                                    {focusStrip.leaders.length > 0 && <div style={{ padding: "10px 12px", borderRadius: 14, background: isDark ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.18)", color: subtext, fontSize: 12 }}><span style={{ color: "#22c55e", fontWeight: 800, marginRight: 6 }}>LEADING</span>{focusStrip.leaders.map(s => s.label).join(", ")}</div>}
-                                    {focusStrip.rotating.length > 0 && <div style={{ padding: "10px 12px", borderRadius: 14, background: isDark ? "rgba(234,179,8,0.10)" : "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.18)", color: subtext, fontSize: 12 }}><span style={{ color: "#eab308", fontWeight: 800, marginRight: 6 }}>IMPROVING</span>{focusStrip.rotating.map(s => s.label).join(", ")}</div>}
-                                    {focusStrip.laggards.length > 0 && <div style={{ padding: "10px 12px", borderRadius: 14, background: isDark ? "rgba(239,68,68,0.10)" : "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.18)", color: subtext, fontSize: 12 }}><span style={{ color: "#ef4444", fontWeight: 800, marginRight: 6 }}>LAGGING</span>{focusStrip.laggards.map(s => s.label).join(", ")}</div>}
+                            {/* Timeframe pills */}
+                            <div style={{ marginTop: 16 }}>
+                                <div className="rrg-scroll-x" style={{ width: "100%" }}>
+                                    <div className="rrg-scroll-inner" style={{ gap: 8 }}>
+                                        {[["10D", "10 Days"], ["1M", "1 Month"], ["3M", "3 Months"], ["6M", "6 Months"]].map(([tf, lbl]) => {
+                                            const active = timeframe === tf;
+                                            return (
+                                                <button key={tf} onClick={() => setTimeframe(tf)} className="rrg-btn-pill"
+                                                    style={{ padding: isMobile ? "8px 12px" : "9px 14px", border: `1px solid ${active ? "#60a5fa" : panelBorder}`, background: active ? focusSoft : segmentedBg, color: active ? "#60a5fa" : text, fontWeight: active ? 700 : 500 }}>
+                                                    {lbl}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            )}
+                            </div>
+
+                            {/* Status legend / filter  the only "key" a new user needs */}
+                            <div style={{ marginTop: 14 }}>
+                                <div className="rrg-scroll-x" style={{ width: "100%" }}>
+                                    <div className="rrg-scroll-inner" style={{ gap: 8 }}>
+                                        {statusChips.map(c => {
+                                            const active = statusFilter === c.key;
+                                            const meta = STATUS_META[c.key];
+                                            return (
+                                                <button key={c.key} onClick={() => setStatusFilter(c.key)} className="rrg-btn-pill"
+                                                    style={{
+                                                        display: "inline-flex", alignItems: "center", gap: 7,
+                                                        padding: isMobile ? "8px 12px" : "9px 14px",
+                                                        border: `1px solid ${active ? (meta?.color || "#60a5fa") : panelBorder}`,
+                                                        background: active ? (meta ? withAlpha(meta.color, isDark ? 0.18 : 0.10) : focusSoft) : segmentedBg,
+                                                        color: active ? (meta?.color || "#60a5fa") : text,
+                                                        fontWeight: active ? 700 : 500,
+                                                    }}>
+                                                    {meta && <span style={{ width: 7, height: 7, borderRadius: "50%", background: meta.color, display: "inline-block", flexShrink: 0 }} />}
+                                                    {c.label}
+                                                    {c.key !== "all" && <span style={{ opacity: 0.6 }}>({counts[c.key] || 0})</span>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
 
                             {isMobile && (
                                 <div style={{ marginTop: 14, display: "flex", padding: 4, borderRadius: 16, background: segmentedBg, border: `1px solid ${panelBorder}` }}>
-                                    {[["chart", "Chart"], ["table", "Rankings"]].map(([tab, label]) => (
+                                    {[["chart", "Chart"], ["table", "Table"]].map(([tab, label]) => (
                                         <button key={tab} onClick={() => setMobileTab(tab)}
                                             style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: mobileTab === tab ? 800 : 600, borderRadius: 12, background: mobileTab === tab ? panelBg : "transparent", border: "none", color: mobileTab === tab ? text : subtext, boxShadow: mobileTab === tab ? `inset 0 0 0 1px ${panelBorder}` : "none", cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
                                             {label}
@@ -22380,376 +21963,178 @@ function SectorRotationModule({ T }) {
                     </div>
                 </div>
 
-                <div style={{ flex: "0 0 auto", display: "flex", overflow: "visible", padding: isMobile ? "12px" : "16px 20px 20px", gap: 14, minHeight: isMobile ? 0 : desktopBodyHeight, flexDirection: isMobile ? "column" : "row" }}>
+                <div style={{ flex: "0 0 auto", display: "flex", overflow: "visible", padding: isMobile ? "12px 10px 24px" : "16px 20px 32px", gap: 14, minHeight: isMobile ? 0 : desktopBodyHeight, flexDirection: isMobile ? "column" : "row" }}>
 
-                    {/*  RRG Chart  */}
+                    {/*  Table  Sector | Status | Momentum, nothing else  compact sidebar like Strike's symbol list  */}
                     <div style={{
                         ...(isMobile
-                            ? { display: mobileTab === "chart" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileChartMinHeight }
-                            : { flex: "0 0 680px", maxWidth: 760, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
-                        border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden",
-                        background: panelBg, boxShadow: panelShadow
+                            ? { display: mobileTab === "table" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileTableMinHeight, order: 2 }
+                            : { flex: "0 0 260px", maxWidth: 270, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
+                        border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden", minWidth: 0, background: panelBg, boxShadow: panelShadow
                     }}>
-                        {/* Chart header */}
-                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 14px 12px", borderBottom: `1px solid ${insetLine}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Rotation Map</div>
-                                <div className="rrg-scroll-x" style={{ flex: 1, width: "100%" }}>
-                                    <div className="rrg-scroll-inner" style={{ gap: isMobile ? 5 : 6 }}>
-                                        {[["all", "All"], ["leaders", "Leading"], ["improving", "Improving"], ["weakening", "Weakening"], ["lagging", "Lagging"]].map(([v, l]) => (
-                                            <button key={v} onClick={() => setChartView(v)} className="rrg-btn-pill"
-                                                style={{
-                                                    padding: isMobile ? "7px 11px" : "8px 12px",
-                                                    border: `1px solid ${chartView === v ? panelBorder : "transparent"}`,
-                                                    background: chartView === v ? (isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.92)") : segmentedBg,
-                                                    color: chartView === v ? text : subtext,
-                                                    fontWeight: chartView === v ? 700 : 500,
-                                                    boxShadow: chartView === v ? `0 8px 24px ${isDark ? "rgba(2,6,23,0.28)" : "rgba(148,163,184,0.16)"}` : "none"
-                                                }}>
-                                                {isMobile && l.length > 7 ? l.slice(0, 4) : l}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 16px 10px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
+                            <div>
+                                <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: text }}>All Sectors</div>
+                                <div style={{ fontSize: 12, color: subtext, marginTop: 3 }}>Grouped by status, strongest first</div>
                             </div>
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-                                <div style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em" }}>Interaction</div>
-                                <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                                    {focusSector && (
-                                        <button onClick={() => setFocusSector(null)}
-                                            style={{ fontSize: 11, color: "#60a5fa", background: focusSoft, border: "1px solid rgba(96,165,250,0.28)", borderRadius: 999, padding: "6px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
-                                            Clear focus
-                                        </button>
-                                    )}
-                                    {!isMobile && <span style={{ fontSize: 11, color: subtext, opacity: 0.7 }}>Hover to inspect, click to lock</span>}
-                                </div>
-                            </div>
+                            <span style={{ fontSize: 11, color: subtext, opacity: 0.78, fontVariantNumeric: "tabular-nums" }}>{filtered.length} sector{filtered.length !== 1 ? "s" : ""}</span>
                         </div>
 
-                        {/* Canvas */}
+                        <div style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", background: isDark ? "rgba(2,6,23,0.12)" : "rgba(255,255,255,0.22)" }}>
+                            {filtered.length === 0 ? (
+                                <div style={{ padding: "40px 16px", textAlign: "center", color: subtext, fontSize: 13, opacity: 0.45 }}>
+                                    No sectors in this category
+                                </div>
+                            ) : isMobile ? (
+                                /*  Mobile: simple card list  */
+                                filtered.map((d) => {
+                                    const isFocus = focusSector === d.sector;
+                                    const meta = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+                                    const momVal = d.momentum ?? 0;
+                                    const insuf = isInsufficient(d);
+                                    return (
+                                        <div key={d.sector}
+                                            onClick={() => setFocusSector(f => f === d.sector ? null : d.sector)}
+                                            style={{
+                                                margin: "10px 10px 0",
+                                                padding: "13px 14px",
+                                                borderRadius: 14,
+                                                border: `1px solid ${isFocus ? "rgba(96,165,250,0.28)" : panelBorder}`,
+                                                background: isFocus
+                                                    ? (isDark ? "rgba(30,41,59,0.9)" : "rgba(239,246,255,0.92)")
+                                                    : (isDark ? "rgba(15,23,42,0.72)" : "rgba(255,255,255,0.84)"),
+                                                opacity: insuf ? 0.4 : 1,
+                                                cursor: "pointer",
+                                                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                                            }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                                <span style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, flexShrink: 0 }} />
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontSize: 15, fontWeight: 600, color: text, fontFamily: sans }}>{d.label}</div>
+                                                    <div style={{ fontSize: 12, color: subtext, marginTop: 1 }}>{meta.label}</div>
+                                                </div>
+                                            </div>
+                                            <div style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: momVal >= 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#f87171" : "#b91c1c"), flexShrink: 0 }}>
+                                                {momVal >= 0 ? "\u2191" : "\u2193"} {Math.abs(momVal).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                /*  Desktop: compact 2-column sidebar list  dot conveys status, matches the reference symbol-list density  */
+                                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontFamily: sans, fontSize: 14 }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: sans, background: D.tableHeadBg || segmentedBg, borderBottom: `1px solid ${panelBorder}`, position: "sticky", top: 0, zIndex: 1 }}>Sector</th>
+                                            <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: sans, background: D.tableHeadBg || segmentedBg, borderBottom: `1px solid ${panelBorder}`, position: "sticky", top: 0, zIndex: 1 }}>Mom.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filtered.map((d) => {
+                                            const isHov = hoveredSector === d.sector;
+                                            const isFocus = focusSector === d.sector;
+                                            const meta = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+                                            const momVal = d.momentum ?? 0;
+                                            const insuf = isInsufficient(d);
+                                            return (
+                                                <tr key={d.sector}
+                                                    onMouseEnter={() => setHoveredSector(d.sector)}
+                                                    onMouseLeave={() => setHoveredSector(null)}
+                                                    onClick={() => setFocusSector(f => f === d.sector ? null : d.sector)}
+                                                    title={meta.label}
+                                                    style={{
+                                                        borderBottom: `1px solid ${isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`,
+                                                        background: isFocus ? focusSoft : isHov ? (isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)") : "transparent",
+                                                        opacity: insuf ? 0.4 : 1,
+                                                        cursor: "pointer",
+                                                        transition: "background 0.12s ease",
+                                                    }}>
+                                                    <td style={{ padding: "12px 16px", fontSize: 15, fontWeight: 600, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 0, fontFamily: sans }}>
+                                                        <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                                                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: meta.color, flexShrink: 0 }} />
+                                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{d.label}</span>
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                                                        <span style={{
+                                                            display: "inline-block",
+                                                            padding: "3px 8px",
+                                                            borderRadius: 6,
+                                                            background: momVal >= 0
+                                                                ? withAlpha(isDark ? "#4ade80" : "#15803d", isDark ? 0.18 : 0.10)
+                                                                : withAlpha(isDark ? "#f87171" : "#b91c1c", isDark ? 0.18 : 0.10),
+                                                            color: momVal >= 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#f87171" : "#b91c1c"),
+                                                            fontFamily: mono, fontWeight: 700, fontSize: 15,
+                                                            fontVariantNumeric: "tabular-nums",
+                                                        }}>
+                                                            {momVal >= 0 ? "\u2191" : "\u2193"} {Math.abs(momVal).toFixed(1)}%
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+
+                        {/* Footer  a one-line, plain key. No formulas, no scores. */}
+                        <div style={{ padding: "8px 16px", borderTop: `1px solid ${border}`, flexShrink: 0, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                            {Object.entries(STATUS_META).map(([key, m]) => (
+                                <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: subtext }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: m.color, display: "inline-block" }} />
+                                    {m.label} = {m.desc}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/*  RRG Chart  the dominant panel, matching the reference RRG layout  */}
+                    <div style={{
+                        ...(isMobile
+                            ? { display: mobileTab === "chart" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileChartMinHeight, order: 1 }
+                            : { flex: 1, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
+                        border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden",
+                        background: panelBg, boxShadow: panelShadow, minWidth: 0
+                    }}>
+                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 14px 10px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0 }}>
+                            <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: text }}>Rotation Chart</div>
+                            <div style={{ fontSize: 12, color: subtext, marginTop: 3 }}>{isMobile ? "Tap a dot to inspect" : "Hover a dot to inspect, click to lock it in place"}</div>
+                        </div>
+
                         <canvas ref={canvasRef}
-                            style={{ flex: 1, width: "100%", cursor: hoveredSector ? "pointer" : "default", minHeight: isMobile ? 320 : 580, background: isDark ? "rgba(2,6,23,0.18)" : "rgba(255,255,255,0.4)" }}
+                            style={{ flex: 1, width: "100%", cursor: hoveredSector ? "pointer" : "default", minHeight: isMobile ? 320 : 680, background: isDark ? "rgba(2,6,23,0.18)" : "rgba(255,255,255,0.4)" }}
                             onMouseMove={handleCanvasMouseMove}
                             onMouseLeave={() => setHoveredSector(null)}
                             onClick={handleCanvasClick}
                             onTouchStart={handleCanvasTouch}
                         />
 
-                        {/* Hover/focus tooltip */}
+                        {/* Hover/focus tooltip  plain-English only */}
                         {(() => {
                             const active = focusSector || hoveredSector;
                             const d = active ? snapshot.find(x => x.sector === active) : null;
                             if (!d) return (
                                 <div style={{ padding: isMobile ? "10px 12px 12px" : "10px 14px 12px", borderTop: `1px solid ${insetLine}`, fontSize: 12, color: subtext, opacity: 0.55, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
-                                    {isMobile ? "Tap a sector bubble" : "Hover or click a sector"}
+                                    {isMobile ? "Tap a sector dot to see details" : "Hover or click a sector dot to see details"}
                                 </div>
                             );
-                            const trend = getTrendState(d, trails);
+                            const meta = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+                            const momVal = d.momentum ?? 0;
                             return (
                                 <div style={{ padding: isMobile ? "10px 12px 12px" : "10px 14px 12px", borderTop: `1px solid ${insetLine}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
                                     <span style={{ fontSize: isMobile ? 14 : 13, fontWeight: 800, color: text }}>{d.label}</span>
-                                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: Q_DOT[d.quadrant], padding: "5px 9px", borderRadius: 999, background: qBadgeStyles[d.quadrant]?.bg, border: `1px solid ${qBadgeStyles[d.quadrant]?.border}` }}>
-                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: Q_DOT[d.quadrant], display: "inline-block" }} />
-                                        {d.quadrant}
+                                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: meta.color, padding: "5px 9px", borderRadius: 999, background: statusBadgeStyles[d.quadrant]?.bg, border: `1px solid ${statusBadgeStyles[d.quadrant]?.border}` }}>
+                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color, display: "inline-block" }} />
+                                        {meta.label}
                                     </span>
-                                    <span style={{ fontSize: 12, color: subtext }}>
-                                        Opp <span style={{ color: text, fontWeight: 600 }}>{(d.opportunity_score ?? 0) > 0 ? "+" : ""}{(d.opportunity_score ?? 0).toFixed(3)}</span>
+                                    <span style={{ fontSize: 12, color: subtext }}>{meta.desc}</span>
+                                    <span style={{ fontSize: 12, color: momVal >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600, marginLeft: "auto" }}>
+                                        {momVal >= 0 ? "\u2191" : "\u2193"} {Math.abs(momVal).toFixed(1)}% momentum
                                     </span>
-                                    <span style={{ fontSize: 12, color: subtext }}>
-                                        RS <span style={{ color: d.rs_spread >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{(d.rs_spread ?? 0) >= 0 ? "+" : ""}{(d.rs_spread ?? 0).toFixed(3)}</span>
-                                    </span>
-                                    <span style={{ fontSize: 12, color: subtext }}>
-                                        Mom <span style={{ color: d.momentum > 0 ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{(d.momentum ?? 0) > 0 ? "+" : ""}{(d.momentum ?? 0).toFixed(2)}%</span>
-                                    </span>
-                                    {trend && <span style={{ fontSize: 12, color: trend.color, marginLeft: "auto" }}>{trend.label}</span>}
                                 </div>
                             );
                         })()}
-                    </div>
-
-                    {/*  Opportunity Rankings Table  */}
-                    <div style={{
-                        ...(isMobile
-                            ? { display: mobileTab === "table" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileTableMinHeight }
-                            : { flex: 1, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
-                        border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden", minWidth: 0, background: panelBg, boxShadow: panelShadow
-                    }}>
-                        {/* Table header */}
-                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 16px 12px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
-                                <span style={{ fontSize: 11, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em" }}>Executive Ranking</span>
-                                <span style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: text, letterSpacing: "-0.03em", flexShrink: 0 }}>Opportunity Rankings</span>
-                                {!isMobile && stats?.topOpp?.length > 0 && (
-                                    <span style={{ fontSize: 12, color: subtext, opacity: 0.82 }}>
-                                        Leaders: {stats.topOpp.slice(0, 2).map(s => `${s.label} (${(s.opportunity_score ?? 0) > 0 ? "+" : ""}${(s.opportunity_score ?? 0).toFixed(2)})`).join(" · ")}
-                                    </span>
-                                )}
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                                <span style={{ fontSize: 11, color: subtext, opacity: 0.78, fontVariantNumeric: "tabular-nums" }}>{filtered.length} sector{filtered.length !== 1 ? "s" : ""}</span>
-                                <span style={{ padding: "6px 10px", borderRadius: 999, background: segmentedBg, border: `1px solid ${panelBorder}`, fontSize: 11, color: text, fontWeight: 700 }}>
-                                    {filterMeta[filter]?.label || "All sectors"}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Table / Cards */}
-                        <div style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", background: isDark ? "rgba(2,6,23,0.12)" : "rgba(255,255,255,0.22)" }}>
-                            {isMobile ? (
-                                /*  Mobile: Card list  */
-                                (() => {
-                                    const maxOpp = filtered.length ? Math.max(...filtered.map(d => Math.abs(d.opportunity_score ?? 0))) || 1 : 1;
-                                    return filtered.length === 0 ? (
-                                        <div style={{ padding: "40px 16px", textAlign: "center", color: subtext, fontSize: 13, opacity: 0.45 }}>
-                                            No sectors in this category
-                                        </div>
-                                    ) : filtered.map((d, i) => {
-                                        const isFocus = focusSector === d.sector;
-                                        const isTop3 = i < 3;
-                                        const inDeadZone = isDeadZone(d);
-                                        const insuf = isInsufficient(d);
-                                        const trend = getTrendState(d, trails);
-                                        const opp = d.opportunity_score ?? 0;
-                                        const rsVal = d.rs_spread ?? 0;
-                                        const momVal = d.momentum ?? 0;
-                                        const oppBarW = Math.round((Math.abs(opp) / maxOpp) * 80);
-                                        const qColor = Q_DOT[d.quadrant];
-                                        return (
-                                            <div key={d.sector}
-                                                onClick={() => setFocusSector(f => f === d.sector ? null : d.sector)}
-                                                style={{
-                                                    margin: "10px 10px 0",
-                                                    padding: "14px 14px 13px",
-                                                    borderRadius: 14,
-                                                    border: `1px solid ${isFocus ? "rgba(96,165,250,0.28)" : panelBorder}`,
-                                                    boxShadow: isFocus ? `0 14px 30px ${isDark ? "rgba(37,99,235,0.16)" : "rgba(59,130,246,0.14)"}` : "none",
-                                                    background: isFocus
-                                                        ? (isDark ? "linear-gradient(180deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,0.88) 100%)" : "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(239,246,255,0.92) 100%)")
-                                                        : (isDark ? "rgba(15,23,42,0.72)" : "rgba(255,255,255,0.84)"),
-                                                    opacity: insuf ? 0.3 : inDeadZone ? 0.55 : 1,
-                                                    cursor: "pointer",
-                                                    transition: "all 0.16s ease",
-                                                }}>
-                                                {/* Top row: rank + name + quadrant badge */}
-                                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                                                    <span style={{ width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontFamily: mono, color: isTop3 ? text : subtext, fontWeight: 800, background: isTop3 ? accentSoft : segmentedBg, border: `1px solid ${isTop3 ? "rgba(16,185,129,0.22)" : panelBorder}`, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{i + 1}</span>
-                                                    <span style={{ fontSize: 15, fontWeight: isFocus ? 800 : isTop3 ? 700 : 600, color: isFocus ? (isDark ? "#e2eaf4" : "#0a0f1e") : text, flex: 1 }}>
-                                                        {d.label}
-                                                        {inDeadZone && <span style={{ fontSize: 10, color: subtext, opacity: 0.45, marginLeft: 6 }}>Dead zone</span>}
-                                                    </span>
-                                                    {/* Quadrant badge */}
-                                                    <span style={{
-                                                        display: "inline-flex", alignItems: "center", gap: 4,
-                                                        fontSize: 11, fontWeight: 600,
-                                                        color: qColor,
-                                                        background: qBadgeStyles[d.quadrant]?.bg,
-                                                        border: `1px solid ${qBadgeStyles[d.quadrant]?.border}`,
-                                                        borderRadius: 999, padding: "5px 9px",
-                                                    }}>
-                                                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: qColor, display: "inline-block", flexShrink: 0 }} />
-                                                        {d.quadrant.charAt(0) + d.quadrant.slice(1, 4).toLowerCase()}
-                                                    </span>
-                                                </div>
-                                                {/* Bottom row: momentum */}
-                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 9px", borderRadius: 14, background: segmentedBg, border: `1px solid ${panelBorder}`, marginBottom: trend ? 10 : 0 }}>
-                                                    <div style={{ fontSize: 10, color: subtext, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.4px" }}>Momentum</div>
-                                                    <div style={{
-                                                        fontFamily: mono, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                                                        color: momVal > 0 ? (isDark ? "#4ade80" : "#15803d") : (isDark ? "#f87171" : "#b91c1c")
-                                                    }}>
-                                                        {momVal > 0 ? "" : ""}{Math.abs(momVal).toFixed(2)}%
-                                                    </div>
-                                                </div>
-                                                {trend && (
-                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                                        <span style={{ fontSize: 10, color: subtext, textTransform: "uppercase", letterSpacing: "0.08em" }}>Trend signal</span>
-                                                        <span style={{ fontSize: 12, fontWeight: 700, color: trend.color }}>{trend.label}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    });
-                                })()
-                            ) : (
-                                /*  Desktop: Standard table  */
-                                (() => {
-                                    const maxOpp = filtered.length ? Math.max(...filtered.map(d => Math.abs(d.opportunity_score ?? 0))) || 1 : 1;
-                                    return (
-                                        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, fontFamily: sans, tableLayout: "fixed" }}>
-                                            <thead>
-                                                <tr style={{
-                                                    background: D.tableHeadBg,
-                                                    position: "sticky", top: 0, zIndex: 1,
-                                                    borderBottom: `1px solid ${panelBorder}`,
-                                                }}>
-                                                    <th style={{ padding: "10px 6px 10px 14px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", width: "6%", userSelect: "none", fontFamily: sans }}>#</th>
-                                                    <th style={{ padding: "10px 12px 10px 6px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", cursor: "pointer", userSelect: "none", fontFamily: sans, width: "28%", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => toggleSort("label")}>
-                                                        <span style={{ color: sortCol === "label" ? text : subtext }}>Sector</span> <SortIcon col="label" />
-                                                    </th>
-                                                    <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 800, fontSize: 12, color: sortCol === "momentum" ? text : subtext, textTransform: "uppercase", letterSpacing: "0.12em", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", fontFamily: sans, width: "18%" }} onClick={() => toggleSort("momentum")}>
-                                                        Momentum <SortIcon col="momentum" />
-                                                    </th>
-                                                    <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", whiteSpace: "nowrap", userSelect: "none", fontFamily: sans, width: "20%" }}>Quadrant</th>
-                                                    <th style={{ padding: "10px 14px 10px 8px", textAlign: "left", fontWeight: 800, fontSize: 12, color: subtext, textTransform: "uppercase", letterSpacing: "0.12em", whiteSpace: "nowrap", userSelect: "none", fontFamily: sans, width: "28%" }}>Trend</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filtered.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={5} style={{ padding: "40px 16px", textAlign: "center", color: subtext, fontSize: 13, opacity: 0.45 }}>
-                                                            No sectors in this category
-                                                        </td>
-                                                    </tr>
-                                                ) : filtered.map((d, i) => {
-                                                    const isHov = hoveredSector === d.sector;
-                                                    const isFocus = focusSector === d.sector;
-                                                    const isTop3 = i < 3;
-                                                    const inDeadZone = isDeadZone(d);
-                                                    const insuf = isInsufficient(d);
-                                                    const trend = getTrendState(d, trails);
-                                                    const opp = d.opportunity_score ?? 0;
-                                                    const rsVal = d.rs_spread ?? 0;
-                                                    const momVal = d.momentum ?? 0;
-                                                    const oppBarW = Math.round((Math.abs(opp) / maxOpp) * 52);
-
-                                                    // Row background: transparent base, hover/focus only
-                                                    const rowBg = isFocus
-                                                        ? (isDark ? "rgba(167,139,250,0.08)" : "rgba(124,58,237,0.05)")
-                                                        : isHov
-                                                            ? (isDark ? "rgba(255,255,255,0.04)" : "rgba(0,120,255,0.04)")
-                                                            : "transparent";
-
-                                                    // Left accent for top 3
-                                                    const leftAccent = isTop3
-                                                        ? `3px solid ${i === 0 ? T.green : i === 1 ? (isDark ? "#34d399" : "#059669") : (isDark ? "#6ee7b7" : "#10b981")}`
-                                                        : isFocus
-                                                            ? "3px solid #a78bfa"
-                                                            : `3px solid transparent`;
-
-                                                    return (
-                                                        <tr key={d.sector}
-                                                            onMouseEnter={() => setHoveredSector(d.sector)}
-                                                            onMouseLeave={() => setHoveredSector(null)}
-                                                            onClick={() => setFocusSector(f => f === d.sector ? null : d.sector)}
-                                                            style={{
-                                                                background: rowBg,
-                                                                cursor: "pointer",
-                                                                opacity: insuf ? 0.3 : inDeadZone && !isHov && !isFocus ? 0.5 : 1,
-                                                                borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.05)"}`,
-                                                                transition: "background 0.1s",
-                                                                borderLeft: leftAccent,
-                                                            }}>
-
-                                                            {/* # rank */}
-                                                            <td style={{
-                                                                padding: "12px 6px 12px 10px",
-                                                                fontSize: 12,
-                                                                fontFamily: mono,
-                                                                fontWeight: isTop3 ? 700 : 400,
-                                                                color: isTop3 ? (isDark ? "#94a3b8" : "#475569") : subtext,
-                                                                opacity: isTop3 ? 1 : 0.4,
-                                                                textAlign: "right",
-                                                                fontVariantNumeric: "tabular-nums",
-                                                                width: 32,
-                                                            }}>{i + 1}</td>
-
-                                                            {/* Sector name */}
-                                                            <td style={{ padding: "12px 12px 12px 8px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                                <span style={{
-                                                                    fontSize: 14,
-                                                                    fontWeight: isFocus ? 700 : isTop3 ? 600 : 500,
-                                                                    color: isFocus ? (isDark ? "#e2eaf4" : "#0a0f1e") : text,
-                                                                }}>
-                                                                    {isFocus && <span style={{ color: "#a78bfa", marginRight: 5, fontSize: 10 }}></span>}
-                                                                    {d.label}
-                                                                </span>
-                                                                {inDeadZone && <span style={{ fontSize: 10, color: subtext, opacity: 0.35, marginLeft: 5 }}></span>}
-                                                            </td>
-
-                                                            {/* Momentum  primary color signal */}
-                                                            <td style={{
-                                                                padding: "12px 12px",
-                                                                textAlign: "right",
-                                                                fontFamily: "'IBM Plex Mono', monospace",
-                                                                fontSize: 14,
-                                                                fontWeight: 600,
-                                                                fontVariantNumeric: "tabular-nums",
-                                                                letterSpacing: "0.2px",
-                                                                color: momVal > 0
-                                                                    ? (isDark ? "#4ade80" : "#15803d")
-                                                                    : (isDark ? "#f87171" : "#b91c1c"),
-                                                            }}>
-                                                                <span style={{ display: "inline-block", minWidth: 95 }}>
-                                                                    <span style={{ marginRight: 4 }}>
-                                                                        {momVal > 0 ? "" : ""}
-                                                                    </span>
-                                                                    {Math.abs(momVal).toFixed(2)}%
-                                                                </span>
-                                                            </td>
-
-                                                            {/* Quadrant  dot + label */}
-                                                            <td style={{ padding: "12px 12px" }}>
-                                                                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                                                    <span style={{
-                                                                        width: 7, height: 7, borderRadius: "50%",
-                                                                        background: Q_DOT[d.quadrant],
-                                                                        display: "inline-block", flexShrink: 0,
-                                                                        transform: isHov || isFocus ? "scale(1.2)" : "scale(1)",
-                                                                        transition: "transform 0.15s ease",
-                                                                        // Quadrant dot (slightly softer)
-                                                                        filter: "brightness(0.9)"
-                                                                    }} />
-                                                                    <span style={{
-                                                                        fontSize: 13, color: isDark ? "#d1d5db" : "#374151",
-                                                                        fontWeight: 500,
-                                                                    }}>
-                                                                        {d.quadrant.charAt(0) + d.quadrant.slice(1).toLowerCase()}
-                                                                    </span>
-                                                                </span>
-                                                            </td>
-
-                                                            {/* Trend */}
-                                                            <td style={{ padding: "12px 14px 12px 8px" }}>
-                                                                {trend ? (
-                                                                    <span style={{
-                                                                        display: "inline-block",
-                                                                        minWidth: 90,
-                                                                        fontSize: 13,
-                                                                        fontWeight: 500,
-                                                                        color: trend.color,
-                                                                        opacity: 0.9,
-                                                                        letterSpacing: "0.2px",
-                                                                    }}>
-                                                                        {trend.label}
-                                                                    </span>
-                                                                ) : (
-                                                                    <span style={{
-                                                                        fontSize: 13,
-                                                                        color: subtext,
-                                                                        opacity: 0.5,
-                                                                    }} title="No signal">
-
-                                                                    </span>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    );
-                                })()
-                            )}
-                        </div>
-
-                        {/* Table footer */}
-                        <div style={{ padding: "6px 16px", borderTop: `1px solid ${border}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 11, color: subtext, opacity: 0.35 }}
-                                title="Opp = 0.35*RS_Spread + 0.25*Momentum/10 + 0.15*Velocity + 0.15*Signal + 0.10*Trend">
-                                {isMobile ? "Opp = RS + Mom + Vel + Sig + Trend" : "Opp = 0.35*RS + 0.25*Mom + 0.15*Vel + 0.15*Sig + 0.10*Trend"}
-                            </span>
-                            {!isMobile && <span style={{ fontSize: 11, color: subtext, opacity: 0.3 }}>\u00B7 dead zone \u00B7 click to focus</span>}
-                        </div>
                     </div>
                 </div>
             </div>

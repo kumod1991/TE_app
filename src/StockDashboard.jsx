@@ -3965,8 +3965,8 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                     <TabBar T={D} style={{ marginBottom: 16, flexWrap: "wrap" }}>
                                         <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
                                         <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
-                                        <TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />
-                                        <TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />
+                                        {/*<TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />*/}
+                                        {/*<TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />*/}
                                         <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
                                     </TabBar>
                 {activeMoversTab === "volume_shockers"
