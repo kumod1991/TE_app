@@ -530,6 +530,24 @@ async function fetchScreenMembership(tickers, token) {
     }
 }
 
+// ─── Market Cap (for stat cards + Market Cap column) ───────────
+// Lightweight side-fetch from stock_ratios — avoids touching the
+// get_watchlist_rows RPC just to add one field.
+async function fetchMarketCaps(tickers, token) {
+    if (!tickers || tickers.length === 0) return {};
+    try {
+        const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
+        const data = await GET(`stock_ratios?ticker=in.${tickerIn}&select=ticker,market_cap_cr`, token);
+        const map = {};
+        for (const row of (data || [])) {
+            if (row.ticker && row.market_cap_cr != null) map[row.ticker] = Number(row.market_cap_cr);
+        }
+        return map;
+    } catch {
+        return {};
+    }
+}
+
 // ─── Default-Watchlist Seeding ────────────────────────────────
 // When a brand-new user has zero watchlists we clone kumodiit@gmail.com's
 // watchlists (names + tickers) into their account as a starting point.
@@ -668,7 +686,65 @@ const fmt = {
     pctRound: v => v == null ? "—" : (isNaN(+v) ? "—" : ((+v >= 0 ? "+" : "") + Math.round(+v) + "%")),
     price: v => v == null ? "—" : isNaN(+v) ? "—" : "₹" + (+v).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
     priceFull: v => v == null ? "—" : isNaN(+v) ? "—" : "₹" + (+v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    // v is in crores (₹1 Cr = ₹1e7). Renders "₹1,234 Cr" or "₹24.67T" style.
+    marketCap: v => {
+        if (v == null || isNaN(+v)) return "—";
+        const cr = +v;
+        if (cr >= 1e5) return "₹" + (cr / 1e5).toFixed(2) + "L Cr";
+        return "₹" + Math.round(cr).toLocaleString("en-IN") + " Cr";
+    },
 };
+
+// ─── Screen-membership pill config (shared: table + card rows) ─
+// Solid-tint, high-legibility badges — matches the flat "TAGS / FILTERS" style.
+const SCREEN_PILL_CFG = {
+    "RS Leader": { color: "#3b82f6", bg: "rgba(59,130,246,0.14)", border: "rgba(59,130,246,0.32)" },
+    "Near 52W High": { color: "#3b82f6", bg: "rgba(59,130,246,0.14)", border: "rgba(59,130,246,0.32)" },
+    "Multi-TF RS": { color: "#6366f1", bg: "rgba(99,102,241,0.14)", border: "rgba(99,102,241,0.32)" },
+    "RS Accel": { color: "#6366f1", bg: "rgba(99,102,241,0.14)", border: "rgba(99,102,241,0.32)" },
+    "52W High BO": { color: "#16a34a", bg: "rgba(22,163,74,0.14)", border: "rgba(22,163,74,0.32)" },
+    "Vol Breakout": { color: "#16a34a", bg: "rgba(22,163,74,0.14)", border: "rgba(22,163,74,0.32)" },
+    "Pivot BO": { color: "#0ea5e9", bg: "rgba(14,165,233,0.14)", border: "rgba(14,165,233,0.32)" },
+    "Pullback 50DMA": { color: "#f59e0b", bg: "rgba(245,158,11,0.14)", border: "rgba(245,158,11,0.32)" },
+    "Shallow PB": { color: "#f59e0b", bg: "rgba(245,158,11,0.14)", border: "rgba(245,158,11,0.32)" },
+    "Weekly PB": { color: "#f59e0b", bg: "rgba(245,158,11,0.14)", border: "rgba(245,158,11,0.32)" },
+    "Vol Dry-up": { color: "#94a3b8", bg: "rgba(148,163,184,0.14)", border: "rgba(148,163,184,0.30)" },
+    "Large Cap": { color: "#64748b", bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.28)" },
+};
+const SCREEN_PRIORITY = ["RS Leader", "52W High BO", "Pivot BO", "Vol Breakout", "Pullback 50DMA", "Shallow PB", "Weekly PB", "Vol Dry-up", "Large Cap"];
+
+// Derives the screen/tag pills for a row from its raw fields — single
+// source of truth used by both the mobile card row and the desktop table.
+function deriveRowScreens(row, screenMembership) {
+    const rs = row.rs_rating ?? 0;
+    const cl = row.close ?? 0;
+    const s50 = row.sma50 ?? 0;
+    const s200 = row.sma200 ?? 0;
+    const pctH = row.pct_from_high ?? 0;
+    const rv = row.rel_vol ?? 0;
+    const p20w = row.pivot_20w ?? 0;
+
+    const rowScreens = [];
+    if (rs >= 85) rowScreens.push("RS Leader");
+    if (pctH >= -5 && cl > s50 && cl > s200) rowScreens.push("Near 52W High");
+    if (rs >= 70 && rv >= 2.0 && cl > s50 && cl > s200) rowScreens.push("Vol Breakout");
+    if (pctH >= -7 && cl > s50 && cl > s200 && rs >= 80) rowScreens.push("52W High BO");
+    if (p20w > 0 && cl >= p20w * 0.97 && cl > s50 && s200 > 0) rowScreens.push("Pivot BO");
+    if (s50 > 0 && Math.abs(cl - s50) / s50 < 0.03 && cl > s200 && rs >= 70) rowScreens.push("Pullback 50DMA");
+    if (p20w > 0 && cl < p20w && cl >= p20w * 0.95 && cl > s50 && rs >= 80) rowScreens.push("Shallow PB");
+    if (p20w > 0 && cl >= p20w * 0.95 && cl > s50 && rs >= 75) rowScreens.push("Weekly PB");
+    if (rv > 0 && rv < 0.7 && cl > s50 && cl > s200 && rs >= 60) rowScreens.push("Vol Dry-up");
+
+    const smScreens = screenMembership?.[row.ticker] ?? [];
+    if (!rowScreens.includes("Multi-TF RS") && smScreens.includes("Multi-TF RS")) rowScreens.push("Multi-TF RS");
+    if (!rowScreens.includes("RS Accel") && smScreens.includes("RS Accel")) rowScreens.push("RS Accel");
+    if (rowScreens.length === 0 && (row.market_cap_cr ?? 0) >= 20000) rowScreens.push("Large Cap");
+
+    return [...rowScreens].sort((a, b) => {
+        const ai = SCREEN_PRIORITY.indexOf(a), bi = SCREEN_PRIORITY.indexOf(b);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    });
+}
 
 // ─── Sparkline (mini) ─────────────────────────────────────────
 const Sparkline = memo(({ data, positive, width = 60, height = 24 }) => {
@@ -680,6 +756,23 @@ const Sparkline = memo(({ data, positive, width = 60, height = 24 }) => {
     return (
         <svg width={width} height={height} style={{ overflow: "visible", opacity: 0.6 }}>
             <polyline points={pts} fill="none" stroke={color} strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
+    );
+});
+
+// ─── Sidebar watchlist icon (star for active, folder otherwise) ───────
+const WlIcon = memo(({ active, color }) => {
+    const common = { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+    if (active) {
+        return (
+            <svg {...common} fill={color} stroke="none">
+                <polygon points="12 2 15.09 8.63 22 9.27 16.5 14.14 18.18 21 12 17.27 5.82 21 7.5 14.14 2 9.27 8.91 8.63 12 2" />
+            </svg>
+        );
+    }
+    return (
+        <svg {...common}>
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
         </svg>
     );
 });
@@ -1003,70 +1096,8 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
             : row.trend === "stage4" ? "Stage 4"
                 : null;
 
-    // ── Screen pills derived directly from row data ────────────
-    // (No dependency on async screenMembership universe fetch)
-    const SCREEN_PILL_CFG = {
-        // Market Leaders — blue/violet
-        "RS Leader": { color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.3)" },
-        "Near 52W High": { color: "#60a5fa", bg: "rgba(96,165,250,0.12)", border: "rgba(96,165,250,0.3)" },
-        "Multi-TF RS": { color: "#818cf8", bg: "rgba(129,140,248,0.12)", border: "rgba(129,140,248,0.3)" },
-        "RS Accel": { color: "#c084fc", bg: "rgba(192,132,252,0.12)", border: "rgba(192,132,252,0.3)" },
-        // Breakouts — green
-        "Vol Breakout": { color: "#34d399", bg: "rgba(52,211,153,0.10)", border: "rgba(52,211,153,0.28)" },
-        "52W High BO": { color: "#4ade80", bg: "rgba(74,222,128,0.10)", border: "rgba(74,222,128,0.28)" },
-        "Pivot BO": { color: "#22c55e", bg: "rgba(34,197,94,0.10)", border: "rgba(34,197,94,0.28)" },
-        // Pullbacks — amber/orange
-        "Pullback 50DMA": { color: "#fbbf24", bg: "rgba(251,191,36,0.10)", border: "rgba(251,191,36,0.28)" },
-        "Shallow PB": { color: "#fb923c", bg: "rgba(251,146,60,0.10)", border: "rgba(251,146,60,0.28)" },
-        "Weekly PB": { color: "#f59e0b", bg: "rgba(245,158,11,0.10)", border: "rgba(245,158,11,0.28)" },
-        "Vol Dry-up": { color: "#d97706", bg: "rgba(217,119,6,0.08)", border: "rgba(217,119,6,0.22)" },
-    };
-
-    // Derive screens from row fields directly — always works, no async dependency
-    const rs = row.rs_rating ?? 0;
-    const cl = row.close ?? 0;
-    const s50 = row.sma50 ?? 0;
-    const s200 = row.sma200 ?? 0;
-    const pctH = row.pct_from_high ?? 0;
-    const rv = row.rel_vol ?? 0;
-    const p20w = row.pivot_20w ?? 0;
-
-    const rowScreens = [];
-    // Market Leaders
-    if (rs >= 85) rowScreens.push("RS Leader");
-    if (pctH >= -5 && cl > s50 && cl > s200) rowScreens.push("Near 52W High");
-    if (rs >= 70 && rv >= 2.0 && cl > s50 && cl > s200) rowScreens.push("Vol Breakout");
-    if (pctH >= -7 && cl > s50 && cl > s200 && rs >= 80) rowScreens.push("52W High BO");
-    if (p20w > 0 && cl >= p20w * 0.97 && cl > s50 && s200 > 0) rowScreens.push("Pivot BO");
-    if (s50 > 0 && Math.abs(cl - s50) / s50 < 0.03 && cl > s200 && rs >= 70) rowScreens.push("Pullback 50DMA");
-    if (p20w > 0 && cl < p20w && cl >= p20w * 0.95 && cl > s50 && rs >= 80) rowScreens.push("Shallow PB");
-    if (p20w > 0 && cl >= p20w * 0.95 && cl > s50 && rs >= 75) rowScreens.push("Weekly PB");
-    if (rv > 0 && rv < 0.7 && cl > s50 && cl > s200 && rs >= 60) rowScreens.push("Vol Dry-up");
-    // Multi-TF RS — needs rs_3m/rs_6m/rs_12m from screenMembership if available, else skip
-    const smScreens = screenMembership?.[row.ticker] ?? [];
-    if (smScreens.includes("Multi-TF RS") || smScreens.includes("RS Accel")) {
-        if (!rowScreens.includes("Multi-TF RS") && smScreens.includes("Multi-TF RS")) rowScreens.push("Multi-TF RS");
-        if (!rowScreens.includes("RS Accel") && smScreens.includes("RS Accel")) rowScreens.push("RS Accel");
-    }
-    // ── PRIORITY ORDER (most actionable first) ─────────────
-    const PRIORITY = [
-        "RS Leader",
-        "52W High BO",
-        "Pivot BO",
-        "Vol Breakout",
-        "Pullback 50DMA",
-        "Shallow PB",
-        "Weekly PB",
-        "Vol Dry-up"
-    ];
-
-    // ── Sort screens by priority ───────────────────────────
-    const tickerScreens = [...rowScreens].sort((a, b) => {
-        const ai = PRIORITY.indexOf(a);
-        const bi = PRIORITY.indexOf(b);
-
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    });
+    // ── Screen/tag pills — shared derivation (see deriveRowScreens) ──
+    const tickerScreens = useMemo(() => deriveRowScreens(row, screenMembership), [row, screenMembership]);
 
     return (
         <div
@@ -1218,35 +1249,37 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
 
             {/* ROW 3 — Screen membership pills */}
             {tickerScreens.length > 0 && (() => {
-                const PRIORITY = ["52W High BO", "Pivot BO", "Vol Breakout", "RS Leader", "Pullback 50DMA", "Shallow PB", "Weekly PB", "Vol Dry-up"];
-                const sortedScreens = [...tickerScreens].sort((a, b) => {
-                    const ai = PRIORITY.indexOf(a); const bi = PRIORITY.indexOf(b);
-                    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-                });
+                const sortedScreens = tickerScreens;
                 const MAX_VISIBLE = 2;
                 const visibleScreens = showAllSignals ? sortedScreens : sortedScreens.slice(0, MAX_VISIBLE);
                 const hiddenCount = sortedScreens.length - MAX_VISIBLE;
                 return (
-                    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 6, flexWrap: "nowrap", overflow: "hidden" }}>
-                        {visibleScreens.map(screenName => {
-                            const cfg = SCREEN_PILL_CFG[screenName] || { color: T.subtext, bg: "transparent", border: T.border };
-                            const canNav = !!onNavigateToScreen;
-                            return (
-                                <span key={screenName}
-                                    title={canNav ? `View screen: ${screenName}` : screenName}
-                                    onClick={canNav ? e => { e.stopPropagation(); onNavigateToScreen(screenName); } : undefined}
-                                    style={{
-                                        fontSize: isMobile ? 9 : 10, fontWeight: 500, padding: "2px 6px", borderRadius: 3,
-                                        background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
-                                        whiteSpace: "nowrap", letterSpacing: "0.05em", textTransform: "uppercase",
-                                        flexShrink: 0, cursor: canNav ? "pointer" : "default", transition: "opacity 0.12s",
-                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                    }}
-                                    onMouseEnter={canNav ? e => { e.currentTarget.style.opacity = "0.65"; } : undefined}
-                                    onMouseLeave={canNav ? e => { e.currentTarget.style.opacity = "1"; } : undefined}
-                                >{screenName}</span>
-                            );
-                        })}
+                    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 6, width: "100%", flexWrap: showAllSignals ? "wrap" : "nowrap", rowGap: 4 }}>
+                        <div style={{
+                            display: "flex", gap: 4, alignItems: "center", minWidth: 0, flex: "1 1 auto",
+                            overflow: showAllSignals ? "visible" : "hidden",
+                            flexWrap: showAllSignals ? "wrap" : "nowrap", rowGap: 4,
+                        }}>
+                            {visibleScreens.map(screenName => {
+                                const cfg = SCREEN_PILL_CFG[screenName] || { color: T.subtext, bg: "transparent", border: T.border };
+                                const canNav = !!onNavigateToScreen;
+                                return (
+                                    <span key={screenName}
+                                        title={canNav ? `View screen: ${screenName}` : screenName}
+                                        onClick={canNav ? e => { e.stopPropagation(); onNavigateToScreen(screenName); } : undefined}
+                                        style={{
+                                            fontSize: isMobile ? 9.5 : 10, fontWeight: 700, padding: "3px 7px", borderRadius: 5,
+                                            background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
+                                            whiteSpace: "nowrap", letterSpacing: "0.03em", textTransform: "uppercase",
+                                            flexShrink: 0, cursor: canNav ? "pointer" : "default", transition: "opacity 0.12s",
+                                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                        }}
+                                        onMouseEnter={canNav ? e => { e.currentTarget.style.opacity = "0.65"; } : undefined}
+                                        onMouseLeave={canNav ? e => { e.currentTarget.style.opacity = "1"; } : undefined}
+                                    >{screenName}</span>
+                                );
+                            })}
+                        </div>
                         {!showAllSignals && hiddenCount > 0 && (
                             <span onClick={e => { e.stopPropagation(); setShowAllSignals(true); }}
                                 style={{
@@ -1296,6 +1329,208 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                     </div>
                 );
             })()}
+        </div>
+    );
+});
+
+// ─── Desktop Table (grid-based, matches template layout) ──────
+const WL_GRID_COLS = "34px minmax(140px,1.6fr) 84px 78px minmax(90px,1fr) 84px 84px 84px minmax(90px,1fr) minmax(150px,1.8fr) 26px";
+
+const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
+    const Head = ({ label, field, align = "left" }) => (
+        <div
+            onClick={field ? () => onSort(field) : undefined}
+            style={{
+                display: "flex", alignItems: "center", gap: 3,
+                justifyContent: align === "right" ? "flex-end" : "flex-start",
+                cursor: field ? "pointer" : "default", userSelect: "none",
+                fontSize: 11, fontWeight: 800, color: sortCol === field ? T.text : T.muted,
+                textTransform: "uppercase", letterSpacing: "0.09em",
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+            }}
+        >
+            {label}
+            {field && sortCol === field && <span style={{ fontSize: 9, opacity: 0.7 }}>{sortAsc ? "▲" : "▼"}</span>}
+        </div>
+    );
+    return (
+        <div style={{
+            display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 10, alignItems: "center",
+            padding: "0 14px 10px", borderBottom: `1px solid ${T.border}`, marginBottom: 4,
+        }}>
+            <Head label="#" />
+            <Head label="Stock" />
+            <Head label="RS" field="rs_rating" />
+            <Head label="Stage" />
+            <Head label="Price" field="close" align="right" />
+            <Head label="3M Ret" field="ret_3m" align="right" />
+            <Head label="6M Ret" field="ret_6m" align="right" />
+            <Head label="12M Ret" field="ret_12m" align="right" />
+            <Head label="Market Cap" align="right" />
+            <Head label="Screens" />
+            <div />
+        </div>
+    );
+});
+
+const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isExpanded, T, screenMembership, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
+    const [hov, setHov] = useState(false);
+    const [showAllTags, setShowAllTags] = useState(false);
+    const _bp = bestPriceFn ? bestPriceFn(row.ticker, price?.price ?? row.close) : null;
+    const p = _bp?.price ?? price?.price ?? row.close;
+    const isPending = isMarketLiveFn?.() && isPricePendingFn?.(row.ticker) && (price?.price ?? row.close) != null;
+    const rsVal = row.rs_rating != null ? Math.round(+row.rs_rating) : null;
+    const rc = v => v == null ? T.subtext : +v >= 0 ? T.pos : T.neg;
+    const tickerScreens = useMemo(() => deriveRowScreens(row, screenMembership), [row, screenMembership]);
+    const MAX_VISIBLE = 2;
+    const visible = showAllTags ? tickerScreens : tickerScreens.slice(0, MAX_VISIBLE);
+    const hidden = tickerScreens.length - MAX_VISIBLE;
+
+    const STAGE_CFG = {
+        stage1: { label: "Stage 1", color: T.subtext, bg: "transparent", border: T.border },
+        stage2: { label: "Stage 2", color: T.green, bg: `${T.green}12`, border: `${T.green}45` },
+        stage4: { label: "Stage 4", color: T.neg, bg: `${T.neg}12`, border: `${T.neg}45` },
+    };
+    const stageCfg = STAGE_CFG[row.trend] || null;
+
+    return (
+        <div
+            className="wl-stock-row"
+            onClick={() => onExpand(row.ticker)}
+            onMouseEnter={() => setHov(true)}
+            onMouseLeave={() => setHov(false)}
+            style={{
+                display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 10, alignItems: "center",
+                padding: "10px 14px",
+                borderRadius: 10,
+                cursor: "pointer",
+                background: isExpanded ? `${T.green}12` : hov ? T.hover : "transparent",
+                border: `1px solid ${isExpanded ? `${T.green}40` : "transparent"}`,
+                marginBottom: 2,
+                transition: "background 0.12s ease",
+            }}
+        >
+            <div style={{ fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
+
+            <div style={{ minWidth: 0 }}>
+                <div style={{
+                    fontSize: 13, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace",
+                    letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                    {row.ticker}
+                </div>
+            </div>
+
+            <div>
+                {rsVal != null ? (
+                    <span style={{
+                        display: "inline-block", fontSize: 12.5, fontWeight: 700,
+                        color: rsVal >= 90 ? T.green : rsVal >= 70 ? "#0ea5e9" : T.text,
+                        background: rsVal >= 90 ? `${T.green}14` : rsVal >= 70 ? "rgba(14,165,233,0.10)" : "transparent",
+                        border: `1px solid ${rsVal >= 90 ? `${T.green}45` : rsVal >= 70 ? "rgba(14,165,233,0.28)" : T.border}`,
+                        borderRadius: 6, padding: "3px 9px",
+                        fontFamily: "'IBM Plex Mono', monospace",
+                    }}>
+                        {rsVal}
+                    </span>
+                ) : <span style={{ color: T.subtext, fontSize: 12 }}>—</span>}
+            </div>
+
+            <div>
+                {stageCfg ? (
+                    <span style={{
+                        display: "inline-block", fontSize: 10.5, fontWeight: 600,
+                        color: stageCfg.color, background: stageCfg.bg,
+                        border: `1px solid ${stageCfg.border}`,
+                        borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap",
+                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.02em",
+                    }}>
+                        {stageCfg.label}
+                    </span>
+                ) : <span style={{ color: T.subtext, fontSize: 12 }}>—</span>}
+            </div>
+
+            <div style={{ textAlign: "right", fontSize: 13, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {p != null ? `₹${(+p).toLocaleString("en-IN")}` : "—"}
+                {isPending && (
+                    <span style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: "#34d399", opacity: 0.6, marginLeft: 4, animation: "wlPricePulse 1.2s ease-in-out infinite" }} />
+                )}
+            </div>
+
+            <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 500, color: rc(row.ret_3m), fontFamily: "'IBM Plex Mono', monospace" }}>
+                {row.ret_3m != null ? `${Math.round(row.ret_3m) > 0 ? "+" : ""}${Math.round(row.ret_3m)}%` : "—"}
+            </div>
+            <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 500, color: rc(row.ret_6m), fontFamily: "'IBM Plex Mono', monospace" }}>
+                {row.ret_6m != null ? `${Math.round(row.ret_6m) > 0 ? "+" : ""}${Math.round(row.ret_6m)}%` : "—"}
+            </div>
+            <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 500, color: rc(row.ret_12m), fontFamily: "'IBM Plex Mono', monospace" }}>
+                {row.ret_12m != null ? `${Math.round(row.ret_12m) > 0 ? "+" : ""}${Math.round(row.ret_12m)}%` : "—"}
+            </div>
+
+            <div style={{ textAlign: "right", fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {marketCap != null ? fmt.marketCap(marketCap) : "—"}
+            </div>
+
+            <div style={{ display: "flex", gap: 4, alignItems: "center", width: "100%", flexWrap: showAllTags ? "wrap" : "nowrap", rowGap: 4 }}>
+                <div style={{
+                    display: "flex", gap: 4, alignItems: "center", minWidth: 0, flex: "1 1 auto",
+                    overflow: showAllTags ? "visible" : "hidden",
+                    flexWrap: showAllTags ? "wrap" : "nowrap", rowGap: 4,
+                }}>
+                    {visible.map(screenName => {
+                        const cfg = SCREEN_PILL_CFG[screenName] || { color: T.subtext, bg: "transparent", border: T.border };
+                        const canNav = !!onNavigateToScreen;
+                        return (
+                            <span key={screenName}
+                                title={canNav ? `View screen: ${screenName}` : screenName}
+                                onClick={canNav ? e => { e.stopPropagation(); onNavigateToScreen(screenName); } : undefined}
+                                style={{
+                                    fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
+                                    background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
+                                    whiteSpace: "nowrap", letterSpacing: "0.03em", textTransform: "uppercase",
+                                    flexShrink: 0, cursor: canNav ? "pointer" : "default",
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                    transition: "filter 0.12s ease",
+                                }}
+                                onMouseEnter={canNav ? e => { e.currentTarget.style.filter = "brightness(1.12)"; } : undefined}
+                                onMouseLeave={canNav ? e => { e.currentTarget.style.filter = "none"; } : undefined}
+                            >{screenName}</span>
+                        );
+                    })}
+                </div>
+                {!showAllTags && hidden > 0 && (
+                    <span
+                        onClick={e => { e.stopPropagation(); setShowAllTags(true); }}
+                        title={`Show ${hidden} more tag${hidden > 1 ? "s" : ""}`}
+                        style={{
+                            fontSize: 9.5, color: T.green, flexShrink: 0, fontWeight: 600,
+                            fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85, cursor: "pointer",
+                            padding: "2px 5px", borderRadius: 3, border: `1px solid ${T.green}35`,
+                        }}
+                    >+{hidden}</span>
+                )}
+                {showAllTags && tickerScreens.length > MAX_VISIBLE && (
+                    <span
+                        onClick={e => { e.stopPropagation(); setShowAllTags(false); }}
+                        style={{
+                            fontSize: 9.5, color: T.subtext, flexShrink: 0, cursor: "pointer",
+                            fontFamily: "'IBM Plex Mono', monospace", opacity: 0.6,
+                            padding: "2px 5px",
+                        }}
+                    >less</span>
+                )}
+            </div>
+
+            <button
+                className="wl-remove-btn"
+                onClick={e => { e.stopPropagation(); onRemove(row.ticker); }}
+                style={{
+                    opacity: hov ? 0.5 : 0, transition: "opacity 0.15s",
+                    background: "none", border: "none", cursor: "pointer",
+                    fontSize: 11, color: T.subtext, padding: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+            >✕</button>
         </div>
     );
 });
@@ -1510,11 +1745,13 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [filterDraft, setFilterDraft] = useState({});
     const [filtersApplied, setFiltersApplied] = useState({});
     const [filterOpen, setFilterOpen] = useState(false);
+    const [addStocksOpen, setAddStocksOpen] = useState(false);
     const [quickFilter, setQuickFilter] = useState(null);
     const [expandedTicker, setExpandedTicker] = useState(null);
     const [keySelectedIdx, setKeySelectedIdx] = useState(-1);
     const [compareOpen, setCompareOpen] = useState(false);
     const [screenMembership, setScreenMembership] = useState({});
+    const [marketCaps, setMarketCaps] = useState({});
     const [eventsMap, setEventsMap] = useState({});
     const [earningsMap, setEarningsMap] = useState({});
     const [eventFilter, setEventFilter] = useState("all");
@@ -1538,10 +1775,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 
     const dark = darkModeProp ?? true;
     const filterRef = useRef(null);
+    const addStocksRef = useRef(null);
     const prevActiveWlRef = useRef(null);
 
     // ── Scroll refs for keyboard navigation per panel ────────────
     const sidebarScrollRef = useRef(null);
+    const newWlInputRef = useRef(null);
     const stocksScrollRef = useRef(null);
     const announcScrollRef = useRef(null);
     const earningsScrollRef = useRef(null);
@@ -1550,6 +1789,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     // ── Effects ─────────────────────────────────────────────────
     useEffect(() => {
         const h = e => { if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false); };
+        document.addEventListener("mousedown", h);
+        return () => document.removeEventListener("mousedown", h);
+    }, []);
+
+    useEffect(() => {
+        const h = e => { if (addStocksRef.current && !addStocksRef.current.contains(e.target)) setAddStocksOpen(false); };
         document.addEventListener("mousedown", h);
         return () => document.removeEventListener("mousedown", h);
     }, []);
@@ -1885,6 +2130,14 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             .catch(() => { });
     }, [rows, token]);
 
+    useEffect(() => {
+        const tickers = rows.map(r => r.ticker).filter(Boolean);
+        if (!tickers.length) return;
+        fetchMarketCaps(tickers, token)
+            .then(m => setMarketCaps(prev => ({ ...prev, ...m })))
+            .catch(() => { });
+    }, [rows, token]);
+
     // ── Background pre-warm: on first login, silently populate feed caches for ALL watchlists ──
     // This ensures the announcements panel feels instant on every watchlist switch.
     useEffect(() => {
@@ -2138,6 +2391,18 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const avgRS = useMemo(() => rows.length ? Math.round(rows.reduce((a, r) => a + (r.rs_rating ?? 0), 0) / rows.length) : null, [rows]);
     const leaders = useMemo(() => rows.filter(r => (r.rs_rating ?? 0) >= 90).length, [rows]);
     const stage2Count = useMemo(() => rows.filter(r => r.trend === "stage2").length, [rows]);
+    // Per-row derived screens (shared with the pill/tag rendering) — reused for stat-card counts
+    const rowScreensMap = useMemo(() => {
+        const m = {};
+        for (const r of rows) m[r.ticker] = deriveRowScreens(r, screenMembership);
+        return m;
+    }, [rows, screenMembership]);
+    const bo52wCount = useMemo(() => rows.filter(r => rowScreensMap[r.ticker]?.includes("52W High BO")).length, [rows, rowScreensMap]);
+    const pivotBoCount = useMemo(() => rows.filter(r => rowScreensMap[r.ticker]?.includes("Pivot BO")).length, [rows, rowScreensMap]);
+    const avgMarketCap = useMemo(() => {
+        const vals = rows.map(r => marketCaps[r.ticker]).filter(v => v != null);
+        return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
+    }, [rows, marketCaps]);
     const avgRet3m = useMemo(() => {
         const vals = rows.map(r => r.ret_3m).filter(v => v != null && !Number.isNaN(Number(v)));
         return vals.length ? vals.reduce((a, v) => a + Number(v), 0) / vals.length : null;
@@ -2213,6 +2478,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         .wl-drag-handle:hover{opacity:1!important}
         .wl-sidebar-item.wl-dragging{opacity:0.55;cursor:grabbing!important}
         .wl-toolbar-btn:hover{background:${T.hover}!important;color:${T.text}!important}
+        .wl-add-stocks-btn:hover{transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 8px 20px ${T.green}55, inset 0 1px 0 rgba(255,255,255,0.25)!important}
+        .wl-add-stocks-btn:active{transform:translateY(0)}
+        .wl-stat-card{transition:transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease}
+        .wl-stat-card:hover{transform:translateY(-1px);border-color:${dark ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"}}
         input::placeholder{color:${T.subtext};opacity:0.5}
         /* iOS: prevent zoom on input focus */
         @media (max-width: 767px) { input, select, textarea { font-size: 16px !important; } }
@@ -2318,11 +2587,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            marginBottom: 12
+                            marginBottom: isMobile ? 12 : 10,
                         }}>
                             <span style={{
                                 fontSize: 10,
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 color: T.subtext,
                                 textTransform: "uppercase",
                                 letterSpacing: "0.16em"
@@ -2333,6 +2602,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 <span style={{
                                     fontSize: 11,
+                                    fontWeight: 600,
                                     color: atWatchlistLimit ? "#ef4444" : T.subtext,
                                     opacity: 0.85,
                                     padding: isMobile ? "4px 8px" : 0,
@@ -2359,16 +2629,44 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             </div>
                         </div>
 
-                        <TickerSearch
-                            value={addTicker}
-                            onChange={v => { setAddTicker(v); setAddError(""); }}
-                            onSelect={v => { setAddTicker(v); setAddError(""); }}
-                            onSubmit={addStock}
-                            addError={addError}
-                            T={T}
-                            compact
-                            isMobile={isMobile}
-                        />
+                        {/* Add Watchlist — jumps focus to the create field pinned at the bottom of the list */}
+                        {!isMobile && (
+                            <button
+                                onClick={() => {
+                                    sidebarScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                                    newWlInputRef.current?.focus();
+                                }}
+                                disabled={atWatchlistLimit}
+                                style={{
+                                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                                    width: "100%", padding: "8px 10px", marginTop: 2,
+                                    borderRadius: 8, border: `1px dashed ${T.border}`,
+                                    background: "transparent", color: atWatchlistLimit ? T.subtext : T.text,
+                                    fontSize: 12, fontWeight: 600, cursor: atWatchlistLimit ? "not-allowed" : "pointer",
+                                    opacity: atWatchlistLimit ? 0.45 : 1,
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                    transition: "background 0.14s ease, border-color 0.14s ease",
+                                }}
+                                onMouseEnter={e => { if (!atWatchlistLimit) { e.currentTarget.style.background = T.hover; e.currentTarget.style.borderColor = `${T.green}70`; } }}
+                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = T.border; }}
+                            >
+                                <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add Watchlist
+                            </button>
+                        )}
+
+                        {/* Add-ticker search — mobile only; desktop uses the "+ Add Stocks" button in the toolbar */}
+                        {isMobile && (
+                            <TickerSearch
+                                value={addTicker}
+                                onChange={v => { setAddTicker(v); setAddError(""); }}
+                                onSelect={v => { setAddTicker(v); setAddError(""); }}
+                                onSubmit={addStock}
+                                addError={addError}
+                                T={T}
+                                compact
+                                isMobile={isMobile}
+                            />
+                        )}
                     </div>
 
                     {/* LIST */}
@@ -2451,6 +2749,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             ⠿
                                         </span>
 
+                                        {!isRenaming && (
+                                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: isActive ? 1 : 0.55 }}>
+                                                <WlIcon active={isActive} color={isActive ? T.green : T.subtext} />
+                                            </span>
+                                        )}
+
                                         {isRenaming ? (
                                             <input
                                                 autoFocus
@@ -2484,17 +2788,33 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     setRenamingId(w.id); setRenameVal(w.name);
                                                 }}
                                                 style={{
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: isMobile ? 2 : 1,
+                                                }}>
+                                                <span style={{
                                                     fontSize: isMobile ? 14 : 13,
                                                     letterSpacing: "0.01em",
                                                     color: isActive ? T.text : T.subtext,
                                                     fontWeight: isActive ? 700 : 500,
-                                                    flex: 1,
-                                                    minWidth: 0,
                                                     overflow: "hidden",
                                                     textOverflow: "ellipsis",
                                                     whiteSpace: "nowrap",
                                                 }}>
-                                                {w.name}
+                                                    {w.name}
+                                                </span>
+                                                {w.stock_count != null && (
+                                                    <span style={{
+                                                        fontSize: isMobile ? 11 : 10.5,
+                                                        color: T.subtext,
+                                                        opacity: 0.55,
+                                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                    }}>
+                                                        {w.stock_count} stocks
+                                                    </span>
+                                                )}
                                             </span>
                                         )}
 
@@ -2596,6 +2916,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         )}
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                             <input
+                                ref={newWlInputRef}
                                 value={newWlName}
                                 onChange={e => { setNewWlName(e.target.value); setWlError(""); }}
                                 placeholder={atWatchlistLimit ? "Limit reached" : "New watchlist"}
@@ -2754,36 +3075,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         {/* Divider — desktop only */}
                         {activeWl && !isMobile && <div style={{ width: 1, height: 14, background: T.border }} />}
 
-                        {/* Summary pills — desktop only */}
-                        {activeWl && rows.length > 0 && !isMobile && (
-                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                {avgRS != null && (
-                                    <span style={{
-                                        fontSize: 11,
-                                        color: T.subtext,
-                                        fontFamily: "'IBM Plex Mono', monospace",
-                                        padding: "4px 8px",
-                                        borderRadius: 999,
-                                        border: `1px solid ${T.border}`,
-                                        background: dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"
-                                    }}>
-                                        RS <span style={{ color: T.green, fontWeight: 500 }}>{avgRS}</span>
-                                    </span>
-                                )}
-                                <span style={{
-                                    fontSize: 11,
-                                    color: T.subtext,
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    padding: "4px 8px",
-                                    borderRadius: 999,
-                                    border: `1px solid ${T.border}`,
-                                    background: dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"
-                                }}>
-                                    S2 <span style={{ color: T.text, fontWeight: 500 }}>{stage2Count}</span>
-                                </span>
-                            </div>
-                        )}
-
                         <div style={{ flex: 1 }} />
 
                         {/* Actions */}
@@ -2793,14 +3084,18 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 <div style={{ position: "relative" }} ref={filterRef}>
                                     <button onClick={() => setFilterOpen(o => !o)}
                                         style={{
-                                            padding: isMobile ? "5px 9px" : "4px 9px",
+                                            padding: isMobile ? "6px 11px" : "6px 13px",
                                             background: activeFiltersCount > 0 ? `${T.green}10` : "transparent",
                                             border: `1px solid ${activeFiltersCount > 0 ? `${T.green}50` : T.border}`,
-                                            borderRadius: 5,
-                                            color: activeFiltersCount > 0 ? T.green : T.subtext,
-                                            fontSize: 11,
-                                            cursor: "pointer"
-                                        }}>
+                                            borderRadius: 7,
+                                            color: activeFiltersCount > 0 ? T.green : T.text,
+                                            fontSize: 12, fontWeight: 600,
+                                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                            cursor: "pointer",
+                                            transition: "background 0.14s ease, border-color 0.14s ease",
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = T.hover; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = activeFiltersCount > 0 ? `${T.green}10` : "transparent"; }}>
                                         {isMobile ? (activeFiltersCount > 0 ? `Filter·${activeFiltersCount}` : "Filter") : "Filter"}
                                     </button>
 
@@ -2818,15 +3113,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 {/* Refresh */}
                                 <button onClick={refreshPrices}
                                     disabled={priceLoading || !rows.length}
+                                    title="Refresh prices"
                                     style={{
-                                        padding: isMobile ? "5px 9px" : "4px 8px",
+                                        width: isMobile ? 32 : 30, height: isMobile ? 32 : 30,
+                                        display: "flex", alignItems: "center", justifyContent: "center",
                                         background: "transparent",
                                         border: `1px solid ${T.border}`,
-                                        borderRadius: 5,
+                                        borderRadius: 7,
                                         color: T.subtext,
-                                        fontSize: 12,
-                                        cursor: "pointer"
-                                    }}>
+                                        fontSize: 13,
+                                        cursor: "pointer",
+                                        transition: "background 0.14s ease",
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = T.hover; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
                                     ↺
                                 </button>
 
@@ -2834,15 +3134,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 {!isMobile && (
                                     <button onClick={exportCSV}
                                         disabled={!rows.length}
+                                        title="Export CSV"
                                         style={{
-                                            padding: "4px 8px",
+                                            width: 30, height: 30,
+                                            display: "flex", alignItems: "center", justifyContent: "center",
                                             background: "transparent",
                                             border: `1px solid ${T.border}`,
-                                            borderRadius: 5,
+                                            borderRadius: 7,
                                             color: T.subtext,
-                                            fontSize: 12,
-                                            cursor: "pointer"
-                                        }}>
+                                            fontSize: 13,
+                                            cursor: "pointer",
+                                            transition: "background 0.14s ease",
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = T.hover; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
                                         ↓
                                     </button>
                                 )}
@@ -2852,34 +3157,155 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     <>
                                         <button onClick={() => setFeedOpen(o => !o)}
                                             style={{
-                                                padding: "4px 9px",
+                                                padding: "6px 13px",
                                                 background: feedOpen ? `${T.green}15` : "transparent",
                                                 border: `1px solid ${feedOpen ? T.green : T.border}`,
-                                                borderRadius: 5,
-                                                color: feedOpen ? T.green : T.subtext,
-                                                fontSize: 11,
-                                                cursor: "pointer"
+                                                borderRadius: 7,
+                                                color: feedOpen ? T.green : T.text,
+                                                fontSize: 12, fontWeight: 600,
+                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                cursor: "pointer",
+                                                transition: "background 0.14s ease",
                                             }}>
                                             Announcements
                                         </button>
 
                                         <button onClick={() => setEarningsOpen(o => !o)}
                                             style={{
-                                                padding: "4px 9px",
+                                                padding: "6px 13px",
                                                 background: earningsOpen ? `rgba(251,191,36,0.12)` : "transparent",
                                                 border: `1px solid ${earningsOpen ? "rgba(251,191,36,0.6)" : T.border}`,
-                                                borderRadius: 5,
-                                                color: earningsOpen ? "#f59e0b" : T.subtext,
-                                                fontSize: 11,
-                                                cursor: "pointer"
+                                                borderRadius: 7,
+                                                color: earningsOpen ? "#f59e0b" : T.text,
+                                                fontSize: 12, fontWeight: 600,
+                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                cursor: "pointer",
+                                                transition: "background 0.14s ease",
                                             }}>
                                             Earnings
                                         </button>
                                     </>
                                 )}
+
+                                {/* Add Stocks — desktop only, dedicated button (mobile uses sidebar search) */}
+                                {!isMobile && (
+                                    <div style={{ position: "relative" }} ref={addStocksRef}>
+                                        <button className="wl-add-stocks-btn" onClick={() => setAddStocksOpen(o => !o)}
+                                            style={{
+                                                display: "flex", alignItems: "center", gap: 6,
+                                                padding: "7px 16px",
+                                                background: T.green,
+                                                border: `1px solid ${T.green}`,
+                                                borderRadius: 8,
+                                                color: "#062012",
+                                                fontSize: 12.5,
+                                                fontWeight: 700,
+                                                letterSpacing: "0.01em",
+                                                cursor: "pointer",
+                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                boxShadow: "0 1px 2px rgba(15,23,42,0.06)",
+                                                transition: "filter 0.14s ease",
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.06)"; }}
+                                            onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}>
+                                            <span style={{
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                                width: 15, height: 15, borderRadius: "50%",
+                                                background: "rgba(6,32,18,0.16)", fontSize: 11, lineHeight: 1, fontWeight: 800,
+                                            }}>+</span>
+                                            Add Stocks
+                                        </button>
+
+                                        {addStocksOpen && (
+                                            <div style={{
+                                                position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 400,
+                                                background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+                                                width: 270, padding: 14,
+                                                boxShadow: dark ? "0 18px 44px rgba(0,0,0,0.4)" : "0 18px 44px rgba(15,23,42,0.14)",
+                                            }}>
+                                                <div style={{
+                                                    fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase",
+                                                    letterSpacing: "0.09em", marginBottom: 10,
+                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                }}>
+                                                    Add to {activeWlName || "watchlist"}
+                                                </div>
+                                                <TickerSearch
+                                                    value={addTicker}
+                                                    onChange={v => { setAddTicker(v); setAddError(""); }}
+                                                    onSelect={v => { setAddTicker(v); setAddError(""); }}
+                                                    onSubmit={addStock}
+                                                    addError={addError}
+                                                    T={T}
+                                                    compact
+                                                />
+                                                {addError && (
+                                                    <div style={{ fontSize: 11, color: "#dc2626", marginTop: 6 }}>{addError}</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
+
+                    {/* ── STAT CARDS — desktop only (matches Journal Dashboard .stat-card theme) ── */}
+                    {!isMobile && activeWl && rows.length > 0 && (
+                        <div style={{
+                            flexShrink: 0,
+                            display: "grid",
+                            gridTemplateColumns: "repeat(5, 1fr)",
+                            gap: 12,
+                            padding: "14px 18px 0",
+                        }}>
+                            {[
+                                {
+                                    label: "Avg RS Rating",
+                                    value: avgRS != null ? String(avgRS) : "—",
+                                    tone: T.green,
+                                    hint: avgRS != null ? (avgRS >= 80 ? "Very Strong" : avgRS >= 60 ? "Strong" : avgRS >= 40 ? "Average" : "Weak") : null,
+                                },
+                                { label: "RS Leaders", value: String(leaders), tone: T.text, hint: "stocks" },
+                                { label: "52W High BO", value: String(bo52wCount), tone: T.text, hint: "stocks" },
+                                { label: "Pivot BO", value: String(pivotBoCount), tone: T.text, hint: "stocks" },
+                                { label: "Avg Market Cap", value: fmt.marketCap(avgMarketCap), tone: T.text, hint: avgMarketCap != null && avgMarketCap >= 20000 ? "Large Cap Focus" : null },
+                            ].map(card => (
+                                <div key={card.label} className="wl-stat-card" style={{
+                                    position: "relative",
+                                    background: T.card,
+                                    border: `1px solid ${T.border}`,
+                                    borderRadius: 14,
+                                    padding: "16px 16px",
+                                    minWidth: 0,
+                                    boxShadow: dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)",
+                                    transition: "box-shadow 0.14s ease, transform 0.14s ease, border-color 0.14s ease",
+                                }}
+                                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = dark ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"; }}
+                                    onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = T.border; }}
+                                >
+                                    <div style={{
+                                        fontSize: 12, fontWeight: 800, color: T.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                        textTransform: "uppercase", letterSpacing: "0.11em", marginBottom: 7,
+                                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                    }}>
+                                        {card.label}
+                                    </div>
+                                    <div style={{
+                                        fontSize: 22, fontWeight: 800, color: card.tone, fontFamily: "'IBM Plex Mono', monospace",
+                                        letterSpacing: "-0.03em", lineHeight: 1.1,
+                                    }}>
+                                        {card.value}
+                                    </div>
+                                    {card.hint && (
+                                        <div style={{ fontSize: 13, color: T.subtext, marginTop: 6, lineHeight: 1.6, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                                            {card.hint}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     {/* ── CONTENT ──────────────────────────────────────────── */}
                     {!activeWl ? (
@@ -2897,11 +3323,17 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         <div style={{ flex: 1, display: "flex", overflow: "hidden", flexDirection: isMobile ? "column" : "row" }}>
                             {/* ── TABLE (flex) ───────────────────────────── */}
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, paddingBottom: isMobile ? 8 : 0 }}>
+                                {/* Column headers — desktop table only */}
+                                {!isMobile && !tableLoading && displayRows.length > 0 && (
+                                    <div style={{ flexShrink: 0, padding: "14px 18px 0" }}>
+                                        <WlTableHeader T={T} sortCol={sortCol} sortAsc={sortAsc} onSort={toggleSort} />
+                                    </div>
+                                )}
                                 {/* Rows */}
                                 <div
                                     ref={stocksScrollRef}
                                     onMouseEnter={() => { hoveredPanelRef.current = "stocks"; }}
-                                    style={{ flex: 1, overflowY: "auto", padding: isMobile ? "8px 10px 8px" : "14px 18px 18px" }}
+                                    style={{ flex: 1, overflowY: "auto", padding: isMobile ? "8px 10px 8px" : "6px 18px 18px" }}
                                     onTouchStart={e => { if (!isMobile) return; const t = e.touches[0]; stocksScrollRef._swipeStartX = t.clientX; stocksScrollRef._swipeStartY = t.clientY; }}
                                     onTouchEnd={e => {
                                         if (!isMobile || stocksScrollRef._swipeStartX == null) return;
@@ -2921,7 +3353,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 : activeFiltersCount > 0 || quickFilter ? "No stocks match the current filters."
                                                     : "No stocks yet — add tickers using the search bar above."}
                                         </div>
-                                    ) : displayRows.map((row, i) => (
+                                    ) : isMobile ? displayRows.map((row, i) => (
                                         <StockRow
                                             key={row.ticker}
                                             row={row}
@@ -2942,6 +3374,23 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             isMarketLiveFn={_isMarketLive}
                                             livePriceTick={livePriceTick}
                                             isMobile={isMobile}
+                                        />
+                                    )) : displayRows.map((row, i) => (
+                                        <WlTableRow
+                                            key={row.ticker}
+                                            row={row}
+                                            rank={page * PAGE_SIZE + i + 1}
+                                            price={prices[row.ticker]}
+                                            marketCap={marketCaps[row.ticker]}
+                                            onRemove={removeStock}
+                                            onExpand={ticker => { setExpandedTicker(t => t === ticker ? null : ticker); setKeySelectedIdx(i); }}
+                                            isExpanded={expandedTicker === row.ticker}
+                                            T={T}
+                                            screenMembership={screenMembership}
+                                            onNavigateToScreen={onNavigateToScreen}
+                                            bestPriceFn={_bestPrice}
+                                            isPricePendingFn={_isPricePending}
+                                            isMarketLiveFn={_isMarketLive}
                                         />
                                     ))}
                                 </div>
@@ -3141,27 +3590,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     ))}
                                                 </div>
                                             ))}
-
-                                            {/* Screen pills */}
-                                            {screenMembership[expandedRow.ticker]?.length > 0 && (
-                                                <div>
-                                                    <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Screens</div>
-                                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                                        {screenMembership[expandedRow.ticker].map(s => (
-                                                            <span key={s}
-                                                                onClick={onNavigateToScreen ? () => onNavigateToScreen(s) : undefined}
-                                                                style={{
-                                                                    fontSize: 9, padding: "2px 6px", borderRadius: 3, border: `1px solid ${T.border}`, color: T.subtext,
-                                                                    cursor: onNavigateToScreen ? "pointer" : "default", transition: "all 0.12s",
-                                                                    textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", fontWeight: 600
-                                                                }}
-                                                                onMouseEnter={onNavigateToScreen ? e => { e.currentTarget.style.color = T.green; e.currentTarget.style.borderColor = `${T.green}50`; } : undefined}
-                                                                onMouseLeave={onNavigateToScreen ? e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.borderColor = T.border; } : undefined}
-                                                            >{s}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
+                                        
                                         </div>
                                     </div>
                                 )
