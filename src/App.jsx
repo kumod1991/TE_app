@@ -23,6 +23,11 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJ
 const PUBLIC_SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://tradeedge.in");
 const AUTH_SESSION_KEY = "te_supabase_session";
 const BRAND_LOGO_SRC = "/tradeedge_logo.png";
+// Marketing preview shown to logged-out users on the Journals tab (put the file in /public)
+const JOURNAL_PROMO_IMG = "/journal-preview.png";
+const JOURNAL_PROMO_IMG_MOBILE = "/journal-preview-mobile.png";
+const WATCHLIST_PROMO_IMG = "/watchlist-preview.png";
+const WATCHLIST_PROMO_IMG_MOBILE = "/watchlist-preview-mobile.png";
 
 function loadPersistedSession() {
     try {
@@ -1678,6 +1683,22 @@ a:hover { text-decoration: underline; }
   border: 1px solid ${T.border}; color: ${T.subtext}; transition: all .14s ease;
 }
 .journal-pill-filter.active { background: ${T.accentFill || T.greenGlow}; border-color: ${T.accent}; color: ${T.accent}; }
+.journal-promo { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 20px 0 40px; text-align: center; }
+.journal-promo-image-wrap { width: 100%; border-radius: 20px; overflow: hidden; border: 1px solid ${T.border}; box-shadow: 0 20px 60px rgba(0,0,0,0.18); }
+.journal-promo-image { width: 100%; display: block; }
+.journal-promo-image-mobile { display: none; }
+.journal-promo-copy { max-width: 560px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.journal-promo-title { font-size: 26px; font-weight: 800; color: ${T.text}; margin: 4px 0 0; letter-spacing: -.02em; }
+.journal-promo-subtitle { font-size: 14px; color: ${T.subtext}; line-height: 1.6; margin: 0; }
+.journal-promo-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+.journal-promo-cta { background: ${T.green}; color: #fff; border: none; border-radius: 8px; padding: 12px 22px; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .12s, opacity .12s; }
+.journal-promo-cta:hover { opacity: .92; transform: translateY(-1px); }
+.journal-promo-cta-ghost { background: transparent; border: 1px solid ${T.border}; color: ${T.text}; border-radius: 8px; padding: 12px 22px; font-size: 14px; font-weight: 600; cursor: pointer; transition: .15s; }
+.journal-promo-cta-ghost:hover { border-color: ${T.green}; color: ${T.green}; }
+.tab-promo-shell { flex: 1; overflow-y: auto; padding: 20px 22px 34px; background: ${T.bg}; }
+.tab-promo-shell-inner { width: 100%; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 1120px) { .tab-promo-shell { padding: 18px 16px 28px; } }
+@media (max-width: 520px) { .tab-promo-shell { padding: 12px 10px 22px; } }
 .journal-toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding: 14px 16px; border-radius: 14px; border: 1px solid ${T.border};
@@ -1696,6 +1717,10 @@ a:hover { text-decoration: underline; }
   .journal-chip-value { font-size: 13px; }
   .journal-toolbar { align-items: stretch; }
   .journal-hero-aside { padding: 14px; border-radius: 16px; }
+  .journal-promo-title { font-size: 20px; }
+  .journal-promo { padding: 8px 0 24px; gap: 20px; }
+  .journal-promo-image-desktop { display: none; }
+  .journal-promo-image-mobile { display: block; }
 }
 @media (max-width: 520px) {
   .journal-main { padding: 12px 10px 22px; }
@@ -3355,6 +3380,68 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
                 </div>
             )}
         </section>
+    );
+}
+
+function JournalLandingPromo({ T, onLogin }) {
+    return (
+        <div className="journal-promo">
+            <div className="journal-promo-image-wrap">
+                <img
+                    src={JOURNAL_PROMO_IMG}
+                    alt="TradeEdge trading journal preview"
+                    className="journal-promo-image journal-promo-image-desktop"
+                />
+                <img
+                    src={JOURNAL_PROMO_IMG_MOBILE}
+                    alt="TradeEdge trading journal preview"
+                    className="journal-promo-image journal-promo-image-mobile"
+                />
+            </div>
+            <div className="journal-promo-copy">
+                <div className="journal-kicker">All-in-one Trading Journal</div>
+                <h2 className="journal-promo-title">Track. Analyze. Improve. Repeat.</h2>
+                <p className="journal-promo-subtitle">
+                    Sign up free to log every trade, track your real P&amp;L, and see the analytics
+                    that show you your actual edge  right inside TradeEdge.
+                </p>
+                <div className="journal-promo-actions">
+                    <button className="journal-promo-cta" onClick={onLogin}>Start Your Edge Today →</button>
+                    <button className="journal-promo-cta-ghost" onClick={onLogin}>Login</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function WatchlistLandingPromo({ T, onLogin }) {
+    return (
+        <div className="journal-promo">
+            <div className="journal-promo-image-wrap">
+                <img
+                    src={WATCHLIST_PROMO_IMG}
+                    alt="TradeEdge watchlist preview"
+                    className="journal-promo-image journal-promo-image-desktop"
+                />
+                <img
+                    src={WATCHLIST_PROMO_IMG_MOBILE}
+                    alt="TradeEdge watchlist preview"
+                    className="journal-promo-image journal-promo-image-mobile"
+                />
+            </div>
+            <div className="journal-promo-copy">
+                <div className="journal-kicker">Watchlists</div>
+                <h2 className="journal-promo-title">Your Watchlist, Organized.</h2>
+                <p className="journal-promo-subtitle">
+                    Sign up free to build watchlists, track live prices, and get RS ratings and
+                    breakout signals for every stock you follow.
+                </p>
+                <div className="journal-promo-actions">
+                    <button className="journal-promo-cta" onClick={onLogin}>Start Your Edge Today →</button>
+                    <button className="journal-promo-cta-ghost" onClick={onLogin}>Login</button>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -12039,6 +12126,51 @@ function _prefetchScreensVcp() {
     return _prefetchVcpPromise;
 }
 
+//  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
+// Engulfing / Hammer) loaded directly from the `pattern_filters` Supabase table.
+// Simple in-memory SWR cache per pattern, keyed by pattern code, so switching
+// between the three sub-tabs (and navigating back/forth) doesn't re-fetch.
+const _PATTERN_FILTER_TTL_MS = 10 * 60 * 1000;
+const _patternFilterCache = {};   // { [pattern]: { rows, loadedAt } }
+const _patternFilterInflight = {}; // { [pattern]: Promise }
+
+function _fetchPatternFilters(pattern) {
+    const cached = _patternFilterCache[pattern];
+    if (cached && cached.rows && (Date.now() - cached.loadedAt) < _PATTERN_FILTER_TTL_MS) {
+        return Promise.resolve(cached.rows);
+    }
+    if (_patternFilterInflight[pattern]) return _patternFilterInflight[pattern];
+    _patternFilterInflight[pattern] = (async () => {
+        try {
+            const url = `${SUPABASE_URL}/rest/v1/pattern_filters?select=*&pattern=eq.${encodeURIComponent(pattern)}&order=week_end.desc,detected_at.desc&limit=300`;
+            const r = await fetch(url, {
+                headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+            });
+            if (!r.ok) throw new Error(`pattern_filters fetch failed: ${r.status}`);
+            const rows = await r.json();
+            if (!Array.isArray(rows)) throw new Error("pattern_filters returned a non-array response");
+            // Debug: if this logs 0 rows for a pattern you know has data in the SQL
+            // editor, it's almost always RLS on pattern_filters blocking the anon
+            // key (Postgres returns 200 + [] rather than an error in that case).
+            console.debug(`[PatternFilter] ${pattern}: ${rows.length} rows`, { status: r.status, url });
+            _patternFilterCache[pattern] = { rows, loadedAt: Date.now() };
+            return rows;
+        } finally {
+            delete _patternFilterInflight[pattern];
+        }
+    })();
+    return _patternFilterInflight[pattern];
+}
+
+// Pattern filter rows accumulate one row per stock per week; both the Screens
+// preview cards and the full-screen PatternFilterModule only ever show the
+// most recent detection week, so this helper is shared between them.
+function _latestWeekPatternRows(rows) {
+    if (!rows || !rows.length) return [];
+    const maxWk = rows.reduce((m, r) => (r.week_end && (!m || r.week_end > m) ? r.week_end : m), null);
+    return rows.filter(r => r.week_end === maxWk);
+}
+
 
 async function _loadNifty500() {
     if (_nifty500Cache !== null) return _nifty500Cache;
@@ -17759,6 +17891,15 @@ const VCP_FILTER_DEFS = [
     { key: "rel_volume", label: "Rel Volume", defaultOp: ">", num: true },
 ];
 
+// Pattern Filter (Chart Patterns) numeric filters  full-screen view only
+const PATTERN_FILTER_DEFS = [
+    { key: "ret_3m", label: "3M Return %", defaultOp: ">", num: true },
+    { key: "ret_6m", label: "6M Return %", defaultOp: ">", num: true },
+    { key: "ret_12m", label: "12M Return %", defaultOp: ">", num: true },
+    { key: "close", label: "Price ", defaultOp: ">", num: true },
+    { key: "volume", label: "Volume", defaultOp: ">", num: true },
+];
+
 
 
 
@@ -19276,6 +19417,556 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         </div>
     );
 }
+
+/* 
+   PATTERN FILTER MODULE  weekly candlestick pattern scans, loaded straight
+   from the `pattern_filters` Supabase table (Morning Star / Bullish
+   Engulfing / Hammer). Self-contained: owns its own tabs, fetch, sort and
+   pagination, so it drops into ScreensModule the same way ScreenDetailView
+   does (full-width swap, back button returns to the library).
+ */
+const PATTERN_FILTER_TABS = [
+    { id: "MORNING_STAR", label: "Morning Star", desc: "Bearish-to-bullish 3-candle reversal — a down candle, a small-bodied indecision candle, then a strong up candle." },
+    { id: "BULLISH_ENGULFING", label: "Bullish Engulfing", desc: "A down candle fully engulfed by the next candle's up move — buyers overwhelming sellers." },
+    { id: "HAMMER", label: "Hammer", desc: "Small body near the top of the range with a long lower wick — sellers pushed price down, buyers pushed it back up." },
+];
+
+function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, universe, nifty500Set, nifty500Loading }) {
+    const isDark = T.bg !== THEMES.light.bg;
+    const sans = "'IBM Plex Sans', system-ui, sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+    const D = useMemo(() => buildDashboardTheme(T), [T]);
+    const ACCENT = isDark ? "#6366f1" : "#4f46e5";
+
+    const [activeTab, setActiveTab] = useState(initialTab || PATTERN_FILTER_TABS[0].id);
+    const [rowsByTab, setRowsByTab] = useState({});
+    const [loadingTab, setLoadingTab] = useState(activeTab);
+    const [errorsByTab, setErrorsByTab] = useState({});
+    const [sortKey, setSortKey] = useState("ret_3m");
+    const [sortDir, setSortDir] = useState("desc");
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 25;
+    // Quick exchange filter + numeric add-filter chips (mirrors ScreenDetailView's filter bar)
+    const [exchangeFilter, setExchangeFilter] = useState("ALL"); // ALL | NSE | BSE
+    const [filters, setFilters] = useState([]);
+    const [addFilterOpen, setAddFilterOpen] = useState(false);
+    const addFilterRef = useRef(null);
+    const tableRef = useRef(null);
+    // Chart preview popover  same mechanism as ScreenDetailView
+    const [hoveredRow, setHoveredRow] = useState(null); // { ticker, row, anchorRect }
+
+    useEffect(() => {
+        if (!addFilterOpen) return;
+        const h = e => { if (addFilterRef.current && !addFilterRef.current.contains(e.target)) setAddFilterOpen(false); };
+        document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+    }, [addFilterOpen]);
+
+    // Dismiss chart preview when tapping outside the table (touch devices)
+    useEffect(() => {
+        if (!hoveredRow) return;
+        const h = e => { if (tableRef.current && !tableRef.current.contains(e.target)) setHoveredRow(null); };
+        document.addEventListener("touchstart", h, { passive: true });
+        return () => document.removeEventListener("touchstart", h);
+    }, [hoveredRow]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoadingTab(activeTab);
+        _fetchPatternFilters(activeTab)
+            .then(rows => {
+                if (cancelled) return;
+                setRowsByTab(p => ({ ...p, [activeTab]: rows }));
+                setErrorsByTab(p => ({ ...p, [activeTab]: null }));
+            })
+            .catch(e => {
+                if (cancelled) return;
+                console.error("[PatternFilter] fetch failed:", e);
+                setErrorsByTab(p => ({ ...p, [activeTab]: "Couldn't load this scan. Please try again." }));
+            })
+            .finally(() => { if (!cancelled) setLoadingTab(t => t === activeTab ? null : t); });
+        return () => { cancelled = true; };
+    }, [activeTab]);
+
+    useEffect(() => { setPage(1); }, [activeTab, sortKey, sortDir, exchangeFilter, filters]);
+    // Reset quick filters when switching pattern tabs so a filter set for one
+    // pattern doesn't silently hide results on the next
+    useEffect(() => { setExchangeFilter("ALL"); setFilters([]); }, [activeTab]);
+
+    const isLoading = (loadingTab === activeTab && !rowsByTab[activeTab]) || (universe === "nifty500" && nifty500Loading);
+    const error = errorsByTab[activeTab];
+    const rawRows = rowsByTab[activeTab] || [];
+    const activeMeta = PATTERN_FILTER_TABS.find(t => t.id === activeTab);
+
+    // The table shows only the most recent detection week for the active
+    // pattern — pattern_filters accumulates one row per stock per week, so
+    // without this the table mixes several weeks' worth of hits together.
+    const latestWeekEnd = useMemo(() => {
+        if (!rawRows.length) return null;
+        return rawRows.reduce((max, r) => (r.week_end && (!max || r.week_end > max) ? r.week_end : max), null);
+    }, [rawRows]);
+
+    const latestWeekRows = useMemo(
+        () => (latestWeekEnd ? rawRows.filter(r => r.week_end === latestWeekEnd) : []),
+        [rawRows, latestWeekEnd]
+    );
+
+    // Same "latest week only" logic, used for the small count badge on each
+    // tab pill so it reflects what the table will actually show once opened.
+    const latestWeekCountFor = (rows) => {
+        if (!rows || !rows.length) return 0;
+        const maxWk = rows.reduce((m, r) => (r.week_end && (!m || r.week_end > m) ? r.week_end : m), null);
+        return applyUniverse(rows.filter(r => r.week_end === maxWk)).length;
+    };
+
+    // Mirrors ScreensModule's filterByUniverse so the All/Nifty 500 toggle
+    // stays in sync between the preview cards and this full-screen view
+    const applyUniverse = useCallback(rows => {
+        if (universe !== "nifty500") return rows;
+        if (nifty500Loading || !nifty500Set) return [];
+        if (nifty500Set.size === 0) return rows;
+        return rows.filter(r => nifty500Set.has(r.ticker));
+    }, [universe, nifty500Set, nifty500Loading]);
+
+    // Quick exchange filter + numeric add-filter chips applied on top of the
+    // latest-week rows, before sorting
+    const filteredWeekRows = useMemo(() => {
+        let r = applyUniverse(latestWeekRows);
+        if (exchangeFilter !== "ALL") r = r.filter(x => x.exchange === exchangeFilter);
+        for (const f of filters) {
+            const val = parseFloat(f.value); if (isNaN(val)) continue;
+            r = r.filter(row => {
+                const rv = Number(row[f.key] ?? 0);
+                if (f.op === ">") return rv > val;
+                if (f.op === ">=") return rv >= val;
+                if (f.op === "<") return rv < val;
+                return rv <= val;
+            });
+        }
+        return r;
+    }, [latestWeekRows, exchangeFilter, filters, applyUniverse]);
+
+    const addFilter = key => {
+        const def = PATTERN_FILTER_DEFS.find(f => f.key === key);
+        setFilters(fs => [...fs, { id: Date.now(), key, op: def?.defaultOp || ">", value: "" }]);
+        setAddFilterOpen(false);
+    };
+
+    // Pre-warm chart cache for visible rows so hover popover is instant
+    useEffect(() => {
+        if (!filteredWeekRows || filteredWeekRows.length === 0) return;
+        const toPrefetch = filteredWeekRows.slice(0, 25).map(r => r.ticker).filter(Boolean);
+        toPrefetch.forEach((ticker, i) => {
+            if (_weeklyChartCache.get(ticker) !== undefined) return;
+            setTimeout(() => fetchWeeklyOHLCFromDB(ticker), i * 80);
+        });
+    }, [filteredWeekRows]);
+
+    const sortedRows = useMemo(() => {
+        const r = [...filteredWeekRows];
+        r.sort((a, b) => {
+            const av = a[sortKey], bv = b[sortKey];
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            const an = Number(av), bn = Number(bv);
+            if (!isNaN(an) && !isNaN(bn) && sortKey !== "week_end" && sortKey !== "week_start" && sortKey !== "ticker" && sortKey !== "name" && sortKey !== "exchange") {
+                return sortDir === "desc" ? bn - an : an - bn;
+            }
+            return sortDir === "desc" ? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
+        });
+        return r;
+    }, [filteredWeekRows, sortKey, sortDir]);
+
+    const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+    const pageStart = (page - 1) * PAGE_SIZE;
+    const pagedRows = useMemo(() => sortedRows.slice(pageStart, pageStart + PAGE_SIZE), [sortedRows, pageStart]);
+    const goToPage = p => setPage(Math.min(Math.max(1, p), totalPages));
+
+    const handleSort = key => {
+        if (sortKey === key) setSortDir(d => d === "desc" ? "asc" : "desc");
+        else { setSortKey(key); setSortDir(key === "ticker" || key === "name" ? "asc" : "desc"); }
+    };
+
+    const posClr = isDark ? "#4ade80" : "#16a34a";
+    const negClr = T.neg;
+
+    const columns = [
+        { key: "ticker", label: "Ticker", align: "left", width: 120 },
+        { key: "name", label: "Company", align: "left", width: 220 },
+        { key: "exchange", label: "Exch", align: "left", width: 60 },
+        { key: "week_end", label: "Week End", align: "left", width: 100 },
+        { key: "open", label: "Open", align: "right", width: 90 },
+        { key: "high", label: "High", align: "right", width: 90 },
+        { key: "low", label: "Low", align: "right", width: 90 },
+        { key: "close", label: "Close", align: "right", width: 90 },
+        { key: "volume", label: "Volume", align: "right", width: 110 },
+        { key: "ret_3m", label: "3M Ret", align: "right", width: 90 },
+        { key: "ret_6m", label: "6M Ret", align: "right", width: 90 },
+        { key: "ret_12m", label: "12M Ret", align: "right", width: 90 },
+    ];
+
+    const fmtCell = (row, key) => {
+        const v = row[key];
+        if (v == null || v === "") return null;
+        if (["open", "high", "low", "close"].includes(key)) return fmtINR(v);
+        if (key === "volume") return Number(v).toLocaleString("en-IN");
+        if (["ret_3m", "ret_6m", "ret_12m"].includes(key)) return fmtPct(Number(v));
+        if (key === "week_end") return String(v).slice(0, 10);
+        return String(v);
+    };
+
+    const cellColor = (key, v) => {
+        if (v == null || v === "") return T.muted;
+        if (["ret_3m", "ret_6m", "ret_12m"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
+        if (key === "ticker") return T.text;
+        return T.text;
+    };
+
+    const SortArrow = ({ k }) => sortKey !== k
+        ? <span style={{ opacity: .2, marginLeft: 2, fontSize: 8 }}></span>
+        : <span style={{ marginLeft: 2, color: ACCENT, fontSize: 8 }}>{sortDir === "desc" ? "" : ""}</span>;
+
+    return (
+        <div className="pfv-outer" style={{
+            display: "flex", flexDirection: "column", width: "100%", height: "100%",
+            background: T.bg, color: T.text, fontFamily: sans, flex: 1, minHeight: 0, overflow: "auto"
+        }}>
+            <style>{`
+        .pfv-shell { width:min(100%, 1400px); margin:0 auto; display:flex; flex-direction:column; flex:1; min-height:0; padding:16px 18px 20px; gap:14px; }
+        .pfv-topcard {
+          border:1px solid ${T.border}; border-radius:24px; overflow:hidden;
+          background:${isDark
+                    ? "linear-gradient(180deg, rgba(15,23,42,0.94) 0%, rgba(10,15,28,0.98) 100%)"
+                    : "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(245,247,255,0.98) 100%)"};
+          box-shadow:${isDark ? "0 24px 60px rgba(0,0,0,0.28)" : "0 24px 60px rgba(148,163,184,0.18)"};
+        }
+        .pfv-hero { padding:18px 20px 16px; border-bottom:1px solid ${T.border};
+          background:${isDark ? "linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(15,23,42,0) 60%)" : "linear-gradient(135deg, rgba(79,70,229,0.08) 0%, rgba(255,255,255,0) 60%)"};
+        }
+        .pfv-tabbar { display:flex; align-items:center; gap:8px; padding:12px 20px; flex-wrap:wrap; border-bottom:1px solid ${T.border}; }
+        .pfv-tab {
+          padding:8px 14px; border-radius:10px; border:1px solid ${T.border}; background:${T.card};
+          color:${T.subtext}; font-size:12.5px; font-weight:600; font-family:${sans}; cursor:pointer;
+          transition:.12s; white-space:nowrap;
+        }
+        .pfv-tab.active { background:${ACCENT}; border-color:${ACCENT}; color:#fff; }
+        .pfv-table-wrap { overflow:auto; max-height:min(62vh, 620px); }
+        table.pfv-table { width:100%; border-collapse:collapse; font-family:${sans}; }
+        table.pfv-table th { padding:10px 12px; text-align:left; font-size:10.5px; font-weight:700; color:${T.subtext};
+          text-transform:uppercase; letter-spacing:.08em; background:${D.tableHeadBg}; border-bottom:1px solid ${D.panelBorder};
+          position:sticky; top:0; z-index:1; cursor:pointer; white-space:nowrap; }
+        table.pfv-table td { padding:10px 12px; font-size:12.5px; border-bottom:1px solid ${D.panelBorder}; white-space:nowrap; }
+        table.pfv-table tbody tr:hover { background:${isDark ? "rgba(255,255,255,0.025)" : "rgba(15,23,42,0.02)"}; }
+        @media (max-width:600px) {
+          .pfv-shell { padding:10px 10px 16px; }
+          .pfv-hero { padding:14px 16px 12px; }
+          .pfv-table-wrap { max-height:min(58vh, 480px); }
+        }
+      `}</style>
+
+            <div className="pfv-shell">
+                <div className="pfv-topcard">
+                    <div className="pfv-hero">
+                        <button onClick={onBack}
+                            style={{
+                                display: "flex", alignItems: "center", gap: 6,
+                                padding: "0 0 12px", border: "none", background: "transparent",
+                                color: T.subtext, cursor: "pointer", fontSize: 13,
+                                fontFamily: sans, transition: "color .12s"
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = T.text}
+                            onMouseLeave={e => e.currentTarget.style.color = T.subtext}>
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10 3L5 8l5 5" />
+                            </svg>
+                            Screens
+                        </button>
+                        <div style={{
+                            display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 11px", borderRadius: 999,
+                            border: `1px solid ${ACCENT}22`, background: `${ACCENT}12`, color: ACCENT,
+                            fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase"
+                        }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: ACCENT, boxShadow: `0 0 0 5px ${ACCENT}16` }} />
+                            Chart Patterns
+                        </div>
+                        <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <div style={{ width: 4, height: 20, borderRadius: 999, background: ACCENT, flexShrink: 0 }} />
+                            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-.04em", color: T.text, lineHeight: 1.08 }}>
+                                Pattern Filters
+                            </div>
+                        </div>
+                        {activeMeta && (
+                            <div style={{ marginTop: 8, fontSize: 13.5, color: T.subtext, lineHeight: 1.65, maxWidth: 760 }}>
+                                {activeMeta.desc}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="pfv-tabbar">
+                        {PATTERN_FILTER_TABS.map(tab => (
+                            <button key={tab.id} className={`pfv-tab${activeTab === tab.id ? " active" : ""}`}
+                                onClick={() => setActiveTab(tab.id)}>
+                                {tab.label}
+                                {rowsByTab[tab.id] && (
+                                    <span style={{ marginLeft: 6, opacity: .75, fontFamily: mono, fontSize: 11 }}>
+                                        {latestWeekCountFor(rowsByTab[tab.id])}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/*  FILTER BAR  */}
+                    <div style={{
+                        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                        padding: "10px 20px", borderBottom: `1px solid ${T.border}`
+                    }}>
+                        {["ALL", "NSE", "BSE"].map(v => (
+                            <button key={v} onClick={() => setExchangeFilter(v)}
+                                style={{
+                                    height: 28, padding: "0 10px", borderRadius: 5, fontSize: 11,
+                                    fontFamily: sans, cursor: "pointer", transition: ".12s",
+                                    fontWeight: exchangeFilter === v ? 700 : 500,
+                                    border: exchangeFilter === v ? `1px solid ${ACCENT}` : `1px solid ${D.panelBorder}`,
+                                    background: exchangeFilter === v ? `${ACCENT}14` : T.card,
+                                    color: exchangeFilter === v ? ACCENT : T.subtext
+                                }}>
+                                {v === "ALL" ? "All Exchanges" : v}
+                            </button>
+                        ))}
+                        <div style={{ width: 1, height: 18, background: T.border, margin: "0 2px" }} />
+
+                        {filters.map(f => {
+                            const def = PATTERN_FILTER_DEFS.find(d => d.key === f.key);
+                            return (
+                                <div key={f.id} style={{
+                                    display: "inline-flex", alignItems: "stretch",
+                                    height: 30, borderRadius: 6, border: `1px solid ${D.panelBorder}`,
+                                    background: T.card, overflow: "hidden", flexShrink: 0,
+                                    fontSize: 12, fontFamily: sans
+                                }}>
+                                    <div style={{
+                                        display: "flex", alignItems: "center", padding: "0 10px",
+                                        background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                                        borderRight: `1px solid ${D.panelBorder}`
+                                    }}>
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: T.text, whiteSpace: "nowrap" }}>
+                                            {def?.label || f.key}
+                                        </span>
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", borderRight: `1px solid ${D.panelBorder}` }}>
+                                        <select value={f.op}
+                                            onChange={e => setFilters(fs => fs.map(x => x.id === f.id ? { ...x, op: e.target.value } : x))}
+                                            style={{
+                                                appearance: "none", WebkitAppearance: "none",
+                                                background: "transparent", border: "none", outline: "none",
+                                                fontFamily: mono, fontSize: 11, fontWeight: 700,
+                                                color: ACCENT, padding: "0 14px 0 8px",
+                                                height: 30, letterSpacing: ".04em", cursor: "pointer"
+                                            }}>
+                                            {[">", ">=", "<", "<="].map(o => <option key={o} value={o}>{o}</option>)}
+                                        </select>
+                                    </div>
+                                    <input type="number" value={f.value} placeholder="value"
+                                        onChange={e => setFilters(fs => fs.map(x => x.id === f.id ? { ...x, value: e.target.value } : x))}
+                                        style={{
+                                            width: 60, height: 30, border: "none", outline: "none",
+                                            background: "transparent", fontFamily: mono,
+                                            fontSize: 12, fontWeight: 600, color: T.text,
+                                            padding: "0 8px", textAlign: "right"
+                                        }} />
+                                    <button
+                                        onClick={() => setFilters(fs => fs.filter(x => x.id !== f.id))}
+                                        style={{
+                                            width: 24, height: 30, border: "none",
+                                            borderLeft: `1px solid ${D.panelBorder}`, background: "transparent",
+                                            cursor: "pointer", color: T.muted,
+                                            display: "flex", alignItems: "center", justifyContent: "center"
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.color = T.neg; }}
+                                        onMouseLeave={e => { e.currentTarget.style.color = T.muted; }}>
+                                        <svg width="7" height="7" viewBox="0 0 8 8" fill="none" stroke="currentColor"
+                                            strokeWidth="1.5" strokeLinecap="round">
+                                            <path d="M1 1l6 6M7 1L1 7" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            );
+                        })}
+
+                        <div style={{ position: "relative" }} ref={addFilterRef}>
+                            <button onClick={() => setAddFilterOpen(o => !o)}
+                                style={{
+                                    display: "inline-flex", alignItems: "center", gap: 6,
+                                    height: 30, padding: "0 12px", background: T.card,
+                                    border: `1px dashed ${D.panelBorder}`, borderRadius: 6,
+                                    color: T.muted, cursor: "pointer", fontSize: 12,
+                                    fontFamily: sans, transition: "border-color .12s, color .12s"
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.color = T.text; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = D.panelBorder; e.currentTarget.style.color = T.muted; }}>
+                                <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor"
+                                    strokeWidth="1.6" strokeLinecap="round">
+                                    <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
+                                </svg>
+                                Add Filter
+                            </button>
+                            {addFilterOpen && (
+                                <div style={{
+                                    position: "absolute", top: 34, left: 0, zIndex: 200,
+                                    background: T.card, border: `1px solid ${D.panelBorder}`, borderRadius: 8,
+                                    boxShadow: `0 6px 24px ${T.shadow}`, padding: "4px 0",
+                                    minWidth: 170, fontFamily: sans
+                                }}>
+                                    {PATTERN_FILTER_DEFS.map(d => (
+                                        <div key={d.key} onClick={() => addFilter(d.key)}
+                                            style={{ padding: "7px 13px", fontSize: 12, cursor: "pointer", color: T.subtext }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = T.hover; e.currentTarget.style.color = T.text; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.subtext; }}>
+                                            {d.label}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {(filters.length > 0 || exchangeFilter !== "ALL") && (
+                            <button onClick={() => { setFilters([]); setExchangeFilter("ALL"); }}
+                                style={{
+                                    background: "none", border: "none", cursor: "pointer",
+                                    color: T.muted, fontSize: 12, fontFamily: sans, padding: "0 4px"
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.color = T.text}
+                                onMouseLeave={e => e.currentTarget.style.color = T.muted}>
+                                Clear all
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="pfv-table-wrap" ref={tableRef}>
+                        {isLoading ? (
+                            <div style={{ padding: 40, textAlign: "center", color: T.subtext, fontSize: 13 }}>
+                                Loading {activeMeta?.label} scan
+                            </div>
+                        ) : error ? (
+                            <div style={{ padding: 40, textAlign: "center", color: negClr, fontSize: 13 }}>
+                                {error}
+                            </div>
+                        ) : sortedRows.length === 0 ? (
+                            <div style={{ padding: 40, textAlign: "center", color: T.subtext, fontSize: 13 }}>
+                                {filters.length > 0 || exchangeFilter !== "ALL"
+                                    ? "No stocks match the current filters."
+                                    : "No stocks currently match this pattern."}
+                            </div>
+                        ) : (
+                            <table className="pfv-table">
+                                <thead>
+                                    <tr>
+                                        {columns.map(c => (
+                                            <th key={c.key} onClick={() => handleSort(c.key)}
+                                                style={{
+                                                    textAlign: c.align,
+                                                    background: sortKey === c.key ? (isDark ? `${ACCENT}0d` : `${ACCENT}07`) : D.tableHeadBg
+                                                }}>
+                                                {c.label}<SortArrow k={c.key} />
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pagedRows.map((row, i) => (
+                                        <tr key={row.id || `${row.ticker}-${i}`}
+                                            style={{ cursor: "pointer" }}
+                                            onMouseEnter={e => {
+                                                if (window.matchMedia("(hover: none)").matches) return;
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                setHoveredRow({ ticker: row.ticker, row, anchorRect: rect });
+                                            }}
+                                            onMouseLeave={() => {
+                                                if (window.matchMedia("(hover: none)").matches) return;
+                                                setHoveredRow(null);
+                                            }}
+                                            onClick={e => {
+                                                // Touch devices: tap to toggle preview
+                                                if (!window.matchMedia("(hover: none)").matches) return;
+                                                if (hoveredRow?.ticker === row.ticker) { setHoveredRow(null); return; }
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                setHoveredRow({ ticker: row.ticker, row, anchorRect: rect });
+                                            }}>
+                                            {columns.map(c => (
+                                                <td key={c.key} style={{
+                                                    textAlign: c.align,
+                                                    fontFamily: ["ticker", "week_end", "open", "high", "low", "close", "volume", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? mono : sans,
+                                                    fontWeight: c.key === "ticker" ? 700 : 400,
+                                                    color: cellColor(c.key, row[c.key])
+                                                }}>
+                                                    {fmtCell(row, c.key) ?? <span style={{ color: T.muted }}>{"\u2013"}</span>}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+
+                    {sortedRows.length > 0 && (
+                        <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "12px 20px", borderTop: `1px solid ${T.border}`, flexWrap: "wrap", gap: 10
+                        }}>
+                            <span style={{ fontSize: 11, color: T.subtext, fontFamily: mono }}>
+                                Loaded directly from pattern_filters — week ending {sortedRows[0]?.week_end ? String(sortedRows[0].week_end).slice(0, 10) : "--"}
+                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span style={{ fontSize: 11.5, color: T.subtext, fontFamily: mono, fontVariantNumeric: "tabular-nums" }}>
+                                    {pageStart + 1}{"\u2013"}{Math.min(pageStart + PAGE_SIZE, sortedRows.length)} of {sortedRows.length}
+                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                    <button onClick={() => goToPage(page - 1)} disabled={page <= 1}
+                                        style={{
+                                            padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: sans,
+                                            borderRadius: 6, border: `1px solid ${D.panelBorder}`,
+                                            background: "transparent", color: page <= 1 ? T.muted : T.text,
+                                            cursor: page <= 1 ? "default" : "pointer", opacity: page <= 1 ? 0.5 : 1
+                                        }}>
+                                        Prev
+                                    </button>
+                                    <span style={{ fontSize: 11.5, color: T.text, fontFamily: mono, fontWeight: 600, padding: "0 6px", fontVariantNumeric: "tabular-nums" }}>
+                                        {page} / {totalPages}
+                                    </span>
+                                    <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages}
+                                        style={{
+                                            padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: sans,
+                                            borderRadius: 6, border: `1px solid ${D.panelBorder}`,
+                                            background: "transparent", color: page >= totalPages ? T.muted : T.text,
+                                            cursor: page >= totalPages ? "default" : "pointer", opacity: page >= totalPages ? 0.5 : 1
+                                        }}>
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {hoveredRow && hoveredRow.anchorRect && (
+                <ChartPreviewPopover
+                    ticker={hoveredRow.ticker}
+                    row={hoveredRow.row}
+                    T={T}
+                    accentColor={ACCENT}
+                    anchorRect={hoveredRow.anchorRect}
+                    nameMap={nameMap}
+                    industryMap={industryMap}
+                />
+            )}
+        </div>
+    );
+}
+
 function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const { top52wHigh, topRS, trendAligned, rsRating, rsAcceleration,
         nameMap, industryMap, tablesLoading } = useBreadthData();
@@ -19284,16 +19975,40 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
+    // Same derived flat theme StockDashboard uses everywhere (panelBg,
+    // panelBorder, single-shadow tokens, no gradients/blur) so this page's
+    // card grid matches the Movers/Trend Template look exactly.
+    const D = useMemo(() => buildDashboardTheme(T), [T]);
 
     const [universe, setUniverse] = useState("all");
     const [nifty500Set, setNifty500Set] = useState(() => _nifty500Cache || null);
     const [nifty500Loading, setNifty500Loading] = useState(() => _nifty500Cache === null);
     const [screenDetail, setScreenDetail] = useState(null);
-    const [expandedKey, setExpandedKey] = useState(null);
-    const [openCats, setOpenCats] = useState({});
+    const [patternFilterOpen, setPatternFilterOpen] = useState(false);
+    const [patternFilterInitialTab, setPatternFilterInitialTab] = useState(PATTERN_FILTER_TABS[0].id);
     const [pendingScreen, setPendingScreen] = useState(() => window.__wl_openScreen || null);
+    // Preview data for the three Chart Patterns scans (Morning Star / Bullish
+    // Engulfing / Hammer), fetched once so each pattern gets its own
+    // expandable preview row, same as every other category on this page.
+    const [patternRowsByTab, setPatternRowsByTab] = useState({});
+    const [patternLoading, setPatternLoading] = useState(true);
 
     const openDetail = (cfg) => setScreenDetail(cfg);
+
+    useEffect(() => {
+        let cancelled = false;
+        Promise.all(PATTERN_FILTER_TABS.map(tab =>
+            _fetchPatternFilters(tab.id).then(rows => ({ id: tab.id, rows })).catch(() => ({ id: tab.id, rows: [] }))
+        )).then(results => {
+            if (cancelled) return;
+            const byTab = {};
+            results.forEach(r => { byTab[r.id] = r.rows; });
+            setPatternRowsByTab(byTab);
+            setPatternLoading(false);
+        });
+        return () => { cancelled = true; };
+    }, []);
+
     useEffect(() => {
         // Use cached set if it has data; retry fetch if cache is null or an empty Set (prior failure)
         if (_nifty500Cache !== null && _nifty500Cache.size > 0) {
@@ -19313,6 +20028,28 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         if (nifty500Set.size === 0) return rows;
         return rows.filter(r => nifty500Set.has(r.ticker));
     }, [universe, nifty500Set, nifty500Loading]);
+
+    // Latest-week-only rows per pattern, filtered by the active universe
+    // (All / Nifty 500), sorted by 3M return (desc) for preview
+    const patternPreviewRows = useMemo(() => {
+        const out = {};
+        for (const tab of PATTERN_FILTER_TABS) {
+            const latest = filterByUniverse(_latestWeekPatternRows(patternRowsByTab[tab.id]));
+            out[tab.id] = [...latest].sort((a, b) => {
+                const av = a.ret_3m, bv = b.ret_3m;
+                if (av == null && bv == null) return 0;
+                if (av == null) return 1;
+                if (bv == null) return -1;
+                return Number(bv) - Number(av);
+            });
+        }
+        return out;
+    }, [patternRowsByTab, filterByUniverse]);
+
+    const patternTotalCount = useMemo(
+        () => PATTERN_FILTER_TABS.reduce((sum, tab) => sum + (patternPreviewRows[tab.id]?.length || 0), 0),
+        [patternPreviewRows]
+    );
 
     const d52w = useMemo(() => filterByUniverse(top52wHigh).slice(0, 50), [top52wHigh, filterByUniverse]);
     const dRS3m = useMemo(() => filterByUniverse(topRS.rs3m).slice(0, 50), [topRS, filterByUniverse]);
@@ -19782,7 +20519,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         };
         const sc = PILL_MAP[pendingScreen];
         if (!sc) { setPendingScreen(null); return; }
-        setExpandedKey(sc.rowKey);
         setPendingScreen(null);
         // Only open detail if rows are available  avoids blank page when data still loading
         if (sc.rows && sc.rows.length > 0) {
@@ -19791,7 +20527,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 scoreKey: sc.scoreKey, scoreLabel: sc.scoreLabel, formatVal: sc.formatVal
             });
         }
-        // If rows still loading: row is expanded & highlighted, user clicks "View all" when ready
     }, [pendingScreen, tablesLoading, dRsRating, d52w, dMultiTF, dRsAccel,
         dVolBreakout, d52wBreakout, dPivotBreakout, dPb50dma, dPbShallow, dPbWeekly, dPbVolDryup]);
 
@@ -19813,131 +20548,79 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         );
     }
 
+    // If the Pattern Filter view is open, render it filling the content area
+    if (patternFilterOpen) {
+        return (
+            <PatternFilterModule T={T} initialTab={patternFilterInitialTab}
+                onBack={() => setPatternFilterOpen(false)}
+                nameMap={nameMap} industryMap={industryMap}
+                universe={universe} nifty500Set={nifty500Set} nifty500Loading={nifty500Loading} />
+        );
+    }
+
+    // Flat surfaces only — no gradients, no backdrop-filter blur, no glow
+    // overlays. Depth comes from D.shadowMd/D.shadowLg (StockDashboard's
+    // single soft-shadow tokens), same as SectionCard/PremiumTableShell.
     const css = `
     @keyframes scr-shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
     @keyframes scr-expand  { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
     .scr-page-shell { width:min(100%, 1400px); margin:0 auto; padding:22px 24px 48px; display:flex; flex-direction:column; gap:18px; }
-    .scr-hero {
-      position:relative; overflow:hidden; border:1px solid ${T.border}; border-radius:20px;
-      background:${isDark
-            ? "linear-gradient(145deg, rgba(16,24,39,0.98) 0%, rgba(26,34,55,0.98) 46%, rgba(18,26,46,0.98) 100%)"
-            : "linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(245,248,255,0.98) 42%, rgba(238,243,252,0.98) 100%)"};
-      box-shadow:${isDark
-            ? "0 20px 56px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.04)"
-            : "0 24px 60px rgba(148,163,184,0.22), inset 0 1px 0 rgba(255,255,255,0.85)"};
+    .scr-main-grid { display:flex; flex-direction:column; }
+    .scr-sections { display:flex; flex-direction:column; gap:34px; width:100%; }
+    .scr-cat-block { display:flex; flex-direction:column; gap:14px; }
+    .scr-cat-head { display:flex; flex-direction:column; gap:4px; }
+    .scr-cat-head-left { display:flex; align-items:center; gap:10px; }
+    .scr-cat-title { font-size:16px; font-weight:700; color:${D.text}; font-family:${sans}; letter-spacing:-0.01em; }
+    .scr-cat-count {
+      font-family:${mono}; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; letter-spacing:.03em;
     }
-    .scr-hero::before {
-      content:""; position:absolute; inset:auto -10% -45% auto; width:360px; height:360px; border-radius:999px;
-      background:${isDark ? "radial-gradient(circle, rgba(99,102,241,0.22) 0%, rgba(99,102,241,0) 70%)" : "radial-gradient(circle, rgba(79,70,229,0.14) 0%, rgba(79,70,229,0) 72%)"};
-      pointer-events:none;
+    .scr-card-grid {
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(248px, 1fr)); gap:14px;
     }
-    .scr-hero-inner { position:relative; z-index:1; display:grid; grid-template-columns:minmax(0, 1.45fr) minmax(280px, .95fr); gap:20px; padding:24px; }
-    .scr-kicker {
-      display:inline-flex; align-items:center; gap:8px; padding:7px 12px; border-radius:999px;
-      border:1px solid ${isDark ? "rgba(129,140,248,0.28)" : "rgba(79,70,229,0.16)"};
-      background:${isDark ? "rgba(99,102,241,0.14)" : "rgba(79,70,229,0.08)"};
-      color:${ACCENT}; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.11em;
+    .scr-screen-card {
+      position:relative; text-align:left; cursor:pointer; width:100%; font-family:inherit;
+      border-radius:14px; border:1px solid ${D.panelBorder};
+      background:${D.panelBg};
+      padding:18px; display:flex; flex-direction:column; gap:14px; min-height:180px;
+      box-shadow:${D.shadowMd};
+      transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
     }
-    .scr-kicker-dot {
-      width:7px; height:7px; border-radius:999px; background:${ACCENT};
-      box-shadow:0 0 0 5px ${isDark ? "rgba(99,102,241,0.12)" : "rgba(79,70,229,0.10)"};
+    .scr-screen-card:hover {
+      transform:translateY(-2px);
+      box-shadow:${D.shadowLg};
+      border-color:${D.borderStrong || D.panelBorder};
     }
-    .scr-hero-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; margin-top:18px; }
-    .scr-overview-card {
-      padding:16px 18px; border-radius:20px; border:1px solid ${isDark ? "rgba(148,163,184,0.16)" : "rgba(148,163,184,0.18)"};
-      background:${isDark ? "rgba(15,23,42,0.54)" : "rgba(255,255,255,0.72)"};
-      backdrop-filter: blur(10px);
+    .scr-screen-card:hover .scr-card-arrow { opacity:1; transform:translateX(2px); }
+    .scr-card-icon {
+      width:36px; height:36px; border-radius:10px; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
     }
-    .scr-overview-card strong { display:block; margin-top:8px; font-size:22px; line-height:1; letter-spacing:-.03em; color:${T.text}; }
-    .scr-overview-card span { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:${T.muted}; }
-    .scr-overview-card small { display:block; margin-top:6px; font-size:13px; color:${T.subtext}; line-height:1.5; }
-    .scr-hero-panel {
-      display:flex; flex-direction:column; gap:14px; padding:18px; border-radius:20px;
-      border:1px solid ${isDark ? "rgba(129,140,248,0.18)" : "rgba(79,70,229,0.14)"};
-      background:${isDark ? "linear-gradient(180deg, rgba(18,25,43,0.92) 0%, rgba(12,19,34,0.96) 100%)" : "linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(245,247,255,0.92) 100%)"};
-    }
-    .scr-hero-panel-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
-    .scr-hero-metric {
-      padding:12px; border-radius:16px; border:1px solid ${isDark ? "rgba(148,163,184,0.12)" : "rgba(148,163,184,0.16)"};
-      background:${isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.66)"};
-    }
-    .scr-hero-metric b { display:block; font-family:${mono}; font-size:18px; color:${T.text}; }
-    .scr-hero-metric span { display:block; margin-top:4px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:${T.muted}; }
-    .scr-main-grid { display:grid; grid-template-columns:minmax(0, 1fr) 280px; gap:18px; align-items:start; }
-    .scr-sections { display:flex; flex-direction:column; gap:14px; }
-    .scr-side-panel {
-      position:sticky; top:76px; border:1px solid ${T.border}; border-radius:20px; overflow:hidden;
-      background:${T.card}; box-shadow:${isDark ? "0 18px 42px rgba(0,0,0,0.22)" : "0 18px 42px rgba(148,163,184,0.16)"};
-    }
-    .scr-side-panel-head { padding:18px 18px 14px; border-bottom:1px solid ${T.border}; }
-    .scr-side-panel-body { padding:14px 18px 18px; display:flex; flex-direction:column; gap:12px; }
-    .scr-side-item { display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid ${T.border}; }
-    .scr-side-item:last-child { border-bottom:none; padding-bottom:0; }
-    .scr-side-badge {
-      min-width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-      font-family:${mono}; font-size:11px; font-weight:700; color:${ACCENT};
-      background:${isDark ? "rgba(99,102,241,0.12)" : "rgba(79,70,229,0.08)"};
-      border:1px solid ${isDark ? "rgba(99,102,241,0.16)" : "rgba(79,70,229,0.12)"};
-    }
-    .scr-section-card {
-      border:1px solid ${T.border}; border-radius:20px; overflow:hidden; background:${T.card};
-      box-shadow:${isDark ? "0 16px 34px rgba(0,0,0,0.16)" : "0 14px 28px rgba(148,163,184,0.12)"};
-    }
-    .scr-section-content { padding:0 20px 14px; }
-    .scr-screen-row {
-      transition:background .1s, border-color .16s, transform .16s, box-shadow .16s; cursor:pointer;
-      border:1px solid transparent; border-radius:18px; margin-bottom:10px;
-    }
-    .scr-screen-row:hover {
-      background:${T.hover}; border-color:${isDark ? "rgba(99,102,241,0.18)" : "rgba(79,70,229,0.12)"};
-      transform:translateY(-1px);
-      box-shadow:${isDark ? "0 10px 24px rgba(0,0,0,0.16)" : "0 10px 24px rgba(148,163,184,0.12)"};
-    }
-    .scr-screen-row:hover .scr-arrow { opacity:1; transform:translateX(0); }
-    .scr-arrow { opacity:0; transform:translateX(-4px); transition:opacity .15s, transform .15s; }
-    .scr-preview-row { display:grid; border-top:1px solid ${T.border}; transition:background .07s; }
-    .scr-preview-row:hover { background:${T.hover}; }
-    .scr-preview-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-    .scr-preview-inner { min-width:520px; }
-    .scr-preview-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-    .scr-preview-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-    .scr-mobile-stats { display:none; }
-    .scr-inline-controls { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
-    @media (max-width:980px) {
-      .scr-hero-inner { grid-template-columns:1fr; }
-      .scr-main-grid { grid-template-columns:1fr; }
-      .scr-side-panel { position:static; }
-    }
+    .scr-card-arrow { opacity:.4; transform:translateX(0); transition:all .15s ease; flex-shrink:0; margin-top:4px; }
+    .scr-card-body { position:relative; flex:1; }
+    .scr-card-title { font-size:14px; font-weight:700; color:${D.text}; letter-spacing:-0.005em; margin-bottom:4px; line-height:1.3; font-family:${sans}; }
+    .scr-card-sub { font-size:11.5px; color:${D.subtext}; line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+    .scr-card-footer { display:flex; align-items:flex-end; gap:14px; position:relative; padding-top:12px; border-top:1px solid ${D.panelBorder}; }
+    .scr-inline-controls { display:flex; align-items:center; gap:4px; flex-wrap:wrap; position:relative; }
     @media (max-width:760px) {
       .scr-page-shell { padding:16px 14px 40px; gap:14px; }
-      .scr-hero-inner { padding:18px; gap:16px; }
-      .scr-hero-grid { grid-template-columns:1fr; }
-      .scr-section-content { padding:0 14px 10px; }
-      .scr-row-head { align-items:flex-start !important; }
+      .scr-card-grid { grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:12px; }
       .scr-inline-controls { width:100%; }
-      .scr-preview-actions { width:100%; }
-      .scr-preview-actions > button { flex:1; justify-content:center; min-width:0; }
     }
     @media (max-width:600px) {
-      .scr-stat-block { display:none !important; }
-      .scr-mobile-stats { display:flex; align-items:center; gap:14px; margin-top:10px; }
-      .scr-arrow { opacity:1 !important; transform:translateX(0) !important; }
       .scr-cat-desc { display:block !important; }
       .scr-body-pad { padding:0 !important; }
-      .scr-ctrl-bar { padding:10px 14px !important; min-height:auto !important; gap:10px !important; }
+      .scr-ctrl-bar-inner { padding:10px 14px !important; min-height:auto !important; gap:10px !important; }
       .scr-ctrl-title { font-size:12px !important; }
       .scr-ctrl-universe { width:100%; }
       .scr-ctrl-universe > button { flex:1; }
       .scr-ctrl-summary { width:100%; justify-content:flex-start !important; padding-top:2px; }
-      .scr-kicker { font-size:10px; }
-      .scr-hero h1 { font-size:24px !important; line-height:1.15 !important; }
-      .scr-hero p { font-size:13px !important; }
-      .scr-overview-card strong { font-size:20px; }
-      .scr-hero-panel-grid { grid-template-columns:1fr; }
-      .scr-section-card { border-radius:20px; }
-      .scr-screen-row { border-radius:16px; }
-      .scr-preview-footer { flex-direction:column; align-items:stretch; }
-      .scr-preview-actions { justify-content:stretch; }
+      .scr-card-grid { grid-template-columns:1fr 1fr; gap:10px; }
+      .scr-screen-card { padding:15px; min-height:160px; border-radius:12px; }
+      .scr-card-title { font-size:13px; }
+      .scr-card-sub { font-size:10.5px; -webkit-line-clamp:2; }
+    }
+    @media (max-width:420px) {
+      .scr-card-grid { grid-template-columns:1fr; }
     }
   `;
 
@@ -19962,21 +20645,56 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     };
     const fmtCompact = n => Number(n || 0).toLocaleString("en-IN");
 
-    // Mini preview table shown inline when a row is expanded
-    const PreviewRows = ({ rows, scoreKey, scoreLabel, formatScore, accentColor, title, tfLabel, loadingOverride, onViewAll, detailExtra }) => {
-        const display = (rows || []).slice(0, 8);
-        const isLoading = loadingOverride !== undefined ? loadingOverride : tablesLoading;
+    // Per-category accent color, provided to ScreenCard via context so call sites
+    // don't need to pass a color prop individually.
+    const catColorCtx = createContext(ACCENT);
 
-        if (isLoading) return (
-            <div style={{ paddingTop: 8 }}>
-                {[0, 1, 2, 3].map(i => (
-                    <div key={i} style={{
-                        display: "flex", justifyContent: "space-between", alignItems: "center",
-                        padding: "9px 0", borderBottom: `1px solid ${T.border}`, gap: 12
+    // Square screen card  replaces the old row + inline preview-table pattern.
+    // Clicking anywhere on the card jumps straight to the full table (ScreenDetailView),
+    // no truncated inline preview anymore.
+    const ScreenCard = ({ rowKey, title, subtitle, rows, scoreKey, scoreLabel, formatScore, tfLabel, loadingOverride, onViewAll, extraControls, detailExtra }) => {
+        const accentColor = useContext(catColorCtx);
+        const isLoading = loadingOverride !== undefined ? loadingOverride : tablesLoading;
+        const stats = quickStats(rows, scoreKey);
+
+        const open = () => {
+            if (onViewAll) onViewAll();
+            else openDetail({
+                title, subtitle: "", color: accentColor,
+                rows, scoreKey, scoreLabel, formatVal: formatScore, ...(detailExtra || {})
+            });
+        };
+
+        return (
+            <div className="scr-screen-card" onClick={open}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", position: "relative" }}>
+                    <div className="scr-card-icon" style={{
+                        background: `${accentColor}${isDark ? "1c" : "12"}`, border: `1px solid ${accentColor}30`
                     }}>
-                        {[140, 80, 55, 44, 44, 44].map((w, j) => (
-                            <div key={j} style={{
-                                height: 9, width: w, borderRadius: 3,
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" />
+                        </svg>
+                    </div>
+                    <svg className="scr-card-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={D.subtext} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14" /><path d="M13 6l6 6-6 6" />
+                    </svg>
+                </div>
+
+                <div className="scr-card-body">
+                    <div className="scr-card-title">{title}</div>
+                    <div className="scr-card-sub">{subtitle}</div>
+                    {extraControls ? (
+                        <div className="scr-inline-controls" style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                            {extraControls}
+                        </div>
+                    ) : null}
+                </div>
+
+                {isLoading ? (
+                    <div className="scr-card-footer">
+                        {[0, 1].map(i => (
+                            <div key={i} style={{
+                                height: 14, width: i === 0 ? 40 : 56, borderRadius: 4,
                                 background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
                                 backgroundImage: isDark
                                     ? "linear-gradient(90deg,rgba(255,255,255,0.03) 25%,rgba(255,255,255,0.09) 50%,rgba(255,255,255,0.03) 75%)"
@@ -19985,341 +20703,60 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             }} />
                         ))}
                     </div>
-                ))}
-            </div>
-        );
-
-        if (!rows || rows.length === 0) return (
-            <div style={{ padding: "20px 0", textAlign: "center", fontSize: 12, color: T.muted }}>
-                No data available
-            </div>
-        );
-
-        const cols = "28px 1fr 110px 80px 60px 60px 60px 60px";
-        const hdrStyle = {
-            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: ".07em", color: T.muted, textAlign: "right"
-        };
-
-        return (
-            <div style={{ animation: "scr-expand .18s ease" }}>
-                {/* Scrollable wrapper for mobile */}
-                <div className="scr-preview-scroll">
-                    <div className="scr-preview-inner">
-                        {/* Mini header */}
-                        <div style={{
-                            display: "grid", gridTemplateColumns: cols, padding: "7px 0",
-                            borderBottom: `1px solid ${T.border}`, gap: 0
-                        }}>
-                            <div style={{ ...hdrStyle, textAlign: "right" }}>#</div>
-                            <div style={{ ...hdrStyle, textAlign: "left", paddingLeft: 8 }}>Company</div>
-                            <div style={{ ...hdrStyle, color: accentColor }}>{scoreLabel}</div>
-                            <div style={hdrStyle}>Price</div>
-                            <div style={hdrStyle}>3M</div>
-                            <div style={hdrStyle}>6M</div>
-                            <div style={hdrStyle}>12M</div>
-                            <div style={hdrStyle}>Rel Vol</div>
+                ) : stats ? (
+                    <div className="scr-card-footer">
+                        <div>
+                            <div style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums" }}>{stats.count}</div>
+                            <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: ".07em", marginTop: 1 }}>stocks</div>
                         </div>
-
-                        {/* Data rows */}
-                        {display.map((row, i) => {
-                            const sv = scoreKey ? Number(row[scoreKey] ?? 0) : null;
-                            const hue = row.ticker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
-                            const bg = isDark ? `hsl(${hue},18%,16%)` : `hsl(${hue},28%,91%)`;
-                            const fg = isDark ? `hsl(${hue},38%,60%)` : `hsl(${hue},35%,32%)`;
-                            const mkRet = (k) => {
-                                const v = row[k];
-                                if (v == null) return <span style={{ color: T.muted }}></span>;
-                                return <span style={{ color: v >= 0 ? (isDark ? "#4ade80" : "#16a34a") : T.neg }}>{v >= 0 ? "+" : ""}{Number(v).toFixed(1)}%</span>;
-                            };
-                            return (
-                                <div key={row.ticker} className="scr-preview-row"
-                                    style={{ gridTemplateColumns: cols, padding: "8px 0", gap: 0 }}>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 11, color: T.muted,
-                                        textAlign: "right", fontVariantNumeric: "tabular-nums"
-                                    }}>{i + 1}</div>
-                                    <div style={{ paddingLeft: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                                        <div style={{
-                                            flexShrink: 0, minWidth: 28, height: 18, borderRadius: 3,
-                                            background: bg, display: "flex", alignItems: "center", justifyContent: "center",
-                                            padding: "0 4px", fontSize: 7.5, fontWeight: 700, letterSpacing: ".04em",
-                                            color: fg, fontFamily: mono, textTransform: "uppercase"
-                                        }}>
-                                            {row.ticker.slice(0, 5)}
-                                        </div>
-                                        <span style={{
-                                            fontSize: 12, fontWeight: 600, color: T.text,
-                                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                                            maxWidth: 140, fontFamily: mono, letterSpacing: ".02em"
-                                        }}>
-                                            {row.ticker}
-                                        </span>
-                                    </div>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 12, fontWeight: 700,
-                                        color: accentColor, textAlign: "right", fontVariantNumeric: "tabular-nums"
-                                    }}>
-                                        {sv != null ? (formatScore ? formatScore(sv, row) : sv.toFixed(2)) : ""}
-                                    </div>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 12,
-                                        color: T.text,
-                                        textAlign: "right", fontVariantNumeric: "tabular-nums"
-                                    }}>
-                                        {fmtINR(row.close) || ""}
-                                    </div>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 12, textAlign: "right",
-                                        fontVariantNumeric: "tabular-nums"
-                                    }}>{mkRet("ret_3m")}</div>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 12, textAlign: "right",
-                                        fontVariantNumeric: "tabular-nums"
-                                    }}>{mkRet("ret_6m")}</div>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 12, textAlign: "right",
-                                        fontVariantNumeric: "tabular-nums"
-                                    }}>{mkRet("ret_12m")}</div>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 12, fontWeight: 600, textAlign: "right",
-                                        fontVariantNumeric: "tabular-nums",
-                                        color: row.rel_volume == null ? T.muted : row.rel_volume >= 2 ? (isDark ? "#4ade80" : "#16a34a") : row.rel_volume >= 1 ? T.text : T.muted
-                                    }}>
-                                        {row.rel_volume != null ? `${Number(row.rel_volume).toFixed(2)}x` : ""}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>{/* scr-preview-inner */}
-                </div>{/* scr-preview-scroll */}
-
-                {/* Footer */}
-                <div className="scr-preview-footer" style={{ paddingTop: 10, marginTop: 4, borderTop: `1px solid ${T.border}` }}>
-                    <span style={{ fontSize: 11, color: T.muted, fontFamily: mono }}>
-                        Showing 8 of <strong style={{ color: T.subtext }}>{(rows || []).length}</strong>
-                    </span>
-                    <div className="scr-preview-actions">
-                        {onTechnoFundaScan && rows && rows.length > 0 && (
-                            <button
-                                onClick={e => { e.stopPropagation(); onTechnoFundaScan({ label: tfLabel, tickers: new Set(rows.map(r => r.ticker)) }); }}
-                                style={{
-                                    display: "inline-flex", alignItems: "center", gap: 5,
-                                    height: 26, padding: "0 10px",
-                                    border: `1px solid ${accentColor}44`, borderRadius: 5,
-                                    background: `${accentColor}0d`, color: accentColor,
-                                    fontSize: 11, fontWeight: 600, fontFamily: sans,
-                                    cursor: "pointer", transition: "background .12s"
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = `${accentColor}1c`}
-                                onMouseLeave={e => e.currentTarget.style.background = `${accentColor}0d`}>
-                                <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                                    strokeWidth="2.2" strokeLinecap="round">
-                                    <circle cx="6" cy="6" r="4" /><line x1="9.5" y1="9.5" x2="14" y2="14" />
-                                </svg>
-                                TechnoFunda
-                            </button>
-                        )}
-                        <button
-                            onClick={e => {
-                                e.stopPropagation();
-                                if (onViewAll) { onViewAll(); }
-                                else openDetail({
-                                    title, subtitle: "", color: accentColor,
-                                    rows, scoreKey, scoreLabel, formatVal: formatScore, ...(detailExtra || {})
-                                });
-                            }}
-                            style={{
-                                display: "inline-flex", alignItems: "center", gap: 5,
-                                height: 26, padding: "0 10px",
-                                border: `1px solid ${T.border}`, borderRadius: 5,
-                                background: T.card, color: T.subtext,
-                                fontSize: 11, fontWeight: 500, fontFamily: sans,
-                                cursor: "pointer", transition: ".12s"
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${accentColor}55`; e.currentTarget.style.color = accentColor; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.subtext; }}>
-                            View all {(rows || []).length}
-                            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 8h10M9 4l4 4-4 4" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    // Screen list row  onViewAll overrides the default openDetail call (used by VCP)
-    const ScreenRow = ({ rowKey, title, subtitle, rows, scoreKey, scoreLabel, formatScore, tfLabel, loadingOverride, onViewAll, extraControls, detailExtra }) => {
-        const isExpanded = expandedKey === rowKey;
-        const isLoading = loadingOverride !== undefined ? loadingOverride : tablesLoading;
-        const stats = quickStats(rows, scoreKey);
-        const toggle = () => setExpandedKey(isExpanded ? null : rowKey);
-
-        return (
-            <div style={{ borderBottom: `1px solid ${T.border}`, padding: "8px 0" }}>
-                <div className="scr-screen-row" onClick={toggle}
-                    style={{
-                        display: "flex", alignItems: "center",
-                        padding: "14px 14px 14px 0",
-                        background: isExpanded
-                            ? (isDark ? "linear-gradient(180deg, rgba(99,102,241,0.08) 0%, rgba(99,102,241,0.04) 100%)" : "linear-gradient(180deg, rgba(79,70,229,0.06) 0%, rgba(79,70,229,0.03) 100%)")
-                            : "transparent"
-                    }}>
-                    {/* Active indicator */}
-                    <div style={{
-                        width: 3, alignSelf: "stretch", borderRadius: "0 2px 2px 0",
-                        background: isExpanded ? ACCENT : "transparent",
-                        marginRight: 13, flexShrink: 0, transition: "background .15s"
-                    }} />
-                    {/* Title + extraControls */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="scr-row-head" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 6 }}>
-                            <span style={{
-                                fontSize: 14, fontWeight: isExpanded ? 700 : 600,
-                                color: T.text, fontFamily: sans, lineHeight: 1.2
-                            }}>
-                                {title}
-                            </span>
-                            {extraControls ? <div className="scr-inline-controls">{extraControls}</div> : null}
-                        </div>
-                        <div style={{ fontSize: 12, color: T.subtext, marginTop: 4, lineHeight: 1.5 }} className="scr-cat-desc">{subtitle}</div>
-                        {!isLoading && stats && (
-                            <div className="scr-mobile-stats">
-                                <div>
-                                    <div style={{ fontFamily: mono, fontSize: 12, fontWeight: 700, color: T.text }}>{stats.count}</div>
-                                    <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", letterSpacing: ".08em" }}>stocks</div>
-                                </div>
-                                {stats.avg != null && (
-                                    <div>
-                                        <div style={{
-                                            fontFamily: mono, fontSize: 11, fontWeight: 700,
-                                            color: stats.noSign ? (isDark ? "#818cf8" : "#4f46e5") : (stats.avg >= 0 ? "#059669" : "#dc2626")
-                                        }}>
-                                            {stats.noSign ? stats.avg.toFixed(0) : `${stats.avg >= 0 ? "+" : ""}${stats.avg.toFixed(1)}%`}
-                                        </div>
-                                        <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", letterSpacing: ".08em" }}>{stats.label || "avg 3M"}</div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    {/* Quick stats */}
-                    {!isLoading && stats && (
-                        <div className="scr-stat-block" style={{ display: "flex", alignItems: "center", gap: 20, marginRight: 16, flexShrink: 0 }}>
-                            <div style={{ textAlign: "right" }}>
+                        {stats.avg != null && (
+                            <div style={{ marginLeft: "auto", textAlign: "right" }}>
                                 <div style={{
-                                    fontFamily: mono, fontSize: 11, fontWeight: 700,
-                                    color: T.subtext, fontVariantNumeric: "tabular-nums"
+                                    fontFamily: mono, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                                    color: stats.noSign ? accentColor : (stats.avg >= 0 ? (isDark ? "#4ade80" : "#059669") : (isDark ? "#f87171" : "#dc2626"))
                                 }}>
-                                    {stats.count}
+                                    {stats.noSign ? stats.avg.toFixed(0) : `${stats.avg >= 0 ? "+" : ""}${stats.avg.toFixed(1)}%`}
                                 </div>
-                                <div style={{
-                                    fontSize: 9, color: T.muted, textTransform: "uppercase",
-                                    letterSpacing: ".06em", marginTop: 1
-                                }}>stocks</div>
+                                <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: ".07em", marginTop: 1 }}>{stats.label || "avg 3M"}</div>
                             </div>
-                            {stats.avg != null && (
-                                <div style={{ textAlign: "right" }}>
-                                    <div style={{
-                                        fontFamily: mono, fontSize: 11, fontWeight: 700,
-                                        color: stats.noSign ? (isDark ? "#818cf8" : "#4f46e5") : (stats.avg >= 0 ? "#059669" : "#dc2626"),
-                                        fontVariantNumeric: "tabular-nums"
-                                    }}>
-                                        {stats.noSign ? stats.avg.toFixed(0) : `${stats.avg >= 0 ? "+" : ""}${stats.avg.toFixed(1)}%`}
-                                    </div>
-                                    <div style={{
-                                        fontSize: 9, color: T.muted, textTransform: "uppercase",
-                                        letterSpacing: ".06em", marginTop: 1
-                                    }}>{stats.label || "avg 3M"}</div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    {/* Arrow + chevron */}
-                    <div className="scr-arrow" style={{ marginRight: 6 }}>
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke={ACCENT}
-                            strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                            style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0)", transition: "transform .18s" }}>
-                            <path d="M3 8h10M9 4l4 4-4 4" />
-                        </svg>
+                        )}
                     </div>
-                    <div style={{
-                        width: 26, height: 26, display: "flex", alignItems: "center",
-                        justifyContent: "center", marginRight: 2, flexShrink: 0
-                    }}>
-                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-                            style={{
-                                transform: isExpanded ? "rotate(0)" : "rotate(-90deg)", transition: ".18s",
-                                color: isExpanded ? ACCENT : T.muted
-                            }}>
-                            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.8"
-                                strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </div>
-                </div>
-                {isExpanded && (
-                    <div style={{
-                        padding: "0 12px 16px 8px",
-                        background: isDark ? "rgba(255,255,255,0.014)" : "rgba(0,0,0,0.011)",
-                        borderTop: `1px solid ${T.border}`, borderBottomLeftRadius: 16, borderBottomRightRadius: 16
-                    }}>
-                        <PreviewRows rows={rows} scoreKey={scoreKey} scoreLabel={scoreLabel}
-                            formatScore={formatScore} accentColor={ACCENT}
-                            title={title} tfLabel={tfLabel} loadingOverride={isLoading}
-                            onViewAll={onViewAll} detailExtra={detailExtra} />
+                ) : (
+                    <div className="scr-card-footer">
+                        <span style={{ fontSize: 11, color: T.muted }}>No data available</span>
                     </div>
                 )}
             </div>
         );
     };
 
-    // Category accordion
-    const CategorySection = ({ name, desc, count, children }) => {
-        const open = !!openCats[name];
-        return (
-            <div className="scr-section-card">
-                <div onClick={() => setOpenCats(p => ({ ...p, [name]: !p[name] }))}
-                    style={{
-                        display: "flex", alignItems: "center", gap: 12,
-                        padding: "18px 20px", cursor: "pointer", userSelect: "none",
-                        borderBottom: open ? `1px solid ${T.border}` : "none",
-                        transition: "background .1s"
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = T.hover}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: sans, letterSpacing: "-0.015em" }}>{name}</span>
-                            {!tablesLoading && count != null && (
-                                <span style={{
-                                    fontFamily: mono, fontSize: 10, fontWeight: 700,
-                                    padding: "1px 7px", borderRadius: 10,
-                                    background: isDark ? "rgba(99,102,241,0.15)" : "rgba(79,70,229,0.08)",
-                                    color: ACCENT, border: `1px solid ${ACCENT}28`,
-                                    letterSpacing: ".03em"
-                                }}>{count}</span>
-                            )}
-                        </div>
-                        <div style={{ fontSize: 13, color: T.subtext, marginTop: 4, lineHeight: 1.5 }} className="scr-cat-desc">{desc}</div>
-                    </div>
-                    <div style={{
-                        width: 26, height: 26, display: "flex", alignItems: "center",
-                        justifyContent: "center", border: `1px solid ${T.border}`, borderRadius: 6, flexShrink: 0
-                    }}>
-                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-                            style={{ transform: open ? "rotate(0)" : "rotate(-90deg)", transition: ".18s", color: T.subtext }}>
-                            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.8"
-                                strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </div>
+    // Kept as an alias so every existing <ScreenRow ...> call site below (Market
+    // Leaders, Breakouts, Pullbacks, Trend Template, Chart Patterns) renders as a
+    // square card automatically, with no per-call-site changes needed.
+    const ScreenRow = ScreenCard;
+
+    // Category section  header + a grid of square cards (no accordion, no
+    // per-row inline preview table  matches the Ownership tab's card layout).
+    const CategorySection = ({ name, desc, count, color, children }) => (
+        <div className="scr-cat-block">
+            <div className="scr-cat-head">
+                <div className="scr-cat-head-left">
+                    <span className="scr-cat-title">{name}</span>
+                    {!tablesLoading && count != null && (
+                        <span className="scr-cat-count" style={{
+                            background: isDark ? `${color || ACCENT}26` : `${color || ACCENT}14`,
+                            color: color || ACCENT, border: `1px solid ${color || ACCENT}30`
+                        }}>{count}</span>
+                    )}
                 </div>
-                {open && <div className="scr-section-content">{children}</div>}
+                <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.5 }} className="scr-cat-desc">{desc}</div>
             </div>
-        );
-    };
+            <catColorCtx.Provider value={color || ACCENT}>
+                <div className="scr-card-grid">{children}</div>
+            </catColorCtx.Provider>
+        </div>
+    );
+
 
     // Coming soon placeholder
     const ComingSoon = ({ title, desc }) => (
@@ -20351,50 +20788,54 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             {/*  CONTROL BAR  */}
             <div className="scr-ctrl-bar" style={{
                 flexShrink: 0, background: T.card, borderBottom: `1px solid ${T.border}`,
-                padding: "0 24px", display: "flex", alignItems: "center", flexWrap: "wrap",
-                minHeight: 44, position: "sticky", top: 0, zIndex: 20
+                display: "flex", position: "sticky", top: 0, zIndex: 20
             }}>
-                <div style={{
-                    display: "flex", alignItems: "center", marginRight: 20,
-                    paddingRight: 20, borderRight: `1px solid ${T.border}`, padding: "10px 20px 10px 0"
+                <div className="scr-ctrl-bar-inner" style={{
+                    width: "min(100%, 1400px)", margin: "0 auto", padding: "0 24px",
+                    display: "flex", alignItems: "center", flexWrap: "wrap", minHeight: 44
                 }}>
-                    <span className="scr-ctrl-title" style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Screens</span>
-                </div>
-                <div className="scr-ctrl-universe" style={{
-                    display: "flex", alignItems: "center", gap: 6, padding: "5px",
-                    border: `1px solid ${T.border}`, borderRadius: 999, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.8)"
-                }}>
-                    {[{ v: "all", l: "All" }, { v: "nifty500", l: "Nifty 500" }].map(opt => (
-                        <button key={opt.v} onClick={() => setUniverse(opt.v)}
-                            style={{
-                                height: 30, padding: "0 14px", border: "none", borderRadius: 999,
-                                background: universe === opt.v ? ACCENT : "transparent",
-                                color: universe === opt.v ? "#fff" : T.subtext,
-                                fontWeight: universe === opt.v ? 700 : 500,
-                                fontSize: 12, fontFamily: sans, cursor: "pointer", transition: "background .12s, color .12s, box-shadow .12s",
-                                boxShadow: universe === opt.v ? (isDark ? "0 8px 18px rgba(99,102,241,0.28)" : "0 8px 16px rgba(79,70,229,0.18)") : "none"
-                            }}>
-                            {opt.l}
-                        </button>
-                    ))}
-                </div>
-                <div style={{ flex: 1 }} />
-                {!tablesLoading && (
-                    <div className="scr-ctrl-summary" style={{ display: "flex", alignItems: "center" }}>
-                        <span style={{
-                            fontSize: 12, color: T.subtext, fontFamily: mono,
-                            fontVariantNumeric: "tabular-nums"
-                        }}>
-                            {(universe === "nifty500" && nifty500Loading) ? (
-                                <span style={{ color: T.muted, fontStyle: "italic" }}>loading…</span>
-                            ) : (
-                                <><strong style={{ color: T.text, fontWeight: 600 }}>
-                                    {totalCount.toLocaleString("en-IN")}
-                                </strong>{" stocks"}</>
-                            )}
-                        </span>
+                    <div style={{
+                        display: "flex", alignItems: "center", marginRight: 20,
+                        paddingRight: 20, borderRight: `1px solid ${T.border}`, padding: "10px 20px 10px 0"
+                    }}>
+                        <span className="scr-ctrl-title" style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Screens</span>
                     </div>
-                )}
+                    <div className="scr-ctrl-universe" style={{
+                        display: "flex", alignItems: "center", gap: 2, padding: "4px",
+                        border: `1px solid ${D.panelBorder}`, borderRadius: 12, background: D.pillBg
+                    }}>
+                        {[{ v: "all", l: "All" }, { v: "nifty500", l: "Nifty 500" }].map(opt => (
+                            <button key={opt.v} onClick={() => setUniverse(opt.v)}
+                                style={{
+                                    height: 28, padding: "0 14px", border: "none", borderRadius: 9,
+                                    background: universe === opt.v ? T.card : "transparent",
+                                    color: universe === opt.v ? T.text : T.muted,
+                                    fontWeight: universe === opt.v ? 700 : 600,
+                                    fontSize: 12.5, fontFamily: sans, cursor: "pointer", transition: "background .12s, color .12s, box-shadow .12s",
+                                    boxShadow: universe === opt.v ? D.shadowMd.split(",")[0] : "none"
+                                }}>
+                                {opt.l}
+                            </button>
+                        ))}
+                    </div>
+                    <div style={{ flex: 1 }} />
+                    {!tablesLoading && (
+                        <div className="scr-ctrl-summary" style={{ display: "flex", alignItems: "center" }}>
+                            <span style={{
+                                fontSize: 12, color: T.subtext, fontFamily: mono,
+                                fontVariantNumeric: "tabular-nums"
+                            }}>
+                                {(universe === "nifty500" && nifty500Loading) ? (
+                                    <span style={{ color: T.muted, fontStyle: "italic" }}>loading…</span>
+                                ) : (
+                                    <><strong style={{ color: T.text, fontWeight: 600 }}>
+                                        {totalCount.toLocaleString("en-IN")}
+                                    </strong>{" stocks"}</>
+                                )}
+                            </span>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/*  BODY  */}
@@ -20402,7 +20843,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 <div className="scr-page-shell">
                     <div className="scr-main-grid">
                         <div className="scr-sections">
-                            <CategorySection name="Market Leaders"
+                            <CategorySection name="Market Leaders" color={ACCENT}
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
                                 count={tablesLoading ? "" : totalCount}>
                                 <ScreenRow rowKey="ml-52w" title="Near 52W High"
@@ -20435,7 +20876,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     formatScore={v => v.toFixed(2)} tfLabel="RS Acceleration" />
                             </CategorySection>
 
-                            <CategorySection name="Breakouts"
+                            <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
                                 desc="Stocks breaking above key resistance with volume confirmation"
                                 count={(volBreakoutLoading || breakoutLoading || pivotLoading) ? "..." : breakoutsCount}>
                                 <ScreenRow
@@ -20498,7 +20939,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 />
                             </CategorySection>
 
-                            <CategorySection name="Pullbacks"
+                            <CategorySection name="Pullbacks" color={isDark ? "#fbbf24" : "#b45309"}
                                 desc="Healthy retracements to key moving averages in uptrends"
                                 count={pbLoading ? "..." : pullbacksCount}>
                                 <ScreenRow
@@ -20595,7 +21036,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 />
                             </CategorySection>
 
-                            <CategorySection name="Trend Template"
+                            <CategorySection name="Trend Template" color={isDark ? "#60a5fa" : "#2563eb"}
                                 desc="Stocks passing all 8 criteria of Mark Minervini's Trend Template"
                                 count={minerviniLoading ? "..." : minerviniCount}>
                                 <ScreenRow
@@ -20612,546 +21053,29 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 />
                             </CategorySection>
 
-                        </div>
+                            <CategorySection name="Chart Patterns" color={isDark ? "#c084fc" : "#7c3aed"}
+                                desc="Weekly candlestick pattern detections, loaded straight from the database"
+                                count={patternLoading ? "..." : patternTotalCount}>
+                                {PATTERN_FILTER_TABS.map(tab => (
+                                    <ScreenRow key={tab.id}
+                                        rowKey={`cp-${tab.id}`}
+                                        title={tab.label}
+                                        subtitle={tab.desc}
+                                        rows={patternPreviewRows[tab.id]}
+                                        scoreKey="ret_3m"
+                                        scoreLabel="3M Ret"
+                                        formatScore={v => `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`}
+                                        tfLabel={tab.label}
+                                        loadingOverride={patternLoading}
+                                        onViewAll={() => { setPatternFilterInitialTab(tab.id); setPatternFilterOpen(true); }}
+                                    />
+                                ))}
+                            </CategorySection>
 
-                        {/*<aside className="scr-side-panel">*/}
-                        {/*    <div className="scr-side-panel-head">*/}
-                        {/*        <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em", color: T.muted, fontWeight: 700 }}>How to use</div>*/}
-                        {/*        <div style={{ marginTop: 8, fontSize: 19, fontWeight: 700, color: T.text, lineHeight: 1.35 }}>*/}
-                        {/*            Faster review flow*/}
-                        {/*        </div>*/}
-                        {/*    </div>*/}
-                        {/*    <div className="scr-side-panel-body">*/}
-                        {/*        {[*/}
-                        {/*            ["01", "Start with Market Leaders to identify where institutional strength is already concentrated."],*/}
-                        {/*            ["02", "Open Breakouts when you want confirmation, then drill into full tables for validation."],*/}
-                        {/*            ["03", "Use Pullbacks for lower-risk entries and run TechnoFunda on names worth deeper work."],*/}
-                        {/*        ].map(([idx, text]) => (*/}
-                        {/*            <div className="scr-side-item" key={idx}>*/}
-                        {/*                <div className="scr-side-badge">{idx}</div>*/}
-                        {/*                <div style={{ fontSize: 13, lineHeight: 1.65, color: T.subtext }}>{text}</div>*/}
-                        {/*            </div>*/}
-                        {/*        ))}*/}
-                        {/*    </div>*/}
-                        {/*</aside>*/}
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    );
-}
-
-// 
-//  VCP SCREEN  Volatility Contraction Pattern candidates
-// 
-function VCPScreen({ T, onBack }) {
-    const isDark = T.bg !== THEMES.light.bg;
-    const sans = "'IBM Plex Sans', system-ui, sans-serif";
-    const mono = "'IBM Plex Mono', monospace";
-    const ACCENT = isDark ? "#6366f1" : "#4f46e5";
-
-    /*  State  */
-    const [rows, setRows] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [catFilter, setCatFilter] = useState("ALL");       // ALL | IDEAL | DEVELOPING
-    const [scoreFilter, setScoreFilter] = useState("ALL");       // ALL | HIGH | MID
-    const [nearPivot, setNearPivot] = useState(false);
-    const [sortKey, setSortKey] = useState("vcp_score");
-    const [sortDir, setSortDir] = useState("desc");
-    const [page, setPage] = useState(0);
-    const PAGE_SIZE = 50;
-
-    /*  Fetch  */
-    useEffect(() => {
-        setLoading(true);
-        setError(null);
-        fetch(
-            `https://munqjcjvzgqyxzlmuyjj.supabase.co/rest/v1/vcp_candidates?select=*&order=vcp_score.desc`,
-            {
-                headers: {
-                    apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q",
-                    Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q",
-                }
-            }
-        )
-            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-            .then(data => { setRows(Array.isArray(data) ? data : []); setLoading(false); })
-            .catch(e => { setError(e.message); setLoading(false); });
-    }, []);
-
-    /*  Filtered + sorted rows (memoized)  */
-    const filtered = useMemo(() => {
-        let r = rows;
-        if (catFilter !== "ALL") r = r.filter(x => x.category === catFilter);
-        if (scoreFilter === "HIGH") r = r.filter(x => Number(x.vcp_score) >= 80);
-        if (scoreFilter === "MID") r = r.filter(x => Number(x.vcp_score) >= 60 && Number(x.vcp_score) < 80);
-        if (nearPivot) r = r.filter(x => x.near_pivot);
-        // Sort
-        r = [...r].sort((a, b) => {
-            const av = a[sortKey] ?? 0;
-            const bv = b[sortKey] ?? 0;
-            return sortDir === "desc" ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
-        });
-        return r;
-    }, [rows, catFilter, scoreFilter, nearPivot, sortKey, sortDir]);
-
-    const idealRows = useMemo(() => filtered.filter(r => r.category === "IDEAL"), [filtered]);
-    const developingRows = useMemo(() => filtered.filter(r => r.category !== "IDEAL"), [filtered]);
-    const paginated = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
-    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-
-    /*  Mini insights  */
-    const tightest = useMemo(() => rows.length ? [...rows].sort((a, b) => Number(a.base_depth || 99) - Number(b.base_depth || 99))[0] : null, [rows]);
-    const closestBreak = useMemo(() => rows.filter(r => r.pct_from_high != null).sort((a, b) => Math.abs(Number(a.pct_from_high)) - Math.abs(Number(b.pct_from_high)))[0] || null, [rows]);
-
-    /*  Helpers  */
-    const scoreColor = (v) => {
-        const n = Number(v);
-        if (n >= 80) return isDark ? "#4ade80" : "#15803d";
-        if (n >= 60) return isDark ? "#818cf8" : "#4f46e5";
-        return isDark ? "#64748b" : "#94a3b8";
-    };
-    const scoreTagBg = (v) => {
-        const n = Number(v);
-        if (n >= 80) return isDark ? "rgba(74,222,128,0.13)" : "rgba(21,128,61,0.09)";
-        if (n >= 60) return isDark ? "rgba(129,140,248,0.15)" : "rgba(79,70,229,0.09)";
-        return isDark ? "rgba(100,116,139,0.12)" : "rgba(148,163,184,0.12)";
-    };
-    const boolIcon = (v, icon) => v
-        ? <span style={{ fontSize: 13 }}>{icon}</span>
-        : <span style={{ color: T.muted, fontSize: 11 }}></span>;
-    const fmtTime = (v) => {
-        if (!v) return null;
-        const d = new Date(v);
-        return isNaN(d.getTime()) ? v : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-    };
-    const toggleSort = (key) => {
-        if (sortKey === key) setSortDir(d => d === "desc" ? "asc" : "desc");
-        else { setSortKey(key); setSortDir("desc"); }
-        setPage(0);
-    };
-
-    /*  Column config  */
-    const COLS = [
-        { key: "ticker", label: "Symbol", w: "130px", align: "left" },
-        { key: "exchange", label: "Exch", w: "56px", align: "left" },
-        { key: "vcp_score", label: "Score", w: "70px", align: "right", sort: true },
-        { key: "category", label: "Type", w: "100px", align: "left" },
-        { key: "contractions", label: "Legs", w: "48px", align: "right", sort: true },
-        { key: "contraction_pattern", label: "Pattern", w: "140px", align: "left" },
-        { key: "pct_from_high", label: "Near High", w: "80px", align: "right", sort: true },
-        { key: "base_depth", label: "Base Depth", w: "80px", align: "right", sort: true },
-        { key: "volume_dryup", label: "Vol Dry", w: "60px", align: "center" },
-        { key: "tight_range", label: "Tight", w: "52px", align: "center" },
-        { key: "near_pivot", label: "Pivot", w: "52px", align: "center" },
-        { key: "breakout_level", label: "Pivot Price", w: "90px", align: "right" },
-        { key: "detected_at", label: "Time", w: "70px", align: "right" },
-    ];
-
-    /*  Row renderer  */
-    const RenderRow = ({ row, idx }) => {
-        const hue = row.ticker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
-        const avatarBg = isDark ? `hsl(${hue},18%,16%)` : `hsl(${hue},28%,91%)`;
-        const avatarFg = isDark ? `hsl(${hue},40%,62%)` : `hsl(${hue},36%,32%)`;
-        const isIdeal = row.category === "IDEAL";
-        return (
-            <div style={{
-                display: "grid", gridTemplateColumns: COLS.map(c => c.w).join(" "),
-                padding: "9px 0", borderBottom: `1px solid ${T.border}`,
-                transition: "background .08s", cursor: "pointer",
-                alignItems: "center"
-            }}
-                onMouseEnter={e => e.currentTarget.style.background = T.hover}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                {/* Symbol */}
-                <div style={{ display: "flex", alignItems: "center", gap: 7, paddingLeft: 16 }}>
-                    <div style={{
-                        flexShrink: 0, width: 30, height: 18, borderRadius: 3,
-                        background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center",
-                        padding: "0 4px", fontSize: 7.5, fontWeight: 700, color: avatarFg,
-                        fontFamily: mono, textTransform: "uppercase", letterSpacing: ".03em"
-                    }}>
-                        {row.ticker?.slice(0, 4)}
-                    </div>
-                    <span style={{
-                        fontFamily: mono, fontSize: 12, fontWeight: 600, color: T.text,
-                        fontVariantNumeric: "tabular-nums"
-                    }}>
-                        {row.ticker}
-                    </span>
-                </div>
-                {/* Exchange */}
-                <div style={{
-                    fontSize: 10, fontWeight: 600, color: T.muted,
-                    fontFamily: mono, letterSpacing: ".04em"
-                }}>{row.exchange}</div>
-                {/* Score */}
-                <div style={{ textAlign: "right", paddingRight: 4 }}>
-                    <span style={{
-                        display: "inline-block", fontFamily: mono, fontSize: 12, fontWeight: 700,
-                        padding: "2px 7px", borderRadius: 4,
-                        background: scoreTagBg(row.vcp_score), color: scoreColor(row.vcp_score)
-                    }}>
-                        {row.vcp_score != null ? Number(row.vcp_score).toFixed(0) : ""}
-                    </span>
-                </div>
-                {/* Category badge */}
-                <div>
-                    <span style={{
-                        display: "inline-block", fontSize: 10, fontWeight: 700,
-                        padding: "2px 8px", borderRadius: 3, letterSpacing: ".04em",
-                        textTransform: "uppercase", fontFamily: mono,
-                        background: isIdeal
-                            ? (isDark ? "rgba(74,222,128,0.12)" : "rgba(21,128,61,0.08)")
-                            : (isDark ? "rgba(251,191,36,0.12)" : "rgba(180,130,0,0.09)"),
-                        color: isIdeal
-                            ? (isDark ? "#4ade80" : "#15803d")
-                            : (isDark ? "#fbbf24" : "#a16207"),
-                        border: `1px solid ${isIdeal
-                            ? (isDark ? "rgba(74,222,128,0.25)" : "rgba(21,128,61,0.2)")
-                            : (isDark ? "rgba(251,191,36,0.25)" : "rgba(180,130,0,0.2)")}`,
-                    }}>
-                        {isIdeal ? "IDEAL" : "DEV"}
-                    </span>
-                </div>
-                {/* Legs */}
-                <div style={{
-                    fontFamily: mono, fontSize: 12, textAlign: "right", paddingRight: 4,
-                    color: T.text, fontVariantNumeric: "tabular-nums"
-                }}>
-                    {row.contractions ?? ""}
-                </div>
-                {/* Pattern */}
-                <div style={{
-                    fontSize: 11, color: T.subtext, fontFamily: mono,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
-                }}>
-                    {row.contraction_pattern ?? ""}
-                </div>
-                {/* Near High */}
-                <div style={{
-                    textAlign: "right", paddingRight: 4, fontFamily: mono, fontSize: 12,
-                    fontVariantNumeric: "tabular-nums",
-                    color: row.pct_from_high != null
-                        ? (Math.abs(Number(row.pct_from_high)) <= 5 ? (isDark ? "#4ade80" : "#15803d") : T.text)
-                        : T.muted
-                }}>
-                    {row.pct_from_high != null ? `${Number(row.pct_from_high).toFixed(1)}%` : ""}
-                </div>
-                {/* Base Depth */}
-                <div style={{
-                    textAlign: "right", paddingRight: 4, fontFamily: mono, fontSize: 12,
-                    color: T.subtext, fontVariantNumeric: "tabular-nums"
-                }}>
-                    {row.base_depth != null ? `${Number(row.base_depth).toFixed(1)}%` : ""}
-                </div>
-                {/* Vol Dry */}
-                <div style={{ textAlign: "center" }}>{boolIcon(row.volume_dryup, "")}</div>
-                {/* Tight */}
-                <div style={{ textAlign: "center" }}>{boolIcon(row.tight_range, "")}</div>
-                {/* Near Pivot */}
-                <div style={{ textAlign: "center" }}>{boolIcon(row.near_pivot, "")}</div>
-                {/* Pivot Price */}
-                <div style={{
-                    textAlign: "right", paddingRight: 4, fontFamily: mono, fontSize: 12,
-                    color: T.text, fontVariantNumeric: "tabular-nums"
-                }}>
-                    {row.breakout_level != null
-                        ? `${Number(row.breakout_level).toLocaleString("en-IN", { maximumFractionDigits: 1 })}`
-                        : ""}
-                </div>
-                {/* Time */}
-                <div style={{ textAlign: "right", paddingRight: 16, fontSize: 11, color: T.muted }}>
-                    {fmtTime(row.detected_at) ?? ""}
-                </div>
-            </div>
-        );
-    };
-
-    const SectionHeader = ({ icon, label, count, color }) => (
-        <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "14px 16px 10px", marginTop: 8
-        }}>
-            <span style={{ fontSize: 15 }}>{icon}</span>
-            <span style={{
-                fontSize: 13, fontWeight: 700, color, fontFamily: sans,
-                letterSpacing: ".01em"
-            }}>{label}</span>
-            <span style={{
-                fontFamily: mono, fontSize: 11, fontWeight: 600, color,
-                opacity: .6
-            }}>({count})</span>
-        </div>
-    );
-
-    const FilterBtn = ({ active, onClick, children }) => (
-        <button onClick={onClick} style={{
-            height: 28, padding: "0 12px", border: `1px solid ${active ? ACCENT : T.border}`,
-            borderRadius: 5, background: active
-                ? (isDark ? "rgba(99,102,241,0.15)" : "rgba(79,70,229,0.08)")
-                : "transparent",
-            color: active ? ACCENT : T.subtext, fontSize: 12, fontFamily: sans,
-            fontWeight: active ? 600 : 400, cursor: "pointer", transition: ".12s",
-            whiteSpace: "nowrap"
-        }}>{children}</button>
-    );
-
-    const ColHeader = ({ col }) => (
-        <div style={{
-            textAlign: col.align, fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-            letterSpacing: ".07em", color: T.muted, cursor: col.sort ? "pointer" : "default",
-            paddingRight: col.align === "right" ? 4 : 0,
-            paddingLeft: col.align === "left" && col.key === "ticker" ? 16 : 0,
-            display: "flex", alignItems: "center",
-            justifyContent: col.align === "right" ? "flex-end" : col.align === "center" ? "center" : "flex-start",
-            gap: 4
-        }}
-            onClick={col.sort ? () => toggleSort(col.key) : undefined}
-            onMouseEnter={e => { if (col.sort) e.currentTarget.style.color = ACCENT }}
-            onMouseLeave={e => { e.currentTarget.style.color = T.muted }}>
-            {col.label}
-            {col.sort && sortKey === col.key && (
-                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke={ACCENT}
-                    strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
-                    style={{ transform: sortDir === "desc" ? "rotate(180deg)" : "none", transition: ".15s" }}>
-                    <path d="M4 1v6M1 4l3-3 3 3" />
-                </svg>
-            )}
-        </div>
-    );
-
-    /*  Render  */
-    return (
-        <div style={{
-            fontFamily: sans, flex: 1, overflow: "auto", minHeight: 0,
-            display: "flex", flexDirection: "column", background: T.bg, color: T.text
-        }}>
-
-            {/*  TOP BAR  */}
-            <div style={{
-                flexShrink: 0, background: T.card, borderBottom: `1px solid ${T.border}`,
-                padding: "0 24px", display: "flex", alignItems: "center",
-                height: 44, gap: 14, position: "sticky", top: 0, zIndex: 20
-            }}>
-                {/* Back */}
-                <button onClick={onBack} style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    background: "none", border: "none", color: T.subtext, cursor: "pointer",
-                    fontSize: 12, fontFamily: sans, padding: 0, transition: "color .12s"
-                }}
-                    onMouseEnter={e => e.currentTarget.style.color = T.text}
-                    onMouseLeave={e => e.currentTarget.style.color = T.subtext}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M13 8H3M7 12l-4-4 4-4" />
-                    </svg>
-                    Screens
-                </button>
-                <span style={{ color: T.border }}></span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>VCP Pattern</span>
-                {!loading && (
-                    <span style={{ fontFamily: mono, fontSize: 11, color: T.muted }}>
-                        {filtered.length} setups
-                    </span>
-                )}
-            </div>
-
-            {/*  FILTER BAR  */}
-            <div style={{
-                flexShrink: 0, padding: "10px 24px", background: T.surface,
-                borderBottom: `1px solid ${T.border}`,
-                display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap"
-            }}>
-
-                {/* Category */}
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{
-                        fontSize: 11, color: T.muted, marginRight: 2, textTransform: "uppercase",
-                        letterSpacing: ".06em", fontWeight: 600
-                    }}>Type:</span>
-                    {[["ALL", "All"], ["IDEAL", " Ideal"], ["DEVELOPING", " Developing"]].map(([v, l]) => (
-                        <FilterBtn key={v} active={catFilter === v}
-                            onClick={() => { setCatFilter(v); setPage(0) }}>{l}</FilterBtn>
-                    ))}
-                </div>
-
-                <div style={{ width: 1, height: 20, background: T.border, margin: "0 4px" }} />
-
-                {/* Score */}
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{
-                        fontSize: 11, color: T.muted, marginRight: 2, textTransform: "uppercase",
-                        letterSpacing: ".06em", fontWeight: 600
-                    }}>Score:</span>
-                    {[["ALL", "All"], ["HIGH", "80"], ["MID", "6080"]].map(([v, l]) => (
-                        <FilterBtn key={v} active={scoreFilter === v}
-                            onClick={() => { setScoreFilter(v); setPage(0) }}>{l}</FilterBtn>
-                    ))}
-                </div>
-
-                <div style={{ width: 1, height: 20, background: T.border, margin: "0 4px" }} />
-
-                {/* Near Pivot */}
-                <FilterBtn active={nearPivot} onClick={() => { setNearPivot(p => !p); setPage(0) }}>
-                    Near Pivot
-                </FilterBtn>
-
-                <div style={{ flex: 1 }} />
-
-                {/* Sort indicator */}
-                {!loading && rows.length > 0 && (
-                    <span style={{ fontSize: 11, color: T.muted, fontFamily: mono }}>
-                        Sorted: {COLS.find(c => c.key === sortKey)?.label} {sortDir === "desc" ? "" : ""}
-                    </span>
-                )}
-            </div>
-
-            {/*  INSIGHTS BAR  */}
-            {!loading && !error && rows.length > 0 && (
-                <div style={{
-                    flexShrink: 0, padding: "8px 24px",
-                    borderBottom: `1px solid ${T.border}`,
-                    display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap"
-                }}>
-                    {tightest && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{
-                                fontSize: 10, fontWeight: 700, color: T.muted,
-                                textTransform: "uppercase", letterSpacing: ".07em"
-                            }}>Tightest Contraction</span>
-                            <span style={{
-                                fontFamily: mono, fontSize: 11, fontWeight: 600,
-                                color: isDark ? "#4ade80" : "#15803d"
-                            }}>
-                                {tightest.ticker}  {Number(tightest.base_depth || 0).toFixed(1)}%
-                            </span>
-                        </div>
-                    )}
-                    {closestBreak && (
-                        <>
-                            <span style={{ color: T.border }}></span>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{
-                                    fontSize: 10, fontWeight: 700, color: T.muted,
-                                    textTransform: "uppercase", letterSpacing: ".07em"
-                                }}>Closest to Breakout</span>
-                                <span style={{
-                                    fontFamily: mono, fontSize: 11, fontWeight: 600,
-                                    color: isDark ? "#818cf8" : "#4f46e5"
-                                }}>
-                                    {closestBreak.ticker}  {Number(closestBreak.pct_from_high || 0).toFixed(1)}%
-                                </span>
-                            </div>
-                        </>
-                    )}
-                </div>
-            )}
-
-            {/*  LOADING  */}
-            {loading && (
-                <div style={{
-                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                    flexDirection: "column", gap: 12, color: T.muted
-                }}>
-                    <div style={{
-                        width: 28, height: 28, borderRadius: "50%",
-                        border: `2px solid ${T.border}`, borderTopColor: ACCENT,
-                        animation: "spin .8s linear infinite"
-                    }} />
-                    <span style={{ fontSize: 13 }}>Fetching VCP candidates</span>
-                </div>
-            )}
-
-            {/*  ERROR  */}
-            {!loading && error && (
-                <div style={{
-                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                    flexDirection: "column", gap: 8
-                }}>
-                    <span style={{ fontSize: 28 }}></span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Failed to load data</span>
-                    <span style={{ fontSize: 12, color: T.muted }}>{error}</span>
-                </div>
-            )}
-
-            {/*  EMPTY  */}
-            {!loading && !error && filtered.length === 0 && (
-                <div style={{
-                    flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                    flexDirection: "column", gap: 8
-                }}>
-                    <span style={{ fontSize: 32 }}></span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>No VCP setups found for today</span>
-                    <span style={{ fontSize: 12, color: T.muted }}>Market may not be in contraction phase</span>
-                </div>
-            )}
-
-            {/*  TABLE  */}
-            {!loading && !error && filtered.length > 0 && (
-                <div style={{ flex: 1, overflow: "auto" }}>
-                    {/* Column header */}
-                    <div style={{
-                        display: "grid", gridTemplateColumns: COLS.map(c => c.w).join(" "),
-                        padding: "8px 0", borderBottom: `1px solid ${T.border}`,
-                        background: T.tableHead, position: "sticky", top: 0, zIndex: 5
-                    }}>
-                        {COLS.map(col => <ColHeader key={col.key} col={col} />)}
-                    </div>
-
-                    {catFilter === "ALL" ? (
-                        /*  Grouped view  */
-                        <>
-                            {idealRows.length > 0 && (
-                                <>
-                                    <SectionHeader icon="" label="IDEAL SETUPS"
-                                        count={idealRows.length} color={isDark ? "#4ade80" : "#15803d"} />
-                                    {idealRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row, i) =>
-                                        <RenderRow key={row.ticker + i} row={row} idx={i} />)}
-                                </>
-                            )}
-                            {developingRows.length > 0 && (
-                                <>
-                                    <SectionHeader icon="" label="DEVELOPING SETUPS"
-                                        count={developingRows.length} color={isDark ? "#fbbf24" : "#a16207"} />
-                                    {developingRows.slice(0, PAGE_SIZE).map((row, i) =>
-                                        <RenderRow key={row.ticker + i} row={row} idx={i} />)}
-                                </>
-                            )}
-                        </>
-                    ) : (
-                        /*  Flat view (filtered)  */
-                        paginated.map((row, i) => <RenderRow key={row.ticker + i} row={row} idx={i} />)
-                    )}
-
-                    {/* Pagination */}
-                    {totalPages > 1 && catFilter !== "ALL" && (
-                        <div style={{
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            gap: 8, padding: "20px 0", borderTop: `1px solid ${T.border}`
-                        }}>
-                            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                                style={{
-                                    height: 28, padding: "0 12px", border: `1px solid ${T.border}`,
-                                    borderRadius: 5, background: "transparent", color: T.subtext,
-                                    cursor: page === 0 ? "not-allowed" : "pointer", fontSize: 12, fontFamily: sans,
-                                    opacity: page === 0 ? .4 : 1
-                                }}> Prev</button>
-                            <span style={{ fontSize: 12, color: T.muted, fontFamily: mono }}>
-                                {page + 1} / {totalPages}
-                            </span>
-                            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-                                style={{
-                                    height: 28, padding: "0 12px", border: `1px solid ${T.border}`,
-                                    borderRadius: 5, background: "transparent", color: T.subtext,
-                                    cursor: page === totalPages - 1 ? "not-allowed" : "pointer", fontSize: 12, fontFamily: sans,
-                                    opacity: page === totalPages - 1 ? .4 : 1
-                                }}>Next </button>
-                        </div>
-                    )}
-                </div>
-            )}
         </div>
     );
 }
@@ -25425,18 +25349,26 @@ export default function App() {
                                 {/* JOURNAL MODULE */}
                                 {productTab === "tradevault" && (
                                     <div className="journal-layout">
-                                        <QuoteContext.Provider value={{ quotes, setQuotes }}>
+                                        {!session ? (
                                             <main className="journal-main">
                                                 <div className="journal-main-inner">
-                                                    {page === "dashboard" && <Dashboard trades={trades} tradeRows={journalTradeRows} stats={journalStats} isDemo={isDemo} T={T} />}
-                                                    {page === "trades" && <Trades trades={trades} tradeRows={journalTradeRows} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
-                                                    {page === "analytics" && <Analytics trades={trades} tradeRows={journalTradeRows} stats={journalStats} T={T} />}
-                                                    {page === "capital-gains" && <CapitalGains trades={trades} tradeRows={journalTradeRows} rows={journalCapitalGainsRows} T={T} />}
-                                                    {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} />}
-                                                    {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
+                                                    <JournalLandingPromo T={T} onLogin={() => setShowLoginModal(true)} />
                                                 </div>
                                             </main>
-                                        </QuoteContext.Provider>
+                                        ) : (
+                                            <QuoteContext.Provider value={{ quotes, setQuotes }}>
+                                                <main className="journal-main">
+                                                    <div className="journal-main-inner">
+                                                        {page === "dashboard" && <Dashboard trades={trades} tradeRows={journalTradeRows} stats={journalStats} isDemo={isDemo} T={T} />}
+                                                        {page === "trades" && <Trades trades={trades} tradeRows={journalTradeRows} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
+                                                        {page === "analytics" && <Analytics trades={trades} tradeRows={journalTradeRows} stats={journalStats} T={T} />}
+                                                        {page === "capital-gains" && <CapitalGains trades={trades} tradeRows={journalTradeRows} rows={journalCapitalGainsRows} T={T} />}
+                                                        {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} />}
+                                                        {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
+                                                    </div>
+                                                </main>
+                                            </QuoteContext.Provider>
+                                        )}
                                     </div>
                                 )}
 
@@ -25476,27 +25408,35 @@ export default function App() {
                                     </ModuleErrorBoundary>
                                 )}
                                 {productTab === "watchlist" && (
-                                    <ModuleErrorBoundary
-                                        T={T}
-                                        moduleName="Watchlist"
-                                        resetKey={`watchlist-${theme}`}
-                                        onRecover={() => { setProductTab(SAFE_PRODUCT_TAB); setPage("dashboard"); }}
-                                    >
-                                        <WatchlistDashboard
+                                    !session ? (
+                                        <div className="tab-promo-shell">
+                                            <div className="tab-promo-shell-inner">
+                                                <WatchlistLandingPromo T={T} onLogin={() => setShowLoginModal(true)} />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <ModuleErrorBoundary
                                             T={T}
-                                            session={session}
-                                            darkMode={theme === "dark"}
-                                            onToggleDark={toggleTheme}
-                                            onNavigateToScreen={(screenName) => {
-                                                setTechnicalSubPage("screens");
-                                                setProductTab("technical");
-                                                window.__wl_openScreen = screenName;
-                                            }}
-                                            onTechnoFunda={({ label, tickers }) => {
-                                                handleTechnoFundaScan({ label, tickers }, "watchlist");
-                                            }}
-                                        />
-                                    </ModuleErrorBoundary>
+                                            moduleName="Watchlist"
+                                            resetKey={`watchlist-${theme}`}
+                                            onRecover={() => { setProductTab(SAFE_PRODUCT_TAB); setPage("dashboard"); }}
+                                        >
+                                            <WatchlistDashboard
+                                                T={T}
+                                                session={session}
+                                                darkMode={theme === "dark"}
+                                                onToggleDark={toggleTheme}
+                                                onNavigateToScreen={(screenName) => {
+                                                    setTechnicalSubPage("screens");
+                                                    setProductTab("technical");
+                                                    window.__wl_openScreen = screenName;
+                                                }}
+                                                onTechnoFunda={({ label, tickers }) => {
+                                                    handleTechnoFundaScan({ label, tickers }, "watchlist");
+                                                }}
+                                            />
+                                        </ModuleErrorBoundary>
+                                    )
                                 )}
 
                                 {/* FUNDAMENTALS */}
