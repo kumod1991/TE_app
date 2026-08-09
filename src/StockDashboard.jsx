@@ -726,6 +726,162 @@ export function buildDashboardTheme(T = {}) {
     };
 }
 
+// ─── STOCK AVATARS & INDUSTRY ICONS ──────────────────────────────────────────
+// Deterministic per-ticker color so the same stock always gets the same
+// avatar color across sessions/tables (no server data needed).
+const AVATAR_PALETTE = [
+    "#7c3aed", "#059669", "#2563eb", "#ea580c", "#dc2626",
+    "#0891b2", "#c026d3", "#65a30d", "#4f46e5", "#0d9488",
+];
+
+function hashString(str) {
+    let hash = 0;
+    const s = String(str || "");
+    for (let i = 0; i < s.length; i++) {
+        hash = (hash << 5) - hash + s.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+function avatarColorFor(seed) {
+    return AVATAR_PALETTE[hashString(seed) % AVATAR_PALETTE.length];
+}
+
+function StockAvatar({ T, name, ticker, size = 32 }) {
+    const label = (name || ticker || "?").trim();
+    const letter = label.charAt(0).toUpperCase() || "?";
+    const color = avatarColorFor(ticker || name || "?");
+    return (
+        <div style={{
+            width: size,
+            height: size,
+            minWidth: size,
+            borderRadius: Math.round(size * 0.32),
+            background: withAlpha(color, T?.isDark ? 0.24 : 0.14),
+            color,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 800,
+            fontSize: Math.round(size * 0.42),
+            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+            flexShrink: 0,
+            lineHeight: 1,
+        }}>
+            {letter}
+        </div>
+    );
+}
+
+// Shared "avatar + name + ticker" cell used by every stock table (Movers,
+// Volume Shockers, Trend Template, RS tables) so the layout is identical
+// everywhere instead of each table hand-rolling its own name column.
+function NameCell({ T, name, ticker, size = 32, nameFontSize = 15.5, tickerFontSize = 13.5 }) {
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <StockAvatar T={T} name={name} ticker={ticker} size={size} />
+            <div style={{ minWidth: 0 }}>
+                <div style={{
+                    fontWeight: 600,
+                    fontSize: nameFontSize,
+                    color: T.text,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    lineHeight: 1.3,
+                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                }}>{name || ticker}</div>
+                {name && (
+                    <div style={{
+                        fontFamily: "'IBM Plex Mono', monospace",
+                        fontSize: tickerFontSize,
+                        color: T.muted,
+                        marginTop: 2,
+                        letterSpacing: "0.03em",
+                    }}>{ticker}</div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Keyword → icon/color map for the RS Rating industry list. Falls back to a
+// neutral generic icon for industries that don't match a known keyword.
+function industryIconSpec(industry) {
+    const name = String(industry || "").toLowerCase();
+    if (name.includes("chemical")) return {
+        color: "#7c3aed",
+        path: <path d="M9 3h6M10 3v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" />,
+    };
+    if (name.includes("pharma") || name.includes("biotech") || name.includes("health")) return {
+        color: "#059669",
+        path: <><rect x="3" y="3" width="18" height="18" rx="6" /><path d="M9 12h6M12 9v6" /></>,
+    };
+    if (name.includes("auto")) return {
+        color: "#ea580c",
+        path: <><path d="M3 17V11l2-5h10l4 5v6" /><path d="M5 17h14" /><circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" /></>,
+    };
+    if (name.includes("electronic") || name.includes("tech") || name.includes("software") || name.includes(" it")) return {
+        color: "#2563eb",
+        path: <><rect x="6" y="6" width="12" height="12" rx="2" /><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" /></>,
+    };
+    if (name.includes("capital goods") || name.includes("industrial") || name.includes("engineering") || name.includes("machinery")) return {
+        color: "#4f46e5",
+        path: <><path d="M3 21h18" /><path d="M5 21V9l7-5 7 5v12" /><path d="M9 21v-6h6v6" /></>,
+    };
+    if (name.includes("bank") || name.includes("financ") || name.includes("insurance") || name.includes("nbfc")) return {
+        color: "#0891b2",
+        path: <><path d="M3 10l9-6 9 6" /><path d="M4 10v9M20 10v9M9 10v9M15 10v9" /><path d="M2 21h20" /></>,
+    };
+    if (name.includes("metal") || name.includes("mining") || name.includes("steel") || name.includes("cement")) return {
+        color: "#b45309",
+        path: <><path d="M4 20h16" /><path d="M6 20V10l6-6 6 6v10" /></>,
+    };
+    if (name.includes("fmcg") || name.includes("consumer") || name.includes("food") || name.includes("beverage")) return {
+        color: "#db2777",
+        path: <><path d="M6 2h12l-1 5H7L6 2z" /><path d="M5 7h14l-1.5 13a2 2 0 0 1-2 1.8H8.5a2 2 0 0 1-2-1.8L5 7z" /></>,
+    };
+    if (name.includes("energy") || name.includes("oil") || name.includes("power") || name.includes("gas") || name.includes("utilit")) return {
+        color: "#d97706",
+        path: <path d="M13 2 3 14h7l-1 8 11-14h-8l1-6z" />,
+    };
+    if (name.includes("realt") || name.includes("construction") || name.includes("infra") || name.includes("cement")) return {
+        color: "#0d9488",
+        path: <><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M9 9h.01M9 13h.01M15 9h.01M15 13h.01" /></>,
+    };
+    if (name.includes("textile") || name.includes("apparel")) return {
+        color: "#c026d3",
+        path: <path d="M6 3l3 2 3-2 3 2 3-2v6l-3 2v10H9V11L6 9V3z" />,
+    };
+    return {
+        color: "#64748b",
+        path: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12h8M12 8v8" /></>,
+    };
+}
+
+function IndustryIcon({ industry, size = 32 }) {
+    const { color, path } = industryIconSpec(industry);
+    return (
+        <span style={{
+            width: size,
+            height: size,
+            minWidth: size,
+            borderRadius: 9,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: withAlpha(color, 0.12),
+            color,
+            flexShrink: 0,
+        }}>
+            <svg width={Math.round(size * 0.52)} height={Math.round(size * 0.52)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                {path}
+            </svg>
+        </span>
+    );
+}
+
 function useViewportFlags() {
     const getWidth = () => (typeof window === "undefined" ? 1440 : window.innerWidth);
     const [width, setWidth] = useState(getWidth);
@@ -908,10 +1064,10 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
         {
             label: "Breadth",
             breadth: [
-                { label: "Near 52W High", value: Number.isFinite(highPct) ? `${highPct.toFixed(1)}%` : EMPTY_VALUE, color: highPct >= lowPct ? D.pos : D.text },
-                { label: "Near 52W Low", value: Number.isFinite(lowPct) ? `${lowPct.toFixed(1)}%` : EMPTY_VALUE, color: lowPct > highPct ? D.neg : D.text },
-                { label: "Above 50 SMA", value: Number.isFinite(sma50Pct) ? `${sma50Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma50Pct >= 50 ? D.pos : D.neg },
-                { label: "Above 200 SMA", value: Number.isFinite(sma200Pct) ? `${sma200Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma200Pct >= 50 ? D.pos : D.neg },
+                { label: "52W High", value: Number.isFinite(highPct) ? `${highPct.toFixed(1)}%` : EMPTY_VALUE, color: highPct >= lowPct ? D.pos : D.text },
+                { label: "52W Low", value: Number.isFinite(lowPct) ? `${lowPct.toFixed(1)}%` : EMPTY_VALUE, color: lowPct > highPct ? D.neg : D.text },
+                { label: "Above 50D", value: Number.isFinite(sma50Pct) ? `${sma50Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma50Pct >= 50 ? D.pos : D.neg },
+                { label: "Above 200D", value: Number.isFinite(sma200Pct) ? `${sma200Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma200Pct >= 50 ? D.pos : D.neg },
             ],
         },
         { label: "Top RS Sectors", sectors: topRsSectors, color: D.accent },
@@ -938,7 +1094,9 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
             <div style={{ padding: isCompact ? "18px 16px" : "24px 26px" }}>
                 <div style={{
                     display: "grid",
-                    gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 1fr) minmax(580px, 1.1fr)",
+                    gridTemplateColumns: isCompact
+                        ? "1fr"
+                        : "minmax(0, 0.72fr) minmax(0, 1.5fr)",
                     gap: isCompact ? 18 : 24,
                     alignItems: "stretch",
                 }}>
@@ -988,12 +1146,18 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
 
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "minmax(140px, 1fr) minmax(140px, 1fr) minmax(280px, 2fr)",
+                        gridTemplateColumns: isCompact
+                            ? "repeat(2, minmax(0, 1fr))"
+                            : "minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1.7fr)",
                         gap: 10,
                     }}>
                         {heroMetrics.map(metric => (
                             <div key={metric.label} style={{
                                 minWidth: 0,
+                                width: "100%",
+                                maxWidth: "100%",
+                                boxSizing: "border-box",
+                                overflow: "hidden",
                                 borderRadius: 10,
                                 padding: isCompact ? "12px 12px" : "14px 14px",
                                 background: D.softFill,
@@ -1691,9 +1855,12 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                                 cursor: "pointer",
                             }}
                         >
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-                                <div style={{ fontWeight: 700, lineHeight: 1.4 }}>{row.industry}</div>
-                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16.5, color }}>{pct.toFixed(1)}%</div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                    <IndustryIcon industry={row.industry} size={30} />
+                                    <div style={{ fontWeight: 700, lineHeight: 1.4, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.industry}</div>
+                                </div>
+                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16.5, color, flexShrink: 0 }}>{pct.toFixed(1)}%</div>
                             </div>
                             <div style={{
                                 height: 8,
@@ -1764,7 +1931,10 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
                             <td style={{ padding: "11px 14px", color: T.text, fontWeight: 600, fontSize: 15, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                                {row.industry}
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                    <IndustryIcon industry={row.industry} size={30} />
+                                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.industry}</span>
+                                </div>
                             </td>
                             <td style={{ padding: "11px 14px" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
@@ -1902,26 +2072,8 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
                         onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                     >
                         {/* Name + ticker cell – mirrors MoversTable layout */}
-                        <td style={{ padding: "11px 14px", maxWidth: 240, minWidth: 160 }}>
-                            <div style={{
-                                fontWeight: 600,
-                                fontSize: 15,
-                                color: T.text,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                lineHeight: 1.3,
-                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                            }}>{row.name || row.ticker}</div>
-                            {row.name && (
-                                <div style={{
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 13,
-                                    color: T.muted,
-                                    marginTop: 2,
-                                    letterSpacing: "0.03em",
-                                }}>{row.ticker}</div>
-                            )}
+                        <td style={{ padding: "11px 14px", maxWidth: 260, minWidth: 180 }}>
+                            <NameCell T={T} name={row.name} ticker={row.ticker} size={30} nameFontSize={15} tickerFontSize={13} />
                         </td>
                         <td style={{ padding: "11px 14px", textAlign: "right" }}>
                             <span style={{
@@ -2071,26 +2223,8 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
                     >
                         <td style={{ padding: "11px 14px", color: T.muted, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                         {/* Name + ticker cell – mirrors MoversTable layout */}
-                        <td style={{ padding: "11px 14px", maxWidth: 240, minWidth: 160 }}>
-                            <div style={{
-                                fontWeight: 600,
-                                fontSize: 15,
-                                color: T.text,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                lineHeight: 1.3,
-                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                            }}>{row.name || row.ticker}</div>
-                            {row.name && (
-                                <div style={{
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 13,
-                                    color: T.muted,
-                                    marginTop: 2,
-                                    letterSpacing: "0.03em",
-                                }}>{row.ticker}</div>
-                            )}
+                        <td style={{ padding: "11px 14px", maxWidth: 260, minWidth: 180 }}>
+                            <NameCell T={T} name={row.name} ticker={row.ticker} size={30} nameFontSize={15} tickerFontSize={13} />
                         </td>
                         <td style={{ padding: "11px 14px", textAlign: "right" }}>
                             <span style={{
@@ -2362,15 +2496,8 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                                     onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                                 >
                                     <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
-                                    <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
-                                        <div style={{
-                                            fontWeight: 600, fontSize: 15.5, color: T.text, whiteSpace: "nowrap",
-                                            overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3,
-                                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                        }}>{row.name || row.ticker}</div>
-                                        {row.name && (
-                                            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>
-                                        )}
+                                    <td style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
+                                        <NameCell T={T} name={row.name} ticker={row.ticker} />
                                     </td>
                                     <td style={{
                                         padding: "12px 16px", textAlign: "right",
@@ -2593,26 +2720,8 @@ function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadi
                             {/* Row index */}
                             <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                             {/* Name cell */}
-                            <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
-                                <div style={{
-                                    fontWeight: 600,
-                                    fontSize: 15.5,
-                                    color: T.text,
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    lineHeight: 1.3,
-                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                }}>{row.name || row.ticker}</div>
-                                {row.name && (
-                                    <div style={{
-                                        fontFamily: "'IBM Plex Mono', monospace",
-                                        fontSize: 13.5,
-                                        color: T.muted,
-                                        marginTop: 2,
-                                        letterSpacing: "0.03em",
-                                    }}>{row.ticker}</div>
-                                )}
+                            <td style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
+                                <NameCell T={T} name={row.name} ticker={row.ticker} />
                             </td>
                             {/* LTP */}
                             <td style={{
@@ -2835,9 +2944,8 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
                             <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
-                            <td style={{ padding: "12px 16px", maxWidth: 240, minWidth: 160 }}>
-                                <div style={{ fontWeight: 600, fontSize: 15.5, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{row.name || row.ticker}</div>
-                                {row.name && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5, color: T.muted, marginTop: 2, letterSpacing: "0.03em" }}>{row.ticker}</div>}
+                            <td style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
+                                <NameCell T={T} name={row.name} ticker={row.ticker} />
                             </td>
                             <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
                             <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
