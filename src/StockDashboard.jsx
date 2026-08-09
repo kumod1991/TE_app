@@ -1070,7 +1070,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                 { label: "Above 200D", value: Number.isFinite(sma200Pct) ? `${sma200Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma200Pct >= 50 ? D.pos : D.neg },
             ],
         },
-        { label: "Top RS Sectors", sectors: topRsSectors, color: D.accent },
+        { label: "Strong Sectors", sectors: topRsSectors, color: D.accent },
         { label: "FII / DII Daily Flow", fiiDii: true },
     ];
     const lenses = [

@@ -2797,30 +2797,81 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         )}
 
                                         {isRenaming ? (
-                                            <input
-                                                autoFocus
-                                                value={renameVal}
-                                                onChange={e => setRenameVal(e.target.value)}
-                                                onClick={e => e.stopPropagation()}
-                                                onKeyDown={e => {
-                                                    if (e.key === "Enter") renameWatchlist(w.id);
-                                                    if (e.key === "Escape") setRenamingId(null);
-                                                }}
-                                                onBlur={() => renameWatchlist(w.id)}
-                                                style={{
-                                                    flex: 1,
-                                                    minWidth: 0,
-                                                    fontSize: isMobile ? 14 : 13,
-                                                    fontWeight: 600,
-                                                    color: T.text,
-                                                    background: dark ? "rgba(255,255,255,0.06)" : "#fff",
-                                                    border: `1px solid ${T.green}80`,
-                                                    borderRadius: 5,
-                                                    padding: isMobile ? "5px 7px" : "2px 6px",
-                                                    outline: "none",
-                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                                }}
-                                            />
+                                            <>
+                                                <input
+                                                    autoFocus
+                                                    value={renameVal}
+                                                    onChange={e => setRenameVal(e.target.value)}
+                                                    onClick={e => e.stopPropagation()}
+                                                    enterKeyHint="done"
+                                                    inputMode="text"
+                                                    onKeyDown={e => {
+                                                        if (e.key === "Enter") renameWatchlist(w.id);
+                                                        if (e.key === "Escape") setRenamingId(null);
+                                                    }}
+                                                    onBlur={() => renameWatchlist(w.id)}
+                                                    style={{
+                                                        flex: 1,
+                                                        minWidth: 0,
+                                                        fontSize: isMobile ? 14 : 13,
+                                                        fontWeight: 600,
+                                                        color: T.text,
+                                                        background: dark ? "rgba(255,255,255,0.06)" : "#fff",
+                                                        border: `1px solid ${T.green}80`,
+                                                        borderRadius: 5,
+                                                        padding: isMobile ? "5px 7px" : "2px 6px",
+                                                        outline: "none",
+                                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                    }}
+                                                />
+                                                {/* Confirm — explicit tap target so mobile (no hardware Enter key) can finish editing */}
+                                                <button
+                                                    title="Save"
+                                                    onClick={e => e.stopPropagation()}
+                                                    onMouseDown={e => { e.preventDefault(); e.stopPropagation(); renameWatchlist(w.id); }}
+                                                    onTouchStart={e => { e.preventDefault(); e.stopPropagation(); renameWatchlist(w.id); }}
+                                                    style={{
+                                                        flexShrink: 0,
+                                                        background: "none",
+                                                        border: "none",
+                                                        cursor: "pointer",
+                                                        color: T.green,
+                                                        fontSize: isMobile ? 15 : 13,
+                                                        fontWeight: 700,
+                                                        padding: isMobile ? "4px 6px" : "2px 4px",
+                                                        borderRadius: 4,
+                                                        lineHeight: 1,
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                    }}
+                                                >
+                                                    ✓
+                                                </button>
+                                                {/* Cancel */}
+                                                <button
+                                                    title="Cancel"
+                                                    onClick={e => e.stopPropagation()}
+                                                    onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setRenamingId(null); }}
+                                                    onTouchStart={e => { e.preventDefault(); e.stopPropagation(); setRenamingId(null); }}
+                                                    style={{
+                                                        flexShrink: 0,
+                                                        background: "none",
+                                                        border: "none",
+                                                        cursor: "pointer",
+                                                        color: T.subtext,
+                                                        fontSize: isMobile ? 14 : 12,
+                                                        padding: isMobile ? "4px 6px" : "2px 4px",
+                                                        borderRadius: 4,
+                                                        lineHeight: 1,
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                    }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </>
                                         ) : (
                                             <span
                                                 onDoubleClick={e => {
