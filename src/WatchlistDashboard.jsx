@@ -3291,63 +3291,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         )}
                     </div>
 
-                    {/* ── STAT CARDS — desktop only (matches Journal Dashboard .stat-card theme) ── */}
-                    {!isMobile && activeWl && rows.length > 0 && (
-                        <div style={{
-                            flexShrink: 0,
-                            display: "grid",
-                            gridTemplateColumns: "repeat(5, 1fr)",
-                            gap: 12,
-                            padding: "14px 18px 0",
-                        }}>
-                            {[
-                                {
-                                    label: "Avg RS Rating",
-                                    value: avgRS != null ? String(avgRS) : "—",
-                                    tone: T.green,
-                                    hint: avgRS != null ? (avgRS >= 80 ? "Very Strong" : avgRS >= 60 ? "Strong" : avgRS >= 40 ? "Average" : "Weak") : null,
-                                },
-                                { label: "RS Leaders", value: String(leaders), tone: T.text, hint: "stocks" },
-                                { label: "52W High BO", value: String(bo52wCount), tone: T.text, hint: "stocks" },
-                                { label: "Pivot BO", value: String(pivotBoCount), tone: T.text, hint: "stocks" },
-                                { label: "Avg Market Cap", value: fmt.marketCap(avgMarketCap), tone: T.text, hint: avgMarketCap != null && avgMarketCap >= 20000 ? "Large Cap Focus" : null },
-                            ].map(card => (
-                                <div key={card.label} className="wl-stat-card" style={{
-                                    position: "relative",
-                                    background: T.card,
-                                    border: `1px solid ${T.border}`,
-                                    borderRadius: 14,
-                                    padding: "16px 16px",
-                                    minWidth: 0,
-                                    boxShadow: dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)",
-                                    transition: "box-shadow 0.14s ease, transform 0.14s ease, border-color 0.14s ease",
-                                }}
-                                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = dark ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = T.border; }}
-                                >
-                                    <div style={{
-                                        fontSize: 12, fontWeight: 800, color: T.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                        textTransform: "uppercase", letterSpacing: "0.11em", marginBottom: 7,
-                                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                                    }}>
-                                        {card.label}
-                                    </div>
-                                    <div style={{
-                                        fontSize: 22, fontWeight: 800, color: card.tone, fontFamily: "'IBM Plex Mono', monospace",
-                                        letterSpacing: "-0.03em", lineHeight: 1.1,
-                                    }}>
-                                        {card.value}
-                                    </div>
-                                    {card.hint && (
-                                        <div style={{ fontSize: 13, color: T.subtext, marginTop: 6, lineHeight: 1.6, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                                            {card.hint}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
                     {/* ── CONTENT ──────────────────────────────────────────── */}
                     {!activeWl ? (
                         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
@@ -3364,6 +3307,62 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         <div style={{ flex: 1, display: "flex", overflow: "hidden", flexDirection: isMobile ? "column" : "row" }}>
                             {/* ── TABLE (flex) ───────────────────────────── */}
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, paddingBottom: isMobile ? 8 : 0 }}>
+                                {/* ── STAT CARDS — desktop only (matches Journal Dashboard .stat-card theme) ── */}
+                                {!isMobile && rows.length > 0 && (
+                                    <div style={{
+                                        flexShrink: 0,
+                                        display: "grid",
+                                        gridTemplateColumns: "repeat(5, 1fr)",
+                                        gap: 12,
+                                        padding: "14px 18px 0",
+                                    }}>
+                                        {[
+                                            {
+                                                label: "Avg RS Rating",
+                                                value: avgRS != null ? String(avgRS) : "—",
+                                                tone: T.green,
+                                                hint: avgRS != null ? (avgRS >= 80 ? "Very Strong" : avgRS >= 60 ? "Strong" : avgRS >= 40 ? "Average" : "Weak") : null,
+                                            },
+                                            { label: "RS Leaders", value: String(leaders), tone: T.text, hint: "stocks" },
+                                            { label: "52W High BO", value: String(bo52wCount), tone: T.text, hint: "stocks" },
+                                            { label: "Pivot BO", value: String(pivotBoCount), tone: T.text, hint: "stocks" },
+                                            { label: "Avg Market Cap", value: fmt.marketCap(avgMarketCap), tone: T.text, hint: avgMarketCap != null && avgMarketCap >= 20000 ? "Large Cap Focus" : null },
+                                        ].map(card => (
+                                            <div key={card.label} className="wl-stat-card" style={{
+                                                position: "relative",
+                                                background: T.card,
+                                                border: `1px solid ${T.border}`,
+                                                borderRadius: 14,
+                                                padding: "16px 16px",
+                                                minWidth: 0,
+                                                boxShadow: dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)",
+                                                transition: "box-shadow 0.14s ease, transform 0.14s ease, border-color 0.14s ease",
+                                            }}
+                                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = dark ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"; }}
+                                                onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = T.border; }}
+                                            >
+                                                <div style={{
+                                                    fontSize: 12, fontWeight: 800, color: T.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                    textTransform: "uppercase", letterSpacing: "0.11em", marginBottom: 7,
+                                                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                                }}>
+                                                    {card.label}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: 22, fontWeight: 800, color: card.tone, fontFamily: "'IBM Plex Mono', monospace",
+                                                    letterSpacing: "-0.03em", lineHeight: 1.1,
+                                                }}>
+                                                    {card.value}
+                                                </div>
+                                                {card.hint && (
+                                                    <div style={{ fontSize: 13, color: T.subtext, marginTop: 6, lineHeight: 1.6, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                                                        {card.hint}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 {/* Column headers — desktop table only */}
                                 {!isMobile && !tableLoading && displayRows.length > 0 && (
                                     <div style={{ flexShrink: 0, padding: "14px 18px 0" }}>
