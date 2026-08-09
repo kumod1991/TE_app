@@ -23738,479 +23738,276 @@ function ContactForm({ T }) {
 }
 
 // ===== LEGAL PAGE COMPONENT =====
+const LEGAL_LAST_UPDATED = "May 22, 2025";
+
+function LegalIcon({ name, size = 20, style }) {
+    const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", style };
+    switch (name) {
+        case "shield-check":
+            return <svg {...c}><path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" /><path d="M9 12l2 2 4-4" /></svg>;
+        case "lock":
+            return <svg {...c}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;
+        case "file":
+            return <svg {...c}><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" /><path d="M14 3v5h5" /></svg>;
+        case "info":
+            return <svg {...c}><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16" /><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none" /></svg>;
+        case "trending-up":
+            return <svg {...c}><polyline points="4 15 10 9 14 13 20 6" /><polyline points="14 6 20 6 20 12" /></svg>;
+        case "alert-triangle":
+            return <svg {...c}><path d="M12 4 L21 20 L3 20 Z" /><line x1="12" y1="10" x2="12" y2="15" /><circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none" /></svg>;
+        case "user":
+            return <svg {...c}><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" /></svg>;
+        case "user-plus":
+            return <svg {...c}><circle cx="10" cy="8" r="3.5" /><path d="M3 20c0-3.5 3-6 7-6s7 2.5 7 6" /><line x1="18" y1="8" x2="18" y2="14" /><line x1="15" y1="11" x2="21" y2="11" /></svg>;
+        case "database":
+            return <svg {...c}><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6" /><path d="M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" /></svg>;
+        case "check-circle":
+            return <svg {...c}><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></svg>;
+        case "link":
+            return <svg {...c}><path d="M9 15l6-6" /><path d="M13 5l1-1a4 4 0 0 1 6 6l-1 1" /><path d="M11 19l-1 1a4 4 0 0 1-6-6l1-1" /></svg>;
+        case "scale":
+            return <svg {...c}><line x1="12" y1="3" x2="12" y2="21" /><line x1="6" y1="7" x2="18" y2="7" /><path d="M6 7l-3 6a3 3 0 0 0 6 0z" /><path d="M18 7l-3 6a3 3 0 0 0 6 0z" /></svg>;
+        case "headset":
+            return <svg {...c}><path d="M4 13v-1a8 8 0 0 1 16 0v1" /><rect x="3" y="13" width="4" height="6" rx="1.5" /><rect x="17" y="13" width="4" height="6" rx="1.5" /><path d="M19 19v1a2 2 0 0 1-2 2h-3" /></svg>;
+        case "mail":
+            return <svg {...c}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>;
+        case "globe":
+            return <svg {...c}><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /><path d="M12 3c2.5 2.5 4 5.5 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.5-4-9s1.5-6.5 4-9z" /></svg>;
+        case "calendar":
+            return <svg {...c}><rect x="3" y="5" width="18" height="16" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="8" y1="3" x2="8" y2="7" /><line x1="16" y1="3" x2="16" y2="7" /></svg>;
+        default:
+            return null;
+    }
+}
+
+const LEGAL_COLUMNS = [
+    {
+        id: "disclaimer",
+        icon: "shield-check",
+        title: "Disclaimer",
+        intro: "TradeEdge is an analytics platform providing financial market data, insights, and tools for informational purposes only.",
+        items: [
+            { icon: "info", title: "No Investment Advice", body: "Nothing on TradeEdge constitutes investment, trading, or financial advice." },
+            { icon: "trending-up", title: "Data Accuracy", body: "We strive for accuracy but do not guarantee completeness or real-time accuracy of data." },
+            { icon: "alert-triangle", title: "Risk Warning", body: "All trading and investment activities involve risk. You are solely responsible for your decisions." },
+            { icon: "user", title: "Independent Decision", body: "Use of this platform is at your own risk. Please consult a SEBI-registered advisor before making any investment." },
+        ],
+        highlight: { icon: "info", body: "Past performance is not indicative of future results. Invest wisely and manage risk responsibly." },
+    },
+    {
+        id: "privacy",
+        icon: "lock",
+        title: "Privacy Policy",
+        intro: "We value your privacy and are committed to protecting your personal information.",
+        items: [
+            { icon: "user", title: "Information We Collect", body: "We collect basic information you provide to us and data related to your usage of the platform." },
+            { icon: "database", title: "How We Use Information", body: "Your data is used to provide and improve our services, personalize your experience and communicate important updates." },
+            { icon: "shield-check", title: "Data Protection", body: "We implement industry-standard security measures to protect your data from unauthorized access." },
+            { icon: "user-plus", title: "Your Rights", body: "You can access, update or delete your data at any time by contacting us." },
+        ],
+        highlight: { icon: "lock", body: "We do not sell or rent your personal information to third parties." },
+    },
+    {
+        id: "terms",
+        icon: "file",
+        title: "Terms of Use",
+        intro: "By using TradeEdge, you agree to the following terms and conditions.",
+        items: [
+            { icon: "check-circle", title: "Acceptance of Terms", body: "By accessing or using TradeEdge, you agree to be bound by these terms." },
+            { icon: "user", title: "User Responsibilities", body: "You agree to use the platform only for lawful purposes and not to misuse or disrupt our services." },
+            { icon: "link", title: "Intellectual Property", body: "All content, data, logos and materials on TradeEdge are the property of TradeEdge and protected by applicable laws." },
+            { icon: "scale", title: "Limitation of Liability", body: "TradeEdge shall not be liable for any direct, indirect or consequential losses arising from use of the platform." },
+        ],
+        highlight: { icon: "info", body: "We reserve the right to modify these terms at any time. Continued use constitutes acceptance." },
+    },
+];
+
 function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
-    const [activeTab, setActiveTab] = useState(initialTab);
+    const [activeTab, setActiveTab] = useState(LEGAL_COLUMNS.some(c => c.id === initialTab) ? initialTab : "disclaimer");
+    const sectionRefs = useRef({});
+    const footerRef = useRef(null);
 
-    const tabs = [
-        { id: "disclaimer", label: "Disclaimer" },
-        { id: "privacy", label: "Privacy Policy" },
-        { id: "terms", label: "Terms of Service" },
-        { id: "contact", label: "Contact Us" },
-    ];
+    useEffect(() => {
+        if (LEGAL_COLUMNS.some(c => c.id === initialTab) && sectionRefs.current[initialTab]) {
+            sectionRefs.current[initialTab].scrollIntoView({ behavior: "auto", block: "start" });
+        } else if (initialTab === "contact" && footerRef.current) {
+            footerRef.current.scrollIntoView({ behavior: "auto", block: "start" });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    const sectionStyle = { marginBottom: 28 };
-    const h3Style = { color: T.text, fontSize: 15, fontWeight: 700, marginBottom: 8, marginTop: 0, letterSpacing: 0.2 };
-    const h4Style = { color: T.text, fontSize: 13, fontWeight: 600, marginBottom: 6, marginTop: 18 };
-    const pStyle = { color: T.subtext, lineHeight: 1.75, marginBottom: 10, fontSize: 13.5 };
-    const ulStyle = { color: T.subtext, lineHeight: 1.75, fontSize: 13.5, paddingLeft: 20, marginBottom: 10 };
-    const strongStyle = { color: T.text, fontWeight: 600 };
-    const warningBoxStyle = {
-        background: "rgba(255,170,0,0.08)",
-        border: "1px solid rgba(255,170,0,0.25)",
-        borderRadius: 8,
-        padding: "14px 18px",
-        marginBottom: 22,
+    const goTo = (id) => {
+        setActiveTab(id);
+        const el = sectionRefs.current[id];
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg, position: "relative" }}>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg, overflowY: "auto" }}>
+            <style>{`
+                .legalv2-wrap { max-width: 1400px; margin: 0 auto; width: 100%; box-sizing: border-box; padding: 0 28px; }
+                .legalv2-body { display: flex; gap: 24px; align-items: flex-start; }
+                .legalv2-sidebar { width: 260px; flex-shrink: 0; }
+                .legalv2-grid { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; min-width: 0; }
+                .legalv2-footer-grid { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+                @media (max-width: 980px) {
+                    .legalv2-body { flex-direction: column; }
+                    .legalv2-sidebar { width: 100%; }
+                    .legalv2-grid { grid-template-columns: 1fr; }
+                }
+            `}</style>
 
-            {/* ── Sticky Header ── */}
-            <div style={{
-                position: "sticky", top: 0, zIndex: 10,
-                background: T.surface,
-                borderBottom: `1px solid ${T.border}`,
-                padding: "16px 24px 0",
-                flexShrink: 0,
-            }}>
-                {/* Title row with ✕ */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                    <h2 style={{ margin: 0, color: T.green, fontSize: 18, fontWeight: 700 }}>Legal Information</h2>
-                    <button
-                        onClick={onClose}
-                        title="Close"
-                        style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            color: T.subtext, fontSize: 24, lineHeight: 1,
-                            padding: "4px 8px", borderRadius: 4,
-                            transition: "all 0.15s",
-                            display: "flex", alignItems: "center", justifyContent: "center"
-                        }}
-                        onMouseEnter={e => {
-                            e.currentTarget.style.color = T.text;
-                            e.currentTarget.style.background = T.hover;
-                        }}
-                        onMouseLeave={e => {
-                            e.currentTarget.style.color = T.subtext;
-                            e.currentTarget.style.background = "none";
-                        }}
-                    >✕</button>
-                </div>
+            {/* Header */}
+            <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+                <div className="legalv2-wrap" style={{ paddingTop: 20, paddingBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
+                            <img src={BRAND_LOGO_SRC} alt="" aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        </div>
+                        <span style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: "-.02em" }}>TradeEdge</span>
+                    </div>
 
-                {/* Tab bar */}
-                <div style={{ display: "flex", gap: 4 }}>
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            style={{
-                                background: "none", border: "none", cursor: "pointer",
-                                padding: "6px 14px",
-                                fontFamily: "inherit", fontSize: 13, fontWeight: 600,
-                                color: activeTab === tab.id ? T.green : T.subtext,
-                                borderBottom: activeTab === tab.id ? `2px solid ${T.green}` : "2px solid transparent",
-                                marginBottom: -1,
-                                transition: "color 0.15s",
-                            }}
-                        >{tab.label}</button>
-                    ))}
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{
+                            display: "flex", alignItems: "center", gap: 7,
+                            background: T.posFill, color: T.greenText,
+                            border: `1px solid ${T.green}33`,
+                            borderRadius: 999, padding: "6px 14px",
+                            fontSize: 11, fontWeight: 700, letterSpacing: ".06em",
+                        }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.green, display: "inline-block" }} />
+                            TRANSPARENT &middot; SECURE &middot; TRUSTED
+                        </div>
+
+                        {onClose && (
+                            <button onClick={onClose} title="Close" style={{
+                                background: "none", border: `1px solid ${T.border}`, cursor: "pointer",
+                                color: T.subtext, width: 32, height: 32, borderRadius: 8,
+                                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* ── Scrollable Body ── */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "32px 28px", maxWidth: 820, width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
+            <div className="legalv2-wrap">
+                {/* Title row */}
+                <div style={{ marginTop: 28, marginBottom: 28 }}>
+                    <h1 style={{ margin: 0, fontSize: 34, fontWeight: 800, color: T.text, letterSpacing: "-.02em", lineHeight: 1.15 }}>
+                        Legal &amp; <span style={{ color: T.green }}>Policies</span>
+                    </h1>
+                    <p style={{ margin: "10px 0 0", fontSize: 14.5, color: T.subtext, maxWidth: 480, lineHeight: 1.6 }}>
+                        Your trust is important to us. Please read our policies carefully.
+                    </p>
+                </div>
 
-                {/* ══════════════ DISCLAIMER ══════════════ */}
-                {activeTab === "disclaimer" && (
-                    <div>
-                        <div style={warningBoxStyle}>
-                            <p style={{ ...pStyle, marginBottom: 0, color: "#e6a817", fontWeight: 600 }}>
-                                ⚠ Important Notice: TradeEdge is NOT a SEBI-registered Investment Advisor, Research Analyst, Broker, or Portfolio Management Service (PMS). Nothing on this platform constitutes investment advice.
-                            </p>
+                <div className="legalv2-body">
+                    {/* Sidebar */}
+                    <div className="legalv2-sidebar">
+                        <nav style={{ display: "flex", flexDirection: "column", gap: 4, background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 6, marginBottom: 16 }}>
+                            {LEGAL_COLUMNS.map(col => {
+                                const active = activeTab === col.id;
+                                return (
+                                    <button key={col.id} onClick={() => goTo(col.id)} style={{
+                                        display: "flex", alignItems: "center", gap: 10,
+                                        textAlign: "left", padding: "10px 12px", borderRadius: 9,
+                                        border: "none", cursor: "pointer",
+                                        background: active ? T.posFill : "transparent",
+                                        color: active ? T.greenText : T.subtext,
+                                        fontFamily: "inherit", fontSize: 13.5, fontWeight: active ? 700 : 500,
+                                        transition: "background .15s, color .15s",
+                                    }}>
+                                        <LegalIcon name={col.icon} size={17} />
+                                        {col.title}
+                                    </button>
+                                );
+                            })}
+                        </nav>
+
+                        <div style={{ background: T.posFill, border: `1px solid ${T.green}33`, borderRadius: 14, padding: 18 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 10, background: T.card, color: T.green, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                                <LegalIcon name="shield-check" size={19} />
+                            </div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 5 }}>Our Commitment</div>
+                            <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.6 }}>
+                                We are committed to transparency, data security and providing a safe experience for all our users.
+                            </div>
                         </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>1. Regulatory Status & Non-Advisory Declaration</h3>
-                            <p style={pStyle}>
-                                TradeEdge ("the Platform," "we," "us," or "our") is a financial analytics and portfolio tracking platform operated as a technology service. The Platform is <strong style={strongStyle}>not registered with the Securities and Exchange Board of India (SEBI)</strong> as an Investment Adviser under the SEBI (Investment Advisers) Regulations, 2013, nor as a Research Analyst under the SEBI (Research Analysts) Regulations, 2014, nor as a Stockbroker, Depository Participant, or Portfolio Manager.
-                            </p>
-                            <p style={pStyle}>
-                                No content, feature, tool, visualization, output, or communication on the Platform shall be construed as investment advice, a buy or sell recommendation, a solicitation to trade, or a suggestion to hold any security, derivative, mutual fund unit, or any other financial instrument. All information is provided strictly for informational and educational purposes.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>2. No Investment Recommendation</h3>
-                            <p style={pStyle}>The Platform does not, and is not designed to:</p>
-                            <ul style={ulStyle}>
-                                <li>Recommend the purchase, sale, or retention of any specific security or financial product;</li>
-                                <li>Predict future market movements, price targets, or investment returns;</li>
-                                <li>Identify stocks as suitable investments for any individual user;</li>
-                                <li>Substitute for consultation with a SEBI-registered investment professional.</li>
-                            </ul>
-                            <p style={pStyle}>
-                                Users are solely responsible for their own investment decisions. TradeEdge expressly disclaims any liability arising from reliance on any information, analytics, or data presented on the Platform.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>3. Risk Disclosure</h3>
-                            <p style={pStyle}>Investing and trading in equity, derivatives, mutual funds, and other financial instruments involve significant risk, including:</p>
-                            <ul style={ulStyle}>
-                                <li><strong style={strongStyle}>Market Risk:</strong> Security prices fluctuate due to macroeconomic, geopolitical, and sector-specific factors beyond any platform's ability to predict.</li>
-                                <li><strong style={strongStyle}>Volatility Risk:</strong> Rapid price swings can result in substantial and sudden loss of capital, particularly in derivative and small-cap instruments.</li>
-                                <li><strong style={strongStyle}>Liquidity Risk:</strong> Certain securities may not be easily tradeable at the desired price or volume.</li>
-                                <li><strong style={strongStyle}>Capital Loss Risk:</strong> You may lose part or all of your invested capital. Past performance of any security, sector, or strategy is not indicative of future results.</li>
-                                <li><strong style={strongStyle}>Leverage Risk:</strong> Margin and futures trading amplify both gains and losses.</li>
-                            </ul>
-                            <p style={pStyle}>
-                                Users are advised to consult a SEBI-registered investment adviser and a qualified tax professional before making investment or tax-related decisions.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>4. Data Accuracy & API Limitations</h3>
-                            <p style={pStyle}>
-                                Market data, stock quotes, historical prices, fundamental data, and all related information displayed on the Platform are sourced from third-party API providers. TradeEdge does not guarantee the accuracy, completeness, timeliness, or reliability of any such data. Specifically:
-                            </p>
-                            <ul style={ulStyle}>
-                                <li>Market data may be delayed, incomplete, or inaccurate due to feed interruptions, API latency, or provider errors;</li>
-                                <li>Fundamental data (earnings, ratios, balance sheets) is sourced as-is and may not reflect the latest corporate filings;</li>
-                                <li>Portfolio analytics displayed on the Platform are indicative only and may not match your broker's official statements or contract notes;</li>
-                                <li>Capital gains calculations are algorithmic estimates based on user-entered data and are <strong style={strongStyle}>not tax advice</strong>. They may differ from actual tax liability computed under applicable Indian tax laws. Users must verify calculations with a qualified Chartered Accountant or tax adviser.</li>
-                            </ul>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>5. User-Entered Data Responsibility</h3>
-                            <p style={pStyle}>
-                                All trade journal entries, portfolio data, cost bases, quantities, and other data entered by the user into the Platform are the sole responsibility of the user. TradeEdge does not verify, audit, or validate any user-submitted data. Errors in user-entered data will result in erroneous analytics, calculations, and outputs. The Platform bears no responsibility for conclusions drawn from inaccurate user inputs.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>6. No Liability</h3>
-                            <p style={pStyle}>
-                                To the fullest extent permitted by applicable law, TradeEdge, its founders, employees, affiliates, and technology service providers shall not be liable for any direct, indirect, incidental, special, consequential, or punitive losses or damages arising from: (a) reliance on data or analytics provided by the Platform; (b) investment decisions made using the Platform; (c) Platform downtime, service interruptions, or API failures; (d) errors in third-party data; or (e) unauthorized access to user accounts.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>7. Educational Purpose</h3>
-                            <p style={pStyle}>
-                                The Platform is designed as an educational and self-analytical tool for individual investors who wish to track, journal, and understand their own trading activity and market data. It is not a substitute for professional financial, legal, or tax advice. Users are encouraged to use the Platform as one of many inputs in their personal research process.
-                            </p>
-                        </div>
-
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Governing jurisdiction: Courts of Mumbai, India</p>
                     </div>
-                )}
 
-                {/* ══════════════ PRIVACY POLICY ══════════════ */}
-                {activeTab === "privacy" && (
-                    <div>
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>1. Introduction</h3>
-                            <p style={pStyle}>
-                                TradeEdge ("we," "us," or "our") is committed to protecting the privacy of its users. This Privacy Policy describes the categories of personal information we collect, the purposes for which it is used, how it is stored and secured, and the rights available to users with respect to their data. By accessing or using the Platform, you consent to the practices described in this Policy.
-                            </p>
-                            <p style={pStyle}>
-                                This Policy is compliant with applicable Indian data protection principles, including those set out under the Information Technology Act, 2000, the Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011, and applicable provisions of the Digital Personal Data Protection Act, 2023 (to the extent notified and in force).
-                            </p>
-                        </div>
+                    {/* 3-column grid */}
+                    <div className="legalv2-grid">
+                        {LEGAL_COLUMNS.map(col => (
+                            <div
+                                key={col.id}
+                                ref={el => { sectionRefs.current[col.id] = el; }}
+                                style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "22px 20px", display: "flex", flexDirection: "column", scrollMarginTop: 24 }}
+                            >
+                                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                                    <div style={{
+                                        width: 40, height: 40, borderRadius: 12,
+                                        background: T.posFill, color: T.green,
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        flexShrink: 0,
+                                    }}>
+                                        <LegalIcon name={col.icon} size={22} />
+                                    </div>
+                                    <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text }}>{col.title}</div>
+                                </div>
+                                <div style={{ width: 32, height: 3, borderRadius: 2, background: T.green, marginBottom: 14 }} />
 
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>2. Data We Collect</h3>
-                            <h4 style={h4Style}>2.1 Account & Authentication Data</h4>
-                            <ul style={ulStyle}>
-                                <li>Email address (used for account creation, login, and service communications);</li>
-                                <li>Authentication tokens (managed via Supabase; we do not store raw passwords);</li>
-                                <li>Google OAuth profile data (display name, email) if you choose to sign in via Google.</li>
-                            </ul>
-                            <h4 style={h4Style}>2.2 User-Generated Data</h4>
-                            <ul style={ulStyle}>
-                                <li>Trade journal entries (ticker, date, quantity, price, notes) as entered by you;</li>
-                                <li>Portfolio data and watchlists you configure within the Platform;</li>
-                                <li>Preferences and settings (theme, display configurations).</li>
-                            </ul>
-                            <h4 style={h4Style}>2.3 Usage & Technical Data</h4>
-                            <ul style={ulStyle}>
-                                <li>Browser type, operating system, device type, and screen resolution;</li>
-                                <li>IP address and approximate geographic region;</li>
-                                <li>Pages visited, features used, and session duration for analytics and service improvement;</li>
-                                <li>Error logs and crash reports.</li>
-                            </ul>
-                        </div>
+                                <p style={{ fontSize: 13, color: T.subtext, lineHeight: 1.6, margin: "0 0 16px" }}>{col.intro}</p>
 
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>3. Data We Do NOT Collect</h3>
-                            <p style={pStyle}>TradeEdge explicitly does not collect, store, or process:</p>
-                            <ul style={ulStyle}>
-                                <li>Bank account numbers, IFSC codes, or net banking credentials;</li>
-                                <li>Demat account numbers or depository participant credentials;</li>
-                                <li>Broker login credentials, API keys, or trading platform tokens;</li>
-                                <li>UPI IDs, credit/debit card numbers, or payment instrument details;</li>
-                                <li>PAN, Aadhaar, or any government-issued identity document numbers;</li>
-                                <li>Sensitive personal data as defined under SPDI Rules, 2011 (biometric, medical, sexual orientation data).</li>
-                            </ul>
-                        </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
+                                    {col.items.map(item => (
+                                        <div key={item.title} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
+                                            <div style={{ width: 28, height: 28, borderRadius: 8, background: T.hover, color: T.subtext, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                                                <LegalIcon name={item.icon} size={15} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>{item.title}</div>
+                                                <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.55 }}>{item.body}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
 
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>4. Purpose of Data Use</h3>
-                            <p style={pStyle}>Data collected is used exclusively for the following purposes:</p>
-                            <ul style={ulStyle}>
-                                <li>Authenticating and maintaining your user account;</li>
-                                <li>Storing and retrieving your trade journal and portfolio entries;</li>
-                                <li>Providing analytics, capital gains estimates, and performance visualizations based on your data;</li>
-                                <li>Improving platform features and fixing bugs through aggregated usage analysis;</li>
-                                <li>Sending transactional communications (account verification, password reset, critical service updates);</li>
-                                <li>Complying with applicable legal and regulatory obligations.</li>
-                            </ul>
-                            <p style={pStyle}>We do not use your data for advertising profiling, cross-platform tracking, or sale to third parties.</p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>5. Data Storage & Security</h3>
-                            <p style={pStyle}>
-                                User data is stored on Supabase (a managed PostgreSQL infrastructure hosted on cloud servers). We implement the following security measures:
-                            </p>
-                            <ul style={ulStyle}>
-                                <li>Encrypted data transmission via HTTPS/TLS 1.2+;</li>
-                                <li>Row-level security policies ensuring users can only access their own data;</li>
-                                <li>Authentication tokens are short-lived and refreshed securely;</li>
-                                <li>No plaintext storage of passwords — authentication is handled via Supabase Auth with bcrypt hashing;</li>
-                                <li>Access to the production database is restricted to authorised administrators only.</li>
-                            </ul>
-                            <p style={pStyle}>
-                                Despite these measures, no system is entirely immune to security breaches. In the event of a data breach affecting your personal information, we will notify affected users as required under applicable law.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>6. Third-Party Services & Data Processors</h3>
-                            <p style={pStyle}>TradeEdge uses the following third-party services that may process limited user data as part of service delivery:</p>
-                            <ul style={ulStyle}>
-                                <li><strong style={strongStyle}>Supabase:</strong> Database, authentication, and backend infrastructure. Processes account credentials and stored journal data.</li>
-                                <li><strong style={strongStyle}>Market Data API Providers:</strong> Receive query parameters (e.g., stock symbols) but do not receive personal user data.</li>
-                                <li><strong style={strongStyle}>Google (OAuth):</strong> If Google Sign-In is used, Google processes authentication as per its own privacy policy.</li>
-                                <li><strong style={strongStyle}>Analytics Tools (if enabled):</strong> May collect anonymised usage telemetry to improve platform performance.</li>
-                            </ul>
-                            <p style={pStyle}>We do not sell, rent, or license your personal data to any third party for commercial purposes.</p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>7. Data Sharing Restrictions</h3>
-                            <p style={pStyle}>Your data is not shared with any third party except:</p>
-                            <ul style={ulStyle}>
-                                <li>When required by law, court order, or government authority under applicable Indian law;</li>
-                                <li>To our technical service providers (processors) acting on our explicit instructions and bound by confidentiality obligations;</li>
-                                <li>In the event of a business merger, acquisition, or restructuring, with appropriate data protection obligations imposed on the successor entity.</li>
-                            </ul>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>8. User Rights</h3>
-                            <p style={pStyle}>Subject to applicable law, you have the following rights with respect to your personal data:</p>
-                            <ul style={ulStyle}>
-                                <li><strong style={strongStyle}>Right to Access:</strong> Request a summary of personal data we hold about you;</li>
-                                <li><strong style={strongStyle}>Right to Correction:</strong> Update inaccurate account data via your profile settings or by contacting us;</li>
-                                <li><strong style={strongStyle}>Right to Deletion:</strong> Request deletion of your account and associated data. Upon receipt of a valid deletion request, we will erase your personal data within 30 business days, subject to legal retention requirements;</li>
-                                <li><strong style={strongStyle}>Right to Data Export:</strong> Request an export of your trade journal and portfolio data in a machine-readable format;</li>
-                                <li><strong style={strongStyle}>Right to Withdraw Consent:</strong> Withdraw consent for non-essential data processing at any time, without affecting the lawfulness of prior processing.</li>
-                            </ul>
-                            <p style={pStyle}>To exercise any of these rights, contact us at: <strong style={strongStyle}>support@tradeedge.in</strong></p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>9. Data Retention Policy</h3>
-                            <p style={pStyle}>
-                                We retain your personal data only for as long as necessary to fulfill the purposes described in this Policy:
-                            </p>
-                            <ul style={ulStyle}>
-                                <li><strong style={strongStyle}>Account data:</strong> Retained until account deletion or for up to 3 years from last login, whichever is earlier;</li>
-                                <li><strong style={strongStyle}>Trade journal & portfolio data:</strong> Retained until you delete it or close your account;</li>
-                                <li><strong style={strongStyle}>Usage logs:</strong> Retained for up to 12 months for security and debugging purposes;</li>
-                                <li><strong style={strongStyle}>Legal compliance records:</strong> Retained for the minimum period required under applicable Indian law (typically 5–7 years for financial records, where applicable).</li>
-                            </ul>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>10. Cookies & Local Storage</h3>
-                            <p style={pStyle}>
-                                The Platform may use browser local storage to persist session tokens and user preferences (such as theme settings). No cross-site tracking cookies or advertising cookies are used. You may clear browser storage at any time through your browser settings.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>11. Amendments to this Policy</h3>
-                            <p style={pStyle}>
-                                We reserve the right to amend this Privacy Policy at any time. Material changes will be notified via a prominent notice on the Platform or via email. Continued use of the Platform after such notice constitutes acceptance of the revised Policy.
-                            </p>
-                        </div>
-
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Contact: support@tradeedge.in</p>
+                                <div style={{ marginTop: "auto", display: "flex", gap: 9, alignItems: "flex-start", background: T.hover, borderRadius: 10, padding: "12px 13px" }}>
+                                    <div style={{ color: T.green, flexShrink: 0, marginTop: 1 }}><LegalIcon name={col.highlight.icon} size={14} /></div>
+                                    <div style={{ fontSize: 11.5, color: T.subtext, lineHeight: 1.55 }}>{col.highlight.body}</div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                )}
+                </div>
 
-                {/* ══════════════ TERMS OF SERVICE ══════════════ */}
-                {activeTab === "terms" && (
-                    <div>
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>1. Acceptance of Terms</h3>
-                            <p style={pStyle}>
-                                By accessing, registering on, or using the TradeEdge platform (the "Platform"), you ("User," "you," or "your") agree to be bound by these Terms of Service ("Terms"), the Privacy Policy, and the Disclaimer, all of which are incorporated herein by reference. If you do not agree to these Terms in their entirety, you must immediately cease use of the Platform.
-                            </p>
-                            <p style={pStyle}>
-                                These Terms constitute a binding legal agreement between you and TradeEdge. Users must be at least 18 years of age and legally competent to enter into contracts under the Indian Contract Act, 1872.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>2. Nature of Service</h3>
-                            <p style={pStyle}>
-                                TradeEdge provides a self-service financial analytics and portfolio tracking platform for informational and personal record-keeping purposes. The Platform is a technology tool only. It does not execute trades, hold securities, manage funds, or provide regulated financial services of any kind. All outputs — including portfolio analytics, capital gains estimates, and performance metrics — are indicative and for personal reference only.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>3. User Responsibilities</h3>
-                            <p style={pStyle}>By using the Platform, you agree to:</p>
-                            <ul style={ulStyle}>
-                                <li>Provide accurate information during account registration and maintain its accuracy;</li>
-                                <li>Use the Platform solely for lawful purposes and in accordance with these Terms;</li>
-                                <li>Ensure that all trade data, quantities, prices, and dates entered by you are accurate — the Platform relies entirely on user-entered data for analytics outputs;</li>
-                                <li>Independently verify all analytics, estimates, and calculations with your broker statements and a qualified tax professional before relying on them;</li>
-                                <li>Comply with all applicable Indian laws, including SEBI regulations, the Income Tax Act, and the Prevention of Money Laundering Act, as applicable to your investment activities.</li>
-                            </ul>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>4. Prohibited Activities</h3>
-                            <p style={pStyle}>Users are strictly prohibited from:</p>
-                            <ul style={ulStyle}>
-                                <li>Attempting to reverse-engineer, decompile, or extract source code from the Platform;</li>
-                                <li>Using automated scripts, bots, or crawlers to scrape data from the Platform without express written consent;</li>
-                                <li>Circumventing authentication or security controls;</li>
-                                <li>Uploading malicious code, viruses, or any content that disrupts Platform integrity;</li>
-                                <li>Misrepresenting your identity or affiliation with any entity;</li>
-                                <li>Using the Platform to facilitate any activity that violates Indian law or any applicable regulation;</li>
-                                <li>Sharing account credentials with third parties or reselling access to the Platform;</li>
-                                <li>Reproducing, republishing, or commercially exploiting any data, analytics, or content generated by the Platform without prior written authorisation.</li>
-                            </ul>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>5. Account Security</h3>
-                            <p style={pStyle}>
-                                You are solely responsible for maintaining the confidentiality of your account credentials (email, password, and any OAuth tokens). You agree to notify us immediately at <strong style={strongStyle}>support@tradeedge.in</strong> upon becoming aware of any unauthorised access to or use of your account. TradeEdge shall not be liable for any loss or damage resulting from your failure to maintain account security or from unauthorized use of your credentials.
-                            </p>
-                            <p style={pStyle}>
-                                TradeEdge will never ask for your password, broker credentials, or banking details via email, in-app messages, or any other channel.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>6. Platform-Specific Acknowledgements</h3>
-                            <p style={pStyle}>By using the Platform, you expressly acknowledge and accept that:</p>
-                            <ul style={ulStyle}>
-                                <li>User-entered trade and portfolio data is entirely the user's responsibility. The Platform does not verify, validate, or audit such data;</li>
-                                <li>Portfolio analytics are indicative only and may not match broker statements, contract notes, or depository records;</li>
-                                <li>Capital gains calculations are algorithmic estimates and do not constitute tax advice. Users must verify all tax computations with a qualified Chartered Accountant;</li>
-                                <li>Market data displayed on the Platform may be delayed, incomplete, or inaccurate due to API provider limitations;</li>
-                                <li>Platform downtime, API failures, data feed interruptions, or service unavailability shall not give rise to any claim or liability against TradeEdge.</li>
-                            </ul>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>7. Intellectual Property Rights</h3>
-                            <p style={pStyle}>
-                                All software, code, design elements, algorithms, branding, and content constituting the Platform are the exclusive intellectual property of TradeEdge and its licensors, protected under the Copyright Act, 1957, and applicable intellectual property laws. Nothing in these Terms transfers ownership of any intellectual property to the user.
-                            </p>
-                            <p style={pStyle}>
-                                You are granted a limited, non-exclusive, non-transferable, revocable licence to access and use the Platform solely for personal, non-commercial purposes in accordance with these Terms.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>8. Service Availability</h3>
-                            <p style={pStyle}>
-                                TradeEdge provides the Platform on an "as is" and "as available" basis. We do not warrant uninterrupted, error-free, or continuous access to the Platform. Scheduled or unscheduled maintenance, third-party API failures, hosting infrastructure outages, and force majeure events may result in service unavailability. TradeEdge shall not be liable for any losses arising from service interruptions.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>9. Modification of Terms & Service</h3>
-                            <p style={pStyle}>
-                                TradeEdge reserves the right to modify these Terms, the Privacy Policy, the Disclaimer, or any feature of the Platform at any time, with or without prior notice. Material changes to these Terms will be communicated via a notice on the Platform or via email. Continued use of the Platform following such changes constitutes acceptance of the revised Terms.
-                            </p>
-                            <p style={pStyle}>
-                                We further reserve the right to suspend, modify, or discontinue any feature, functionality, or the entire Platform at any time, without liability to any user.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>10. Termination</h3>
-                            <p style={pStyle}>
-                                TradeEdge may, at its sole discretion, suspend or permanently terminate your account and access to the Platform, with or without notice, if you breach these Terms, engage in prohibited activities, or if continued access poses a risk to the Platform or other users.
-                            </p>
-                            <p style={pStyle}>
-                                You may terminate your account at any time by submitting a deletion request to <strong style={strongStyle}>support@tradeedge.in</strong>. Upon termination, your right to use the Platform ceases immediately. Data deletion will be handled as per the Privacy Policy.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>11. Limitation of Liability</h3>
-                            <p style={pStyle}>
-                                To the maximum extent permitted by applicable Indian law, TradeEdge, its directors, founders, employees, and affiliates shall not be liable for any direct, indirect, incidental, consequential, special, or punitive damages, including but not limited to: financial losses from investment decisions; loss of data; loss of profits or business opportunity; or losses arising from Platform downtime, data inaccuracies, or reliance on analytics outputs.
-                            </p>
-                            <p style={pStyle}>
-                                In no event shall TradeEdge's aggregate liability to any user exceed the total amount paid by that user for Platform access in the six (6) months preceding the claim.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>12. Indemnification</h3>
-                            <p style={pStyle}>
-                                You agree to indemnify, defend, and hold harmless TradeEdge and its affiliates from and against any claims, liabilities, damages, fines, penalties, or costs (including legal fees) arising from: (a) your use or misuse of the Platform; (b) your violation of these Terms; (c) your violation of any applicable law or third-party right; or (d) errors in data you have entered into the Platform.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>13. Governing Law & Jurisdiction</h3>
-                            <p style={pStyle}>
-                                These Terms, and all disputes arising from or in connection with them or the use of the Platform, shall be governed by and construed in accordance with the laws of India, without regard to conflict of law principles.
-                            </p>
-                            <p style={pStyle}>
-                                Subject to mandatory statutory provisions, the Courts of <strong style={strongStyle}>Mumbai, Maharashtra, India</strong> shall have exclusive jurisdiction over all disputes arising under or in relation to these Terms. By using the Platform, you irrevocably consent to such jurisdiction.
-                            </p>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>14. Grievance Officer</h3>
-                            <p style={pStyle}>
-                                In accordance with the Information Technology Act, 2000, and applicable rules, any grievances or complaints regarding the Platform or this Policy may be directed to:
-                            </p>
-                            <ul style={ulStyle}>
-                                <li><strong style={strongStyle}>Grievance Officer:</strong> TradeEdge Support Team</li>
-                                <li><strong style={strongStyle}>Email:</strong> support@tradeedge.in</li>
-                                <li><strong style={strongStyle}>Response time:</strong> We endeavour to acknowledge all grievances within 48 hours and resolve them within 30 days of receipt.</li>
-                            </ul>
-                        </div>
-
-                        <div style={sectionStyle}>
-                            <h3 style={h3Style}>15. Severability & Entire Agreement</h3>
-                            <p style={pStyle}>
-                                If any provision of these Terms is held to be invalid, illegal, or unenforceable by a competent court, that provision shall be modified to the minimum extent necessary to make it enforceable, and the remaining provisions shall continue in full force and effect. These Terms, together with the Privacy Policy and Disclaimer, constitute the entire agreement between you and TradeEdge with respect to use of the Platform and supersede all prior agreements or understandings.
-                            </p>
-                        </div>
-
-                        <p style={{ ...pStyle, fontSize: 12, opacity: 0.6, marginTop: 20 }}>Last updated: April 2025 · Governing jurisdiction: Courts of Mumbai, Maharashtra, India</p>
+                {/* Footer contact bar */}
+                <div ref={footerRef} style={{ margin: "28px 0 32px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "20px 24px", scrollMarginTop: 24 }}>
+                    <div className="legalv2-footer-grid">
+                        {[
+                            { icon: "headset", label: "Have Questions?", value: "If you have any questions regarding our policies, feel free to reach out to us." },
+                            { icon: "mail", label: "Email Us", value: "kmk03072018@gmail.com", isLink: true, href: "mailto:kmk03072018@gmail.com" },
+                            { icon: "globe", label: "Visit Our Website", value: "www.tradeedge.in", isLink: true, href: "https://www.tradeedge.in" },
+                            { icon: "calendar", label: "Last Updated", value: LEGAL_LAST_UPDATED },
+                        ].map(f => (
+                            <div key={f.label} style={{ display: "flex", alignItems: "flex-start", gap: 11, flex: "1 1 220px", minWidth: 200 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 10, background: T.posFill, color: T.green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <LegalIcon name={f.icon} size={17} />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>{f.label}</div>
+                                    {f.isLink ? (
+                                        <a href={f.href} style={{ fontSize: 12, color: T.green, fontWeight: 600, textDecoration: "none" }}>{f.value}</a>
+                                    ) : (
+                                        <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.5 }}>{f.value}</div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                )}
-
-                {activeTab === "contact" && (
-                    <ContactForm T={T} />
-                )}
+                </div>
             </div>
         </div>
     );
