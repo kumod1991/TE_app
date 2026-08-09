@@ -312,7 +312,6 @@ let cashInflight = null;
 const CASH_SELECT = [
   "date", "fii_buy", "fii_sell", "fii_net", "dii_buy", "dii_sell", "dii_net",
   "fii_net_5d", "fii_net_20d", "dii_net_5d", "dii_net_20d",
-  "fii_net_20d_avg", "fii_net_20d_std", "fii_zscore_20d", "regime",
 ].join(",");
 
 async function fetchLatestCashDate() {
@@ -934,7 +933,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const fii1 = +latest.fii_net || 0, dii1 = +latest.dii_net || 0;
     const fii5  = +latest.fii_net_5d  || 0, dii5  = +latest.dii_net_5d  || 0;
     const fii20 = +latest.fii_net_20d || 0, dii20 = +latest.dii_net_20d || 0;
-    const z     = +latest.fii_zscore_20d || 0;
 
     // Full-history daily + rolling arrays (ASC order, date field preserved)
     const daily = cashData.map(d => ({
@@ -961,7 +959,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
       return s;
     })();
 
-    return { latest, fii1, dii1, fii5, dii5, fii20, dii20, z, daily, rolling, participation, absorption, sellStreak, totalInst1: fii1 + dii1 };
+    return { latest, fii1, dii1, fii5, dii5, fii20, dii20, daily, rolling, participation, absorption, sellStreak, totalInst1: fii1 + dii1 };
   }, [cashData]);
 
   // ── DERIV MEMO ─────────────────────────────────────────────────────────────
@@ -988,30 +986,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return { rows, latest, lsRatio, buildUp, lsTrend };
   }, [derivData]);
 
-  // ── SIGNALS MEMO ───────────────────────────────────────────────────────────
-  const signals = useMemo(() => {
-    if (cashMemo.fii20 == null) return {};
-    const { fii20=0, dii20=0, z=0, absorption="", sellStreak=0 } = cashMemo;
-    const { lsRatio="1", buildUp="" } = derivMemo;
-    const lr = parseFloat(lsRatio) || 1;
-    let regime = "Sideways / Neutral";
-    if      (fii20 > 0 && lr > 1)                      regime = "Bullish Regime";
-    else if (fii20 < 0 && buildUp === "Short Build-up") regime = "Bearish Regime";
-    else if (fii20 < 0 && dii20 > Math.abs(fii20))     regime = "DII Absorbing";
-    else if (fii20 < 0 && dii20 < 0)                   regime = "Risk-Off";
-    const insights = [];
-    if (sellStreak >= 5) insights.push({ type:"alert",   icon:"🚨", text:`FII selling for ${sellStreak} consecutive sessions — Highest in recent period.` });
-    if (z > 2)   insights.push({ type:"alert",   icon:"🚨", text:"Extreme FII buying — Z-score >2. Historically precedes strong rallies." });
-    if (z < -2)  insights.push({ type:"alert",   icon:"⚠️", text:"Extreme FII selling — Z-score <-2. Panic selling detected." });
-    if (absorption === "DII Absorbing FII") insights.push({ type:"bullish", icon:"🛡️", text:"DII absorbing FII selling. Domestic support intact — Bullish." });
-    if (absorption === "Both Buying")       insights.push({ type:"bullish", icon:"🚀", text:"Both FII & DII buying together — Strong institutional conviction." });
-    if (absorption === "Both Selling")      insights.push({ type:"bearish", icon:"🔻", text:"Both institutions selling simultaneously — Rare risk-off event." });
-    if (lr > 1.5) insights.push({ type:"bullish", icon:"📈", text:`FII L/S ${lr.toFixed(2)}x — heavily net-long in F&O. Bullish positioning.` });
-    if (lr < 0.7) insights.push({ type:"bearish", icon:"📉", text:`FII L/S ${lr.toFixed(2)}x — net-short in F&O. Bearish positioning.` });
-    const exportText = [`📊 FII-DII Signal: ${regime}`, ``, `FII 20D: ${fmtCrShort(fii20)} | DII 20D: ${fmtCrShort(dii20)}`, `FII L/S: ${lr.toFixed(2)}x | Z-Score: ${z.toFixed(2)}`, ...insights.map(i => i.text), ``, `#FII #DII #NSE #Markets`].join("\n");
-    return { regime, insights, exportText, lsRatio: lr, z };
-  }, [cashMemo, derivMemo]);
-
   const overviewTabData = useMemo(() => {
     const daily = cashMemo.daily || [];
     const rolling = cashMemo.rolling || [];
@@ -1034,22 +1008,13 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return aggregateCashRows(rawReverse, cashFreq);
   }, [cashData, cashFreq]);
 
-  // Full-history mean/std only feeds the Daily-frequency z-score column — skip
-  // the O(n) pass entirely for Weekly/Monthly/Annual views where it's discarded.
-  const dailyFiiStats = useMemo(() => {
-    if (cashFreq !== "Daily") return { avgFii: 0, stdFii: 0 };
-    const allFii = cashData.map(d => +d.fii_net || 0);
-    return { avgFii: allFii.length ? mean(allFii) : 0, stdFii: allFii.length ? std(allFii) : 0 };
-  }, [cashData, cashFreq]);
-
   // Cash Flow table pagination — only slice+render CASH_TABLE_PAGE_SIZE rows at a time
   const cashPageCount = Math.max(1, Math.ceil(cashFlowAggRows.length / CASH_TABLE_PAGE_SIZE));
   const cashPageClamped = Math.min(Math.max(1, cashPage), cashPageCount);
 
-  // Per-row derived stats (chg/abs/rowZ/label) — only computed for the page
+  // Per-row derived stats (chg/abs/label) — only computed for the page
   // actually on screen, instead of every aggregated row up front.
   const cashFlowPageRows = useMemo(() => {
-    const { avgFii, stdFii } = dailyFiiStats;
     const start = (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE;
     return cashFlowAggRows.slice(start, start + CASH_TABLE_PAGE_SIZE).map((row, localI) => {
       const i = start + localI;
@@ -1059,18 +1024,16 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
       const prevFii = prev ? +prev.fii_net || 0 : null;
       const chg = prevFii ? ((fiiN - prevFii) / Math.abs(prevFii) * 100) : null;
       const abs = fiiN < 0 && diiN > Math.abs(fiiN) ? "Absorbed" : fiiN < 0 && diiN < 0 ? "Risk-Off" : fiiN > 0 && diiN > 0 ? "Both Buy" : "—";
-      const rowZ = cashFreq === "Daily" && stdFii > 0 ? (fiiN - avgFii) / stdFii : 0;
       return {
         ...row,
         fiiN,
         diiN,
         chg,
         abs,
-        rowZ,
         label: fmtPeriodLabel(row.endDate || row.date, cashFreq),
       };
     });
-  }, [cashFlowAggRows, cashPageClamped, cashFreq, dailyFiiStats]);
+  }, [cashFlowAggRows, cashPageClamped, cashFreq]);
 
   const derivativesTabData = useMemo(() => {
     const rows = derivMemo.rows || [];
@@ -1100,29 +1063,13 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   // OVERVIEW TAB
   // ══════════════════════════════════════════════════════════════════════════
   const OverviewTab = () => {
-    const { fii1, dii1, fii5, dii5, fii20, dii20, z, daily, rolling, participation, absorption, latest, totalInst1 } = cashMemo;
-    const insightText = (() => {
-      if (absorption === "DII Absorbing FII") return { text: "DII absorbing FII selling → Bullish cushion", color: GREEN };
-      if (absorption === "Both Buying")        return { text: "Both FII & DII buying → Strong momentum",     color: GREEN };
-      if (absorption === "Both Selling")       return { text: "Both selling → Risk-off event, caution",       color: RED   };
-      return { text: "Mixed flows — no dominant direction", color: T.subtext };
-    })();
+    const { fii1, dii1, fii5, dii5, fii20, dii20, daily, rolling, participation, absorption, latest, totalInst1 } = cashMemo;
 
     // (1) Only Daily or 20D Rolling; default 20D Rolling; filter by range
     const { isRolling, spanYears, chartData, chartSeries, rangeExceedsData } = overviewTabData;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {signals.regime && (
-          <div style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, color: T.subtext, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Market Regime</div>
-              <SignalPill signal={signals.regime} T={T} />
-            </div>
-            <div style={{ fontSize: 12, color: insightText.color, fontWeight: 600, maxWidth: 320, textAlign: isMobile ? "left" : "right" }}>{insightText.text}</div>
-          </div>
-        )}
-
         <div>
           <h2 style={sh}>Flow Summary <span style={{ fontSize: 12, color: T.subtext, fontWeight: 400 }}>as of {fmtDate(latest?.date)}</span></h2>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(6, 1fr)", gap: 10 }}>
@@ -1135,9 +1082,8 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: 10 }}>
           <StatCard label="Total Inst. 1D"    value={fmtCrShort(totalInst1)} color={getColor(totalInst1)} T={T} />
-          <StatCard label="FII Z-Score (20D)" value={isFinite(z) ? z.toFixed(2) : "—"} color={z > 2 ? GREEN : z < -2 ? RED : AMBER} sub={z > 2 ? "Extreme Buying" : z < -2 ? "Panic Selling" : "Normal"} T={T} />
           <StatCard label="FII Participation" value={`${(participation * 100).toFixed(0)}%`} color={BLUE} sub="of institutional volume" T={T} />
           <StatCard label="Absorption"        value={absorption} color={absorption.includes("Both Sell") ? RED : absorption.includes("Both Buy") ? GREEN : BLUE} T={T} />
         </div>
@@ -1175,7 +1121,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   // CASH FLOW TAB  — (2) no cumulative chart; (4) frequency toggle on table
   // ══════════════════════════════════════════════════════════════════════════
   const CashFlowTab = () => {
-    const { fii5, dii5, fii20, dii20, z, sellStreak } = cashMemo;
+    const { fii5, dii5, fii20, dii20, sellStreak } = cashMemo;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1193,16 +1139,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
             <StatCard label="FII Rolling 20D" value={fmtCrShort(fii20)} color={getColor(fii20)} T={T} />
             <StatCard label="DII Rolling 5D"  value={fmtCrShort(dii5)}  color={getColor(dii5)}  T={T} />
             <StatCard label="DII Rolling 20D" value={fmtCrShort(dii20)} color={getColor(dii20)} T={T} />
-          </div>
-        </div>
-
-        <div style={{ ...card, borderLeft: `4px solid ${z > 2 ? GREEN : z < -2 ? RED : AMBER}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <div>
-            <div style={{ fontSize: 11, color: T.subtext, fontWeight: 600, textTransform: "uppercase" }}>FII Z-Score (20D window)</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: z > 2 ? GREEN : z < -2 ? RED : AMBER, fontFamily: "monospace" }}>{isFinite(z) ? z.toFixed(2) : "—"}</div>
-          </div>
-          <div style={{ fontSize: 12, color: T.subtext, maxWidth: 280 }}>
-            {z > 2 ? "🚨 Extreme FII buying — 2+ SD above mean" : z < -2 ? "⚠️ Panic selling — 2+ SD below mean" : "📊 Flows within normal range"}
           </div>
         </div>
 
@@ -1229,15 +1165,13 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
               </thead>
               <tbody>
                 {cashFlowPageRows.map((row, i) => {
-                  const { fiiN, diiN, chg, abs, rowZ, label } = row;
+                  const { fiiN, diiN, chg, abs, label } = row;
                   const absC = abs==="Absorbed" ? GREEN : abs==="Risk-Off" ? RED : abs==="Both Buy" ? BLUE : T.subtext;
-                  const rowBg = rowZ > 2 ? GREEN+"12" : rowZ < -2 ? RED+"12" : i%2===0 ? T.card : (T.surface||T.bg);
+                  const rowBg = i%2===0 ? T.card : (T.surface||T.bg);
                   return (
                     <tr key={i} style={{ background: rowBg }}>
                       <td style={{ padding: "8px 10px", color: T.text, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
                         {label}
-                        {rowZ > 2  && <span style={{ marginLeft: 4, fontSize: 9, color: GREEN }}>▲EXT</span>}
-                        {rowZ < -2 && <span style={{ marginLeft: 4, fontSize: 9, color: RED   }}>▼EXT</span>}
                       </td>
                       {[row.fii_buy, row.fii_sell, fiiN, row.dii_buy, row.dii_sell, diiN].map((v, j) => (
                         <td key={j} style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: [2,5].includes(j)?700:400, color: [2,5].includes(j)?getColor(v):T.subtext, borderBottom: `1px solid ${T.border}` }}>
@@ -1514,7 +1448,6 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
               Institutional flow intelligence for cash, derivatives, and regime tracking as of {fmtDate(cashData[cashData.length-1]?.date)}.
             </p>
           </div>
-          {signals.regime && <SignalPill signal={signals.regime} T={T} />}
         </div>
 
         {/* Tab row */}

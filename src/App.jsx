@@ -1684,8 +1684,14 @@ a:hover { text-decoration: underline; }
 }
 .journal-pill-filter.active { background: ${T.accentFill || T.greenGlow}; border-color: ${T.accent}; color: ${T.accent}; }
 .journal-promo { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 20px 0 40px; text-align: center; }
-.journal-promo-image-wrap { width: 100%; border-radius: 20px; overflow: hidden; border: 1px solid ${T.border}; box-shadow: 0 20px 60px rgba(0,0,0,0.18); }
-.journal-promo-image { width: 100%; display: block; }
+.journal-promo-image-wrap { width: 100%; }
+.journal-promo-image {
+  width: 100%; display: block;
+  -webkit-mask-image: radial-gradient(ellipse 85% 88% at 50% 50%, #000 68%, transparent 100%);
+  mask-image: radial-gradient(ellipse 85% 88% at 50% 50%, #000 68%, transparent 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
 .journal-promo-image-mobile { display: none; }
 .journal-promo-copy { max-width: 560px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .journal-promo-title { font-size: 26px; font-weight: 800; color: ${T.text}; margin: 4px 0 0; letter-spacing: -.02em; }
@@ -6894,7 +6900,7 @@ async function fetchSingleTickerRatios(ticker, computeRatiosFn) {
     );
     if (!fRes.ok) throw new Error(`HTTP ${fRes.status}`);
     const rows = await fRes.json();
-    if (!rows?.length) throw new Error(`"${t}" not found in database`);
+    if (!rows?.length) throw new Error(`"${t}" `);
     const row = rows[0];
     // 2. Bhav price (close)
     let bhavPrice = null;
@@ -14850,7 +14856,7 @@ function FinancialAnalyticsModule({
                 fetchBhavPriceRow(nseTicker, bhavExchange),
                 fetchBseMeta(),
             ]);
-            if (!finRes.ok) throw new Error(`Database error ${finRes.status}`);
+            if (!finRes.ok) throw new Error(`error ${finRes.status}`);
             const rows = await finRes.json();
             if (bseMetaRow && rows[0]) {
                 rows[0]._bse_code = bseMetaRow.bse_code ?? null;
@@ -19358,7 +19364,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                         background: T.surface || T.card
                     }}>
                         <span className="sdv-price-footer" style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace" }}>
-                            Prices from Bhav Copy (EOD)
+                            Prices (EOD)
                         </span>
 
                         {filteredRows.length > 0 && (
@@ -19593,13 +19599,8 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
     const columns = [
         { key: "ticker", label: "Ticker", align: "left", width: 120 },
         { key: "name", label: "Company", align: "left", width: 220 },
-        { key: "exchange", label: "Exch", align: "left", width: 60 },
         { key: "week_end", label: "Week End", align: "left", width: 100 },
-        { key: "open", label: "Open", align: "right", width: 90 },
-        { key: "high", label: "High", align: "right", width: 90 },
-        { key: "low", label: "Low", align: "right", width: 90 },
         { key: "close", label: "Close", align: "right", width: 90 },
-        { key: "volume", label: "Volume", align: "right", width: 110 },
         { key: "ret_3m", label: "3M Ret", align: "right", width: 90 },
         { key: "ret_6m", label: "6M Ret", align: "right", width: 90 },
         { key: "ret_12m", label: "12M Ret", align: "right", width: 90 },
@@ -19629,38 +19630,40 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
     return (
         <div className="pfv-outer" style={{
             display: "flex", flexDirection: "column", width: "100%", height: "100%",
-            background: T.bg, color: T.text, fontFamily: sans, flex: 1, minHeight: 0, overflow: "auto"
+            background: T.bg, color: T.text, fontFamily: sans, flex: 1, minHeight: 0, overflow: "hidden"
         }}>
             <style>{`
-        .pfv-shell { width:min(100%, 1400px); margin:0 auto; display:flex; flex-direction:column; flex:1; min-height:0; padding:16px 18px 20px; gap:14px; }
+        .pfv-shell { width:min(100%, 1400px); margin:0 auto; display:flex; flex-direction:column; flex:1; min-height:0; padding:16px 18px 20px; gap:14px; overflow:hidden; }
         .pfv-topcard {
           border:1px solid ${T.border}; border-radius:24px; overflow:hidden;
+          display:flex; flex-direction:column; flex:1; min-height:0;
           background:${isDark
                     ? "linear-gradient(180deg, rgba(15,23,42,0.94) 0%, rgba(10,15,28,0.98) 100%)"
                     : "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(245,247,255,0.98) 100%)"};
           box-shadow:${isDark ? "0 24px 60px rgba(0,0,0,0.28)" : "0 24px 60px rgba(148,163,184,0.18)"};
         }
-        .pfv-hero { padding:18px 20px 16px; border-bottom:1px solid ${T.border};
+        .pfv-hero { flex-shrink:0; padding:18px 20px 16px; border-bottom:1px solid ${T.border};
           background:${isDark ? "linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(15,23,42,0) 60%)" : "linear-gradient(135deg, rgba(79,70,229,0.08) 0%, rgba(255,255,255,0) 60%)"};
         }
-        .pfv-tabbar { display:flex; align-items:center; gap:8px; padding:12px 20px; flex-wrap:wrap; border-bottom:1px solid ${T.border}; }
+        .pfv-tabbar { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:12px 20px; flex-wrap:wrap; border-bottom:1px solid ${T.border}; }
         .pfv-tab {
           padding:8px 14px; border-radius:10px; border:1px solid ${T.border}; background:${T.card};
           color:${T.subtext}; font-size:12.5px; font-weight:600; font-family:${sans}; cursor:pointer;
           transition:.12s; white-space:nowrap;
         }
         .pfv-tab.active { background:${ACCENT}; border-color:${ACCENT}; color:#fff; }
-        .pfv-table-wrap { overflow:auto; max-height:min(62vh, 620px); }
+        .pfv-table-shell { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+        .pfv-table-wrap { flex:1; min-height:0; overflow:auto; }
         table.pfv-table { width:100%; border-collapse:collapse; font-family:${sans}; }
-        table.pfv-table th { padding:10px 12px; text-align:left; font-size:10.5px; font-weight:700; color:${T.subtext};
-          text-transform:uppercase; letter-spacing:.08em; background:${D.tableHeadBg}; border-bottom:1px solid ${D.panelBorder};
+        table.pfv-table th { padding:11px 16px; text-align:left; font-size:12px; font-weight:800; color:${T.muted};
+          text-transform:uppercase; letter-spacing:.12em; background:${D.tableHeadBg}; border-bottom:1px solid ${D.panelBorder};
           position:sticky; top:0; z-index:1; cursor:pointer; white-space:nowrap; }
-        table.pfv-table td { padding:10px 12px; font-size:12.5px; border-bottom:1px solid ${D.panelBorder}; white-space:nowrap; }
+        table.pfv-table td { padding:12px 16px; font-size:15.5px; border-bottom:1px solid ${D.panelBorder}; white-space:nowrap; }
         table.pfv-table tbody tr:hover { background:${isDark ? "rgba(255,255,255,0.025)" : "rgba(15,23,42,0.02)"}; }
+        .pfv-pagination { flex-shrink:0; }
         @media (max-width:600px) {
           .pfv-shell { padding:10px 10px 16px; }
           .pfv-hero { padding:14px 16px 12px; }
-          .pfv-table-wrap { max-height:min(58vh, 480px); }
         }
       `}</style>
 
@@ -19719,7 +19722,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
 
                     {/*  FILTER BAR  */}
                     <div style={{
-                        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                        flexShrink: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
                         padding: "10px 20px", borderBottom: `1px solid ${T.border}`
                     }}>
                         {["ALL", "NSE", "BSE"].map(v => (
@@ -19844,6 +19847,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
                         )}
                     </div>
 
+                    <div className="pfv-table-shell">
                     <div className="pfv-table-wrap" ref={tableRef}>
                         {isLoading ? (
                             <div style={{ padding: 40, textAlign: "center", color: T.subtext, fontSize: 13 }}>
@@ -19897,8 +19901,9 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
                                             {columns.map(c => (
                                                 <td key={c.key} style={{
                                                     textAlign: c.align,
-                                                    fontFamily: ["ticker", "week_end", "open", "high", "low", "close", "volume", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? mono : sans,
-                                                    fontWeight: c.key === "ticker" ? 700 : 400,
+                                                    fontFamily: ["ticker", "week_end", "close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? mono : sans,
+                                                    fontWeight: ["ticker", "close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? 600 : (c.key === "name" ? 600 : 400),
+                                                    fontVariantNumeric: ["close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? "tabular-nums" : undefined,
                                                     color: cellColor(c.key, row[c.key])
                                                 }}>
                                                     {fmtCell(row, c.key) ?? <span style={{ color: T.muted }}>{"\u2013"}</span>}
@@ -19912,7 +19917,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
                     </div>
 
                     {sortedRows.length > 0 && (
-                        <div style={{
+                        <div className="pfv-pagination" style={{
                             display: "flex", alignItems: "center", justifyContent: "space-between",
                             padding: "12px 20px", borderTop: `1px solid ${T.border}`, flexWrap: "wrap", gap: 10
                         }}>
@@ -19923,25 +19928,42 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
                                 <span style={{ fontSize: 11.5, color: T.subtext, fontFamily: mono, fontVariantNumeric: "tabular-nums" }}>
                                     {pageStart + 1}{"\u2013"}{Math.min(pageStart + PAGE_SIZE, sortedRows.length)} of {sortedRows.length}
                                 </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                                     <button onClick={() => goToPage(page - 1)} disabled={page <= 1}
                                         style={{
-                                            padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: sans,
-                                            borderRadius: 6, border: `1px solid ${D.panelBorder}`,
-                                            background: "transparent", color: page <= 1 ? T.muted : T.text,
-                                            cursor: page <= 1 ? "default" : "pointer", opacity: page <= 1 ? 0.5 : 1
+                                            padding: "6px 12px", fontSize: 11.5, fontWeight: 600, fontFamily: sans,
+                                            borderRadius: 999, border: `1px solid ${D.panelBorder}`,
+                                            background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)",
+                                            color: page <= 1 ? T.muted : T.text,
+                                            cursor: page <= 1 ? "not-allowed" : "pointer", opacity: page <= 1 ? 0.4 : 1
                                         }}>
                                         Prev
                                     </button>
-                                    <span style={{ fontSize: 11.5, color: T.text, fontFamily: mono, fontWeight: 600, padding: "0 6px", fontVariantNumeric: "tabular-nums" }}>
-                                        {page} / {totalPages}
-                                    </span>
+                                    {(() => {
+                                        let s = Math.max(1, page - 3); let e = Math.min(totalPages, s + 6); s = Math.max(1, e - 6);
+                                        const pages = []; for (let p = s; p <= e; p++) pages.push(p);
+                                        return pages.map(p => (
+                                            <button key={p} onClick={() => goToPage(p)}
+                                                style={{
+                                                    padding: "6px 10px", minWidth: 34, fontSize: 11.5,
+                                                    fontWeight: p === page ? 700 : 500, fontFamily: mono,
+                                                    borderRadius: 999,
+                                                    border: `1px solid ${p === page ? ACCENT + "55" : D.panelBorder}`,
+                                                    background: p === page ? withAlpha(ACCENT, isDark ? 0.18 : 0.10) : (isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)"),
+                                                    color: p === page ? ACCENT : T.subtext,
+                                                    cursor: "pointer", fontVariantNumeric: "tabular-nums"
+                                                }}>
+                                                {p}
+                                            </button>
+                                        ));
+                                    })()}
                                     <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages}
                                         style={{
-                                            padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: sans,
-                                            borderRadius: 6, border: `1px solid ${D.panelBorder}`,
-                                            background: "transparent", color: page >= totalPages ? T.muted : T.text,
-                                            cursor: page >= totalPages ? "default" : "pointer", opacity: page >= totalPages ? 0.5 : 1
+                                            padding: "6px 12px", fontSize: 11.5, fontWeight: 600, fontFamily: sans,
+                                            borderRadius: 999, border: `1px solid ${D.panelBorder}`,
+                                            background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)",
+                                            color: page >= totalPages ? T.muted : T.text,
+                                            cursor: page >= totalPages ? "not-allowed" : "pointer", opacity: page >= totalPages ? 0.4 : 1
                                         }}>
                                         Next
                                     </button>
@@ -19949,6 +19971,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
             </div>
 
@@ -21054,7 +21077,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             </CategorySection>
 
                             <CategorySection name="Chart Patterns" color={isDark ? "#c084fc" : "#7c3aed"}
-                                desc="Weekly candlestick pattern detections, loaded straight from the database"
+                                desc="Weekly candlestick pattern detections"
                                 count={patternLoading ? "..." : patternTotalCount}>
                                 {PATTERN_FILTER_TABS.map(tab => (
                                     <ScreenRow key={tab.id}

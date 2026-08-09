@@ -183,7 +183,7 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
     const axisVals = [pMin, Math.exp((logMin + logMax) / 2), pMax];
 
     return (
-        <svg width={width} height={totalH} style={{ display: "block", overflow: "visible" }}>
+        <svg viewBox={`0 0 ${width} ${totalH}`} width="100%" height={totalH} preserveAspectRatio="xMidYMid meet" style={{ display: "block", overflow: "visible" }}>
             {axisVals.map((v, i) => (
                 <line key={i} x1={pad.l} x2={pad.l + W} y1={py(v)} y2={py(v)}
                     stroke={T.border} strokeWidth="0.5" strokeDasharray="3,3" opacity="0.5" />
@@ -265,6 +265,25 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
 function WlCandleSection({ ticker, T, width }) {
     const [candles, setCandles] = useState(null);
     const [loading, setLoading] = useState(true);
+    const innerRef = useRef(null);
+    const [measuredWidth, setMeasuredWidth] = useState(width || 260);
+
+    useEffect(() => {
+        const el = innerRef.current;
+        if (!el) return;
+
+        // Measure immediately on mount — don't rely solely on the RO callback timing.
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 40) setMeasuredWidth(Math.round(rect.width));
+
+        if (typeof ResizeObserver === "undefined") return;
+        const ro = new ResizeObserver(entries => {
+            const w = entries[0]?.contentRect?.width;
+            if (w && w > 40) setMeasuredWidth(Math.round(w));
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
 
     useEffect(() => {
         if (!ticker) return;
@@ -277,38 +296,46 @@ function WlCandleSection({ ticker, T, width }) {
         return () => { cancelled = true; };
     }, [ticker]);
 
-    const chartW = width || 260;
+    const hasChart = Array.isArray(candles) && candles.length >= 4;
 
     return (
-        <div style={{ background: T.card, borderRadius: 8, padding: "10px 10px 8px", overflow: "hidden" }}>
+        <div style={{
+            background: T.card, border: `1px solid ${T.border}`, borderRadius: 12,
+            padding: "12px 12px 10px", overflow: "hidden", width: "100%",
+            boxSizing: "border-box", boxShadow: T.shadow || "none",
+            flexShrink: 0,
+        }}>
             <div style={{
-                fontSize: 9, color: T.subtext, fontWeight: 500, textTransform: "uppercase",
-                letterSpacing: "0.1em", marginBottom: 8, opacity: 0.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
+                fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: "0.11em", marginBottom: 9, opacity: 0.62, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
             }}>
                 Weekly Chart · 52W
             </div>
-            {loading ? (
-                <div style={{
-                    height: 80, display: "flex", flexDirection: "column", alignItems: "center",
-                    justifyContent: "center", gap: 6, opacity: 0.45
-                }}>
+            {/* Unpadded measuring div — matches the exact plottable width, no double-counted padding */}
+            <div ref={innerRef} style={{ width: "100%" }}>
+                {loading ? (
                     <div style={{
-                        width: 14, height: 14, border: `1.5px solid ${T.border}`,
-                        borderTopColor: T.green, borderRadius: "50%",
-                        animation: "wlChartSpin 0.7s linear infinite"
-                    }} />
-                    <span style={{ fontSize: 10, color: T.subtext }}>Loading chart</span>
-                </div>
-            ) : candles ? (
-                <WlMiniCandleChart candles={candles} T={T} width={chartW} height={110} />
-            ) : (
-                <div style={{
-                    height: 70, display: "flex", alignItems: "center", justifyContent: "center",
-                    color: T.subtext, fontSize: 11, opacity: 0.4
-                }}>
-                    Chart data unavailable
-                </div>
-            )}
+                        height: 80, display: "flex", flexDirection: "column", alignItems: "center",
+                        justifyContent: "center", gap: 6, opacity: 0.45
+                    }}>
+                        <div style={{
+                            width: 14, height: 14, border: `1.5px solid ${T.border}`,
+                            borderTopColor: T.green, borderRadius: "50%",
+                            animation: "wlChartSpin 0.7s linear infinite"
+                        }} />
+                        <span style={{ fontSize: 10, color: T.subtext }}>Loading chart</span>
+                    </div>
+                ) : hasChart ? (
+                    <WlMiniCandleChart candles={candles} T={T} width={Math.max(150, measuredWidth)} height={110} />
+                ) : (
+                    <div style={{
+                        height: 70, display: "flex", alignItems: "center", justifyContent: "center",
+                        color: T.subtext, fontSize: 11, opacity: 0.4
+                    }}>
+                        Chart data unavailable
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -678,6 +705,20 @@ async function fetchEarningsDates(tickers, token) {
         }
         return map;
     } catch { return {}; }
+}
+
+// ─── Upcoming results-date badge (shared: header pill + Quality row) ──
+function earningsBadgeInfo(resultDateStr) {
+    if (!resultDateStr) return null;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(resultDateStr + "T00:00:00");
+    if (isNaN(d)) return null;
+    const daysLeft = Math.round((d - today) / 86400000);
+    const suffix = daysLeft === 0 ? " (Today)" : daysLeft === 1 ? " (Tomorrow)" : daysLeft > 1 ? ` (in ${daysLeft}d)` : "";
+    const color = daysLeft <= 0 ? "#f59e0b" : daysLeft <= 3 ? "#f87171" : daysLeft <= 7 ? "#fb923c" : daysLeft <= 14 ? "#22c55e" : null;
+    const shortLabel = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    const fullLabel = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) + suffix;
+    return { daysLeft, color, shortLabel, fullLabel };
 }
 
 // ─── Formatters ───────────────────────────────────────────────
@@ -1569,7 +1610,7 @@ function ComparePanel({ watchlists, token, onClose, T }) {
                     ))}
                 </div>
                 <button onClick={run} disabled={sel.length < 2 || busy}
-                    style={{ padding: "5px 16px", background: T.green, color: "#fff", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: sel.length < 2 ? "not-allowed" : "pointer", opacity: sel.length < 2 ? 0.5 : 1, marginBottom: 16 }}>
+                    style={{ padding: "5px 16px", background: "#22c55e", color: "#08210f", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: sel.length < 2 ? "not-allowed" : "pointer", opacity: sel.length < 2 ? 0.5 : 1, marginBottom: 16 }}>
                     {busy ? "Comparing…" : "Compare"}</button>
                 {data.length > 0 && (
                     <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(data.length, 3)},1fr)`, gap: 8 }}>
@@ -2478,7 +2519,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         .wl-drag-handle:hover{opacity:1!important}
         .wl-sidebar-item.wl-dragging{opacity:0.55;cursor:grabbing!important}
         .wl-toolbar-btn:hover{background:${T.hover}!important;color:${T.text}!important}
-        .wl-add-stocks-btn:hover{transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 8px 20px ${T.green}55, inset 0 1px 0 rgba(255,255,255,0.25)!important}
+        .wl-add-stocks-btn:hover{transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 8px 20px rgba(34,197,94,0.35), inset 0 1px 0 rgba(255,255,255,0.25)!important}
         .wl-add-stocks-btn:active{transform:translateY(0)}
         .wl-stat-card{transition:transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease}
         .wl-stat-card:hover{transform:translateY(-1px);border-color:${dark ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"}}
@@ -3194,10 +3235,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             style={{
                                                 display: "flex", alignItems: "center", gap: 6,
                                                 padding: "7px 16px",
-                                                background: T.green,
-                                                border: `1px solid ${T.green}`,
+                                                background: "#22c55e",
+                                                border: "1px solid #22c55e",
                                                 borderRadius: 8,
-                                                color: "#062012",
+                                                color: "#08210f",
                                                 fontSize: 12.5,
                                                 fontWeight: 700,
                                                 letterSpacing: "0.01em",
@@ -3211,7 +3252,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             <span style={{
                                                 display: "flex", alignItems: "center", justifyContent: "center",
                                                 width: 15, height: 15, borderRadius: "50%",
-                                                background: "rgba(6,32,18,0.16)", fontSize: 11, lineHeight: 1, fontWeight: 800,
+                                                background: "rgba(8,33,15,0.16)", fontSize: 11, lineHeight: 1, fontWeight: 800,
                                             }}>+</span>
                                             Add Stocks
                                         </button>
@@ -3440,30 +3481,55 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
                                                 <div style={{ width: 40, height: 4, borderRadius: 99, background: T.border, opacity: 0.6 }} />
                                             </div>
-                                            <div style={{ padding: "12px 18px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                                                    <div>
-                                                        <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, opacity: 0.5 }}>Detail</div>
-                                                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
-                                                        <div style={{ fontSize: 24, fontWeight: 400, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
-                                                            {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
+                                            <div style={{ padding: "12px 18px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+                                                <div style={{
+                                                    background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
+                                                    padding: "14px 16px", boxShadow: T.shadow || "none", flexShrink: 0,
+                                                }}>
+                                                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                                                        <div>
+                                                            <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5, opacity: 0.55, fontWeight: 700 }}>Detail</div>
+                                                            <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
+                                                            <div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
+                                                                {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
+                                                            </div>
+                                                            <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                                                {expandedRow.rs_rating != null && (
+                                                                    <span style={{
+                                                                        fontSize: 12, fontWeight: 700, color: T.green,
+                                                                        background: `${T.green}14`, border: `1px solid ${T.green}40`,
+                                                                        borderRadius: 6, padding: "3px 8px",
+                                                                        fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em",
+                                                                    }}>RS {Math.round(expandedRow.rs_rating)}</span>
+                                                                )}
+                                                                {expandedRow.trend && (
+                                                                    <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, border: `1px solid ${T.border}`, color: T.subtext, background: T.hover, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.04em" }}>
+                                                                        {expandedRow.trend === "stage2" ? "Stage 2 ↑" : expandedRow.trend === "stage1" ? "Stage 1 →" : "Stage 4 ↓"}
+                                                                    </span>
+                                                                )}
+                                                                {(() => {
+                                                                    const eb = earningsBadgeInfo(earningsMap[expandedRow.ticker]);
+                                                                    if (!eb) return null;
+                                                                    const c = eb.color || T.subtext;
+                                                                    return (
+                                                                        <span title={`Results: ${eb.fullLabel}`} style={{
+                                                                            fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
+                                                                            border: `1px solid ${eb.color ? `${c}45` : T.border}`, color: c,
+                                                                            background: eb.color ? `${c}14` : T.hover,
+                                                                            fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.02em"
+                                                                        }}>
+                                                                            📅 {eb.shortLabel}
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                            </div>
                                                         </div>
-                                                        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-                                                            {expandedRow.rs_rating != null && (
-                                                                <span style={{ fontSize: 12, fontWeight: 600, color: T.green, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>RS {Math.round(expandedRow.rs_rating)}</span>
-                                                            )}
-                                                            {expandedRow.trend && (
-                                                                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 5, border: `1px solid ${T.border}`, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.04em" }}>
-                                                                    {expandedRow.trend === "stage2" ? "Stage 2 ↑" : expandedRow.trend === "stage1" ? "Stage 1 →" : "Stage 4 ↓"}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        <button onClick={() => setExpandedTicker(null)}
+                                                            style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", cursor: "pointer", color: T.subtext, fontSize: 13, flexShrink: 0, marginLeft: 8 }}>✕</button>
                                                     </div>
-                                                    <button onClick={() => setExpandedTicker(null)}
-                                                        style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", cursor: "pointer", color: T.subtext, fontSize: 13 }}>✕</button>
                                                 </div>
                                                 {/* Candlestick Chart — mobile */}
-                                                <WlCandleSection ticker={expandedRow.ticker} T={T} width={Math.min(window.innerWidth - 36, 480)} />
+                                                <WlCandleSection ticker={expandedRow.ticker} T={T} />
                                                 {[
                                                     {
                                                         label: "Performance", rows: [
@@ -3485,15 +3551,19 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                             ["RS Rating", expandedRow.rs_rating != null ? Math.round(expandedRow.rs_rating) : "—", T.green],
                                                             ["Rel Volume", expandedRow.rel_vol != null ? `${expandedRow.rel_vol.toFixed(1)}×` : "—", expandedRow.rel_vol >= 2 ? T.pos : T.text],
                                                             ...(expandedRow.pct_from_high != null ? [["From High", fmt.pct(expandedRow.pct_from_high), retColor(expandedRow.pct_from_high, T)]] : []),
+                                                            ...(earningsBadgeInfo(earningsMap[expandedRow.ticker]) ? [["Results Date", earningsBadgeInfo(earningsMap[expandedRow.ticker]).fullLabel, earningsBadgeInfo(earningsMap[expandedRow.ticker]).color || T.subtext]] : []),
                                                         ]
                                                     },
                                                 ].map(section => (
-                                                    <div key={section.label}>
-                                                        <div style={{ fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
+                                                    <div key={section.label} style={{
+                                                        background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
+                                                        padding: "12px 16px 2px", boxShadow: T.shadow || "none", flexShrink: 0,
+                                                    }}>
+                                                        <div style={{ fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
                                                         {section.rows.map(([l, v, c]) => (
                                                             <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
                                                                 <span style={{ fontSize: 14, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7 }}>{l}</span>
-                                                                <span style={{ fontSize: 14, fontWeight: 500, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
+                                                                <span style={{ fontSize: 14, fontWeight: 700, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -3504,46 +3574,71 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 ) : (
                                     // Desktop inline panel
                                     <div style={{
-                                        width: 300, flexShrink: 0,
+                                        width: 320, flexShrink: 0,
                                         background: T.surface,
                                         borderLeft: `1px solid ${T.border}`,
                                         display: "flex", flexDirection: "column",
                                         overflow: "auto",
                                         animation: "slideInRight 0.18s ease",
                                     }}>
-                                        <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 16, minHeight: "100%" }}>
-                                            {/* Header */}
-                                            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                                                <div>
-                                                    <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, opacity: 0.5 }}>Detail</div>
-                                                    <div style={{ fontSize: 17, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
-                                                    <div style={{ fontSize: 22, fontWeight: 400, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
-                                                        {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
+                                        <div style={{ padding: "16px 14px", display: "flex", flexDirection: "column", gap: 12, minHeight: "100%" }}>
+                                            {/* Header card */}
+                                            <div style={{
+                                                background: T.card, border: `1px solid ${T.border}`, borderRadius: 12,
+                                                padding: "14px 14px", boxShadow: T.shadow || "none", flexShrink: 0,
+                                            }}>
+                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontSize: 10, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5, opacity: 0.55, fontWeight: 700 }}>Detail</div>
+                                                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.03em" }}>{expandedRow.ticker}</div>
+                                                        <div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 3, letterSpacing: "-0.02em" }}>
+                                                            {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
+                                                        </div>
+                                                        <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                                            {expandedRow.rs_rating != null && (
+                                                                <span style={{
+                                                                    fontSize: 11.5, fontWeight: 700, color: T.green,
+                                                                    background: `${T.green}14`, border: `1px solid ${T.green}40`,
+                                                                    borderRadius: 5, padding: "2px 7px",
+                                                                    fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.03em",
+                                                                }}>RS {Math.round(expandedRow.rs_rating)}</span>
+                                                            )}
+                                                            {expandedRow.trend && (
+                                                                <span style={{
+                                                                    fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 5,
+                                                                    border: `1px solid ${T.border}`, color: T.subtext, background: T.hover,
+                                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.03em"
+                                                                }}>
+                                                                    {expandedRow.trend === "stage2" ? "S2 ↑" : expandedRow.trend === "stage1" ? "S1 →" : "S4 ↓"}
+                                                                </span>
+                                                            )}
+                                                            {(() => {
+                                                                const eb = earningsBadgeInfo(earningsMap[expandedRow.ticker]);
+                                                                if (!eb) return null;
+                                                                const c = eb.color || T.subtext;
+                                                                return (
+                                                                    <span title={`Results: ${eb.fullLabel}`} style={{
+                                                                        fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
+                                                                        border: `1px solid ${eb.color ? `${c}45` : T.border}`, color: c,
+                                                                        background: eb.color ? `${c}14` : T.hover,
+                                                                        fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.02em"
+                                                                    }}>
+                                                                        📅 {eb.shortLabel}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                        </div>
                                                     </div>
-                                                    <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
-                                                        {expandedRow.rs_rating != null && (
-                                                            <span style={{ fontSize: 11, fontWeight: 500, color: T.green, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>RS {Math.round(expandedRow.rs_rating)}</span>
-                                                        )}
-                                                        {expandedRow.trend && (
-                                                            <span style={{
-                                                                fontSize: 10, padding: "2px 6px", borderRadius: 3,
-                                                                border: `1px solid ${T.border}`, color: T.subtext,
-                                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.04em"
-                                                            }}>
-                                                                {expandedRow.trend === "stage2" ? "S2 ↑" : expandedRow.trend === "stage1" ? "S1 →" : "S4 ↓"}
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                    <button onClick={() => setExpandedTicker(null)}
+                                                        style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", color: T.subtext, fontSize: 11, opacity: 0.65, transition: "opacity 0.15s, background 0.15s", flexShrink: 0, marginLeft: 8 }}
+                                                        onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = T.hover; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.opacity = "0.65"; e.currentTarget.style.background = "transparent"; }}
+                                                    >✕</button>
                                                 </div>
-                                                <button onClick={() => setExpandedTicker(null)}
-                                                    style={{ background: "transparent", border: `1px solid ${T.border}`, borderRadius: 5, padding: "4px 8px", cursor: "pointer", color: T.subtext, fontSize: 11, opacity: 0.6, transition: "opacity 0.15s" }}
-                                                    onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-                                                    onMouseLeave={e => e.currentTarget.style.opacity = "0.6"}
-                                                >✕</button>
                                             </div>
 
                                             {/* Candlestick Chart */}
-                                            <WlCandleSection ticker={expandedRow.ticker} T={T} width={260} />
+                                            <WlCandleSection ticker={expandedRow.ticker} T={T} />
 
                                             {[
                                                 {
@@ -3567,30 +3662,24 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         ["RS Rating", expandedRow.rs_rating != null ? Math.round(expandedRow.rs_rating) : "—", T.green],
                                                         ["Rel Volume", expandedRow.rel_vol != null ? `${expandedRow.rel_vol.toFixed(1)}×` : "—", expandedRow.rel_vol >= 2 ? T.pos : T.text],
                                                         ...(expandedRow.pct_from_high != null ? [["From High", fmt.pct(expandedRow.pct_from_high), retColor(expandedRow.pct_from_high, T)]] : []),
-                                                        ...(earningsMap[expandedRow.ticker] ? (() => {
-                                                            const eDate = earningsMap[expandedRow.ticker];
-                                                            const today = new Date(); today.setHours(0, 0, 0, 0);
-                                                            const d = new Date(eDate + "T00:00:00");
-                                                            const daysLeft = Math.round((d - today) / 86400000);
-                                                            const suffix = daysLeft === 0 ? " (Today)" : daysLeft === 1 ? " (Tomorrow)" : ` (in ${daysLeft}d)`;
-                                                            const urgColor = daysLeft <= 0 ? "#f59e0b" : daysLeft <= 3 ? "#f87171" : daysLeft <= 7 ? "#fb923c" : daysLeft <= 14 ? T.green : T.subtext;
-                                                            const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) + suffix;
-                                                            return [["Results Date", label, urgColor]];
-                                                        })() : []),
+                                                        ...(earningsBadgeInfo(earningsMap[expandedRow.ticker]) ? [["Results Date", earningsBadgeInfo(earningsMap[expandedRow.ticker]).fullLabel, earningsBadgeInfo(earningsMap[expandedRow.ticker]).color || T.subtext]] : []),
                                                     ]
                                                 },
                                             ].map(section => (
-                                                <div key={section.label}>
-                                                    <div style={{ fontSize: 9, color: T.subtext, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
+                                                <div key={section.label} style={{
+                                                    background: T.card, border: `1px solid ${T.border}`, borderRadius: 12,
+                                                    padding: "12px 14px 4px", boxShadow: T.shadow || "none", flexShrink: 0,
+                                                }}>
+                                                    <div style={{ fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4, opacity: 0.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
                                                     {section.rows.map(([l, v, c]) => (
-                                                        <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
-                                                            <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.6 }}>{l}</span>
-                                                            <span style={{ fontSize: 11, fontWeight: 500, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
+                                                        <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
+                                                            <span style={{ fontSize: 11.5, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7 }}>{l}</span>
+                                                            <span style={{ fontSize: 11.5, fontWeight: 700, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
                                                         </div>
                                                     ))}
                                                 </div>
                                             ))}
-                                        
+
                                         </div>
                                     </div>
                                 )
@@ -3838,38 +3927,44 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                 animation: isMobile ? "none" : "slideInRight 0.18s ease",
             }}>
             {/* Feed Header */}
-            <div style={{ flexShrink: 0, padding: isMobile ? "10px 18px 12px" : "14px 16px 10px", borderBottom: `1px solid ${T.border}` }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 10 }}>
+            <div style={{ flexShrink: 0, padding: isMobile ? "12px 18px 14px" : "16px 18px 12px", borderBottom: `1px solid ${T.border}`, background: T.surface }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                        <span style={{ fontSize: isMobile ? 16 : 15.5, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "-0.01em" }}>
                             Announcements
                         </span>
                         {announcements.length > 0 && (
-                            <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 500, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{announcements.length}</span>
+                            <span style={{
+                                fontSize: isMobile ? 12 : 12, fontWeight: 700, color: T.subtext,
+                                fontFamily: "'IBM Plex Mono', monospace", background: T.hover,
+                                borderRadius: 20, padding: "2px 9px",
+                            }}>{announcements.length}</span>
                         )}
                         {refreshing && !loading && (
                             <span style={{ fontSize: 14, color: T.subtext, fontWeight: 400, animation: "spin 1s linear infinite", display: "inline-block" }}>↻</span>
                         )}
                     </div>
                     <button onClick={onClose}
-                        style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: isMobile ? 8 : 4, cursor: "pointer", color: T.subtext, fontSize: 14, lineHeight: 1, padding: isMobile ? "6px 10px" : "3px 7px", transition: "all 0.15s" }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = T.text; e.currentTarget.style.color = T.text; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.subtext; }}
+                        style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: isMobile ? 8 : 7, cursor: "pointer", color: T.subtext, fontSize: 14, lineHeight: 1, padding: isMobile ? "6px 10px" : "5px 9px", transition: "all 0.15s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = T.text; e.currentTarget.style.color = T.text; e.currentTarget.style.background = T.hover; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.subtext; e.currentTarget.style.background = "transparent"; }}
                     >✕</button>
                 </div>
                 {/* Category filters */}
-                <div style={{ display: "flex", gap: isMobile ? 6 : 3 }}>
+                <div style={{ display: "flex", gap: isMobile ? 7 : 6 }}>
                     {FILTERS.map(f => (
                         <button key={f.key} onClick={() => setFilter(f.key)}
                             style={{
-                                padding: isMobile ? "6px 14px" : "3px 10px", fontSize: isMobile ? 13 : 13,
-                                fontWeight: 500, borderRadius: 20, cursor: "pointer",
-                                background: filter === f.key ? `${T.green}12` : "transparent",
-                                color: filter === f.key ? T.green : T.subtext,
-                                border: `1px solid ${filter === f.key ? `${T.green}40` : T.border}`,
+                                padding: isMobile ? "6px 14px" : "5px 12px", fontSize: isMobile ? 13 : 12.5,
+                                fontWeight: 700, borderRadius: 20, cursor: "pointer",
+                                background: filter === f.key ? "#22c55e" : "transparent",
+                                color: filter === f.key ? "#08210f" : T.subtext,
+                                border: `1px solid ${filter === f.key ? "#22c55e" : T.border}`,
                                 transition: "all 0.15s", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                letterSpacing: "0.04em",
-                            }}>
+                                letterSpacing: "0.02em",
+                            }}
+                            onMouseEnter={e => { if (filter !== f.key) e.currentTarget.style.background = T.hover; }}
+                            onMouseLeave={e => { if (filter !== f.key) e.currentTarget.style.background = "transparent"; }}>
                             {f.label}
                         </button>
                     ))}
@@ -3877,9 +3972,9 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
             </div>
 
             {/* Feed Body */}
-            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
+            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", padding: "10px 12px" }}>
                 {loading ? (
-                    <div style={{ padding: "28px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ padding: "18px 6px", display: "flex", flexDirection: "column", gap: 12 }}>
                         {[80, 60, 90, 70, 50].map((w, i) => (
                             <div key={i}>
                                 <div style={{ width: 50, height: 10, borderRadius: 2, background: T.border, opacity: 0.4, marginBottom: 6 }} />
@@ -3898,79 +3993,83 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                             <div key={dateLabel}>
                                 {/* Date separator */}
                                 <div style={{
-                                    padding: "8px 16px 4px", position: "sticky", top: 0, zIndex: 2,
-                                    background: T.surface, borderBottom: `1px solid ${T.border}`
+                                    padding: "8px 6px 8px", position: "sticky", top: 0, zIndex: 2,
+                                    background: T.surface,
                                 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                                    <span style={{ fontSize: 11.5, fontWeight: 700, color: T.subtext, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7 }}>
                                         {dateLabel}
                                     </span>
                                 </div>
 
                                 {/* Items */}
-                                {items.map((ann, idx) => {
-                                    const badge = catColor(ann.category);
-                                    return (
-                                        <div key={ann.seq_id ?? idx}
-                                            className="wl-announce-row"
-                                            style={{
-                                                padding: "10px 16px",
-                                                borderBottom: `1px solid ${T.border}`,
-                                                transition: "background 0.1s",
-                                                cursor: ann.attachment_url ? "pointer" : "default",
-                                                borderLeft: `2px solid ${badge.border}`,
-                                            }}
-                                            onClick={ann.attachment_url ? () => window.open(ann.attachment_url, "_blank") : undefined}
-                                            onMouseEnter={e => { e.currentTarget.style.background = T.hover; }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                                        >
-                                            {/* Symbol + time */}
-                                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
-                                                <span style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.05em" }}>
-                                                    {ann.symbol}
-                                                </span>
-                                                <span style={{ fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
-                                                    {fmtTime(ann.announcement_datetime)}
-                                                    {ann.attachment_url && <span style={{ marginLeft: 5, opacity: 0.6 }}>↗</span>}
-                                                </span>
-                                            </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                                    {items.map((ann, idx) => {
+                                        const badge = catColor(ann.category);
+                                        return (
+                                            <div key={ann.seq_id ?? idx}
+                                                className="wl-announce-row"
+                                                style={{
+                                                    padding: "12px 14px",
+                                                    borderRadius: 12,
+                                                    border: `1px solid ${T.border}`,
+                                                    background: T.card,
+                                                    transition: "background 0.14s ease, border-color 0.14s ease, transform 0.14s ease",
+                                                    cursor: ann.attachment_url ? "pointer" : "default",
+                                                    boxShadow: T.shadow || "none",
+                                                }}
+                                                onClick={ann.attachment_url ? () => window.open(ann.attachment_url, "_blank") : undefined}
+                                                onMouseEnter={e => { e.currentTarget.style.background = T.hover; e.currentTarget.style.borderColor = badge.border; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = T.card; e.currentTarget.style.borderColor = T.border; }}
+                                            >
+                                                {/* Symbol + time */}
+                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>
+                                                        {ann.symbol}
+                                                    </span>
+                                                    <span style={{ fontSize: 12.5, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.75 }}>
+                                                        {fmtTime(ann.announcement_datetime)}
+                                                        {ann.attachment_url && <span style={{ marginLeft: 5, opacity: 0.6 }}>↗</span>}
+                                                    </span>
+                                                </div>
 
-                                            {/* Category badge */}
-                                            <div style={{ marginBottom: 4 }}>
-                                                <span style={{
-                                                    fontSize: 12, fontWeight: 600, padding: "2px 7px", borderRadius: 3,
-                                                    background: badge.bg, border: `1px solid ${badge.border}`, color: badge.color,
-                                                    letterSpacing: "0.04em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
-                                                }}>
-                                                    {shortCat(ann.category)}
-                                                </span>
-                                            </div>
+                                                {/* Category badge */}
+                                                <div style={{ marginBottom: 6 }}>
+                                                    <span style={{
+                                                        fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
+                                                        background: badge.bg, border: `1px solid ${badge.border}`, color: badge.color,
+                                                        letterSpacing: "0.03em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
+                                                    }}>
+                                                        {shortCat(ann.category)}
+                                                    </span>
+                                                </div>
 
-                                            {/* Text */}
-                                            <div style={{ fontSize: 14, color: T.subtext, lineHeight: 1.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                                                {truncate(ann.announcement_text)}
+                                                {/* Text */}
+                                                <div style={{ fontSize: 13.5, color: T.subtext, lineHeight: 1.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.9 }}>
+                                                    {truncate(ann.announcement_text)}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
                         ))}
 
                         {/* Show More button */}
                         {grouped.hasMore && (
-                            <div style={{ padding: isMobile ? "12px 16px calc(20px + env(safe-area-inset-bottom, 0px))" : "12px 16px 16px", borderTop: `1px solid ${T.border}` }}>
+                            <div style={{ padding: isMobile ? "6px 2px calc(20px + env(safe-area-inset-bottom, 0px))" : "6px 2px 8px" }}>
                                 <button
                                     onClick={() => setVisibleCount(c => c + FEED_PAGE_SIZE)}
                                     style={{
-                                        width: "100%", padding: "7px 0",
+                                        width: "100%", padding: "9px 0",
                                         background: "transparent",
-                                        border: `1px solid ${T.border}`,
-                                        borderRadius: 6, color: T.subtext,
-                                        fontSize: 14, fontWeight: 500,
+                                        border: `1px dashed ${T.border}`,
+                                        borderRadius: 10, color: T.subtext,
+                                        fontSize: 13.5, fontWeight: 600,
                                         cursor: "pointer", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                        letterSpacing: "0.03em", transition: "color 0.15s, border-color 0.15s",
+                                        letterSpacing: "0.02em", transition: "color 0.15s, border-color 0.15s, background 0.15s",
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.color = T.green; e.currentTarget.style.borderColor = `${T.green}50`; e.currentTarget.style.opacity = "1"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.borderColor = T.border; e.currentTarget.style.opacity = "0.6"; }}
+                                    onMouseEnter={e => { e.currentTarget.style.color = T.green; e.currentTarget.style.borderColor = `${T.green}50`; e.currentTarget.style.background = `${T.green}0a`; }}
+                                    onMouseLeave={e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = "transparent"; }}
                                 >
                                     Show {grouped.remaining} more
                                 </button>
