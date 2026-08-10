@@ -537,9 +537,9 @@ async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSear
 }
 
 export function prefetchAnnouncementsData() {
-    const cacheKey = getCacheKey("important", "", []);
+    const cacheKey = getCacheKey("all", "", []);
     if (announcementsCache.has(cacheKey)) return Promise.resolve(announcementsCache.get(cacheKey));
-    return fetchAnnouncementsPage("important", [], "", 0)
+    return fetchAnnouncementsPage("all", [], "", 0)
         .then(data => {
             const cached = { announcements: data, offset: PAGE_SIZE, hasMore: data.length === PAGE_SIZE };
             announcementsCache.set(cacheKey, cached);
@@ -559,7 +559,7 @@ export default function AnnouncementsModule({ T }) {
         return () => window.removeEventListener("resize", handler);
     }, []);
 
-    const [activeFilter, setActiveFilter] = useState("important");
+    const [activeFilter, setActiveFilter] = useState("all");
     const [customFilters, setCustomFilters] = useState(() => {
         try { return JSON.parse(localStorage.getItem("te_ann_filters") || "[]"); } catch { return []; }
     });
@@ -668,7 +668,7 @@ export default function AnnouncementsModule({ T }) {
         const next = customFilters.filter((_, i) => i !== idx);
         setCustomFilters(next);
         try { localStorage.setItem("te_ann_filters", JSON.stringify(next)); } catch {}
-        if (activeFilter === idx) setActiveFilter("important");
+        if (activeFilter === idx) setActiveFilter("all");
     };
 
     const filterBarStyle = {
