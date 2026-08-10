@@ -24,10 +24,10 @@ const PUBLIC_SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "und
 const AUTH_SESSION_KEY = "te_supabase_session";
 const BRAND_LOGO_SRC = "/tradeedge_logo.png";
 // Marketing preview shown to logged-out users on the Journals tab (put the file in /public)
-const JOURNAL_PROMO_IMG = "/journal-preview.png";
-const JOURNAL_PROMO_IMG_MOBILE = "/journal-preview-mobile.png";
-const WATCHLIST_PROMO_IMG = "/watchlist-preview.png";
-const WATCHLIST_PROMO_IMG_MOBILE = "/watchlist-preview-mobile.png";
+const JOURNAL_PROMO_IMG = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/journal-preview.webp';
+const JOURNAL_PROMO_IMG_MOBILE = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/journal-preview-mobile.webp';
+const WATCHLIST_PROMO_IMG = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/watchlist-preview.webp';
+const WATCHLIST_PROMO_IMG_MOBILE = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/watchlist-preview-mobile.webp';
 
 function loadPersistedSession() {
     try {
@@ -23988,7 +23988,7 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                     <div className="legalv2-footer-grid">
                         {[
                             { icon: "headset", label: "Have Questions?", value: "If you have any questions regarding our policies, feel free to reach out to us." },
-                            { icon: "mail", label: "Email Us", value: "kmk03072018@gmail.com", isLink: true, href: "mailto:kmk03072018@gmail.com" },
+                            { icon: "mail", label: "Email Us", value: "support@tradeedge.in", isLink: true, href: "mailto:support@tradeedge.in" },
                             { icon: "globe", label: "Visit Our Website", value: "www.tradeedge.in", isLink: true, href: "https://www.tradeedge.in" },
                             { icon: "calendar", label: "Last Updated", value: LEGAL_LAST_UPDATED },
                         ].map(f => (
