@@ -1040,6 +1040,122 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
     );
 }
 
+// Dark, one-card-at-a-time swipeable carousel that combines Breadth, Strong Sectors and
+// FII/DII Daily Flow into a single horizontal strip on mobile (mirrors the Journal/Dashboard
+// hero carousel styling via the shared .journal-hero-carousel-* classes).
+function DashboardHeroMobileCarousel({ D, breadthItems, sectors, fiiDiiData }) {
+    const trackRef = useRef(null);
+    const [active, setActive] = useState(0);
+
+    // Fixed light-on-dark palette so text stays legible on the dark gradient card
+    // regardless of the app's current light/dark theme.
+    const darkD = {
+        ...D,
+        text: "#e2e8f0",
+        subtext: "rgba(226,232,240,0.62)",
+        muted: "rgba(226,232,240,0.55)",
+    };
+
+    const handleScroll = () => {
+        const el = trackRef.current;
+        if (!el || !el.clientWidth) return;
+        const idx = Math.round(el.scrollLeft / el.clientWidth);
+        setActive(Math.max(0, Math.min(2, idx)));
+    };
+
+    const goTo = (i) => {
+        const el = trackRef.current;
+        if (!el) return;
+        el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    };
+
+    return (
+        <div className="journal-hero-carousel-mobile" style={{ display: "block" }}>
+            <div className="journal-hero-carousel-track" ref={trackRef} onScroll={handleScroll}>
+                <div className="journal-hero-carousel-card">
+                    <div className="journal-hero-carousel-label">Breadth</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
+                        {breadthItems.map(item => (
+                            <div key={item.label} style={{ minWidth: 0 }}>
+                                <div style={{
+                                    color: "rgba(226,232,240,0.55)",
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    textTransform: "uppercase",
+                                    letterSpacing: ".08em",
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                }}>{item.label}</div>
+                                <div style={{
+                                    color: item.color,
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontSize: 20,
+                                    fontWeight: 800,
+                                    marginTop: 5,
+                                }}>{item.value}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="journal-hero-carousel-card">
+                    <div className="journal-hero-carousel-label">Strong Sectors</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {sectors.length ? sectors.map((sector, idx) => (
+                            <div key={sector.industry || idx} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                <span style={{
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: 6,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                    background: "rgba(226,232,240,0.14)",
+                                    color: "#e2e8f0",
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                }}>{idx + 1}</span>
+                                <span style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                    color: "#e2e8f0",
+                                    fontSize: 14.5,
+                                    fontWeight: 700,
+                                }}>{sector.industry}</span>
+                                <span style={{
+                                    flexShrink: 0,
+                                    color: "#e2e8f0",
+                                    fontFamily: "'IBM Plex Mono', monospace",
+                                    fontSize: 15,
+                                    fontWeight: 800,
+                                }}>{sector.count}</span>
+                            </div>
+                        )) : (
+                            <div style={{ color: "rgba(226,232,240,0.62)", fontSize: 13 }}>waiting for RS data</div>
+                        )}
+                    </div>
+                </div>
+                <div className="journal-hero-carousel-card">
+                    <div className="journal-hero-carousel-label">FII / DII Daily Flow</div>
+                    <FiiDiiFlowBars D={darkD} data={fiiDiiData} isCompact />
+                </div>
+            </div>
+            <div className="journal-hero-carousel-dots">
+                {[0, 1, 2].map(i => (
+                    <span
+                        key={i}
+                        className={`journal-hero-carousel-dot${i === active ? " active" : ""}`}
+                        onClick={() => goTo(i)}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, onNavigate }) {
     const topRsSectors = [...(rsIndustrySummary || [])]
         .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
@@ -1144,11 +1260,17 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                         </p>
                     </div>
 
+                    {isCompact ? (
+                        <DashboardHeroMobileCarousel
+                            D={D}
+                            breadthItems={heroMetrics[0].breadth}
+                            sectors={topRsSectors}
+                            fiiDiiData={fiiDiiData}
+                        />
+                    ) : (
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: isCompact
-                            ? "repeat(2, minmax(0, 1fr))"
-                            : "minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1.7fr)",
+                        gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1.7fr)",
                         gap: 10,
                     }}>
                         {heroMetrics.map(metric => (
@@ -1249,6 +1371,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
                             </div>
                         ))}
                     </div>
+                    )}
                 </div>
 
                 <div style={{
