@@ -1664,6 +1664,20 @@ a:hover { text-decoration: underline; }
 .journal-hero-carousel-dots { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; }
 .journal-hero-carousel-dot { width: 6px; height: 6px; border-radius: 50%; cursor: pointer; background: ${D ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)"}; transition: all .15s ease; }
 .journal-hero-carousel-dot.active { width: 16px; border-radius: 4px; background: ${T.green}; }
+.journal-hero-carousel-mobile { min-width: 0; }
+.journal-hero-carousel-track { min-width: 0; }
+.journal-hero-carousel-card { min-width: 0; }
+.journal-hero-carousel-card.premium {
+  padding: 20px 18px 22px;
+  background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,0.05) 0%, transparent 45%), linear-gradient(150deg, #101f38 0%, #0a1424 65%, #08101e 100%);
+  border: 1px solid rgba(226,232,240,0.12);
+  box-shadow: 0 18px 34px rgba(3,8,20,0.46), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.journal-hero-carousel-glow {
+  position: absolute; top: -30%; right: -20%; width: 65%; height: 65%;
+  pointer-events: none; opacity: 0.8; filter: blur(2px); z-index: 0;
+}
+.journal-hero-carousel-card-body { position: relative; z-index: 1; min-width: 0; }
 .journal-kicker-row, .journal-chip-row, .journal-action-row, .journal-hero-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .journal-kicker {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px;

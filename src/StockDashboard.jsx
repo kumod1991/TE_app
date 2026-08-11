@@ -1040,9 +1040,19 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
     );
 }
 
+// Small line-icon set for the mobile carousel card headers — kept local so this
+// component has no dependency beyond currentColor styling.
+function CarouselCardIcon({ type, color }) {
+    const common = { width: 15, height: 15, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2.1", strokeLinecap: "round", strokeLinejoin: "round" };
+    if (type === "breadth") return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
+    if (type === "sectors") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
+    return <svg {...common}><rect x="3" y="10" width="4" height="10" rx="1" /><rect x="10" y="5" width="4" height="15" rx="1" /><rect x="17" y="13" width="4" height="7" rx="1" /></svg>;
+}
+
 // Dark, one-card-at-a-time swipeable carousel that combines Breadth, Strong Sectors and
 // FII/DII Daily Flow into a single horizontal strip on mobile (mirrors the Journal/Dashboard
-// hero carousel styling via the shared .journal-hero-carousel-* classes).
+// hero carousel styling via the shared .journal-hero-carousel-* classes, with extra premium
+// finishing — accent icon chips, glow, and a page counter — layered on top).
 function DashboardHeroMobileCarousel({ D, breadthItems, sectors, fiiDiiData }) {
     const trackRef = useRef(null);
     const [active, setActive] = useState(0);
@@ -1056,11 +1066,17 @@ function DashboardHeroMobileCarousel({ D, breadthItems, sectors, fiiDiiData }) {
         muted: "rgba(226,232,240,0.55)",
     };
 
+    const cards = [
+        { key: "breadth", label: "Breadth", accent: "#60a5fa" },
+        { key: "sectors", label: "Strong Sectors", accent: "#c084fc" },
+        { key: "fiidii", label: "FII / DII Daily Flow", accent: "#34d399" },
+    ];
+
     const handleScroll = () => {
         const el = trackRef.current;
         if (!el || !el.clientWidth) return;
         const idx = Math.round(el.scrollLeft / el.clientWidth);
-        setActive(Math.max(0, Math.min(2, idx)));
+        setActive(Math.max(0, Math.min(cards.length - 1, idx)));
     };
 
     const goTo = (i) => {
@@ -1069,85 +1085,129 @@ function DashboardHeroMobileCarousel({ D, breadthItems, sectors, fiiDiiData }) {
         el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
     };
 
+    const CardHeader = ({ meta, idx }) => (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                <span style={{
+                    width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    background: `linear-gradient(150deg, ${meta.accent}33, ${meta.accent}14)`,
+                    border: `1px solid ${meta.accent}40`,
+                }}>
+                    <CarouselCardIcon type={meta.key} color={meta.accent} />
+                </span>
+                <span style={{
+                    fontSize: 12, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase",
+                    color: "rgba(226,232,240,0.82)", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{meta.label}</span>
+            </div>
+            <span style={{
+                flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "rgba(226,232,240,0.4)",
+                fontFamily: "'IBM Plex Mono', monospace", letterSpacing: ".02em",
+            }}>{idx + 1}/{cards.length}</span>
+        </div>
+    );
+
     return (
-        <div className="journal-hero-carousel-mobile" style={{ display: "block" }}>
-            <div className="journal-hero-carousel-track" ref={trackRef} onScroll={handleScroll}>
-                <div className="journal-hero-carousel-card">
-                    <div className="journal-hero-carousel-label">Breadth</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
-                        {breadthItems.map(item => (
-                            <div key={item.label} style={{ minWidth: 0 }}>
-                                <div style={{
-                                    color: "rgba(226,232,240,0.55)",
-                                    fontSize: 11,
-                                    fontWeight: 800,
-                                    textTransform: "uppercase",
-                                    letterSpacing: ".08em",
-                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                }}>{item.label}</div>
-                                <div style={{
-                                    color: item.color,
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 20,
-                                    fontWeight: 800,
-                                    marginTop: 5,
-                                }}>{item.value}</div>
-                            </div>
-                        ))}
+        <div className="journal-hero-carousel-mobile" style={{ display: "block", minWidth: 0, width: "100%", maxWidth: "100%" }}>
+            <div className="journal-hero-carousel-track" ref={trackRef} onScroll={handleScroll} style={{ minWidth: 0, width: "100%" }}>
+                <div className="journal-hero-carousel-card premium" style={{ minWidth: 0, boxSizing: "border-box" }}>
+                    <div className="journal-hero-carousel-glow" style={{ background: `radial-gradient(circle, ${cards[0].accent}2e 0%, transparent 70%)` }} />
+                    <div className="journal-hero-carousel-card-body">
+                        <CardHeader meta={cards[0]} idx={0} />
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px 14px", minWidth: 0 }}>
+                            {breadthItems.map(item => (
+                                <div key={item.label} style={{ minWidth: 0 }}>
+                                    <div style={{
+                                        color: "rgba(226,232,240,0.5)",
+                                        fontSize: 10.5,
+                                        fontWeight: 800,
+                                        textTransform: "uppercase",
+                                        letterSpacing: ".08em",
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                    }}>{item.label}</div>
+                                    <div style={{
+                                        color: item.color,
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontSize: "clamp(17px, 5.2vw, 21px)",
+                                        fontWeight: 800,
+                                        letterSpacing: "-.02em",
+                                        marginTop: 5,
+                                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                    }}>{item.value}</div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
-                <div className="journal-hero-carousel-card">
-                    <div className="journal-hero-carousel-label">Strong Sectors</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {sectors.length ? sectors.map((sector, idx) => (
-                            <div key={sector.industry || idx} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                <span style={{
-                                    width: 20,
-                                    height: 20,
-                                    borderRadius: 6,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    flexShrink: 0,
-                                    background: "rgba(226,232,240,0.14)",
-                                    color: "#e2e8f0",
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 12,
-                                    fontWeight: 800,
-                                }}>{idx + 1}</span>
-                                <span style={{
-                                    flex: 1,
-                                    minWidth: 0,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                    color: "#e2e8f0",
-                                    fontSize: 14.5,
-                                    fontWeight: 700,
-                                }}>{sector.industry}</span>
-                                <span style={{
-                                    flexShrink: 0,
-                                    color: "#e2e8f0",
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 15,
-                                    fontWeight: 800,
-                                }}>{sector.count}</span>
-                            </div>
-                        )) : (
-                            <div style={{ color: "rgba(226,232,240,0.62)", fontSize: 13 }}>waiting for RS data</div>
-                        )}
+                <div className="journal-hero-carousel-card premium" style={{ minWidth: 0, boxSizing: "border-box" }}>
+                    <div className="journal-hero-carousel-glow" style={{ background: `radial-gradient(circle, ${cards[1].accent}2e 0%, transparent 70%)` }} />
+                    <div className="journal-hero-carousel-card-body">
+                        <CardHeader meta={cards[1]} idx={1} />
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                            {sectors.length ? sectors.map((sector, idx) => (
+                                <div key={sector.industry || idx} style={{
+                                    display: "flex", alignItems: "center", gap: 10, minWidth: 0,
+                                    padding: "8px 2px",
+                                    borderBottom: idx < sectors.length - 1 ? "1px solid rgba(226,232,240,0.08)" : "none",
+                                }}>
+                                    <span style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: 6,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        flexShrink: 0,
+                                        background: idx === 0 ? "rgba(192,132,252,0.22)" : "rgba(226,232,240,0.1)",
+                                        color: idx === 0 ? "#c084fc" : "rgba(226,232,240,0.75)",
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontSize: 11.5,
+                                        fontWeight: 800,
+                                    }}>{idx + 1}</span>
+                                    <span style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        color: "#e9edf5",
+                                        fontSize: 13.5,
+                                        fontWeight: 650,
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                    }}>{sector.industry}</span>
+                                    <span style={{
+                                        flexShrink: 0,
+                                        color: "#c084fc",
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontSize: 14.5,
+                                        fontWeight: 800,
+                                    }}>{sector.count}</span>
+                                </div>
+                            )) : (
+                                <div style={{ color: "rgba(226,232,240,0.55)", fontSize: 13 }}>waiting for RS data</div>
+                            )}
+                        </div>
                     </div>
                 </div>
-                <div className="journal-hero-carousel-card">
-                    <div className="journal-hero-carousel-label">FII / DII Daily Flow</div>
-                    <FiiDiiFlowBars D={darkD} data={fiiDiiData} isCompact />
+                <div className="journal-hero-carousel-card premium" style={{ minWidth: 0, boxSizing: "border-box" }}>
+                    <div className="journal-hero-carousel-glow" style={{ background: `radial-gradient(circle, ${cards[2].accent}2e 0%, transparent 70%)` }} />
+                    <div className="journal-hero-carousel-card-body">
+                        <CardHeader meta={cards[2]} idx={2} />
+                        <div style={{ minWidth: 0, width: "100%" }}>
+                            <FiiDiiFlowBars D={darkD} data={fiiDiiData} isCompact />
+                        </div>
+                    </div>
                 </div>
             </div>
             <div className="journal-hero-carousel-dots">
-                {[0, 1, 2].map(i => (
+                {cards.map((c, i) => (
                     <span
-                        key={i}
+                        key={c.key}
                         className={`journal-hero-carousel-dot${i === active ? " active" : ""}`}
+                        style={i === active ? { background: c.accent } : undefined}
                         onClick={() => goTo(i)}
                     />
                 ))}
