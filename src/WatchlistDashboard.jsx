@@ -707,6 +707,53 @@ async function fetchEarningsDates(tickers, token) {
     } catch { return {}; }
 }
 
+// ─── Corporate Action Fetcher (on-demand, per expanded ticker) ─
+// corporate_actions.ticker is stored as "NSE:<TICKER>". Returns the single
+// most relevant record: nearest UPCOMING ex_date if one exists, else the
+// most recent PAST ex_date. Returns null if no records at all.
+const CORP_ACTION_LABELS = { DIVIDEND: "Dividend", BONUS: "Bonus", SPLIT: "Split" };
+const CORP_ACTION_COLORS = { DIVIDEND: "#22c55e", BONUS: "#8b5cf6", SPLIT: "#f59e0b" };
+async function fetchCorporateAction(ticker, token) {
+    if (!ticker) return null;
+    try {
+        const nseTicker = `NSE:${ticker}`;
+        const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/corporate_actions?ticker=eq.${encodeURIComponent(nseTicker)}&select=ex_date,action_type,ratio,raw_text&order=ex_date.asc`,
+            { headers: hdrs(token) }
+        );
+        if (!r.ok) return null;
+        const rows = await r.json();
+        if (!rows || rows.length === 0) return null;
+        const today = new Date().toISOString().slice(0, 10);
+        const upcoming = rows.filter(x => x.ex_date >= today);
+        if (upcoming.length) return { ...upcoming[0], isUpcoming: true };
+        const past = rows.filter(x => x.ex_date < today).sort((a, b) => b.ex_date.localeCompare(a.ex_date));
+        if (past.length) return { ...past[0], isUpcoming: false };
+        return null;
+    } catch { return null; }
+}
+
+// ─── Result-date Fetcher w/ past fallback (on-demand, per expanded ticker) ──
+// Nearest UPCOMING result_date if one exists, else the most recent PAST one.
+async function fetchResultDateInfo(ticker, token) {
+    if (!ticker) return null;
+    try {
+        const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/earnings_calendar?ticker=eq.${encodeURIComponent(ticker)}&select=result_date&order=result_date.asc`,
+            { headers: hdrs(token) }
+        );
+        if (!r.ok) return null;
+        const rows = await r.json();
+        if (!rows || rows.length === 0) return null;
+        const today = new Date().toISOString().slice(0, 10);
+        const upcoming = rows.filter(x => x.result_date >= today);
+        if (upcoming.length) return { date: upcoming[0].result_date, isUpcoming: true };
+        const past = rows.filter(x => x.result_date < today).sort((a, b) => b.result_date.localeCompare(a.result_date));
+        if (past.length) return { date: past[0].result_date, isUpcoming: false };
+        return null;
+    } catch { return null; }
+}
+
 // ─── Upcoming results-date badge (shared: header pill + Quality row) ──
 function earningsBadgeInfo(resultDateStr) {
     if (!resultDateStr) return null;
@@ -719,6 +766,66 @@ function earningsBadgeInfo(resultDateStr) {
     const shortLabel = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
     const fullLabel = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) + suffix;
     return { daysLeft, color, shortLabel, fullLabel };
+}
+
+// ─── Corporate Actions card (Detail Panel — shared mobile + desktop) ──
+// Shows: 1) the closest corporate action (dividend/bonus/split) — upcoming
+// if one exists, else the most recent past one. 2) the closest result date,
+// same upcoming-else-past logic. Renders nothing until data has loaded, and
+// nothing at all if the ticker has no corporate-action or result-date history.
+function fmtCaDate(dateStr) {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d)) return "—";
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+function CorpActionsCard({ T, caInfo, compact }) {
+    if (!caInfo) return null; // still loading
+    const { action, resultInfo } = caInfo;
+    if (!action && !resultInfo) return null; // nothing on record for this ticker
+    const labelSize = compact ? 14 : 11.5;
+    const titleSize = compact ? 10 : 10;
+    const pad = compact ? "12px 16px 12px" : "12px 14px 12px";
+    const radius = compact ? 14 : 12;
+    return (
+        <div style={{
+            background: T.card, border: `1px solid ${T.border}`, borderRadius: radius,
+            padding: pad, boxShadow: T.shadow || "none", flexShrink: 0,
+        }}>
+            <div style={{ fontSize: titleSize, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, opacity: 0.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                Corporate Actions
+            </div>
+            {action ? (
+                <div style={{ paddingBottom: 10, marginBottom: 10, borderBottom: `1px solid ${T.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5, gap: 8 }}>
+                        <span style={{
+                            fontSize: compact ? 12 : 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 5, flexShrink: 0,
+                            color: CORP_ACTION_COLORS[action.action_type] || T.text,
+                            background: `${CORP_ACTION_COLORS[action.action_type] || T.subtext}18`,
+                            border: `1px solid ${CORP_ACTION_COLORS[action.action_type] || T.border}45`,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.03em",
+                        }}>
+                            {CORP_ACTION_LABELS[action.action_type] || action.action_type}
+                        </span>
+                        <span style={{ fontSize: compact ? 13 : 11, fontWeight: 600, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", whiteSpace: "nowrap" }}>
+                            {fmtCaDate(action.ex_date)}{action.isUpcoming ? " · Upcoming" : ""}
+                        </span>
+                    </div>
+                    <div style={{ fontSize: labelSize, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", lineHeight: 1.4 }}>
+                        {action.raw_text}
+                    </div>
+                </div>
+            ) : (
+                <div style={{ fontSize: labelSize, color: T.subtext, opacity: 0.6, paddingBottom: 10 }}>No dividend/bonus/split on record</div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: compact ? "4px 0" : "2px 0" }}>
+                <span style={{ fontSize: labelSize, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7 }}>Result Date</span>
+                <span style={{ fontSize: labelSize, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
+                    {resultInfo ? `${fmtCaDate(resultInfo.date)}${resultInfo.isUpcoming ? " · Upcoming" : " · Reported"}` : "—"}
+                </span>
+            </div>
+        </div>
+    );
 }
 
 // ─── Formatters ───────────────────────────────────────────────
@@ -1795,6 +1902,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [marketCaps, setMarketCaps] = useState({});
     const [eventsMap, setEventsMap] = useState({});
     const [earningsMap, setEarningsMap] = useState({});
+    const [caDetailMap, setCaDetailMap] = useState({}); // ticker → { action, resultInfo } — loaded on-demand when a stock's detail panel is opened
     const [eventFilter, setEventFilter] = useState("all");
     const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 768);
     const [feedOpen, setFeedOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 768);
@@ -2244,6 +2352,23 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             setEarningsMap(prev => ({ ...prev, ...map }));
         }).catch(() => { });
     }, [rows, token]);
+
+    // ── Fetch corporate action + result date detail for the currently-expanded stock only ──
+    useEffect(() => {
+        if (!expandedTicker || caDetailMap[expandedTicker] !== undefined) return;
+        let cancelled = false;
+        const tick = expandedTicker;
+        (async () => {
+            const [action, resultInfo] = await Promise.all([
+                fetchCorporateAction(tick, token),
+                earningsMap[tick]
+                    ? Promise.resolve({ date: earningsMap[tick], isUpcoming: true })
+                    : fetchResultDateInfo(tick, token),
+            ]);
+            if (!cancelled) setCaDetailMap(prev => ({ ...prev, [tick]: { action, resultInfo } }));
+        })();
+        return () => { cancelled = true; };
+    }, [expandedTicker, token, earningsMap, caDetailMap]);
 
     // Full feed: fetch ALL announcements for current watchlist tickers — decoupled from rows.
     // Fires on activeWl change. Always clears stale data first so we never show
@@ -3618,6 +3743,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         ))}
                                                     </div>
                                                 ))}
+                                                <CorpActionsCard T={T} caInfo={caDetailMap[expandedRow.ticker]} compact />
                                             </div>
                                         </div>
                                     </>
@@ -3729,6 +3855,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     ))}
                                                 </div>
                                             ))}
+                                            <CorpActionsCard T={T} caInfo={caDetailMap[expandedRow.ticker]} />
 
                                         </div>
                                     </div>

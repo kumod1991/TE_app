@@ -1635,6 +1635,35 @@ a:hover { text-decoration: underline; }
   border: 1px solid ${T.border};
   background: ${D ? "rgba(148,163,184,0.08)" : "rgba(226,232,240,0.45)"};
 }
+.journal-hero-carousel-mobile { display: none; }
+.journal-hero-carousel-track {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  gap: 12px; margin: 14px -2px 0; padding: 2px 2px 2px;
+}
+.journal-hero-carousel-track::-webkit-scrollbar { display: none; }
+.journal-hero-carousel-card {
+  flex: 0 0 100%; scroll-snap-align: center; min-width: 0;
+  padding: 20px 20px 22px; border-radius: 18px;
+  background: linear-gradient(150deg, #0e1b31 0%, #0a1424 100%);
+  border: 1px solid rgba(148,163,184,0.14);
+  box-shadow: 0 14px 30px rgba(3,8,20,0.4);
+  position: relative; overflow: hidden;
+}
+.journal-hero-carousel-label {
+  font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: rgba(226,232,240,0.55); margin-bottom: 10px;
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+}
+.journal-hero-carousel-value {
+  font-size: 27px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1;
+  font-family: 'IBM Plex Mono', monospace; margin-bottom: 8px;
+}
+.journal-hero-carousel-sub { font-size: 12.5px; color: rgba(226,232,240,0.62); line-height: 1.55; max-width: 78%; }
+.journal-hero-carousel-spark { position: absolute; right: -6px; bottom: -6px; width: 58%; height: 64px; opacity: .95; }
+.journal-hero-carousel-dots { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; }
+.journal-hero-carousel-dot { width: 6px; height: 6px; border-radius: 50%; cursor: pointer; background: ${D ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)"}; transition: all .15s ease; }
+.journal-hero-carousel-dot.active { width: 16px; border-radius: 4px; background: ${T.green}; }
 .journal-kicker-row, .journal-chip-row, .journal-action-row, .journal-hero-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .journal-kicker {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px;
@@ -1718,11 +1747,10 @@ a:hover { text-decoration: underline; }
   .journal-main-inner { gap: 14px; }
   .journal-hero-title { font-size: 22px; letter-spacing: -.04em; margin: 12px 0 8px; }
   .journal-hero-subtitle { font-size: 12.5px; margin-bottom: 14px; }
-  .journal-chip-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
-  .journal-chip { min-width: 0; padding: 9px 10px 10px; }
-  .journal-chip-value { font-size: 13px; }
+  .journal-chip-row { display: none; }
+  .journal-hero-aside { display: none; }
+  .journal-hero-carousel-mobile { display: block; }
   .journal-toolbar { align-items: stretch; }
-  .journal-hero-aside { padding: 14px; border-radius: 16px; }
   .journal-promo-title { font-size: 20px; }
   .journal-promo { padding: 8px 0 24px; gap: 20px; }
   .journal-promo-image-desktop { display: none; }
@@ -1733,7 +1761,8 @@ a:hover { text-decoration: underline; }
   .journal-hero { padding: 16px 14px; border-radius: 20px; gap: 12px; }
   .journal-hero-title { font-size: 20px; }
   .journal-kicker { font-size: 9px; padding: 5px 9px; }
-  .journal-chip-row { grid-template-columns: 1fr 1fr; }
+  .journal-hero-carousel-card { padding: 18px 16px 20px; border-radius: 16px; }
+  .journal-hero-carousel-value { font-size: 24px; }
   .journal-action-row { flex-wrap: wrap; }
   .journal-action-row > * { flex: 1; min-width: 0; justify-content: center; }
   .journal-btn-ghost { font-size: 12px; padding: 9px 12px; }
@@ -3349,9 +3378,85 @@ function TradeModal({ trade, onClose, onSave, T }) {
 }
 
 //  PAGES 
+// Mini decorative sparkline used inside the dark mobile hero cards (no hover/tooltip, just a light trend line).
+function HeroCardSpark({ tone }) {
+    const color = tone === "negative" ? "#f87171" : "#34d399";
+    // Fixed, gentle upward/downward path — purely decorative texture for the card, not a data plot.
+    const d = tone === "negative"
+        ? "M2 18 C 22 26, 40 22, 58 34 S 92 30, 116 44 S 150 40, 172 52"
+        : "M2 52 C 22 44, 40 48, 58 34 S 92 38, 116 22 S 150 26, 172 10";
+    return (
+        <svg className="journal-hero-carousel-spark" viewBox="0 0 176 64" preserveAspectRatio="none" fill="none">
+            <defs>
+                <linearGradient id={`hcSpark-${tone}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+                    <stop offset="100%" stopColor={color} stopOpacity="0" />
+                </linearGradient>
+            </defs>
+            <path d={`${d} L 176 64 L 2 64 Z`} fill={`url(#hcSpark-${tone})`} />
+            <path d={d} stroke={color} strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.9" />
+        </svg>
+    );
+}
+
+// Swipeable, one-card-at-a-time dark carousel shown only on mobile in place of the chip grid + aside box.
+function HeroMobileCarousel({ cards, T }) {
+    const trackRef = useRef(null);
+    const [active, setActive] = useState(0);
+
+    if (!cards.length) return null;
+
+    const handleScroll = () => {
+        const el = trackRef.current;
+        if (!el || !el.clientWidth) return;
+        const idx = Math.round(el.scrollLeft / el.clientWidth);
+        setActive(Math.max(0, Math.min(cards.length - 1, idx)));
+    };
+
+    const goTo = (i) => {
+        const el = trackRef.current;
+        if (!el) return;
+        el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    };
+
+    return (
+        <div className="journal-hero-carousel-mobile">
+            <div className="journal-hero-carousel-track" ref={trackRef} onScroll={handleScroll}>
+                {cards.map((c, i) => (
+                    <div key={i} className="journal-hero-carousel-card">
+                        <div className="journal-hero-carousel-label">{c.label}</div>
+                        <div className="journal-hero-carousel-value" style={{ color: c.tone === "negative" ? "#f87171" : c.tone === "positive" ? "#4ade80" : "#e2e8f0" }}>
+                            {c.value}
+                        </div>
+                        {c.sub ? <div className="journal-hero-carousel-sub">{c.sub}</div> : null}
+                        {c.spark !== false && <HeroCardSpark tone={c.tone === "negative" ? "negative" : "positive"} />}
+                    </div>
+                ))}
+            </div>
+            {cards.length > 1 && (
+                <div className="journal-hero-carousel-dots">
+                    {cards.map((_, i) => (
+                        <span
+                            key={i}
+                            className={`journal-hero-carousel-dot${i === active ? " active" : ""}`}
+                            onClick={() => goTo(i)}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null, asideTitle = "", asideValue = "", asideBody = "", asideTone = "neutral" }) {
     const toneColor = (tone) => tone === "positive" ? T.pos : tone === "negative" ? T.neg : T.text;
     const asideColor = toneColor(asideTone);
+
+    // Same data that feeds the desktop chip row + aside box, reshaped into full-width swipeable cards for mobile.
+    const carouselCards = [
+        ...metrics.map((m) => ({ label: m.label, value: m.value, sub: m.sub, tone: m.tone })),
+        ...((asideTitle || asideValue) ? [{ label: asideTitle, value: asideValue, sub: asideBody, tone: asideTone }] : []),
+    ];
 
     return (
         <section className="journal-hero">
@@ -3372,6 +3477,7 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null,
                         ))}
                     </div>
                 )}
+                <HeroMobileCarousel cards={carouselCards} T={T} />
                 {actions ? <div className="journal-action-row" style={{ marginTop: 18 }}>{actions}</div> : null}
             </div>
             {(asideTitle || asideValue) && (
