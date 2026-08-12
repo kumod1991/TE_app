@@ -488,53 +488,117 @@ async function RPC(fn, params, token) {
 
 // ─── Data Loader ──────────────────────────────────────────────
 // Trend staging, breakout/pullback/vol-spike signals, relative volume,
-// filtering, sorting and pagination are all precomputed/executed in
-// Postgres now (see stock_analytics + get_watchlist_rows RPC). This is a
-// single round trip instead of 3 whole-table fetches + client-side joins.
+// pivots etc. are all precomputed in Postgres (stock_analytics matview).
+// Instead of a get_watchlist_rows RPC round trip, we now fetch the
+// watchlist's tickers + their stock_analytics rows directly via PostgREST,
+// and do filtering/sorting/pagination client-side. This is 2 REST calls
+// per watchlist (not per page — see wlAnalyticsCache below) instead of 1
+// RPC call per page, which is a net win once a watchlist is paginated,
+// re-sorted, or re-filtered, since none of that requires a network round
+// trip anymore.
+
+const wlAnalyticsCache = new Map(); // watchlistId -> { ts, rows: rawRow[] }
+const WL_ANALYTICS_TTL = 60_000; // 60s — independent of the page/filter-keyed cache above
+
+const STOCK_ANALYTICS_COLS =
+    "ticker,close,ret_3m,ret_6m,ret_12m,rs_rating,pct_from_high,pct_from_low,pivot_high_20w,high_52w,low_52w,rel_vol,trend,signals,sma50,sma150,sma200";
+
+// Bust the raw-analytics cache for one watchlist (or all, if called with no arg).
+// Call this whenever watchlist_items changes (add/remove stock) so stale
+// membership doesn't linger for WL_ANALYTICS_TTL.
+function invalidateWatchlistAnalyticsCache(watchlistId) {
+    if (watchlistId) wlAnalyticsCache.delete(watchlistId);
+    else wlAnalyticsCache.clear();
+}
+
+async function fetchWatchlistAnalytics(watchlistId, token) {
+    const cached = wlAnalyticsCache.get(watchlistId);
+    if (cached && Date.now() - cached.ts < WL_ANALYTICS_TTL) return cached.rows;
+
+    const itemsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/watchlist_items?watchlist_id=eq.${watchlistId}&select=ticker&order=added_at.asc`,
+        { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" } }
+    );
+    const items = itemsRes.ok ? await itemsRes.json() : [];
+    const tickers = (items || []).map(i => i.ticker);
+
+    if (!tickers.length) {
+        wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows: [] });
+        return [];
+    }
+
+    const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
+    const dataRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/stock_analytics?ticker=in.${tickerIn}&select=${STOCK_ANALYTICS_COLS}`,
+        { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" } }
+    );
+    const data = dataRes.ok ? await dataRes.json() : [];
+
+    // Preserve watchlist order and keep tickers even if stock_analytics has no row
+    // for them yet (e.g. newly listed / not yet backfilled) — matches old RPC's
+    // LEFT JOIN behavior so stocks don't silently vanish from the watchlist.
+    const byTicker = new Map((data || []).map(r => [r.ticker, r]));
+    const rows = tickers.map(t => byTicker.get(t) || { ticker: t });
+
+    wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows });
+    return rows;
+}
+
+const numOrNull = v => (v == null ? null : (typeof v === "number" ? v : parseFloat(v)));
+
 async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, sortAsc, filters }) {
     const f = filters || {};
-    const data = await RPC("get_watchlist_rows", {
-        p_watchlist_id: watchlistId,
-        p_page: page,
-        p_page_size: pageSize,
-        p_sort_col: sortCol || "rs_rating",
-        p_sort_asc: !!sortAsc,
-        p_rs_min: f.rs_min ?? null,
-        p_pct_high_min: f.pct_high_min ?? null,
-        p_ret3m_min: f.ret3m_min ?? null,
-        p_ret6m_min: f.ret6m_min ?? null,
-        p_ret12m_min: f.ret12m_min ?? null,
-        p_relvol_min: f.relvol_min ?? null,
-        p_price_gt_sma50: !!f.price_gt_sma50,
-        p_sma50_gt_sma150: !!f.sma50_gt_sma150,
-        p_sma50_gt_sma200: !!f.sma50_gt_sma200,
-        p_sma150_gt_sma200: !!f.sma150_gt_sma200,
-        p_quick: f.quick || null,
-    }, token);
+    const raw = await fetchWatchlistAnalytics(watchlistId, token);
 
-    if (!data || data.length === 0) return { rows: [], total: 0 };
-
-    const total = Number(data[0].total_count) || 0;
-    const rows = data.map(r => ({
+    // Normalize once — PostgREST returns `numeric` columns as strings.
+    let rows = raw.map(r => ({
         ticker: r.ticker,
-        ret_3m: r.ret_3m,
-        ret_6m: r.ret_6m,
-        ret_12m: r.ret_12m,
-        rs_rating: r.rs_rating,
-        pct_from_high: r.pct_from_high,
-        pct_from_low: r.pct_from_low,
-        pivot_20w: r.pivot_high_20w,
-        high_52w: r.high_52w,
-        low_52w: r.low_52w,
-        close: r.close,
-        rel_vol: r.rel_vol,
-        trend: r.trend,
+        ret_3m: numOrNull(r.ret_3m),
+        ret_6m: numOrNull(r.ret_6m),
+        ret_12m: numOrNull(r.ret_12m),
+        rs_rating: numOrNull(r.rs_rating),
+        pct_from_high: numOrNull(r.pct_from_high),
+        pct_from_low: numOrNull(r.pct_from_low),
+        pivot_20w: numOrNull(r.pivot_high_20w),
+        high_52w: numOrNull(r.high_52w),
+        low_52w: numOrNull(r.low_52w),
+        close: numOrNull(r.close),
+        rel_vol: numOrNull(r.rel_vol),
+        trend: r.trend ?? null,
         signals: r.signals || [],
-        sma50: r.sma50,
-        sma150: r.sma150,
-        sma200: r.sma200,
+        sma50: numOrNull(r.sma50),
+        sma150: numOrNull(r.sma150),
+        sma200: numOrNull(r.sma200),
     }));
-    return { rows, total };
+
+    // ── Filters (mirrors get_watchlist_rows semantics) ──────────────
+    if (f.rs_min != null) rows = rows.filter(r => r.rs_rating != null && r.rs_rating >= f.rs_min);
+    if (f.pct_high_min != null) rows = rows.filter(r => r.pct_from_high != null && r.pct_from_high >= f.pct_high_min);
+    if (f.ret3m_min != null) rows = rows.filter(r => r.ret_3m != null && r.ret_3m >= f.ret3m_min);
+    if (f.ret6m_min != null) rows = rows.filter(r => r.ret_6m != null && r.ret_6m >= f.ret6m_min);
+    if (f.ret12m_min != null) rows = rows.filter(r => r.ret_12m != null && r.ret_12m >= f.ret12m_min);
+    if (f.relvol_min != null) rows = rows.filter(r => r.rel_vol != null && r.rel_vol >= f.relvol_min);
+    if (f.price_gt_sma50) rows = rows.filter(r => r.close != null && r.sma50 != null && r.close > r.sma50);
+    if (f.sma50_gt_sma150) rows = rows.filter(r => r.sma50 != null && r.sma150 != null && r.sma50 > r.sma150);
+    if (f.sma50_gt_sma200) rows = rows.filter(r => r.sma50 != null && r.sma200 != null && r.sma50 > r.sma200);
+    if (f.sma150_gt_sma200) rows = rows.filter(r => r.sma150 != null && r.sma200 != null && r.sma150 > r.sma200);
+    // f.quick: not currently wired to any button (setQuickFilter is never called
+    // anywhere in this file), so there's no defined semantics to port — left as a no-op.
+
+    // ── Sort — nulls always last, regardless of direction ────────────
+    const col = sortCol || "rs_rating";
+    const dir = sortAsc ? 1 : -1;
+    rows.sort((a, b) => {
+        const av = a[col], bv = b[col];
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return (av - bv) * dir;
+    });
+
+    const total = rows.length;
+    const start = page * pageSize;
+    return { rows: rows.slice(start, start + pageSize), total };
 }
 
 // ─── Screen Membership ────────────────────────────────────────
@@ -2606,6 +2670,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     if (parsed?.watchlistId === targetWl) watchlistCache.delete(key);
                 } catch { watchlistCache.delete(key); } // malformed key — safe to evict
             }
+            invalidateWatchlistAnalyticsCache(targetWl);
             try { localStorage.removeItem(getRowsCacheKey(targetWl)); } catch { }
 
             setAddTicker("");
@@ -2630,6 +2695,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                 try { const p = JSON.parse(key); if (p?.watchlistId === activeWl) watchlistCache.delete(key); }
                 catch { watchlistCache.delete(key); }
             }
+            invalidateWatchlistAnalyticsCache(activeWl);
             try { localStorage.removeItem(getRowsCacheKey(activeWl)); } catch { }
             setTimeout(() => { setRefreshKey(k => k + 1); }, 50);
         }

@@ -189,21 +189,27 @@ const supabase = {
             }
             return data;
         },
-        async refreshSession(refresh_token) {
-            const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-                body: JSON.stringify({ refresh_token }),
-            });
-            const data = await r.json();
-            if (data.access_token) {
-                return {
-                    access_token: data.access_token,
-                    refresh_token: data.refresh_token || refresh_token,
-                    expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
-                };
+        async refreshSession(refresh_token, user) {
+            if (!refresh_token) return null;
+            try {
+                const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+                    body: JSON.stringify({ refresh_token }),
+                });
+                const data = await r.json();
+                if (data.access_token) {
+                    return {
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token || refresh_token,
+                        expires_at: Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
+                        user: data.user || user,
+                    };
+                }
+                return null;
+            } catch {
+                return null;
             }
-            return null;
         },
         signInWithGoogle() {
             window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(PUBLIC_SITE_URL)}`;
@@ -24455,6 +24461,51 @@ export default function App() {
             setChecking(false);
         });
     }, []);
+
+    // ── Keep the session alive: refresh the access token before it expires,
+    // and force a real logout if refresh fails (expired/revoked refresh token).
+    // Without this, `session` in state never expires, so the UI still looks
+    // "logged in" while every authenticated fetch silently 401s in the background.
+    const sessionRef = useRef(session);
+    useEffect(() => { sessionRef.current = session; }, [session]);
+
+    useEffect(() => {
+        const checkAndRefresh = async () => {
+            const s = sessionRef.current;
+            if (!s || !s.access_token || !s.refresh_token || isDemo) return; // demo session has no token
+
+            const expiresAt = s.expires_at;
+            const needsRefresh = !expiresAt || (Date.now() / 1000 > expiresAt - 300); // refresh 5 min before expiry
+            if (!needsRefresh) return;
+
+            const refreshed = await supabase.auth.refreshSession(s.refresh_token, s.user);
+            if (refreshed?.access_token) {
+                supabase._session = refreshed;
+                savePersistedSession(refreshed);
+                setSession(refreshed);
+            } else {
+                // Refresh token is dead — the session is genuinely over.
+                // Log the user out properly instead of leaving a stale "logged in" UI.
+                clearPersistedSession();
+                handleLogout();
+            }
+        };
+
+        // Check immediately on mount/session-change, then poll periodically,
+        // and also re-check whenever the tab regains focus/visibility (covers
+        // laptop sleep / backgrounded-tab cases where setInterval can stall).
+        checkAndRefresh();
+        const intervalId = setInterval(checkAndRefresh, 60 * 1000); // every 60s
+        const onVisible = () => { if (document.visibilityState === "visible") checkAndRefresh(); };
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("focus", onVisible);
+
+        return () => {
+            clearInterval(intervalId);
+            document.removeEventListener("visibilitychange", onVisible);
+            window.removeEventListener("focus", onVisible);
+        };
+    }, [session?.user?.id, isDemo]);
 
     const handleLogin = async (sess) => {
         if (!sess?.access_token || !sess.user?.id) return;
