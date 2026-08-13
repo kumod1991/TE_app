@@ -25,33 +25,51 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 async function sbFetchAll(table, params = {}) {
-  const allRows = [];
-  let offset = 0;
-  while (true) {
-    // Build query from params object — never risk regex-mangling a string
+  const buildUrl = (rangeParams) => {
     const qs = Object.entries(params)
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join("&");
-    const url = `${SUPABASE_URL}/rest/v1/${table}?${qs}`;
-    const r = await fetchWithTimeout(url, {
-      headers: {
-        ...SB_H,
-        // Range header: ask for rows offset→offset+PAGE_SIZE-1
-        "Range": `${offset}-${offset + PAGE_SIZE - 1}`,
-        "Range-Unit": "items",
-        "Prefer": "count=none",
-      },
-    });
-    // 206 = partial, 200 = full (fits in one page), 416 = range beyond end
-    if (r.status === 416 || r.status === 204) break;
+    return `${SUPABASE_URL}/rest/v1/${table}?${qs}`;
+  };
+  const fetchPage = (offset, withCount) => fetchWithTimeout(buildUrl(params), {
+    headers: {
+      ...SB_H,
+      "Range": `${offset}-${offset + PAGE_SIZE - 1}`,
+      "Range-Unit": "items",
+      "Prefer": withCount ? "count=exact" : "count=none",
+    },
+  });
+
+  // First page tells us the total row count via the Content-Range response
+  // header (PostgREST: "0-999/2143"). We use that to fire every remaining
+  // page IN PARALLEL instead of awaiting them one at a time — previously
+  // this was a fully serial loop, so N pages cost N sequential network
+  // round-trips; now it's effectively one round-trip regardless of N.
+  const first = await fetchPage(0, true);
+  if (first.status === 416 || first.status === 204) return [];
+  if (!first.ok) throw new Error(`${table} HTTP ${first.status}`);
+  const firstPage = await first.json();
+  if (!Array.isArray(firstPage) || firstPage.length === 0) return [];
+
+  const contentRange = first.headers.get("content-range"); // "0-999/2143"
+  const total = contentRange?.includes("/") ? parseInt(contentRange.split("/")[1], 10) : NaN;
+
+  if (!Number.isFinite(total) || firstPage.length < PAGE_SIZE || total <= PAGE_SIZE) {
+    return firstPage;
+  }
+
+  const remainingOffsets = [];
+  for (let offset = PAGE_SIZE; offset < total; offset += PAGE_SIZE) remainingOffsets.push(offset);
+
+  const restPages = await Promise.all(remainingOffsets.map(async (offset) => {
+    const r = await fetchPage(offset, false);
+    if (r.status === 416 || r.status === 204) return [];
     if (!r.ok) throw new Error(`${table} HTTP ${r.status}`);
     const page = await r.json();
-    if (!Array.isArray(page) || page.length === 0) break;
-    allRows.push(...page);
-    if (page.length < PAGE_SIZE) break; // last page — no more rows
-    offset += PAGE_SIZE;
-  }
-  return allRows;
+    return Array.isArray(page) ? page : [];
+  }));
+
+  return firstPage.concat(...restPages);
 }
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -104,7 +122,7 @@ const DEFAULT_THEME = {
   radiusLg: 24,
   radiusMd: 18,
   radiusSm: 12,
-  fontSans: '"Manrope", "Segoe UI", sans-serif',
+  fontSans: '"IBM Plex Sans", "Segoe UI", sans-serif',
   fontMono: '"IBM Plex Mono", "SFMono-Regular", Consolas, monospace',
 };
 
@@ -170,16 +188,19 @@ function buildTheme(themeProp = {}) {
 }
 
 // ─── DATE RANGE FILTER ────────────────────────────────────────────────────────
+// 5Y is the hard ceiling across the module — nothing older is ever fetched,
+// cached, or offered as a selectable range (see MAX_HISTORY_YEARS below).
+const RANGE_YEARS = { "1Y": 1, "3Y": 3, "5Y": 5 };
+
 function filterByRange(data, range) {
   if (!data.length) return data;
   if (range === "All") return data;
+  const years = RANGE_YEARS[range];
+  if (!years) return data;
   const getDateStr = (d) => d.date || d.fullDate;
   const latest = new Date(getDateStr(data[data.length - 1]));
   const cutoff = new Date(latest);
-  if (range === "1Y")  cutoff.setFullYear(latest.getFullYear() - 1);
-  if (range === "3Y")  cutoff.setFullYear(latest.getFullYear() - 3);
-  if (range === "5Y")  cutoff.setFullYear(latest.getFullYear() - 5);
-  if (range === "10Y") cutoff.setFullYear(latest.getFullYear() - 10);
+  cutoff.setFullYear(latest.getFullYear() - years);
   return data.filter(d => new Date(getDateStr(d)) >= cutoff);
 }
 
@@ -265,30 +286,38 @@ function pivotDerivData(rows) {
 // Small helper — a localStorage + in-memory TTL cache keyed by name, reused for
 // both the cash and derivatives datasets below so each has its own independent
 // freshness window and doesn't force-refetch the other.
+//
+// RANGE-AWARE: each cache entry also remembers how many years of history it
+// actually holds (`years`). A read only counts as "covering" a request if
+// years >= requested — this is what lets us fetch just the 1–3Y that's
+// visible on first paint instead of always pulling the full 5Y ceiling, and
+// then transparently top it up if/when the person picks a wider range.
 function makeCache(storageKey) {
-  let memData = null, memTs = 0;
+  let memData = null, memTs = 0, memYears = 0;
   return {
     read() {
       const now = Date.now();
-      if (memData && now - memTs < CACHE_TTL_MS) return { data: memData, stale: false };
-      if (typeof window === "undefined") return { data: memData, stale: true };
+      if (memData && now - memTs < CACHE_TTL_MS) return { data: memData, years: memYears, stale: false };
+      if (typeof window === "undefined") return { data: memData, years: memYears, stale: true };
       try {
         const raw = window.localStorage.getItem(storageKey);
-        if (!raw) return { data: null, stale: true };
+        if (!raw) return { data: null, years: 0, stale: true };
         const parsed = JSON.parse(raw);
-        if (!parsed?.data) return { data: null, stale: true };
+        if (!parsed?.data) return { data: null, years: 0, stale: true };
         memData = parsed.data;
         memTs = parsed.ts || 0;
-        return { data: parsed.data, stale: now - (parsed.ts || 0) >= CACHE_TTL_MS };
+        memYears = parsed.years || 0;
+        return { data: parsed.data, years: memYears, stale: now - (parsed.ts || 0) >= CACHE_TTL_MS };
       } catch {
-        return { data: null, stale: true };
+        return { data: null, years: 0, stale: true };
       }
     },
-    write(data) {
+    write(data, years) {
       memData = data;
       memTs = Date.now();
+      memYears = years;
       if (typeof window === "undefined") return;
-      try { window.localStorage.setItem(storageKey, JSON.stringify({ data, ts: memTs })); } catch {}
+      try { window.localStorage.setItem(storageKey, JSON.stringify({ data, ts: memTs, years })); } catch {}
     },
   };
 }
@@ -299,21 +328,25 @@ function makeCache(storageKey) {
 // the columns the UI actually reads instead of `select=*` (which also pulled
 // down created_at and prev_*/*_change columns nobody renders).
 //
-// LIGHTWEIGHT FETCH: the UI only ever lets someone view up to 10Y of range
-// (see ViewToggle options), so we cap what we pull/cache at ~11Y instead of
-// fetching the entire history unconditionally. This keeps payload size and
-// the localStorage cache bounded as the table keeps growing year over year.
-const cashCache = makeCache("fiidii-cash-cache-v3");
-let cashInflight = null;
+// RANGE-CAPPED, DEMAND-DRIVEN FETCH: 5Y is the hard ceiling (ViewToggle only
+// offers 1Y/3Y/5Y now) and we never fetch beyond it. On top of that, we don't
+// pull the full 5Y just because it's the ceiling — we only ever request
+// exactly what's needed for the range currently selected/visible (e.g. 1Y on
+// first paint), and transparently top up with an additional fetch only if the
+// person actually switches to a wider range. This keeps first-load payload
+// and localStorage cache size proportional to what's on screen, not to the
+// theoretical max.
+const cashCache = makeCache("fiidii-cash-cache-v4");
+let cashInflight = null, cashInflightYears = 0;
 const CASH_SELECT = [
   "date", "fii_buy", "fii_sell", "fii_net", "dii_buy", "dii_sell", "dii_net",
   "fii_net_5d", "fii_net_20d", "dii_net_5d", "dii_net_20d",
 ].join(",");
-const MAX_HISTORY_YEARS = 11;
+const MAX_HISTORY_YEARS = 5;
 
-function historyCutoffISO() {
+function cutoffISOForYears(years) {
   const d = new Date();
-  d.setFullYear(d.getFullYear() - MAX_HISTORY_YEARS);
+  d.setFullYear(d.getFullYear() - Math.min(years, MAX_HISTORY_YEARS));
   return d.toISOString().slice(0, 10);
 }
 
@@ -322,35 +355,44 @@ async function fetchLatestCashDate() {
   return rows?.[0]?.date || null;
 }
 
-async function refreshCashData() {
-  if (cashInflight) return cashInflight;
+async function refreshCashData(years) {
+  const boundedYears = Math.min(years, MAX_HISTORY_YEARS);
+  // Reuse an in-flight request only if it already covers (or exceeds) what's
+  // being asked for now — a bigger concurrent request still gets its own fetch.
+  if (cashInflight && cashInflightYears >= boundedYears) return cashInflight;
+  cashInflightYears = boundedYears;
   cashInflight = (async () => {
     const rows = await sbFetchAll("fii_dii_activity_mv", {
-      select: CASH_SELECT, order: "date.asc", date: `gte.${historyCutoffISO()}`,
+      select: CASH_SELECT, order: "date.asc", date: `gte.${cutoffISOForYears(boundedYears)}`,
     });
     const data = [...rows].sort((a, b) => new Date(a.date) - new Date(b.date));
-    cashCache.write(data);
+    cashCache.write(data, boundedYears);
     return data;
-  })().finally(() => { cashInflight = null; });
+  })().finally(() => { cashInflight = null; cashInflightYears = 0; });
   return cashInflight;
 }
 
-async function fetchCashData({ preferCache = true } = {}) {
+async function fetchCashData(years, { preferCache = true } = {}) {
+  const boundedYears = Math.min(years, MAX_HISTORY_YEARS);
   const cached = cashCache.read();
-  if (preferCache && cached.data && !cached.stale) {
+  const cacheCoversRange = !!cached.data && cached.years >= boundedYears;
+
+  if (preferCache && cacheCoversRange && !cached.stale) {
     fetchLatestCashDate()
       .then(remoteLatest => {
         const localLatest = cached.data[cached.data.length - 1]?.date;
-        if (remoteLatest && remoteLatest > localLatest) refreshCashData().catch(() => null);
+        if (remoteLatest && remoteLatest > localLatest) refreshCashData(cached.years).catch(() => null);
       })
       .catch(() => null);
     return cached.data;
   }
-  if (preferCache && cached.data && cached.stale) {
-    refreshCashData().catch(() => null);
+  if (preferCache && cacheCoversRange && cached.stale) {
+    refreshCashData(cached.years).catch(() => null);
     return cached.data;
   }
-  return refreshCashData();
+  // No cache yet, or cache covers a narrower range than requested — fetch
+  // exactly the range needed (never more).
+  return refreshCashData(boundedYears);
 }
 
 // ─── DERIVATIVES DATA — fii_dii_fo ─────────────────────────────────────────────
@@ -358,8 +400,10 @@ async function fetchCashData({ preferCache = true } = {}) {
 // the component effect below), since most sessions never touch it.
 // Only the columns pivotDerivData() actually reads are selected — `select=*`
 // was pulling every stock-level/OI column in the table on every load.
-const derivCache = makeCache("fiidii-deriv-cache-v3");
-let derivInflight = null;
+// Same range-capped, demand-driven fetch pattern as cash data: 5Y ceiling,
+// but only the currently-selected range is actually requested up front.
+const derivCache = makeCache("fiidii-deriv-cache-v4");
+let derivInflight = null, derivInflightYears = 0;
 const DERIV_SELECT = [
   "date", "client_type",
   "index_fut_long", "index_fut_short",
@@ -367,27 +411,32 @@ const DERIV_SELECT = [
   "index_put_long", "index_put_short",
 ].join(",");
 
-async function refreshDerivData() {
-  if (derivInflight) return derivInflight;
+async function refreshDerivData(years) {
+  const boundedYears = Math.min(years, MAX_HISTORY_YEARS);
+  if (derivInflight && derivInflightYears >= boundedYears) return derivInflight;
+  derivInflightYears = boundedYears;
   derivInflight = (async () => {
     const rows = await sbFetchAll("fii_dii_fo", {
-      select: DERIV_SELECT, order: "date.asc", date: `gte.${historyCutoffISO()}`,
+      select: DERIV_SELECT, order: "date.asc", date: `gte.${cutoffISOForYears(boundedYears)}`,
     });
     const data = pivotDerivData(rows);
-    derivCache.write(data);
+    derivCache.write(data, boundedYears);
     return data;
-  })().finally(() => { derivInflight = null; });
+  })().finally(() => { derivInflight = null; derivInflightYears = 0; });
   return derivInflight;
 }
 
-async function fetchDerivData({ preferCache = true } = {}) {
+async function fetchDerivData(years, { preferCache = true } = {}) {
+  const boundedYears = Math.min(years, MAX_HISTORY_YEARS);
   const cached = derivCache.read();
-  if (preferCache && cached.data && !cached.stale) return cached.data;
-  if (preferCache && cached.data && cached.stale) {
-    refreshDerivData().catch(() => null);
+  const cacheCoversRange = !!cached.data && cached.years >= boundedYears;
+
+  if (preferCache && cacheCoversRange && !cached.stale) return cached.data;
+  if (preferCache && cacheCoversRange && cached.stale) {
+    refreshDerivData(cached.years).catch(() => null);
     return cached.data;
   }
-  return refreshDerivData();
+  return refreshDerivData(boundedYears);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -396,9 +445,10 @@ async function fetchDerivData({ preferCache = true } = {}) {
 // Called on hover/route-preload from outside the module — only warms the cash
 // dataset (Overview/Cash Flow), which covers the tabs people actually land on.
 export function prefetchFiiDiiData() {
+  const years = RANGE_YEARS["3Y"]; // matches the module's default selected range
   const cached = cashCache.read();
-  if (cached.data && !cached.stale) return Promise.resolve(cached.data);
-  return fetchCashData({ preferCache: false }).catch(() => null);
+  if (cached.data && cached.years >= years && !cached.stale) return Promise.resolve(cached.data);
+  return fetchCashData(years, { preferCache: false }).catch(() => null);
 }
 
 const PAD = { top: 10, right: 12, bottom: 30, left: 56 };
@@ -776,7 +826,7 @@ const StatCard = memo(({ label, value, sub, color, T, badge }) => (
 const ViewToggle = ({ options, value, onChange, T, dataSpanYears }) => (
   <div style={{ display: "flex", gap: 4, background: T.surface || T.bg, borderRadius: 999, padding: 4, border: `1px solid ${T.border}`, boxShadow: T.isDark ? "none" : "inset 0 1px 0 rgba(255,255,255,0.6)", flexShrink: 0 }}>
     {options.map(opt => {
-      const rangeYears = opt === "1Y" ? 1 : opt === "3Y" ? 3 : opt === "5Y" ? 5 : opt === "10Y" ? 10 : null;
+      const rangeYears = RANGE_YEARS[opt] || null;
       const exceedsData = dataSpanYears != null && rangeYears != null && rangeYears > dataSpanYears;
       const isActive = value === opt;
       return (
@@ -876,17 +926,39 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (document.getElementById("fiidii-module-fonts")) return;
+    // NOTE: IBM Plex Sans/Mono should already be loaded once, globally, by
+    // the rest of the app's theme system (per the shared T/D token setup).
+    // If that's confirmed, this effect and the <link> below can be deleted
+    // entirely — this was previously loading "Manrope" as well, a font used
+    // nowhere else in the app, meaning every cold visit to this tab paid for
+    // an extra font family fetch that couldn't reuse anything the browser
+    // had already cached from the rest of the site. Now it only requests
+    // IBM Plex Sans/Mono, so if those are already on the page this is a
+    // harmless no-op (browser dedupes the request); if not, it's at least
+    // no longer double the font weight.
+    const preconnect1 = document.createElement("link");
+    preconnect1.rel = "preconnect"; preconnect1.href = "https://fonts.googleapis.com";
+    const preconnect2 = document.createElement("link");
+    preconnect2.rel = "preconnect"; preconnect2.href = "https://fonts.gstatic.com"; preconnect2.crossOrigin = "anonymous";
+    document.head.appendChild(preconnect1);
+    document.head.appendChild(preconnect2);
     const link = document.createElement("link");
     link.id = "fiidii-module-fonts";
     link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Manrope:wght@500;600;700;800&display=swap";
+    link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@500;600;700;800&display=swap";
     document.head.appendChild(link);
   }, []);
 
   // ── Cash data (fii_dii_activity_mv) — loaded eagerly; drives Overview + Cash Flow ──
+  // Fetches only what the currently-selected range needs (e.g. just 1Y on
+  // first paint, not the full 5Y ceiling), and re-runs to top up whenever
+  // overviewRange is widened — so switching to 3Y/5Y fetches just the extra
+  // history it needs instead of everything up front.
   useEffect(() => {
-    const cached = initialCashCache;
-    if (cached.data) {
+    const years = RANGE_YEARS[overviewRange] || RANGE_YEARS["3Y"];
+    const cached = cashCache.read();
+    const cacheCoversRange = !!cached.data && cached.years >= years;
+    if (cacheCoversRange) {
       setCashData(cached.data);
       setLoading(false);
     }
@@ -894,8 +966,8 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     let cancelled = false;
     (async () => {
       try {
-        if (!cached.data) setLoading(true);
-        const data = await fetchCashData({ preferCache: !cached.data });
+        if (!cacheCoversRange) setLoading(true);
+        const data = await fetchCashData(years, { preferCache: cacheCoversRange });
         if (cancelled) return;
         setCashData(data);
         setError(null);
@@ -914,28 +986,32 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     })();
 
     return () => { cancelled = true; };
-  }, [initialCashCache]);
+  }, [overviewRange]);
 
   // ── Derivatives data (fii_dii_fo) — lazy: fetched the first time the tab opens ──
-  const derivRequestedRef = useRef(false);
+  // Same demand-driven pattern: only the selected derivRange is fetched, and
+  // widening the range on this tab tops up rather than re-pulling everything.
+  const derivLoadedYearsRef = useRef(0);
   useEffect(() => {
-    if (activeTab !== "Derivatives" || derivRequestedRef.current) return;
+    if (activeTab !== "Derivatives") return;
+    const years = RANGE_YEARS[derivRange] || RANGE_YEARS["3Y"];
+    if (derivLoadedYearsRef.current >= years) return;
     const cached = derivCache.read();
-    if (cached.data && !cached.stale) { setDerivData(cached.data); derivRequestedRef.current = true; return; }
-    derivRequestedRef.current = true;
+    const cacheCoversRange = !!cached.data && cached.years >= years;
+    if (cacheCoversRange) { setDerivData(cached.data); derivLoadedYearsRef.current = cached.years; }
 
     let cancelled = false;
     (async () => {
       try {
-        const data = await fetchDerivData({ preferCache: !!cached.data });
-        if (!cancelled) setDerivData(data);
+        const data = await fetchDerivData(years, { preferCache: cacheCoversRange || !!cached.data });
+        if (!cancelled) { setDerivData(data); derivLoadedYearsRef.current = years; }
       } catch (e) {
         if (!cancelled) console.warn("[FIIDII] F&O data unavailable; loading cash flows only.", e);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [activeTab]);
+  }, [activeTab, derivRange]);
 
   // ── CASH MEMO ──────────────────────────────────────────────────────────────
   // fii5/dii5/fii20/dii20/z come straight off the mv's precomputed rolling
@@ -1010,7 +1086,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const chartSeries = isRolling
       ? [{ key: "fiiRoll", color: RED, name: "FII 20D Rolling" }, { key: "diiRoll", color: BLUE, name: "DII 20D Rolling" }]
       : [{ key: "fiiNet", color: GREEN, name: "FII Net" }, { key: "diiNet", color: BLUE, name: "DII Net" }];
-    const selectedRangeYears = overviewRange === "1Y" ? 1 : overviewRange === "3Y" ? 3 : overviewRange === "5Y" ? 5 : overviewRange === "10Y" ? 10 : null;
+    const selectedRangeYears = RANGE_YEARS[overviewRange] || null;
     const rangeExceedsData = selectedRangeYears != null && selectedRangeYears > spanYears;
     return { isRolling, spanYears, chartData, chartSeries, rangeExceedsData };
   }, [cashMemo.daily, cashMemo.rolling, flowView, overviewRange]);
@@ -1055,7 +1131,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     const derivSpanYears = dataYearSpan(rows);
     const filteredRows = filterByRange(rows, derivRange);
     const filteredLsTrend = filterByRange(lsTrend, derivRange);
-    const derivSelectedRangeYears = derivRange === "1Y" ? 1 : derivRange === "3Y" ? 3 : derivRange === "5Y" ? 5 : derivRange === "10Y" ? 10 : null;
+    const derivSelectedRangeYears = RANGE_YEARS[derivRange] || null;
     const derivRangeExceedsData = derivSelectedRangeYears != null && derivSelectedRangeYears > derivSpanYears;
     return { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData };
   }, [derivMemo.rows, derivMemo.lsTrend, derivRange]);
@@ -1198,7 +1274,7 @@ const OverviewTab = memo(function OverviewTab({ cashMemo, overviewTabData, isMob
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <ViewToggle options={["Daily", "20D Rolling"]} value={flowView} onChange={setFlowView} T={T} />
-            <ViewToggle options={["1Y", "3Y", "5Y", "10Y"]} value={overviewRange} onChange={setOverviewRange} T={T} dataSpanYears={spanYears} />
+            <ViewToggle options={["1Y", "3Y", "5Y"]} value={overviewRange} onChange={setOverviewRange} T={T} dataSpanYears={spanYears} />
           </div>
         </div>
         {isRolling
@@ -1307,7 +1383,7 @@ const DerivativesTab = memo(function DerivativesTab({ derivMemo, derivativesTabD
             <h3 style={{ ...sh, margin: 0 }}>FII Long vs Short</h3>
             <div style={{ fontSize: 12, color: T.subtext, marginTop: 2 }}>Index futures only</div>
           </div>
-          <ViewToggle options={["1Y", "3Y", "5Y", "10Y"]} value={derivRange} onChange={setDerivRange} T={T} dataSpanYears={derivSpanYears} />
+          <ViewToggle options={["1Y", "3Y", "5Y"]} value={derivRange} onChange={setDerivRange} T={T} dataSpanYears={derivSpanYears} />
         </div>
         <SvgLineChart data={filteredRows} series={[{ key:"fiiFutLong", color:GREEN, name:"FII Long" }, { key:"fiiFutShort", color:RED, name:"FII Short" }]} height={isMobile?220:300} fill={false} T={T} />
         {derivRangeExceedsData && (

@@ -749,69 +749,6 @@ async function fetchPrices(tickers, token) {
     return { ...priceCache };
 }
 
-// ─── Company Name Cache (ticker → full company name, from bhav_copy) ──────
-// Names practically never change, so we cache them hard: an in-memory map
-// for instant re-renders during this session, backed by localStorage so
-// returning users see full names immediately on load — no flash of
-// ticker-only rows while the network call is in flight. A background
-// refetch keeps things correct without ever blocking the UI.
-const LS_COMPANY_NAME_KEY = "wl_company_names_v1";
-const COMPANY_NAME_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days — names are effectively static
-const companyNameCache = {};   // ticker -> name (hydrated synchronously below)
-const _companyNameTs = {};     // ticker -> ts last confirmed from network
-
-(function hydrateCompanyNameCache() {
-    try {
-        const raw = localStorage.getItem(LS_COMPANY_NAME_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        const now = Date.now();
-        for (const t in parsed) {
-            const entry = parsed[t];
-            if (entry?.n && entry?.ts && now - entry.ts < COMPANY_NAME_TTL) {
-                companyNameCache[t] = entry.n;
-                _companyNameTs[t] = entry.ts;
-            }
-        }
-    } catch { }
-})();
-
-function persistCompanyNameCache() {
-    try {
-        const out = {};
-        for (const t in companyNameCache) out[t] = { n: companyNameCache[t], ts: _companyNameTs[t] || Date.now() };
-        localStorage.setItem(LS_COMPANY_NAME_KEY, JSON.stringify(out));
-    } catch { }
-}
-
-// Resolves ticker → company name from bhav_copy. Reads/writes the cache
-// above; only ever fetches tickers that are missing or stale. No date
-// filter is used — instead we order by date desc (NSE first) and take the
-// most recent row per ticker — so it self-heals across holidays/newly
-// listed tickers without a second round-trip to find "the latest date".
-async function fetchCompanyNames(tickers, token) {
-    if (!tickers || tickers.length === 0) return { ...companyNameCache };
-    const now = Date.now();
-    const missing = tickers.filter(t => !companyNameCache[t] || now - (_companyNameTs[t] || 0) > COMPANY_NAME_TTL);
-    if (missing.length === 0) return { ...companyNameCache };
-    try {
-        const tickerIn = `(${missing.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
-        const rows = await GET(
-            `bhav_copy?ticker=in.${tickerIn}&select=ticker,name,exchange&order=date.desc,exchange.asc&limit=${missing.length * 6}`,
-            token
-        );
-        const seen = new Set();
-        for (const row of (rows || [])) {
-            if (!row.ticker || !row.name || seen.has(row.ticker)) continue;
-            seen.add(row.ticker);
-            companyNameCache[row.ticker] = row.name;
-            _companyNameTs[row.ticker] = now;
-        }
-        if (seen.size) persistCompanyNameCache();
-    } catch { }
-    return { ...companyNameCache };
-}
-
 // ─── Earnings Date Fetcher ────────────────────────────────────
 // Returns a map: { [ticker]: "YYYY-MM-DD" } for the next upcoming earnings date
 async function fetchEarningsDates(tickers, token) {
@@ -1340,7 +1277,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
 // ONLY KEY UPDATED PARTS (StockRow + improvements)
 // Drop-in replacement for StockRow component
 
-const StockRow = memo(({ row, companyName, price, sparkData, onRemove, onExpand, isExpanded, isKeySelected, T, screenMembership, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
+const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, isKeySelected, T, screenMembership, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
     const [hov, setHov] = useState(false);
     const [showAllSignals, setShowAllSignals] = useState(false);
 
@@ -1420,23 +1357,8 @@ const StockRow = memo(({ row, companyName, price, sparkData, onRemove, onExpand,
                         color: T.text,
                         fontFamily: "'IBM Plex Mono', monospace",
                     }}>
-                        {row.ticker}
+        {row.ticker}
                     </span>
-                    {companyName && (
-                        <span style={{
-                            fontSize: isMobile ? 10.5 : 11,
-                            fontWeight: 400,
-                            color: T.muted || T.subtext,
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                            letterSpacing: "0.01em",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: isMobile ? 160 : 220,
-                        }}>
-                            {companyName}
-                        </span>
-                    )}
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1666,7 +1588,7 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
     );
 });
 
-const WlTableRow = memo(({ row, companyName, rank, price, marketCap, onRemove, onExpand, isExpanded, T, screenMembership, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
+const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isExpanded, T, screenMembership, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
     const [hov, setHov] = useState(false);
     const [showAllTags, setShowAllTags] = useState(false);
     const _bp = bestPriceFn ? bestPriceFn(row.ticker, price?.price ?? row.close) : null;
@@ -1712,15 +1634,6 @@ const WlTableRow = memo(({ row, companyName, rank, price, marketCap, onRemove, o
                 }}>
                     {row.ticker}
                 </div>
-                {companyName && (
-                    <div style={{
-                        fontSize: 11, fontWeight: 400, color: T.muted || T.subtext,
-                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.005em",
-                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1,
-                    }}>
-                        {companyName}
-                    </div>
-                )}
             </div>
 
             <div>
@@ -2056,7 +1969,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [marketCaps, setMarketCaps] = useState({});
     // Seeded synchronously from the module-level cache (memory + localStorage)
     // so previously-seen company names render on the very first paint.
-    const [companyNames, setCompanyNames] = useState(() => ({ ...companyNameCache }));
     const [eventsMap, setEventsMap] = useState({});
     const [earningsMap, setEarningsMap] = useState({});
     const [caDetailMap, setCaDetailMap] = useState({}); // ticker → { action, resultInfo } — loaded on-demand when a stock's detail panel is opened
@@ -2441,17 +2353,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         if (!tickers.length) return;
         fetchMarketCaps(tickers, token)
             .then(m => setMarketCaps(prev => ({ ...prev, ...m })))
-            .catch(() => { });
-    }, [rows, token]);
-
-    useEffect(() => {
-        const tickers = rows.map(r => r.ticker).filter(Boolean);
-        if (!tickers.length) return;
-        // Instant: flush anything already cached (e.g. resolved by another
-        // watchlist tab this session) before the network call even starts.
-        setCompanyNames(prev => ({ ...prev, ...companyNameCache }));
-        fetchCompanyNames(tickers, token)
-            .then(m => setCompanyNames(prev => ({ ...prev, ...m })))
             .catch(() => { });
     }, [rows, token]);
 
@@ -3743,7 +3644,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         <StockRow
                                             key={row.ticker}
                                             row={row}
-                                            companyName={companyNames[row.ticker]}
                                             price={prices[row.ticker]}
                                             sparkData={sparklines[row.ticker]}
                                             onRemove={removeStock}
@@ -3766,7 +3666,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         <WlTableRow
                                             key={row.ticker}
                                             row={row}
-                                            companyName={companyNames[row.ticker]}
                                             rank={page * PAGE_SIZE + i + 1}
                                             price={prices[row.ticker]}
                                             marketCap={marketCaps[row.ticker]}
@@ -3837,11 +3736,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         <div>
                                                             <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5, opacity: 0.55, fontWeight: 700 }}>Detail</div>
                                                             <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
-                                                            {companyNames[expandedRow.ticker] && (
-                                                                <div style={{ fontSize: 12, fontWeight: 400, color: T.muted || T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", marginTop: 2, letterSpacing: "0.005em" }}>
-                                                                    {companyNames[expandedRow.ticker]}
-                                                                </div>
-                                                            )}
                                                             <div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
                                                                 {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
                                                             </div>
@@ -3944,15 +3838,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     <div style={{ minWidth: 0 }}>
                                                         <div style={{ fontSize: 10, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5, opacity: 0.55, fontWeight: 700 }}>Detail</div>
                                                         <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.03em" }}>{expandedRow.ticker}</div>
-                                                        {companyNames[expandedRow.ticker] && (
-                                                            <div style={{
-                                                                fontSize: 12, fontWeight: 400, color: T.muted || T.subtext,
-                                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", marginTop: 2, letterSpacing: "0.005em",
-                                                                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220,
-                                                            }}>
-                                                                {companyNames[expandedRow.ticker]}
-                                                            </div>
-                                                        )}
                                                         <div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 3, letterSpacing: "-0.02em" }}>
                                                             {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
                                                         </div>
