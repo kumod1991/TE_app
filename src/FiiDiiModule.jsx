@@ -81,15 +81,6 @@ const fmtYear = (d) => {
   return String(new Date(d).getFullYear());
 };
 
-// ─── MATH ─────────────────────────────────────────────────────────────────────
-const sum  = (arr) => arr.reduce((a, b) => a + b, 0);
-const mean = (arr) => arr.length ? sum(arr) / arr.length : 0;
-const std  = (arr) => {
-  const m = mean(arr);
-  return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / (arr.length || 1));
-};
-const zScore = (v, arr) => { const s = std(arr); return s === 0 ? 0 : (v - mean(arr)) / s; };
-
 // ─── COLORS ───────────────────────────────────────────────────────────────────
 const GREEN = "#10b981", RED = "#ef4444", BLUE = "#3b82f6", AMBER = "#f59e0b", PURPLE = "#8b5cf6";
 const getColor = (v) => (v == null || !isFinite(+v)) ? "#6b7280" : +v >= 0 ? GREEN : RED;
@@ -307,12 +298,24 @@ function makeCache(storageKey) {
 // z-score per row (window functions run once in Postgres), so we only select
 // the columns the UI actually reads instead of `select=*` (which also pulled
 // down created_at and prev_*/*_change columns nobody renders).
-const cashCache = makeCache("fiidii-cash-cache-v2");
+//
+// LIGHTWEIGHT FETCH: the UI only ever lets someone view up to 10Y of range
+// (see ViewToggle options), so we cap what we pull/cache at ~11Y instead of
+// fetching the entire history unconditionally. This keeps payload size and
+// the localStorage cache bounded as the table keeps growing year over year.
+const cashCache = makeCache("fiidii-cash-cache-v3");
 let cashInflight = null;
 const CASH_SELECT = [
   "date", "fii_buy", "fii_sell", "fii_net", "dii_buy", "dii_sell", "dii_net",
   "fii_net_5d", "fii_net_20d", "dii_net_5d", "dii_net_20d",
 ].join(",");
+const MAX_HISTORY_YEARS = 11;
+
+function historyCutoffISO() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - MAX_HISTORY_YEARS);
+  return d.toISOString().slice(0, 10);
+}
 
 async function fetchLatestCashDate() {
   const rows = await sbFetchAll("fii_dii_activity_mv", { select: "date", order: "date.desc", limit: 1 });
@@ -322,7 +325,9 @@ async function fetchLatestCashDate() {
 async function refreshCashData() {
   if (cashInflight) return cashInflight;
   cashInflight = (async () => {
-    const rows = await sbFetchAll("fii_dii_activity_mv", { select: CASH_SELECT, order: "date.asc" });
+    const rows = await sbFetchAll("fii_dii_activity_mv", {
+      select: CASH_SELECT, order: "date.asc", date: `gte.${historyCutoffISO()}`,
+    });
     const data = [...rows].sort((a, b) => new Date(a.date) - new Date(b.date));
     cashCache.write(data);
     return data;
@@ -351,13 +356,23 @@ async function fetchCashData({ preferCache = true } = {}) {
 // ─── DERIVATIVES DATA — fii_dii_fo ─────────────────────────────────────────────
 // Lazy: only fetched the first time the Derivatives tab is actually opened (see
 // the component effect below), since most sessions never touch it.
-const derivCache = makeCache("fiidii-deriv-cache-v2");
+// Only the columns pivotDerivData() actually reads are selected — `select=*`
+// was pulling every stock-level/OI column in the table on every load.
+const derivCache = makeCache("fiidii-deriv-cache-v3");
 let derivInflight = null;
+const DERIV_SELECT = [
+  "date", "client_type",
+  "index_fut_long", "index_fut_short",
+  "index_call_long", "index_call_short",
+  "index_put_long", "index_put_short",
+].join(",");
 
 async function refreshDerivData() {
   if (derivInflight) return derivInflight;
   derivInflight = (async () => {
-    const rows = await sbFetchAll("fii_dii_fo", { select: "*", order: "date.asc" });
+    const rows = await sbFetchAll("fii_dii_fo", {
+      select: DERIV_SELECT, order: "date.asc", date: `gte.${historyCutoffISO()}`,
+    });
     const data = pivotDerivData(rows);
     derivCache.write(data);
     return data;
@@ -620,20 +635,25 @@ function SvgLineChart({ data, series, height = 240, fill = false, T }) {
           })}
         </g>
 
-        {/* Hover hit areas */}
-        {visible.map((d, i) => (
-          <rect key={i}
-            x={px(i) - cW / visible.length / 2} y={PAD.top}
-            width={cW / visible.length} height={cH}
-            fill="transparent"
-            onMouseEnter={e => show(svgRef.current, e.clientX, e.clientY,
+        {/* Single hover hit area — was one <rect> per data point (750-2500+ nodes
+            on multi-year daily series); now one rect + nearest-point lookup. */}
+        <rect
+          x={PAD.left} y={PAD.top} width={cW} height={cH}
+          fill="transparent"
+          onMouseMove={e => {
+            const rect = svgRef.current.getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left - PAD.left) / cW));
+            const i = Math.round(ratio * (visible.length - 1));
+            const d = visible[i];
+            if (!d) return;
+            show(svgRef.current, e.clientX, e.clientY,
               <>
                 <div style={{ fontWeight: 700, marginBottom: 4, color: T.subtext }}>{fmtDate(getPointDate(d))}</div>
                 {series.map(s => <div key={s.key} style={{ color: s.color }}>{s.name}: {fmtCrShort(+d[s.key] || 0)}</div>)}
               </>
-            )}
-          />
-        ))}
+            );
+          }}
+        />
         <SvgTooltip tip={tip} T={T} svgWidth={W} />
       </svg>
 
@@ -693,16 +713,7 @@ function SvgBarChart({ data, series, height = 220, mode = "grouped", T }) {
                 const by = v >= 0 ? py(v) : zeroY;
                 const bh = Math.max(2, Math.abs(py(v) - zeroY));
                 const clr = mode === "colored" ? (v >= 0 ? GREEN : RED) : s.color;
-                return (
-                  <rect key={si} x={bx} y={by} width={barW} height={bh} fill={clr} opacity={0.88} rx={2}
-                    onMouseEnter={e => show(svgRef.current, e.clientX, e.clientY,
-                      <>
-                        <div style={{ fontWeight: 700, marginBottom: 4, color: T.subtext }}>{fmtDate(d.date)}</div>
-                        {series.map(sv => <div key={sv.key} style={{ color: mode === "colored" ? getColor(+d[sv.key]) : sv.color }}>{sv.name}: {fmtCrShort(+d[sv.key] || 0)}</div>)}
-                      </>
-                    )}
-                  />
-                );
+                return <rect key={si} x={bx} y={by} width={barW} height={bh} fill={clr} opacity={0.88} rx={2} />;
               })}
               {i % every === 0 && (
                 <text x={gx + groupW / 2} y={height - 4} textAnchor="middle" fontSize={9} fill={T.subtext}>{d.label}</text>
@@ -710,6 +721,24 @@ function SvgBarChart({ data, series, height = 220, mode = "grouped", T }) {
             </g>
           );
         })}
+        {/* Single hover hit area — was one onMouseEnter per bar per series. */}
+        <rect
+          x={PAD.left} y={PAD.top} width={cW} height={cH}
+          fill="transparent"
+          onMouseMove={e => {
+            const rect = svgRef.current.getBoundingClientRect();
+            const localX = e.clientX - rect.left - PAD.left;
+            const i = Math.max(0, Math.min(n - 1, Math.floor(localX / groupW)));
+            const d = data[i];
+            if (!d) return;
+            show(svgRef.current, e.clientX, e.clientY,
+              <>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: T.subtext }}>{fmtDate(d.date)}</div>
+                {series.map(sv => <div key={sv.key} style={{ color: mode === "colored" ? getColor(+d[sv.key]) : sv.color }}>{sv.name}: {fmtCrShort(+d[sv.key] || 0)}</div>)}
+              </>
+            );
+          }}
+        />
         <SvgTooltip tip={tip} T={T} svgWidth={W} />
       </svg>
       <div style={{ display: "flex", gap: 14, paddingLeft: PAD.left, flexWrap: "wrap", marginTop: 4 }}>
@@ -732,8 +761,8 @@ function SvgBarChart({ data, series, height = 220, mode = "grouped", T }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
-const StatCard = ({ label, value, sub, color, T, badge }) => (
-  <div style={{ background: T.isDark ? T.elevated || T.surface : T.card, borderRadius: T.radiusMd || 18, padding: "16px 18px", border: `1px solid ${T.border}`, boxShadow: T.shadowSoft, display: "flex", flexDirection: "column", gap: 6, position: "relative", overflow: "hidden", backdropFilter: "blur(14px)" }}>
+const StatCard = memo(({ label, value, sub, color, T, badge }) => (
+  <div style={{ background: T.isDark ? T.elevated || T.surface : T.card, borderRadius: T.radiusMd || 18, padding: "16px 18px", border: `1px solid ${T.border}`, boxShadow: T.shadowSoft, display: "flex", flexDirection: "column", gap: 6, position: "relative", overflow: "hidden" }}>
     <div style={{ position: "absolute", inset: 0, background: T.isDark ? "linear-gradient(180deg, rgba(255,255,255,0.045), transparent 28%)" : "linear-gradient(180deg, rgba(255,255,255,0.32), transparent 46%)", pointerEvents: "none" }} />
     {badge && (
       <div style={{ position: "absolute", top: 12, right: 12, background: badge === "BUY" ? GREEN + "18" : RED + "18", color: badge === "BUY" ? GREEN : RED, border: `1px solid ${badge === "BUY" ? GREEN + "28" : RED + "28"}`, borderRadius: 999, padding: "4px 8px", fontSize: 9, fontWeight: 800, letterSpacing: 1.1 }}>{badge}</div>
@@ -742,22 +771,7 @@ const StatCard = ({ label, value, sub, color, T, badge }) => (
     <div style={{ position: "relative", fontSize: 22, fontWeight: 800, color: color || T.text, fontFamily: T.fontMono || "monospace", letterSpacing: -0.8 }}>{value}</div>
     {sub && <div style={{ position: "relative", fontSize: 11, color: T.subtext, lineHeight: 1.5, opacity: T.isDark ? 0.92 : 1 }}>{sub}</div>}
   </div>
-);
-
-const SignalPill = ({ signal, T }) => {
-  const cfg = {
-    "Bullish Regime":     { bg: GREEN + "22", color: GREEN, icon: "🟢" },
-    "Bearish Regime":     { bg: RED   + "22", color: RED,   icon: "🔴" },
-    "Sideways / Neutral": { bg: AMBER + "22", color: AMBER, icon: "🟡" },
-    "DII Absorbing":      { bg: BLUE  + "22", color: BLUE,  icon: "🔵" },
-    "Risk-Off":           { bg: RED   + "22", color: RED,   icon: "🔴" },
-  }[signal] || { bg: "#6b728022", color: "#6b7280", icon: "⚪" };
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}22`, borderRadius: 999, padding: "7px 14px", fontSize: 12, fontWeight: 800, letterSpacing: 0.2, boxShadow: T?.isDark ? "none" : "inset 0 1px 0 rgba(255,255,255,0.3)" }}>
-      {cfg.icon} {signal}
-    </span>
-  );
-};
+));
 
 const ViewToggle = ({ options, value, onChange, T, dataSpanYears }) => (
   <div style={{ display: "flex", gap: 4, background: T.surface || T.bg, borderRadius: 999, padding: 4, border: `1px solid ${T.border}`, boxShadow: T.isDark ? "none" : "inset 0 1px 0 rgba(255,255,255,0.6)", flexShrink: 0 }}>
@@ -1047,9 +1061,17 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   }, [derivMemo.rows, derivMemo.lsTrend, derivRange]);
 
   // ── SWIPE ──────────────────────────────────────────────────────────────────
-  const card = { background: T.isDark ? T.surface : T.card, borderRadius: T.radiusLg || 24, padding: isMobile ? 14 : 18, border: `1px solid ${T.border}`, boxShadow: T.shadow, backdropFilter: "blur(16px)" };
-  const sh   = { fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, marginBottom: 16, marginTop: 0, letterSpacing: -0.4 };
-  const noData = (msg) => <div style={{ ...card, textAlign: "center", color: T.subtext, padding: 40, fontSize: 13 }}>{msg || "No data"}</div>;
+  // card/sh memoized so hoisted tab components get stable style object refs
+  const card = useMemo(() => ({
+    background: T.isDark ? T.surface : T.card, borderRadius: T.radiusLg || 24,
+    padding: isMobile ? 14 : 18, border: `1px solid ${T.border}`, boxShadow: T.shadow,
+    // backdrop-filter blur removed — it was the single most expensive style
+    // property on this page (GPU compositing cost stacked across every card).
+  }), [T, isMobile]);
+  const sh = useMemo(() => ({
+    fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, marginBottom: 16, marginTop: 0, letterSpacing: -0.4,
+  }), [T, isMobile]);
+  const noData = useCallback((msg) => <div style={{ ...card, textAlign: "center", color: T.subtext, padding: 40, fontSize: 13 }}>{msg || "No data"}</div>, [card]);
 
   if (loading) return (
     <div style={{ padding: 60, textAlign: "center", color: T.subtext, fontFamily: T.fontSans }}>
@@ -1059,384 +1081,18 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
   );
   if (error) return <div style={{ padding: 40, textAlign: "center", color: RED, fontSize: 14, fontFamily: T.fontSans }}>Error: {error}</div>;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // OVERVIEW TAB
-  // ══════════════════════════════════════════════════════════════════════════
-  const OverviewTab = () => {
-    const { fii1, dii1, fii5, dii5, fii20, dii20, daily, rolling, participation, absorption, latest, totalInst1 } = cashMemo;
-
-    // (1) Only Daily or 20D Rolling; default 20D Rolling; filter by range
-    const { isRolling, spanYears, chartData, chartSeries, rangeExceedsData } = overviewTabData;
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <div>
-          <h2 style={sh}>Flow Summary <span style={{ fontSize: 12, color: T.subtext, fontWeight: 400 }}>as of {fmtDate(latest?.date)}</span></h2>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(6, 1fr)", gap: 10 }}>
-            <StatCard label="FII 1D"  value={fmtCrShort(fii1)}  color={getColor(fii1)}  badge={fii1 > 0 ? "BUY" : fii1 < 0 ? "SELL" : null} T={T} />
-            <StatCard label="FII 5D"  value={fmtCrShort(fii5)}  color={getColor(fii5)}  T={T} />
-            <StatCard label="FII 20D" value={fmtCrShort(fii20)} color={getColor(fii20)} T={T} />
-            <StatCard label="DII 1D"  value={fmtCrShort(dii1)}  color={getColor(dii1)}  badge={dii1 > 0 ? "BUY" : dii1 < 0 ? "SELL" : null} T={T} />
-            <StatCard label="DII 5D"  value={fmtCrShort(dii5)}  color={getColor(dii5)}  T={T} />
-            <StatCard label="DII 20D" value={fmtCrShort(dii20)} color={getColor(dii20)} T={T} />
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: 10 }}>
-          <StatCard label="Total Inst. 1D"    value={fmtCrShort(totalInst1)} color={getColor(totalInst1)} T={T} />
-          <StatCard label="FII Participation" value={`${(participation * 100).toFixed(0)}%`} color={BLUE} sub="of institutional volume" T={T} />
-          <StatCard label="Absorption"        value={absorption} color={absorption.includes("Both Sell") ? RED : absorption.includes("Both Buy") ? GREEN : BLUE} T={T} />
-        </div>
-
-        {/* (1) Chart with Daily/20D Rolling toggle + 1Y/3Y/5Y/10Y range */}
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-            <div>
-              <h3 style={{ ...sh, margin: 0 }}>Institutional Flow Chart</h3>
-              <div style={{ fontSize: 12, color: T.subtext, marginTop: 2 }}>
-                {isRolling ? "20-day rolling sum — trend momentum" : "Daily net flows by session"}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <ViewToggle options={["Daily", "20D Rolling"]} value={flowView} onChange={setFlowView} T={T} />
-              <ViewToggle options={["1Y", "3Y", "5Y", "10Y"]} value={overviewRange} onChange={setOverviewRange} T={T} dataSpanYears={spanYears} />
-            </div>
-          </div>
-          {isRolling
-            ? <SvgLineChart data={chartData} series={chartSeries} height={isMobile ? 220 : 320} fill={true} T={T} />
-            : <SvgBarChart  data={chartData} series={chartSeries} height={isMobile ? 220 : 320} mode="grouped" T={T} />
-          }
-          {rangeExceedsData && (
-            <div style={{ fontSize: 11, color: AMBER, marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
-              <span>★</span>
-              <span>Data available from 8 Apr 2022 — showing all {chartData.length} sessions ({spanYears.toFixed(1)} years).</span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // CASH FLOW TAB  — (2) no cumulative chart; (4) frequency toggle on table
-  // ══════════════════════════════════════════════════════════════════════════
-  const CashFlowTab = () => {
-    const { fii5, dii5, fii20, dii20, sellStreak } = cashMemo;
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {sellStreak >= 3 && (
-          <div style={{ ...card, borderLeft: `4px solid ${RED}`, background: RED + "0a" }}>
-            <div style={{ fontSize: 11, color: T.subtext, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>⚠️ Alert</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>FII selling for {sellStreak} consecutive sessions — Highest recent streak</div>
-          </div>
-        )}
-
-        <div>
-          <h2 style={sh}>Rolling Flow Metrics</h2>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
-            <StatCard label="FII Rolling 5D"  value={fmtCrShort(fii5)}  color={getColor(fii5)}  T={T} />
-            <StatCard label="FII Rolling 20D" value={fmtCrShort(fii20)} color={getColor(fii20)} T={T} />
-            <StatCard label="DII Rolling 5D"  value={fmtCrShort(dii5)}  color={getColor(dii5)}  T={T} />
-            <StatCard label="DII Rolling 20D" value={fmtCrShort(dii20)} color={getColor(dii20)} T={T} />
-          </div>
-        </div>
-
-        {/* (4) Frequency toggle on cash flow table */}
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-            <h3 style={{ ...sh, margin: 0 }}>Cash Flow Data</h3>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, color: T.subtext }}>
-                Showing {cashFlowAggRows.length === 0 ? 0 : (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE + 1}
-                –{Math.min(cashPageClamped * CASH_TABLE_PAGE_SIZE, cashFlowAggRows.length)} of {cashFlowAggRows.length}
-              </span>
-              <ViewToggle options={["Daily", "Weekly", "Monthly", "Annual"]} value={cashFreq} onChange={setCashFreq} T={T} />
-            </div>
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: T.surface || T.bg }}>
-                  {["Period", "FII Buy", "FII Sell", "FII Net", "DII Buy", "DII Sell", "DII Net", "Status"].map((h, i) => (
-                    <th key={h} style={{ padding: "8px 10px", textAlign: i===0 ? "left":"right", fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: T.subtext, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {cashFlowPageRows.map((row, i) => {
-                  const { fiiN, diiN, chg, abs, label } = row;
-                  const absC = abs==="Absorbed" ? GREEN : abs==="Risk-Off" ? RED : abs==="Both Buy" ? BLUE : T.subtext;
-                  const rowBg = i%2===0 ? T.card : (T.surface||T.bg);
-                  return (
-                    <tr key={i} style={{ background: rowBg }}>
-                      <td style={{ padding: "8px 10px", color: T.text, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
-                        {label}
-                      </td>
-                      {[row.fii_buy, row.fii_sell, fiiN, row.dii_buy, row.dii_sell, diiN].map((v, j) => (
-                        <td key={j} style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: [2,5].includes(j)?700:400, color: [2,5].includes(j)?getColor(v):T.subtext, borderBottom: `1px solid ${T.border}` }}>
-                          {fmtCrShort(v)}
-                          {j===2 && chg!==null && <span style={{ fontSize:9, marginLeft:4, color:chg>=0?GREEN:RED }}>{chg>=0?"▲":"▼"}{Math.abs(chg).toFixed(0)}%</span>}
-                        </td>
-                      ))}
-                      <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 600, color: absC }}>{abs}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <TablePagination page={cashPageClamped} totalPages={cashPageCount} onChange={setCashPage} T={T} />
-        </div>
-      </div>
-    );
-  };
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // DERIVATIVES TAB
-  // ══════════════════════════════════════════════════════════════════════════
-  const DerivativesTab = () => {
-    if (!derivMemo.rows?.length) return noData("No F&O data available. Check fii_dii_fo table format.");
-    const { latest, lsRatio, buildUp, lsTrend, rows } = derivMemo;
-    const { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData } = derivativesTabData;
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
-          <StatCard label="FII Net Position" value={latest.fiiNet ? (latest.fiiNet>0?"+":"")+latest.fiiNet.toLocaleString("en-IN"):"—"} color={getColor(latest.fiiNet)} T={T} />
-          <StatCard label="FII L/S Ratio"    value={lsRatio} color={parseFloat(lsRatio)>1?GREEN:RED} sub={parseFloat(lsRatio)>1?"Net Long":"Net Short"} T={T} />
-          <StatCard label="DII Net Position" value={latest.diiNet ? (latest.diiNet>0?"+":"")+latest.diiNet.toLocaleString("en-IN"):"—"} color={getColor(latest.diiNet)} T={T} />
-          <StatCard label="Build-up"         value={buildUp} color={buildUp==="Long Build-up"?GREEN:buildUp==="Short Build-up"?RED:AMBER} T={T} />
-        </div>
-
-        {/* (3) FII Long vs Short — smooth line chart, range picker */}
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-            <div>
-              <h3 style={{ ...sh, margin: 0 }}>FII Long vs Short</h3>
-              <div style={{ fontSize: 12, color: T.subtext, marginTop: 2 }}>Index futures only</div>
-            </div>
-            <ViewToggle options={["1Y", "3Y", "5Y", "10Y"]} value={derivRange} onChange={setDerivRange} T={T} dataSpanYears={derivSpanYears} />
-          </div>
-          <SvgLineChart data={filteredRows} series={[{ key:"fiiFutLong", color:GREEN, name:"FII Long" }, { key:"fiiFutShort", color:RED, name:"FII Short" }]} height={isMobile?220:300} fill={false} T={T} />
-          {derivRangeExceedsData && (
-            <div style={{ fontSize: 11, color: AMBER, marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
-              <span>★</span>
-              <span>Data available from 8 Apr 2022 — showing all {filteredRows.length} sessions ({derivSpanYears.toFixed(1)} years).</span>
-            </div>
-          )}
-        </div>
-
-        {/* (3) L/S Ratio trend — smooth, same range */}
-        <div style={card}>
-          <h3 style={{ ...sh, marginBottom: 4 }}>FII Long/Short Ratio Trend</h3>
-          <div style={{ fontSize: 12, color: T.subtext, marginBottom: 12 }}>Index futures only · Ratio &gt; 1 = net long (bullish), &lt; 1 = net short (bearish)</div>
-          <SvgLineChart data={filteredLsTrend} series={[{ key:"lsRatio", color:PURPLE, name:"FII L/S Ratio" }]} height={isMobile?180:240} fill={true} T={T} />
-        </div>
-
-      </div>
-    );
-  };
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // SECTOR ROTATION TAB
-  // ══════════════════════════════════════════════════════════════════════════
-  //const SectorTab = () => {
-  //  if (!sectorMemo.ranking) return noData("No sector data.");
-  //  const { allSectors, ranking, leaders, laggards, sectorHistory, latestSnapshot, latestDate, multiSectorData } = sectorMemo;
-  //  const SECTOR_COLORS = [GREEN, BLUE, AMBER, PURPLE, RED, "#06b6d4", "#f97316", "#84cc16"];
-  //  const toggleSector = (sec) => setSelectedSectors(prev => prev.includes(sec) ? prev.filter(s => s!==sec) : prev.length<5 ? [...prev,sec] : prev);
-
-  //  return (
-  //    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-  //      <div style={{ display: "grid", gridTemplateColumns: isMobile?"1fr":"1fr 1fr", gap: 14 }}>
-  //        {[{ title:"🏆 Top 3 Leaders (60D)", list:leaders, color:GREEN }, { title:"📉 Bottom 3 Laggards (60D)", list:laggards, color:RED }].map(({ title, list, color }) => (
-  //          <div key={title} style={card}>
-  //            <h3 style={{ ...sh, color }}>{title}</h3>
-  //            {list.map((s, i) => (
-  //              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:i<2?`1px solid ${T.border}`:"none" }}>
-  //                <div style={{ fontSize:13, color:T.text, fontWeight:500 }}><span style={{ color, fontWeight:700, marginRight:6 }}>#{i+1}</span>{s.sector}</div>
-  //                <div style={{ fontFamily:"monospace", fontWeight:700, color, fontSize:13 }}>{fmtCrShort(s.total)}</div>
-  //              </div>
-  //            ))}
-  //          </div>
-  //        ))}
-  //      </div>
-
-  //      <div style={card}>
-  //        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14, flexWrap:"wrap" }}>
-  //          <h3 style={{ ...sh, margin:0 }}>Sector Historical Flow</h3>
-  //          <select value={selectedSector} onChange={e => setSelectedSector(e.target.value)}
-  //            style={{ background:T.card, color:T.text, border:`1px solid ${T.border}`, borderRadius:6, padding:"5px 10px", fontSize:13, fontFamily:"inherit", cursor:"pointer" }}>
-  //            <option value="__ALL__">— Select Sector —</option>
-  //            {allSectors.map(s => <option key={s} value={s}>{s}</option>)}
-  //          </select>
-  //          {sectorHistory.length > 0 && <button onClick={() => setFullscreen(true)} style={{ background:T.card, border:`1px solid ${T.border}`, color:T.text, borderRadius:6, padding:"5px 12px", fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>⛶ Fullscreen</button>}
-  //        </div>
-  //        {sectorHistory.length > 0
-  //          ? <SvgLineChart data={sectorHistory} series={[{ key:"value", color:GREEN, name:"Net Investment" }]} height={isMobile?200:280} fill={true} T={T} />
-  //          : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:24 }}>Select a sector above to view full historical flow</div>
-  //        }
-  //      </div>
-
-  //      <div style={card}>
-  //        <h3 style={{ ...sh, marginBottom:6 }}>Multi-Sector Overlay</h3>
-  //        <div style={{ fontSize:12, color:T.subtext, marginBottom:10 }}>Select up to 5 sectors to compare</div>
-  //        <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:14 }}>
-  //          {allSectors.map(sec => {
-  //            const active = selectedSectors.includes(sec);
-  //            const clr    = SECTOR_COLORS[selectedSectors.indexOf(sec) % SECTOR_COLORS.length] || T.border;
-  //            return (
-  //              <button key={sec} onClick={() => toggleSector(sec)} style={{ padding:"4px 10px", fontSize:11, borderRadius:20, border:`1.5px solid ${active?clr:T.border}`, background:active?clr+"22":"transparent", color:active?clr:T.subtext, cursor:"pointer", fontFamily:"inherit", fontWeight:active?700:400, transition:"all 0.15s" }}>{sec}</button>
-  //            );
-  //          })}
-  //        </div>
-  //        {selectedSectors.length > 0 && multiSectorData.length > 0
-  //          ? <SvgLineChart data={multiSectorData} series={selectedSectors.map((sec, i) => ({ key:sec, color:SECTOR_COLORS[i%SECTOR_COLORS.length], name:sec }))} height={isMobile?220:300} T={T} />
-  //          : <div style={{ color:T.subtext, fontSize:13, textAlign:"center", padding:20 }}>{selectedSectors.length===0?"Click sectors above to compare them":"Loading…"}</div>
-  //        }
-  //      </div>
-
-  //      <div style={card}>
-  //        <h3 style={sh}>Full Sector Ranking — 60D Net Flows</h3>
-  //        <div style={{ overflowX:"auto" }}>
-  //          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-  //            <thead><tr style={{ background:T.surface||T.bg }}>
-  //              {["#","Sector","60D Flow","Momentum","Signal"].map((h,i) => (
-  //                <th key={h} style={{ padding:"8px 10px", textAlign:i<2?"left":"right", fontSize:10, fontWeight:700, textTransform:"uppercase", color:T.subtext, borderBottom:`1px solid ${T.border}` }}>{h}</th>
-  //              ))}
-  //            </tr></thead>
-  //            <tbody>
-  //              {ranking.map((s, i) => (
-  //                <tr key={i} style={{ background:i%2===0?T.card:(T.surface||T.bg) }}>
-  //                  <td style={{ padding:"8px 10px", color:T.subtext, borderBottom:`1px solid ${T.border}`, fontWeight:700, width:32 }}>{i+1}</td>
-  //                  <td style={{ padding:"8px 10px", color:T.text,    borderBottom:`1px solid ${T.border}`, fontWeight:500 }}>{s.sector}</td>
-  //                  <td style={{ padding:"8px 10px", textAlign:"right", fontFamily:"monospace", fontWeight:700, color:getColor(s.total), borderBottom:`1px solid ${T.border}` }}>{fmtCrShort(s.total)}</td>
-  //                  <td style={{ padding:"8px 10px", textAlign:"right", fontFamily:"monospace", color:getColor(s.momentum), borderBottom:`1px solid ${T.border}` }}>{fmtCrShort(s.momentum)}</td>
-  //                  <td style={{ padding:"8px 10px", textAlign:"right", borderBottom:`1px solid ${T.border}`, fontSize:11, fontWeight:700, color:s.momentum>0&&s.total>0?GREEN:s.momentum<0&&s.total<0?RED:AMBER }}>
-  //                    {s.momentum>0&&s.total>0?"▲ Accelerating":s.momentum<0&&s.total<0?"▼ Declining":"~ Turning"}
-  //                  </td>
-  //                </tr>
-  //              ))}
-  //            </tbody>
-  //          </table>
-  //        </div>
-  //      </div>
-
-  //      <div style={card}>
-  //        <h3 style={sh}>Latest Snapshot — {fmtDate(latestDate)}</h3>
-  //        {latestSnapshot.map((s, i) => {
-  //          const pct = sectorSnapshotMaxAbs ? Math.abs(+s.net_investment||0)/sectorSnapshotMaxAbs*100 : 0;
-  //          const val = +s.net_investment || 0;
-  //          return (
-  //            <div key={i} style={{ marginBottom:8 }}>
-  //              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
-  //                <span style={{ color:T.text, fontWeight:500 }}>{s.sector}</span>
-  //                <span style={{ color:getColor(val), fontWeight:700, fontFamily:"monospace" }}>{fmtCrShort(val)}</span>
-  //              </div>
-  //              <div style={{ background:T.border, borderRadius:2, height:4, overflow:"hidden" }}>
-  //                <div style={{ width:`${pct}%`, height:"100%", background:val>=0?GREEN:RED, borderRadius:2, transition:"width 0.4s ease" }} />
-  //              </div>
-  //            </div>
-  //          );
-  //        })}
-  //      </div>
-  //    </div>
-  //  );
-  //};
-
-  //// ══════════════════════════════════════════════════════════════════════════
-  //// SIGNALS TAB
-  //// ══════════════════════════════════════════════════════════════════════════
-  //const SignalsTab = () => {
-  //  const { regime, insights=[], exportText, lsRatio, z, breadth } = signals;
-  //  const [copied, setCopied] = useState(false);
-  //  const copy = () => { navigator.clipboard?.writeText(exportText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
-
-  //  return (
-  //    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-  //      <div style={{ ...card, background:regime==="Bullish Regime"?GREEN+"12":regime==="Bearish Regime"?RED+"12":AMBER+"12", borderColor:regime==="Bullish Regime"?GREEN+"44":regime==="Bearish Regime"?RED+"44":AMBER+"44", textAlign:"center", padding:28 }}>
-  //        <div style={{ fontSize:11, color:T.subtext, fontWeight:600, textTransform:"uppercase", marginBottom:8 }}>Current Market Regime</div>
-  //        <SignalPill signal={regime} T={T} />
-  //        <div style={{ marginTop:12, fontSize:12, color:T.subtext }}>Based on FII 20D · F&O L/S ratio · DII absorption · Sector breadth</div>
-  //      </div>
-
-  //      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4, 1fr)", gap:10 }}>
-  //        <StatCard label="FII 20D Flow"   value={fmtCrShort(cashMemo.fii20)}  color={getColor(cashMemo.fii20)}  T={T} />
-  //        <StatCard label="DII 20D Flow"   value={fmtCrShort(cashMemo.dii20)}  color={getColor(cashMemo.dii20)}  T={T} />
-  //        <StatCard label="FII L/S Ratio"  value={typeof lsRatio==="number"?lsRatio.toFixed(2):"—"} color={parseFloat(lsRatio)>1?GREEN:RED} sub={parseFloat(lsRatio)>1?"Net Long":"Net Short"} T={T} />
-  //        <StatCard label="Sector Breadth" value={`${breadth??0}%`} color={breadth>60?GREEN:breadth<40?RED:AMBER} sub="sectors with inflows" T={T} />
-  //      </div>
-
-  //      <div style={card}>
-  //        <h3 style={sh}>🧠 Insight Engine</h3>
-  //        {insights.length===0
-  //          ? <div style={{ color:T.subtext, fontSize:13 }}>No significant signals currently.</div>
-  //          : <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-  //              {insights.map((ins, i) => (
-  //                <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start", padding:"12px 14px", borderRadius:8, background:ins.type==="bullish"?GREEN+"12":ins.type==="bearish"?RED+"12":ins.type==="alert"?AMBER+"12":(T.surface||T.bg), border:`1px solid ${ins.type==="bullish"?GREEN+"33":ins.type==="bearish"?RED+"33":ins.type==="alert"?AMBER+"33":T.border}` }}>
-  //                  <span style={{ fontSize:20 }}>{ins.icon}</span>
-  //                  <div style={{ fontSize:13, color:T.text, lineHeight:1.5 }}>{ins.text}</div>
-  //                </div>
-  //              ))}
-  //            </div>
-  //        }
-  //      </div>
-
-  //      {/*<div style={card}>*/}
-  //      {/*  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>*/}
-  //      {/*    <h3 style={{ ...sh, margin:0 }}>📤 Export Insight</h3>*/}
-  //      {/*    <button onClick={copy} style={{ background:BLUE, color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>*/}
-  //      {/*      {copied?"✓ Copied!":"Copy for X / Twitter"}*/}
-  //      {/*    </button>*/}
-  //      {/*  </div>*/}
-  //      {/*  <pre style={{ background:T.surface||T.bg, borderRadius:8, padding:14, fontSize:12, color:T.text, whiteSpace:"pre-wrap", lineHeight:1.7, margin:0, border:`1px solid ${T.border}` }}>{exportText||"Loading…"}</pre>*/}
-  //      {/*</div>*/}
-
-  //      {derivMemo.buildUp && derivMemo.buildUp !== "Neutral" && (
-  //        <div style={{ ...card, borderLeft:`4px solid ${derivMemo.buildUp==="Long Build-up"?GREEN:RED}` }}>
-  //          <div style={{ fontSize:11, color:T.subtext, fontWeight:600, textTransform:"uppercase", marginBottom:4 }}>F&O Build-up Alert</div>
-  //          <div style={{ fontSize:15, fontWeight:700, color:derivMemo.buildUp==="Long Build-up"?GREEN:RED }}>
-  //            {derivMemo.buildUp==="Long Build-up"?"📈 Long Build-up Detected":"📉 Short Build-up Detected"}
-  //          </div>
-  //          <div style={{ fontSize:12, color:T.subtext, marginTop:4 }}>
-  //            {derivMemo.buildUp==="Long Build-up"?"FII adding longs, reducing shorts — Bullish":"FII adding shorts, reducing longs — Bearish"}
-  //          </div>
-  //        </div>
-  //      )}
-  //    </div>
-  //  );
-  //};
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // RENDER — (5) Sticky header + tab bar
-  // ══════════════════════════════════════════════════════════════════════════
-  const tabContent = {
-    "Overview":        <OverviewTab />,
-    "Cash Flow":       <CashFlowTab />,
-    "Derivatives":     <DerivativesTab />,
-    //"Sector Rotation": <SectorTab />,
-    //"Signals":         <SignalsTab />,
-  };
-
   return (
-    <div
-      style={{ width:"100%", minHeight:"100%", overflowY:"auto", boxSizing:"border-box", fontFamily:T.fontSans, color:T.text, background:T.bg, padding:isMobile ? "0" : "22px 28px 36px" }}
-    >
-      <div
-        style={{ width:"100%", maxWidth:isMobile?"100%":1400, margin:"0 auto", minHeight:"100%", background:T.shellBg, border:isMobile?"none":`1px solid ${T.border}`, borderRadius:isMobile?0:(T.radiusLg + 6), boxShadow:T.shadow, position:"relative", overflow:"hidden" }}
-      >
+    <div style={{ width:"100%", minHeight:"100%", overflowY:"auto", boxSizing:"border-box", fontFamily:T.fontSans, color:T.text, background:T.bg, padding:isMobile ? "0" : "22px 28px 36px" }}>
+      <div style={{ width:"100%", maxWidth:isMobile?"100%":1400, margin:"0 auto", minHeight:"100%", background:T.shellBg, border:isMobile?"none":`1px solid ${T.border}`, borderRadius:isMobile?0:(T.radiusLg + 6), boxShadow:T.shadow, position:"relative", overflow:"hidden" }}>
       <div style={{ position:"absolute", inset:0, background:T.shellOverlay, pointerEvents:"none" }} />
 
-      {/* ── (5) STICKY HEADER + TAB BAR ── */}
+      {/* ── STICKY HEADER + TAB BAR ── */}
       <div style={{
         position: "sticky",
         top: 0,
         zIndex: 50,
         background: T.headerBg,
         borderBottom: `1px solid ${T.border}`,
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
         boxShadow: T.headerShadow,
       }}>
         {/* Title row */}
@@ -1458,19 +1114,218 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
               border:`1px solid ${activeTab===t ? T.accentMuted : "transparent"}`, background:activeTab===t?T.tabActiveBg:"transparent", color:activeTab===t?(T.tabActiveText || T.text):T.subtext,
               borderRadius:999,
               cursor:"pointer", transition:"all 0.15s", fontFamily:"inherit", whiteSpace:"nowrap", flexShrink:0, letterSpacing:0.2, boxShadow: activeTab===t && T.isDark ? "inset 0 0 0 1px rgba(52, 211, 153, 0.08)" : "none",
-            }}>{t === "Signals" ? "🧠 " : ""}{t}</button>
+            }}>{t}</button>
           ))}
         </div>
       </div>
 
-      {/* Tab content */}
+      {/* Tab content — only the ACTIVE tab is rendered/mounted now. Previously
+          all three tabs (tabContent = {...}) were built as JSX every render
+          regardless of which was visible; this now conditionally renders just
+          one, and each tab is a hoisted, memoized top-level component instead
+          of an inline closure redefined on every render (which used to force
+          a full unmount/remount of the whole tab subtree on any state change). */}
       <div style={{ padding:isMobile?"16px 14px 28px":"22px 28px 36px", position:"relative" }}>
-        {tabContent[activeTab]}
+        {activeTab === "Overview" && (
+          <OverviewTab
+            cashMemo={cashMemo} overviewTabData={overviewTabData}
+            isMobile={isMobile} T={T} card={card} sh={sh}
+            flowView={flowView} setFlowView={setFlowView}
+            overviewRange={overviewRange} setOverviewRange={setOverviewRange}
+          />
+        )}
+        {activeTab === "Cash Flow" && (
+          <CashFlowTab
+            cashMemo={cashMemo} cashFlowAggRows={cashFlowAggRows} cashFlowPageRows={cashFlowPageRows}
+            cashPageClamped={cashPageClamped} cashPageCount={cashPageCount} setCashPage={setCashPage}
+            cashFreq={cashFreq} setCashFreq={setCashFreq}
+            isMobile={isMobile} T={T} card={card} sh={sh}
+          />
+        )}
+        {activeTab === "Derivatives" && (
+          <DerivativesTab
+            derivMemo={derivMemo} derivativesTabData={derivativesTabData}
+            isMobile={isMobile} T={T} card={card} sh={sh} noData={noData}
+            derivRange={derivRange} setDerivRange={setDerivRange}
+          />
+        )}
       </div>
       </div>
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TABS — hoisted to module scope (top-level `const`s, not inline closures inside
+// FiiDiiModuleInner) and memoized. Inline definitions were being recreated as a
+// brand-new component type on every render, which forces React to unmount and
+// remount the entire tab's DOM tree instead of diffing it — the single biggest
+// contributor to this page feeling heavy. Each tab only re-renders when its own
+// props actually change now.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const OverviewTab = memo(function OverviewTab({ cashMemo, overviewTabData, isMobile, T, card, sh, flowView, setFlowView, overviewRange, setOverviewRange }) {
+  const { fii1, dii1, fii5, dii5, fii20, dii20, participation, absorption, latest, totalInst1 } = cashMemo;
+  const { isRolling, spanYears, chartData, chartSeries, rangeExceedsData } = overviewTabData;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <h2 style={sh}>Flow Summary <span style={{ fontSize: 12, color: T.subtext, fontWeight: 400 }}>as of {fmtDate(latest?.date)}</span></h2>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(6, 1fr)", gap: 10 }}>
+          <StatCard label="FII 1D"  value={fmtCrShort(fii1)}  color={getColor(fii1)}  badge={fii1 > 0 ? "BUY" : fii1 < 0 ? "SELL" : null} T={T} />
+          <StatCard label="FII 5D"  value={fmtCrShort(fii5)}  color={getColor(fii5)}  T={T} />
+          <StatCard label="FII 20D" value={fmtCrShort(fii20)} color={getColor(fii20)} T={T} />
+          <StatCard label="DII 1D"  value={fmtCrShort(dii1)}  color={getColor(dii1)}  badge={dii1 > 0 ? "BUY" : dii1 < 0 ? "SELL" : null} T={T} />
+          <StatCard label="DII 5D"  value={fmtCrShort(dii5)}  color={getColor(dii5)}  T={T} />
+          <StatCard label="DII 20D" value={fmtCrShort(dii20)} color={getColor(dii20)} T={T} />
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: 10 }}>
+        <StatCard label="Total Inst. 1D"    value={fmtCrShort(totalInst1)} color={getColor(totalInst1)} T={T} />
+        <StatCard label="FII Participation" value={`${(participation * 100).toFixed(0)}%`} color={BLUE} sub="of institutional volume" T={T} />
+        <StatCard label="Absorption"        value={absorption} color={absorption.includes("Both Sell") ? RED : absorption.includes("Both Buy") ? GREEN : BLUE} T={T} />
+      </div>
+
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+          <div>
+            <h3 style={{ ...sh, margin: 0 }}>Institutional Flow Chart</h3>
+            <div style={{ fontSize: 12, color: T.subtext, marginTop: 2 }}>
+              {isRolling ? "20-day rolling sum — trend momentum" : "Daily net flows by session"}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <ViewToggle options={["Daily", "20D Rolling"]} value={flowView} onChange={setFlowView} T={T} />
+            <ViewToggle options={["1Y", "3Y", "5Y", "10Y"]} value={overviewRange} onChange={setOverviewRange} T={T} dataSpanYears={spanYears} />
+          </div>
+        </div>
+        {isRolling
+          ? <SvgLineChart data={chartData} series={chartSeries} height={isMobile ? 220 : 320} fill={true} T={T} />
+          : <SvgBarChart  data={chartData} series={chartSeries} height={isMobile ? 220 : 320} mode="grouped" T={T} />
+        }
+        {rangeExceedsData && (
+          <div style={{ fontSize: 11, color: AMBER, marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
+            <span>★</span>
+            <span>Data available from 8 Apr 2022 — showing all {chartData.length} sessions ({spanYears.toFixed(1)} years).</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const CashFlowTab = memo(function CashFlowTab({ cashMemo, cashFlowAggRows, cashFlowPageRows, cashPageClamped, cashPageCount, setCashPage, cashFreq, setCashFreq, isMobile, T, card, sh }) {
+  const { fii5, dii5, fii20, dii20, sellStreak } = cashMemo;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {sellStreak >= 3 && (
+        <div style={{ ...card, borderLeft: `4px solid ${RED}`, background: RED + "0a" }}>
+          <div style={{ fontSize: 11, color: T.subtext, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>⚠️ Alert</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: RED }}>FII selling for {sellStreak} consecutive sessions — Highest recent streak</div>
+        </div>
+      )}
+
+      <div>
+        <h2 style={sh}>Rolling Flow Metrics</h2>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
+          <StatCard label="FII Rolling 5D"  value={fmtCrShort(fii5)}  color={getColor(fii5)}  T={T} />
+          <StatCard label="FII Rolling 20D" value={fmtCrShort(fii20)} color={getColor(fii20)} T={T} />
+          <StatCard label="DII Rolling 5D"  value={fmtCrShort(dii5)}  color={getColor(dii5)}  T={T} />
+          <StatCard label="DII Rolling 20D" value={fmtCrShort(dii20)} color={getColor(dii20)} T={T} />
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+          <h3 style={{ ...sh, margin: 0 }}>Cash Flow Data</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: T.subtext }}>
+              Showing {cashFlowAggRows.length === 0 ? 0 : (cashPageClamped - 1) * CASH_TABLE_PAGE_SIZE + 1}
+              –{Math.min(cashPageClamped * CASH_TABLE_PAGE_SIZE, cashFlowAggRows.length)} of {cashFlowAggRows.length}
+            </span>
+            <ViewToggle options={["Daily", "Weekly", "Monthly", "Annual"]} value={cashFreq} onChange={setCashFreq} T={T} />
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: T.surface || T.bg }}>
+                {["Period", "FII Buy", "FII Sell", "FII Net", "DII Buy", "DII Sell", "DII Net", "Status"].map((h, i) => (
+                  <th key={h} style={{ padding: "8px 10px", textAlign: i===0 ? "left":"right", fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: T.subtext, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cashFlowPageRows.map((row, i) => {
+                const { fiiN, diiN, chg, abs, label } = row;
+                const absC = abs==="Absorbed" ? GREEN : abs==="Risk-Off" ? RED : abs==="Both Buy" ? BLUE : T.subtext;
+                const rowBg = i%2===0 ? T.card : (T.surface||T.bg);
+                return (
+                  <tr key={i} style={{ background: rowBg }}>
+                    <td style={{ padding: "8px 10px", color: T.text, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
+                      {label}
+                    </td>
+                    {[row.fii_buy, row.fii_sell, fiiN, row.dii_buy, row.dii_sell, diiN].map((v, j) => (
+                      <td key={j} style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: [2,5].includes(j)?700:400, color: [2,5].includes(j)?getColor(v):T.subtext, borderBottom: `1px solid ${T.border}` }}>
+                        {fmtCrShort(v)}
+                        {j===2 && chg!==null && <span style={{ fontSize:9, marginLeft:4, color:chg>=0?GREEN:RED }}>{chg>=0?"▲":"▼"}{Math.abs(chg).toFixed(0)}%</span>}
+                      </td>
+                    ))}
+                    <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 600, color: absC }}>{abs}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <TablePagination page={cashPageClamped} totalPages={cashPageCount} onChange={setCashPage} T={T} />
+      </div>
+    </div>
+  );
+});
+
+const DerivativesTab = memo(function DerivativesTab({ derivMemo, derivativesTabData, isMobile, T, card, sh, noData, derivRange, setDerivRange }) {
+  if (!derivMemo.rows?.length) return noData("No F&O data available. Check fii_dii_fo table format.");
+  const { latest, lsRatio, buildUp } = derivMemo;
+  const { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData } = derivativesTabData;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
+        <StatCard label="FII Net Position" value={latest.fiiNet ? (latest.fiiNet>0?"+":"")+latest.fiiNet.toLocaleString("en-IN"):"—"} color={getColor(latest.fiiNet)} T={T} />
+        <StatCard label="FII L/S Ratio"    value={lsRatio} color={parseFloat(lsRatio)>1?GREEN:RED} sub={parseFloat(lsRatio)>1?"Net Long":"Net Short"} T={T} />
+        <StatCard label="DII Net Position" value={latest.diiNet ? (latest.diiNet>0?"+":"")+latest.diiNet.toLocaleString("en-IN"):"—"} color={getColor(latest.diiNet)} T={T} />
+        <StatCard label="Build-up"         value={buildUp} color={buildUp==="Long Build-up"?GREEN:buildUp==="Short Build-up"?RED:AMBER} T={T} />
+      </div>
+
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+          <div>
+            <h3 style={{ ...sh, margin: 0 }}>FII Long vs Short</h3>
+            <div style={{ fontSize: 12, color: T.subtext, marginTop: 2 }}>Index futures only</div>
+          </div>
+          <ViewToggle options={["1Y", "3Y", "5Y", "10Y"]} value={derivRange} onChange={setDerivRange} T={T} dataSpanYears={derivSpanYears} />
+        </div>
+        <SvgLineChart data={filteredRows} series={[{ key:"fiiFutLong", color:GREEN, name:"FII Long" }, { key:"fiiFutShort", color:RED, name:"FII Short" }]} height={isMobile?220:300} fill={false} T={T} />
+        {derivRangeExceedsData && (
+          <div style={{ fontSize: 11, color: AMBER, marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
+            <span>★</span>
+            <span>Data available from 8 Apr 2022 — showing all {filteredRows.length} sessions ({derivSpanYears.toFixed(1)} years).</span>
+          </div>
+        )}
+      </div>
+
+      <div style={card}>
+        <h3 style={{ ...sh, marginBottom: 4 }}>FII Long/Short Ratio Trend</h3>
+        <div style={{ fontSize: 12, color: T.subtext, marginBottom: 12 }}>Index futures only · Ratio &gt; 1 = net long (bullish), &lt; 1 = net short (bearish)</div>
+        <SvgLineChart data={filteredLsTrend} series={[{ key:"lsRatio", color:PURPLE, name:"FII L/S Ratio" }]} height={isMobile?180:240} fill={true} T={T} />
+      </div>
+    </div>
+  );
+});
 
 // Export memoized component to prevent unnecessary re-renders when parent updates
 export default memo(FiiDiiModuleInner);

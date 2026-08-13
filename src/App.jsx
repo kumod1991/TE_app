@@ -107,7 +107,7 @@ const SUB_ROUTE_SEO = {
     },
     technical: {
         breadth: { title: "Market Breadth Dashboard", description: "Read participation, new highs, relative strength, trend alignment, and market internals for Indian equities." },
-        screens: { title: "Technical Stock Screens", description: "Surface breakouts, pullbacks, VCP-style setups, high relative strength stocks, and volume-led moves." },
+        screens: { title: "Technical Stock Screens", description: "Surface breakouts, pullbacks, high relative strength stocks, and volume-led moves." },
         rotation: { title: "Sector Rotation RRG", description: "Compare relative sector leadership, laggards, improving groups, and weakening pockets." },
     },
     tradevault: {
@@ -130,7 +130,7 @@ const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "owner
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "rotation"]);
 const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "funds", "dividends"]);
 const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact"]);
-const BreadthDataContext = createContext({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], rsAcceleration: [], nameMap: {}, industryMap: {}, tablesLoading: true });
+const BreadthDataContext = createContext({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], nameMap: {}, industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
 
 const supabase = {
@@ -12011,7 +12011,6 @@ let _breadthCache = {
     top52wHigh: null,
     topRS: null,
     rsRating: null,
-    rsAcceleration: null,
     nameMap: null,
     cfRows: null,        // company_financials (tickermc/industry/name)
     cfRowsTime: null,    // when cfRows was last fetched
@@ -12036,41 +12035,63 @@ let _breadthCache = {
 // Cache TTL: 20 min  prevents empty RS arrays from being served after a DB update
 const _BREADTH_CACHE_TTL_MS = 30 * 60 * 1000;
 
+// Non-equity instruments (ETFs, bonds/NCDs, liquid/mutual-fund units) that
+// occasionally show up in the underlying screens tables/views by ticker or
+// company name. Every TechLens/Screens dataset (Market Leaders, Breakouts,
+// Pullbacks, Trend Template, Chart Patterns) is filtered through this before
+// being shown, via filterByUniverse() in ScreensModule.
+// NSE tickers don't always spell these words out in full (e.g. "GROWWLIQID",
+// "LIQGRWBEES" for liquid ETFs), so this matches on the common naming
+// conventions rather than the literal words:
+//   - ETF          → straight ETF match (also catches "IETF" suffixes)
+//   - BEES         → NSE's "Benchmark Exchange Traded Scheme" suffix, used
+//                     by nearly all its ETFs (NIFTYBEES, GOLDBEES, LIQGRWBEES...)
+//   - LIQ          → liquid-fund tickers (LIQUIDADD, LIQUIDCASE, GROWWLIQID...)
+//   - GSEC / SDL   → government-securities / state-development-loan ETFs
+//   - BOND / NCD   → bond and non-convertible-debenture instruments
+//   - MUTUAL       → mutual fund units
+const _EXCLUDED_INSTRUMENT_PATTERNS = [/ETF/i, /BEES/i, /LIQ/i, /GSEC/i, /SDL/i, /BOND/i, /NCD/i, /MUTUAL/i];
+function _isExcludedInstrument(row) {
+    const ticker = row?.ticker || "";
+    const name = row?.name || "";
+    return _EXCLUDED_INSTRUMENT_PATTERNS.some(re => re.test(ticker) || re.test(name));
+}
+
 //  Screens-module SWR caches  survive tab navigation, persist across page loads 
 // Pattern: serve stale data instantly on re-mount; revalidate silently in background if >TTL old.
 const _SCREENS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min in-memory fresh window
 const _LS_SCREENS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h localStorage stale-but-usable window
 
+let _mvScreensBaseCache = { rows: null, loadedAt: null };
 let _screensBreakoutCache = { rows: null, loadedAt: null };
 let _screensPivotCache = { rows: null, loadedAt: null };
 let _screensVolBreakCache = { rows: null, loadedAt: null };
 let _screensPullbackCache = { rows: null, loadedAt: null };
-let _screensVcpCache = { rows: null, returnMap: null, loadedAt: null };
 let _screensMinerviniCache = { rows: null, loadedAt: null };
 
+const _LS_MV_SCREENS_BASE = "te_mv_screens_base_v1";
 const _LS_SCR_BREAKOUT = "te_scr_breakout_v1";
 const _LS_SCR_PIVOT = "te_scr_pivot_v1";
 const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
 const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
-const _LS_SCR_VCP = "te_scr_vcp_v1";
 const _LS_SCR_MINERVINI = "te_scr_minervini_v1";
 
 // In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
+let _prefetchMvBasePromise = null;
 let _prefetchBreakoutPromise = null;
 let _prefetchPivotPromise = null;
 let _prefetchVolBreakPromise = null;
 let _prefetchPullbackPromise = null;
-let _prefetchVcpPromise = null;
 let _prefetchMinerviniPromise = null;
 
 // Seed all screens caches from localStorage on module load (SWR: serve stale on first paint)
 (function _seedScreensCaches() {
     const pairs = [
+        [_LS_MV_SCREENS_BASE, v => { _mvScreensBaseCache = v; }],
         [_LS_SCR_BREAKOUT, v => { _screensBreakoutCache = v; }],
         [_LS_SCR_PIVOT, v => { _screensPivotCache = v; }],
         [_LS_SCR_VOLBREAK, v => { _screensVolBreakCache = v; }],
         [_LS_SCR_PULLBACK, v => { _screensPullbackCache = v; }],
-        [_LS_SCR_VCP, v => { _screensVcpCache = v; }],
         [_LS_SCR_MINERVINI, v => { _screensMinerviniCache = v; }],
     ];
     pairs.forEach(([key, setter]) => {
@@ -12117,6 +12138,107 @@ async function _rpcScreens(fnName, body) {
     return rows;
 }
 
+// ─── Direct mv_screens_base fetch (replaces the get_screens_* RPCs) ─────────
+// Breakout / Pivot / VolBreak / Pullback all read from the same underlying
+// materialized view (mv_screens_base). Rather than round-tripping through a
+// Postgres RPC per scan, we pull the whole view once via PostgREST (paginated
+// with Range headers since Supabase caps a single response at ~1000 rows) and
+// derive every scan client-side from that single shared array. This mirrors
+// the exact SQL conditions the RPCs used to apply — see each _derive* fn below.
+async function _fetchMvScreensBase() {
+    const PAGE_SIZE = 1000;
+    let all = [];
+    let offset = 0;
+    for (;;) {
+        const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/mv_screens_base?select=*&order=ticker.asc`,
+            {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                    Range: `${offset}-${offset + PAGE_SIZE - 1}`,
+                },
+            }
+        );
+        const page = await r.json();
+        if (!Array.isArray(page)) {
+            throw new Error(page?.message || "mv_screens_base returned a non-array response");
+        }
+        all = all.concat(page);
+        if (page.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+    }
+    return all;
+}
+
+function _prefetchMvScreensBase() {
+    if (_mvScreensBaseCache.rows && _mvScreensBaseCache.rows.length > 0 &&
+        _mvScreensBaseCache.loadedAt && (Date.now() - _mvScreensBaseCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
+        return Promise.resolve(_mvScreensBaseCache.rows);
+    }
+    if (_prefetchMvBasePromise) return _prefetchMvBasePromise;
+    _prefetchMvBasePromise = (async () => {
+        try {
+            const rows = await _fetchMvScreensBase();
+            const cache = { rows, loadedAt: Date.now() };
+            _mvScreensBaseCache = cache;
+            _lsWriteScreens(_LS_MV_SCREENS_BASE, cache);
+            return rows;
+        } catch (e) { console.warn("[prefetch] mv_screens_base failed:", e); return []; }
+        finally { _prefetchMvBasePromise = null; }
+    })();
+    return _prefetchMvBasePromise;
+}
+
+// 52W High Breakout — within 7% of the 52W high, Stage-2 trend (close > sma50
+// > sma200), >25% up from the 52W low, volume >= 1.5x its 20D avg, rs >= 80.
+function _deriveScreensBreakout(rows) {
+    return rows.filter(r => {
+        const close = Number(r.close), sma50 = Number(r.sma50), sma200 = Number(r.sma200);
+        if (!(Number(r.pct_from_high) >= -7)) return false;
+        if (!(close > sma50 && sma50 > sma200)) return false;
+        if (!(Number(r.pct_from_low) > 25)) return false;
+        const vol = Number(r.volume), volMa = Number(r.volume_ma20);
+        if (!(volMa > 0 && vol / volMa >= 1.5)) return false;
+        if (!((r.rs_rating ?? 0) >= 80)) return false;
+        return true;
+    });
+}
+
+// Pivot Breakout base set — trend alignment only (sma50 > sma150 > sma200).
+// Which pivot level (10D/20D/10W/20W) the price must be above is picked
+// client-side by the pivotTF selector in dPivotBreakout, same as before.
+function _deriveScreensPivot(rows) {
+    return rows.filter(r => {
+        const s50 = Number(r.sma50), s150 = Number(r.sma150), s200 = Number(r.sma200);
+        return s50 > s150 && s150 > s200;
+    });
+}
+
+// Volume Breakout — Stage-2 trend, volume >= 2x its 20D avg, >15% up from
+// the 52W low. No upper bound on pct_from_high (catches all breakout levels).
+function _deriveScreensVolBreak(rows) {
+    return rows.filter(r => {
+        const close = Number(r.close), sma50 = Number(r.sma50), sma200 = Number(r.sma200);
+        if (!(close > sma50 && sma50 > sma200)) return false;
+        const vol = Number(r.volume), volMa = Number(r.volume_ma20);
+        if (!(volMa > 0 && vol / volMa >= 2.0)) return false;
+        if (!(Number(r.pct_from_low) > 15)) return false;
+        return true;
+    }).sort((a, b) => Number(b.rel_volume) - Number(a.rel_volume));
+}
+
+// Pullback base set — the 5 derived pullback scans (dPb50dma, dPbPivotRetest,
+// dPbShallow, dPbWeekly, dPbVolDryup) each apply their own rs_rating/sma/pivot
+// thresholds client-side already, so this just passes through rows with the
+// columns those scans need, normalizing volume_ma20 -> volume_20ma to match
+// the field name the existing pullback/detail-table code expects.
+function _deriveScreensPullback(rows) {
+    return rows
+        .filter(r => r.close != null && r.sma50 != null && r.sma200 != null)
+        .map(r => ({ ...r, volume_20ma: r.volume_ma20 }));
+}
+
 function _prefetchScreensBreakout() {
     if (_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0 &&
         _screensBreakoutCache.loadedAt && (Date.now() - _screensBreakoutCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
@@ -12125,7 +12247,8 @@ function _prefetchScreensBreakout() {
     if (_prefetchBreakoutPromise) return _prefetchBreakoutPromise;
     _prefetchBreakoutPromise = (async () => {
         try {
-            const rows = await _rpcScreens("get_screens_breakout", { p_universe: "all" });
+            const base = await _prefetchMvScreensBase();
+            const rows = _deriveScreensBreakout(base);
             const cache = { rows, loadedAt: Date.now() };
             _screensBreakoutCache = cache;
             _lsWriteScreens(_LS_SCR_BREAKOUT, cache);
@@ -12144,7 +12267,8 @@ function _prefetchScreensPivot() {
     if (_prefetchPivotPromise) return _prefetchPivotPromise;
     _prefetchPivotPromise = (async () => {
         try {
-            const rows = await _rpcScreens("get_screens_pivot");
+            const base = await _prefetchMvScreensBase();
+            const rows = _deriveScreensPivot(base);
             const cache = { rows, loadedAt: Date.now() };
             _screensPivotCache = cache;
             _lsWriteScreens(_LS_SCR_PIVOT, cache);
@@ -12163,7 +12287,8 @@ function _prefetchScreensVolBreak() {
     if (_prefetchVolBreakPromise) return _prefetchVolBreakPromise;
     _prefetchVolBreakPromise = (async () => {
         try {
-            const rows = await _rpcScreens("get_screens_volbreak");
+            const base = await _prefetchMvScreensBase();
+            const rows = _deriveScreensVolBreak(base);
             const cache = { rows, loadedAt: Date.now() };
             _screensVolBreakCache = cache;
             _lsWriteScreens(_LS_SCR_VOLBREAK, cache);
@@ -12182,7 +12307,8 @@ function _prefetchScreensPullback() {
     if (_prefetchPullbackPromise) return _prefetchPullbackPromise;
     _prefetchPullbackPromise = (async () => {
         try {
-            const rows = await _rpcScreens("get_screens_pullback");
+            const base = await _prefetchMvScreensBase();
+            const rows = _deriveScreensPullback(base);
             const cache = { rows, loadedAt: Date.now() };
             _screensPullbackCache = cache;
             _lsWriteScreens(_LS_SCR_PULLBACK, cache);
@@ -12218,30 +12344,6 @@ function _prefetchScreensMinervini() {
         finally { _prefetchMinerviniPromise = null; }
     })();
     return _prefetchMinerviniPromise;
-}
-
-function _prefetchScreensVcp() {
-    if (_screensVcpCache.rows && _screensVcpCache.rows.length > 0 &&
-        _screensVcpCache.loadedAt && (Date.now() - _screensVcpCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
-        return Promise.resolve(_screensVcpCache.rows);
-    }
-    if (_prefetchVcpPromise) return _prefetchVcpPromise;
-    _prefetchVcpPromise = (async () => {
-        try {
-            const rows = await _rpcScreens("get_screens_vcp");
-            // returnMap kept for API-shape compatibility with any caller that
-            // still reads it directly; ret_3m/6m/12m already come back joined
-            // onto each row from the RPC, so this is just a ticker index.
-            const returnMap = {};
-            rows.forEach(r => { if (r?.ticker) returnMap[r.ticker] = { ticker: r.ticker, ret_3m: r.ret_3m, ret_6m: r.ret_6m, ret_12m: r.ret_12m }; });
-            const cache = { rows, returnMap, loadedAt: Date.now() };
-            _screensVcpCache = cache;
-            _lsWriteScreens(_LS_SCR_VCP, cache);
-            return rows;
-        } catch (e) { console.warn("[prefetch] VCP failed:", e); return []; }
-        finally { _prefetchVcpPromise = null; }
-    })();
-    return _prefetchVcpPromise;
 }
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -17224,7 +17326,7 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
  * ----------------------------------------------------------------------------
  * What changed vs. the original:
  *   The "screens" section (Top 52W High Proximity, Top RS 3M/6M/12M,
- *   RS Rating, RS Acceleration, Trend Aligned) previously paginated through
+ *   RS Rating, Trend Aligned) previously paginated through
  *   6 tables client-side (indicators x3, stock_prices_daily, stock_returns,
  *   stock_52w, company_financials  up to ~30-40 requests) and joined/sorted
  *   the full ~1,500-2,000 stock universe in JS, even though only the top 50
@@ -17253,14 +17355,13 @@ function MarketBreadthModule({ T, onDataReady }) {
         _breadthCache.data && _breadthCache.data.length > 0 &&
         _breadthCache.range && _breadthCache.top52wHigh && _breadthCache.topRS &&
         _breadthCache.nameMap && _breadthCache.trendAligned &&
-        _breadthCache.rsRating && _breadthCache.rsAcceleration
+        _breadthCache.rsRating
     );
     const [data, setData] = useState(() => _hasSeededCache ? _breadthCache.data : []);
     const [top52wHigh, setTop52wHigh] = useState(() => _hasSeededCache ? _breadthCache.top52wHigh : []);
     const [topRS, setTopRS] = useState(() => _hasSeededCache ? _breadthCache.topRS : { rs3m: [], rs6m: [], rs12m: [] });
     const [trendAligned, setTrendAligned] = useState(() => _hasSeededCache ? _breadthCache.trendAligned : []);
     const [rsRating, setRsRating] = useState(() => _hasSeededCache ? _breadthCache.rsRating : []);
-    const [rsAcceleration, setRsAcceleration] = useState(() => _hasSeededCache ? _breadthCache.rsAcceleration : []);
     const [nameMap, setNameMap] = useState(() => _hasSeededCache ? (_breadthCache.nameMap || {}) : {});
     const [industryMap, setIndustryMap] = useState(() => _hasSeededCache ? (_breadthCache.industryMap || {}) : {});
     const [loading, setLoading] = useState(!_hasSeededCache);
@@ -17302,7 +17403,7 @@ function MarketBreadthModule({ T, onDataReady }) {
                 _breadthCache.data && _breadthCache.data.length > 0 &&
                 _breadthCache.range === range &&
                 _breadthCache.top52wHigh && _breadthCache.topRS && _breadthCache.nameMap &&
-                _breadthCache.trendAligned && _breadthCache.rsRating && _breadthCache.rsAcceleration
+                _breadthCache.trendAligned && _breadthCache.rsRating
             );
 
             //  STEP 1: serve stale instantly  no loading spinner 
@@ -17314,14 +17415,12 @@ function MarketBreadthModule({ T, onDataReady }) {
                 if (_breadthCache.industryMap) setIndustryMap(_breadthCache.industryMap);
                 setTrendAligned(_breadthCache.trendAligned);
                 setRsRating(_breadthCache.rsRating);
-                setRsAcceleration(_breadthCache.rsAcceleration);
                 setLoading(false); setTablesLoading(false);
                 if (onDataReady) onDataReady({
                     top52wHigh: _breadthCache.top52wHigh,
                     topRS: _breadthCache.topRS,
                     trendAligned: _breadthCache.trendAligned,
                     rsRating: _breadthCache.rsRating,
-                    rsAcceleration: _breadthCache.rsAcceleration,
                     nameMap: _breadthCache.nameMap,
                     industryMap: _breadthCache.industryMap || {},
                     tablesLoading: false,
@@ -17394,7 +17493,6 @@ function MarketBreadthModule({ T, onDataReady }) {
                     top52wHigh: top52wHighRows = [],
                     topRS: topRSRows = { rs3m: [], rs6m: [], rs12m: [] },
                     rsRating: rsRatingRows = [],
-                    rsAcceleration: rsAccelerationRows = [],
                     trendAligned: trendAlignedRows = [],
                 } = screensRes;
 
@@ -17406,7 +17504,7 @@ function MarketBreadthModule({ T, onDataReady }) {
                 const allScreenRows = [
                     ...top52wHighRows,
                     ...topRSRows.rs3m, ...topRSRows.rs6m, ...topRSRows.rs12m,
-                    ...rsRatingRows, ...rsAccelerationRows, ...trendAlignedRows,
+                    ...rsRatingRows, ...trendAlignedRows,
                 ];
                 allScreenRows.forEach(r => {
                     if (!r?.ticker) return;
@@ -17419,7 +17517,6 @@ function MarketBreadthModule({ T, onDataReady }) {
                 setTop52wHigh(top52wHighRows);
                 setTopRS(topRSRows);
                 setRsRating(rsRatingRows);
-                setRsAcceleration(rsAccelerationRows);
                 setTrendAligned(trendAlignedRows);
 
                 _breadthCache.nameMap = nameMapInit;
@@ -17428,7 +17525,6 @@ function MarketBreadthModule({ T, onDataReady }) {
                 _breadthCache.top52wHigh = top52wHighRows;
                 _breadthCache.topRS = topRSRows?.rs3m?.length ? topRSRows : null;
                 _breadthCache.rsRating = rsRatingRows;
-                _breadthCache.rsAcceleration = rsAccelerationRows;
                 _breadthCache.trendAligned = trendAlignedRows;
                 _breadthCache.loadedAt = Date.now();
 
@@ -17440,7 +17536,6 @@ function MarketBreadthModule({ T, onDataReady }) {
                         top52wHigh: top52wHighRows,
                         topRS: _breadthCache.topRS,
                         rsRating: rsRatingRows,
-                        rsAcceleration: rsAccelerationRows,
                         trendAligned: trendAlignedRows,
                         nameMap: nameMapInit,
                         industryMap: industryMap,
@@ -17453,7 +17548,6 @@ function MarketBreadthModule({ T, onDataReady }) {
                     topRS: topRSRows,
                     trendAligned: trendAlignedRows,
                     rsRating: rsRatingRows,
-                    rsAcceleration: rsAccelerationRows,
                     nameMap: nameMapInit,
                     industryMap: industryMap,
                     tablesLoading: false,
@@ -17985,30 +18079,6 @@ const FILTER_DEFS = [
     { key: "rel_volume", label: "Rel Volume", defaultOp: ">", num: true },
 ];
 
-// VCP-specific column definitions shown only in VCP full-screen detail view
-const VCP_EXTRA_COLS = [
-    { key: "category", label: "Type" },
-    { key: "contractions", label: "Legs" },
-    { key: "contraction_pattern", label: "Pattern" },
-    { key: "pct_from_high", label: "Near High" },
-    { key: "base_depth", label: "Base Depth" },
-    { key: "volume_dryup", label: "Vol Dry-up" },
-    { key: "tight_range", label: "Tight Range" },
-    { key: "near_pivot", label: "Near Pivot" },
-    { key: "breakout_level", label: "Pivot Price" },
-];
-
-// VCP-specific numeric filters
-const VCP_FILTER_DEFS = [
-    { key: "vcp_score", label: "VCP Score", defaultOp: ">", num: true },
-    { key: "contractions", label: "Legs", defaultOp: ">=", num: true },
-    { key: "pct_from_high", label: "Near High %", defaultOp: "<", num: true },
-    { key: "base_depth", label: "Base Depth %", defaultOp: "<", num: true },
-    { key: "close", label: "Price ", defaultOp: ">", num: true },
-    { key: "rs_rating", label: "RS Rating", defaultOp: ">", num: true },
-    { key: "rel_volume", label: "Rel Volume", defaultOp: ">", num: true },
-];
-
 // Pattern Filter (Chart Patterns) numeric filters  full-screen view only
 const PATTERN_FILTER_DEFS = [
     { key: "ret_3m", label: "3M Return %", defaultOp: ">", num: true },
@@ -18442,7 +18512,7 @@ function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, nameMap,
 //  SCREEN DETAIL VIEW  full-width table, fills content area like screener
 // 
 function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFundaScan, tablesLoading }) {
-    const { title, subtitle, color, rows, scoreKey, scoreLabel, formatVal, vcpMode, pivotMode, pullbackMode } = detail;
+    const { title, subtitle, color, rows, scoreKey, scoreLabel, formatVal, pivotMode, pullbackMode } = detail;
     const minerviniMode = !!detail.minerviniMode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
@@ -18466,6 +18536,11 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     const pivotRows = useMemo(() => {
         if (!pivotMode || !detail.allPivotRows) return null;
         return detail.allPivotRows
+            // detail.allPivotRows is the raw unfiltered fetch (ScreensModule only
+            // applies filterByUniverse to the card-preview slice, not this full
+            // set), so ETFs/liquid funds/bonds must be excluded here too or they
+            // leak into the paginated Screen Detail table.
+            .filter(r => !_isExcludedInstrument(r))
             .map(row => {
                 const pivotLevel = row[localPivotTF];
                 if (pivotLevel == null || pivotLevel <= 0) return null;
@@ -18482,6 +18557,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     const retestRows = useMemo(() => {
         if (!retestMode || !detail.allPivotRows) return null;
         return detail.allPivotRows
+            // Same raw/unfiltered-source issue as pivotRows above.
+            .filter(r => !_isExcludedInstrument(r))
             .filter(r => {
                 if ((r.rs_rating ?? 0) < 75) return false;
                 if (r.sma50 <= r.sma200) return false;
@@ -18522,9 +18599,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     const [addFilterOpen, setAddFilterOpen] = useState(false);
     const [sortKey, setSortKey] = useState(scoreKey || "ret_3m");
     const [sortDir, setSortDir] = useState("desc");
-    // VCP-specific quick filters
-    const [vcpCatFilter, setVcpCatFilter] = useState("ALL");   // ALL | IDEAL | DEVELOPING
-    const [vcpNearPivot, setVcpNearPivot] = useState(false);
     // Chart preview popover
     const [hoveredRow, setHoveredRow] = useState(null); // { ticker, row, anchorRect }
     const addFilterRef = useRef(null);
@@ -18579,19 +18653,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         if (key === "pct_from_sma50") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "pct_from_pivot") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "vol_ratio") return Number(v) > 0 ? `${Number(v).toFixed(2)}x` : null;
-        // VCP-specific
-        if (key === "vcp_score") return Number(v).toFixed(0);
-        if (key === "pct_from_high") return `${Number(v).toFixed(1)}%`;
-        if (key === "base_depth") return `${Number(v).toFixed(1)}%`;
-        if (key === "contractions") return String(Math.round(Number(v)));
-        if (key === "breakout_level") return fmtINR(v);
-        if (key === "volume_dryup") return v ? "" : "";
-        if (key === "tight_range") return v ? "" : "";
-        if (key === "near_pivot") return v ? "" : "";
-        if (key === "category") {
-            const isIdeal = v === "IDEAL";
-            return isIdeal ? " Ideal" : " Dev";
-        }
         return String(v);
     };
 
@@ -18613,9 +18674,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
 
     const filteredRows = useMemo(() => {
         let r = [...(activeRows || [])];
-        // VCP-specific quick filters
-        if (vcpMode && vcpCatFilter !== "ALL") r = r.filter(x => x.category === vcpCatFilter);
-        if (vcpMode && vcpNearPivot) r = r.filter(x => x.near_pivot);
         // Numeric add-filter chips
         for (const f of filters) {
             const val = parseFloat(f.value); if (isNaN(val)) continue;
@@ -18632,7 +18690,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
             return sortDir === "desc" ? bv - av : av - bv;
         });
         return r;
-    }, [activeRows, filters, sortKey, sortDir, vcpMode, vcpCatFilter, vcpNearPivot]);
+    }, [activeRows, filters, sortKey, sortDir]);
 
     // Paginate instead of rendering every row — keeps the DOM small so large
     // screens (500+ rows) mount and scroll smoothly. Resets to page 1 any time
@@ -18653,7 +18711,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         else { setSortKey(key); setSortDir("desc"); }
     };
 
-    const activeFDefs = vcpMode ? [...FILTER_DEFS, ...VCP_FILTER_DEFS] : FILTER_DEFS;
+    const activeFDefs = FILTER_DEFS;
     const addFilter = key => {
         const def = activeFDefs.find(f => f.key === key);
         setFilters(fs => [...fs, { id: Date.now(), key, op: def?.defaultOp || ">", value: "" }]);
@@ -18684,8 +18742,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         { key: "sma150", label: "150 SMA" },
         { key: "sma200", label: "200 SMA" },
     ].filter(c => visibleCols[c.key] && c.key !== scoreKey);
-    // VCP-specific extra columns (always visible in vcpMode, togglable via panel)
-    const vcpColDefs = vcpMode ? VCP_EXTRA_COLS.filter(c => visibleCols[c.key] !== false) : [];
 
     // Shared button style  no duplicate keys
     const chipBtn = {
@@ -18974,7 +19030,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                             </button>
                                         </div>
                                         <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
-                                            {[...ALL_COLUMNS, ...(vcpMode ? VCP_EXTRA_COLS.map(c => ({ ...c, defaultOn: true })) : [])].map(col => (
+                                            {ALL_COLUMNS.map(col => (
                                                 <div key={col.key}
                                                     onClick={() => setVisibleCols(v => ({ ...v, [col.key]: !v[col.key] }))}
                                                     style={{
@@ -19012,40 +19068,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
 
                 {/*  FILTER BAR  */}
                 <div className="sdv-filterbar">
-
-                    {/* VCP-specific quick filters  only shown in vcpMode */}
-                    {vcpMode && (
-                        <>
-                            {[["ALL", "All"], ["IDEAL", " Ideal"], ["DEVELOPING", " Developing"]].map(([v, l]) => (
-                                <button key={v}
-                                    onClick={() => setVcpCatFilter(v)}
-                                    style={{
-                                        height: 28, padding: "0 10px", borderRadius: 5, fontSize: 11,
-                                        fontFamily: sans, cursor: "pointer", transition: ".12s",
-                                        fontWeight: vcpCatFilter === v ? 700 : 500,
-                                        border: vcpCatFilter === v ? `1px solid ${accentOrFallback}` : `1px solid ${T.border}`,
-                                        background: vcpCatFilter === v ? `${accentOrFallback}14` : T.card,
-                                        color: vcpCatFilter === v ? accentOrFallback : T.subtext
-                                    }}>
-                                    {l}
-                                </button>
-                            ))}
-                            <div style={{ width: 1, height: 18, background: T.border, margin: "0 2px" }} />
-                            <button
-                                onClick={() => setVcpNearPivot(p => !p)}
-                                style={{
-                                    height: 28, padding: "0 10px", borderRadius: 5, fontSize: 11,
-                                    fontFamily: sans, cursor: "pointer", transition: ".12s",
-                                    fontWeight: vcpNearPivot ? 700 : 500,
-                                    border: vcpNearPivot ? `1px solid ${accentOrFallback}` : `1px solid ${T.border}`,
-                                    background: vcpNearPivot ? `${accentOrFallback}14` : T.card,
-                                    color: vcpNearPivot ? accentOrFallback : T.subtext
-                                }}>
-                                Near Pivot
-                            </button>
-                            <div style={{ width: 1, height: 18, background: T.border, margin: "0 2px" }} />
-                        </>
-                    )}
 
                     {filters.map(f => {
                         const def = activeFDefs.find(d => d.key === f.key);
@@ -19269,22 +19291,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                 {c.label} <SortArrow k={c.key} />
                                             </th>
                                         ))}
-                                        {vcpColDefs.map(c => (
-                                            <th key={c.key} onClick={() => handleSort(c.key)}
-                                                style={{
-                                                    padding: "11px 16px",
-                                                    textAlign: ["volume_dryup", "tight_range", "near_pivot"].includes(c.key) ? "center" : "right",
-                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
-                                                    letterSpacing: ".12em", whiteSpace: "nowrap",
-                                                    cursor: "pointer", userSelect: "none",
-                                                    color: sortKey === c.key ? accentOrFallback : T.muted,
-                                                    background: sortKey === c.key ? (isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`) : D.tableHeadBg,
-                                                    borderBottom: sortKey === c.key ? `2px solid ${accentOrFallback}` : "none",
-                                                    transition: "background .1s, color .1s"
-                                                }}>
-                                                {c.label} <SortArrow k={c.key} />
-                                            </th>
-                                        ))}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -19421,38 +19427,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                             padding: "12px 16px", fontFamily: mono,
                                                             fontSize: 15.5, fontWeight: (isRet || isRating || isRelVol) ? 600 : 400,
                                                             textAlign: "right", fontVariantNumeric: "tabular-nums",
-                                                            color: fmt == null ? T.muted : cellColor,
-                                                            whiteSpace: "nowrap"
-                                                        }}>
-                                                            {fmt ?? ""}
-                                                        </td>
-                                                    );
-                                                })}
-                                                {vcpColDefs.map(c => {
-                                                    const v = row[c.key];
-                                                    const fmt = fmtCell(row, c.key);
-                                                    const isBool = ["volume_dryup", "tight_range", "near_pivot"].includes(c.key);
-                                                    const isCat = c.key === "category";
-                                                    const isScore = c.key === "vcp_score";
-                                                    const isPct = ["pct_from_high", "base_depth"].includes(c.key);
-                                                    let cellColor = T.subtext;
-                                                    if (isScore && v != null) {
-                                                        const n = Number(v);
-                                                        cellColor = n >= 80 ? posClr : n >= 60 ? (isDark ? "#818cf8" : "#4f46e5") : T.subtext;
-                                                    } else if (isCat) {
-                                                        cellColor = v === "IDEAL" ? posClr : (isDark ? "#fbbf24" : "#a16207");
-                                                    } else if (isPct && v != null) {
-                                                        cellColor = Number(v) <= 3 ? posClr : T.text;
-                                                    } else if (isBool) {
-                                                        cellColor = v ? posClr : T.muted;
-                                                    }
-                                                    return (
-                                                        <td key={c.key} style={{
-                                                            padding: "12px 16px", fontFamily: mono,
-                                                            fontSize: isBool ? 16 : 15.5,
-                                                            fontWeight: (isScore || isCat) ? 700 : 400,
-                                                            textAlign: isBool ? "center" : "right",
-                                                            fontVariantNumeric: "tabular-nums",
                                                             color: fmt == null ? T.muted : cellColor,
                                                             whiteSpace: "nowrap"
                                                         }}>
@@ -19773,11 +19747,37 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
         table.pfv-table td { padding:12px 16px; font-size:15.5px; border-bottom:1px solid ${D.panelBorder}; white-space:nowrap; }
         table.pfv-table tbody tr:hover { background:${isDark ? "rgba(255,255,255,0.025)" : "rgba(15,23,42,0.02)"}; }
         .pfv-pagination { flex-shrink:0; }
+        .pfv-mobile-back { display:none; }
         @media (max-width:600px) {
-          .pfv-shell { padding:10px 10px 16px; }
-          .pfv-hero { padding:14px 16px 12px; }
+          /* On mobile the hero/badge/description ate most of the screen and
+             .pfv-shell has overflow:hidden (no page scroll), so the table
+             was squeezed into a sliver with no way to reveal more of it.
+             Mirror ScreenDetailView's mobile pattern: collapse the header
+             chrome down to a slim back bar and let the table take the rest. */
+          .pfv-shell { padding:0; gap:0; width:100%; }
+          .pfv-topcard { border-radius:0; border:none; }
+          .pfv-hero { display:none !important; }
+          .pfv-mobile-back {
+            display:flex; align-items:center; gap:10px; flex-shrink:0;
+            padding:0 14px; height:46px;
+            background:${T.surface}; border-bottom:1px solid ${T.border};
+          }
+          .pfv-tabbar { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; padding:10px 14px; }
+          .pfv-tab { flex-shrink:0; }
+          .pfv-filterbar { flex-wrap:nowrap !important; overflow-x:auto; -webkit-overflow-scrolling:touch; padding:8px 14px !important; }
+          .pfv-table-shell { border-radius:0; }
         }
       `}</style>
+
+            <div className="pfv-mobile-back" onClick={onBack} style={{ cursor: "pointer" }}>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 3L5 8l5 5" />
+                </svg>
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.text, fontFamily: sans }}>
+                    {activeMeta?.label || "Pattern Filters"}
+                </span>
+            </div>
 
             <div className="pfv-shell">
                 <div className="pfv-topcard">
@@ -19833,7 +19833,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
                     </div>
 
                     {/*  FILTER BAR  */}
-                    <div style={{
+                    <div className="pfv-filterbar" style={{
                         flexShrink: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
                         padding: "10px 20px", borderBottom: `1px solid ${T.border}`
                     }}>
@@ -20103,7 +20103,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
 }
 
 function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
-    const { top52wHigh, topRS, trendAligned, rsRating, rsAcceleration,
+    const { top52wHigh, topRS, trendAligned, rsRating,
         nameMap, industryMap, tablesLoading } = useBreadthData();
 
     const T = themeTokens || THEMES.light;
@@ -20156,12 +20156,18 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     }, []);
 
     const filterByUniverse = useCallback(rows => {
-        if (universe !== "nifty500") return rows;
+        // Every screen on this page (Market Leaders, Breakouts, Pullbacks,
+        // Trend Template, Chart Patterns) routes through here, so this is
+        // the single choke point to drop non-equity instruments (ETFs,
+        // bonds/NCDs, liquid/mutual-fund units) that occasionally leak into
+        // the underlying tables/views by ticker or company name.
+        const clean = (rows || []).filter(r => !_isExcludedInstrument(r));
+        if (universe !== "nifty500") return clean;
         // Still loading nifty500 constituents — return empty so UI shows loading state
         if (nifty500Loading || !nifty500Set) return [];
         // Fetch succeeded but returned empty set (table missing/empty) — fall back to all rows
-        if (nifty500Set.size === 0) return rows;
-        return rows.filter(r => nifty500Set.has(r.ticker));
+        if (nifty500Set.size === 0) return clean;
+        return clean.filter(r => nifty500Set.has(r.ticker));
     }, [universe, nifty500Set, nifty500Loading]);
 
     // Latest-week-only rows per pattern, filtered by the active universe
@@ -20191,7 +20197,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const dRS6m = useMemo(() => filterByUniverse(topRS.rs6m).slice(0, 50), [topRS, filterByUniverse]);
     const dRS12m = useMemo(() => filterByUniverse(topRS.rs12m).slice(0, 50), [topRS, filterByUniverse]);
     const dRsRating = useMemo(() => filterByUniverse(rsRating || []).slice(0, 50), [rsRating, filterByUniverse]);
-    const dRsAccel = useMemo(() => filterByUniverse(rsAcceleration || []).slice(0, 50), [rsAcceleration, filterByUniverse]);
 
     const rs3mMap = useMemo(() => new Map(filterByUniverse(topRS.rs3m).map(r => [r.ticker, Number(r.rs_3m)])), [topRS, filterByUniverse]);
     const rs6mMap = useMemo(() => new Map(filterByUniverse(topRS.rs6m).map(r => [r.ticker, Number(r.rs_6m)])), [topRS, filterByUniverse]);
@@ -20520,49 +20525,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         [volBreakoutRawRows, filterByUniverse]
     );
 
-    //  VCP Pattern scan  dedicated fetch from vcp_candidates 
-    const [vcpRawRows, setVcpRawRows] = useState(() => _screensVcpCache.rows || []);
-    const [vcpLoading, setVcpLoading] = useState(!(_screensVcpCache.rows && _screensVcpCache.rows.length > 0));
-    const [vcpReturnMap, setVcpReturnMap] = useState(() => _screensVcpCache.returnMap || {});
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const load = async () => {
-            try {
-                //  SWR: serve stale cache instantly 
-                const _bc = _screensVcpCache;
-                const _bcHasData = _bc.rows && _bc.rows.length > 0;
-                if (_bcHasData) {
-                    if (!cancelled) { setVcpRawRows(_bc.rows); setVcpReturnMap(_bc.returnMap || {}); setVcpLoading(false); }
-                } else {
-                    setVcpLoading(true);
-                }
-
-                // vcp_candidates joined with mv_screens_base now happens in
-                // get_screens_vcp() (Postgres RPC), replacing the three separate
-                // fetches (vcp_candidates + stock_returns + stock_52w) + client join.
-                const normalized = await _prefetchScreensVcp();
-                if (!cancelled) {
-                    setVcpRawRows(normalized);
-                    setVcpReturnMap(_screensVcpCache.returnMap || {});
-                }
-            } catch (e) {
-                if (!cancelled) console.error("[VCP] fetch failed:", e);
-            } finally {
-                if (!cancelled) setVcpLoading(false);
-            }
-        };
-
-        load();
-        return () => { cancelled = true; };
-    }, []);
-
-    const dVcp = useMemo(
-        () => filterByUniverse(vcpRawRows),
-        [vcpRawRows, filterByUniverse]
-    );
-
     //  Minervini Trend Template scan  dedicated fetch from minervini_screen table 
     // The table is refreshed daily by the sync pipeline and already carries the
     // full 8-criteria Trend Template pass/fail flags (c1_above_150_200 ...
@@ -20619,8 +20581,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     }, [minerviniRawRows, filterByUniverse]);
 
     const totalCount = d52w.length + dRS3m.length + dRS6m.length + dRS12m.length +
-        dMultiTF.length + dRsRating.length + dRsAccel.length;
-    const techSetupsCount = dVcp.length;
+        dMultiTF.length + dRsRating.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length;
@@ -20643,7 +20604,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             "RS Leader": { rowKey: "ml-rsrating", title: "RS Rating Leaders", rows: dRsRating, scoreKey: "rs_rating", scoreLabel: "RS Rating", color: "#22c55e", formatVal: v => Math.round(v).toString() },
             "Near 52W High": { rowKey: "ml-52w", title: "Near 52W High", rows: d52w, scoreKey: "pct_from_52w_high", scoreLabel: "From High", color: "#60a5fa", formatVal: v => `-${Number(v).toFixed(1)}%` },
             "Multi-TF RS": { rowKey: "ml-multitf", title: "Multi-TF RS Leaders", rows: dMultiTF, scoreKey: "combo", scoreLabel: "RS Composite", color: "#818cf8", formatVal: v => Number(v).toFixed(2) },
-            "RS Accel": { rowKey: "ml-rsacc", title: "RS Acceleration", rows: dRsAccel, scoreKey: "rs_acceleration", scoreLabel: "Acceleration", color: "#c084fc", formatVal: v => Number(v).toFixed(2) },
             "Vol Breakout": { rowKey: "bo-vol", title: "Volume Breakout", rows: dVolBreakout, scoreKey: "rel_volume", scoreLabel: "Rel Vol", color: "#34d399", formatVal: v => `${Number(v).toFixed(2)}x` },
             "52W High BO": { rowKey: "bo-52w", title: "52W High Breakout", rows: d52wBreakout, scoreKey: "pct_from_52w_high", scoreLabel: "From High", color: "#4ade80", formatVal: v => v <= 0 ? `+${Math.abs(v).toFixed(2)}%` : `-${Number(v).toFixed(2)}%` },
             "Pivot BO": { rowKey: "bo-pivot", title: "Pivot Breakout", rows: dPivotBreakout, scoreKey: "pct_above_pivot", scoreLabel: "% Above Pivot", color: "#22c55e", formatVal: v => `+${Number(v).toFixed(2)}%` },
@@ -20662,7 +20622,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 scoreKey: sc.scoreKey, scoreLabel: sc.scoreLabel, formatVal: sc.formatVal
             });
         }
-    }, [pendingScreen, tablesLoading, dRsRating, d52w, dMultiTF, dRsAccel,
+    }, [pendingScreen, tablesLoading, dRsRating, d52w, dMultiTF,
         dVolBreakout, d52wBreakout, dPivotBreakout, dPb50dma, dPbShallow, dPbWeekly, dPbVolDryup]);
 
     // Accent  a neutral blue separate from the app's green
@@ -20678,7 +20638,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 nameMap={nameMap}
                 industryMap={industryMap}
                 onTechnoFundaScan={onTechnoFundaScan}
-                tablesLoading={screenDetail.vcpMode ? vcpLoading : tablesLoading}
+                tablesLoading={tablesLoading}
             />
         );
     }
@@ -20769,7 +20729,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             return { count: rows.length, avg, label: "AVG 3M" };
         }
         if (scoreKey) {
-            // fallback: avg of the primary score column (e.g. vcp_score)
+            // fallback: avg of the primary score column
             const sVals = rows.map(r => r[scoreKey]).filter(v => v != null && !isNaN(Number(v)));
             if (sVals.length) {
                 const avg = sVals.reduce((s, v) => s + Number(v), 0) / sVals.length;
@@ -21005,10 +20965,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     subtitle="Strong relative strength across 3M, 6M and 12M simultaneously"
                                     rows={dMultiTF} scoreKey="combo" scoreLabel="RS Composite"
                                     formatScore={v => v.toFixed(2)} tfLabel="Multi-TF Leaders" />
-                                <ScreenRow rowKey="ml-rsacc" title="RS Acceleration"
-                                    subtitle="Stocks where relative strength is picking up pace"
-                                    rows={dRsAccel} scoreKey="rs_acceleration" scoreLabel="Acceleration"
-                                    formatScore={v => v.toFixed(2)} tfLabel="RS Acceleration" />
                             </CategorySection>
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
@@ -22205,7 +22161,7 @@ function SectorRotationModule({ T }) {
 
 
 function TechnicalAnalyticsModule({ T, subPage = "breadth", onTechnoFundaScan }) {
-    const [breadthShared, setBreadthShared] = useState({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], rsAcceleration: [], nameMap: {}, industryMap: {}, tablesLoading: true });
+    const [breadthShared, setBreadthShared] = useState({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], nameMap: {}, industryMap: {}, tablesLoading: true });
     const isRotation = subPage === "rotation";
     return (
         <BreadthDataContext.Provider value={breadthShared}>
