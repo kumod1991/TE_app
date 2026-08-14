@@ -1040,7 +1040,7 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
     );
 }
 
-function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, onNavigate }) {
+const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, onNavigate }) {
     const topRsSectors = [...(rsIndustrySummary || [])]
         .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
         .slice(0, 5);
@@ -1293,7 +1293,7 @@ function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, 
             </div>
         </section>
     );
-}
+});
 
 function exportCSV(data, filename) {
     if (!data.length) return;
@@ -2108,7 +2108,7 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
 
 
 // --- ALL RS TABLE (Top 50 stocks by RS Rating from indicators) ---
-function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
+const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
@@ -2257,7 +2257,7 @@ function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
         <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
         </>
     );
-}
+});
 
 // ─── TREND TEMPLATE (MINERVINI) CARD ──────────────────────────────────────────
 // Self-contained: fetches minervini_screen directly (passes_all=true, RS-sorted)
@@ -2546,7 +2546,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
 }
 
 // â”€â”€â”€ MOVERS TABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
+const MoversTable = React.memo(function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState(() => {
         if (type === "gainers" || type === "losers") return "change_pct";
@@ -2789,11 +2789,11 @@ function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadi
         <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
         </>
     );
-}
+});
 
 
 // ─── VOLUME SHOCKERS TABLE ───────────────────────────────────────────────────
-function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
+const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("volume_ratio");
     const [sortDir, setSortDir] = useState("desc");
@@ -2978,7 +2978,7 @@ function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loa
         <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
         </>
     );
-}
+});
 
 // ─── RS LOGIN GATE ────────────────────────────────────────────────────────────
 function RsLoginGate({ T, isLocked, onLogin, children }) {
@@ -4079,7 +4079,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                     </TabBar>
                 {activeMoversTab === "volume_shockers"
                     ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} hasMore={volumeShockersHasMore} loadingMore={loadingMoreVolumeShockers} onLoadMore={loadMoreVolumeShockers} />
-                    : <MoversTable key={activeMoversTab} T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} hasMore={moversHasMore} loadingMore={loadingMoreMovers} onLoadMore={loadMoreMovers} />
+                    : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} hasMore={moversHasMore} loadingMore={loadingMoreMovers} onLoadMore={loadMoreMovers} />
                 }
                                 </SectionCard>
                             )}
