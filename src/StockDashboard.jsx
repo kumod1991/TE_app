@@ -2914,17 +2914,12 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
                     <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
                     <VTh k="name" label="Name" />
                     <VTh k="close" label="LTP" />
-                    <VTh k="change_pct" label="Chg %" />
                     <VTh k="today_volume" label="Volume" />
                     <VTh k="volume_ratio" label="Rel Vol" />
                 </tr>
             </thead>
             <tbody>
                 {visibleRows.map((row, i) => {
-                    const chg = row.change_pct;
-                    const isPos = chg != null && chg > 0;
-                    const isNeg = chg != null && chg < 0;
-                    const chgColor = isPos ? (T.pos || "#0ea67a") : isNeg ? (T.neg || "#ef4444") : T.muted;
                     const vr = row.volume_ratio;
                     const vrColor = vr == null ? T.muted
                         : vr >= 10 ? (T.pos || "#10b981")
@@ -2948,24 +2943,6 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
                                 <NameCell T={T} name={row.name} ticker={row.ticker} />
                             </td>
                             <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
-                                <span style={{
-                                    display: "inline-block",
-                                    padding: "3px 8px",
-                                    borderRadius: 6,
-                                    background: isPos
-                                        ? withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10)
-                                        : isNeg
-                                            ? withAlpha(T.neg || "#ef4444", T.isDark ? 0.18 : 0.10)
-                                            : withAlpha(T.muted, 0.10),
-                                    color: chgColor,
-                                    fontFamily: "'IBM Plex Mono', monospace",
-                                    fontWeight: 700,
-                                    fontSize: 15.5,
-                                    minWidth: 64,
-                                    textAlign: "right",
-                                }}>{fmtPct(chg)}</span>
-                            </td>
                             <td style={{ padding: "12px 16px", textAlign: "right", color: T.subtext || T.muted, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5 }}>{fmtVol(row.today_volume)}</td>
                             <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 15.5, color: vrColor }}>
                                 {vr != null ? `${Number(vr).toFixed(2)}x` : EMPTY_VALUE}
