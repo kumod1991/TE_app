@@ -12025,7 +12025,7 @@ const _BREADTH_CACHE_TTL_MS = 30 * 60 * 1000;
 //   - GSEC / SDL   → government-securities / state-development-loan ETFs
 //   - BOND / NCD   → bond and non-convertible-debenture instruments
 //   - MUTUAL       → mutual fund units
-const _EXCLUDED_INSTRUMENT_PATTERNS = [/ETF/i, /BEES/i, /LIQ/i, /GSEC/i, /SDL/i, /BOND/i, /NCD/i, /MUTUAL/i];
+const _EXCLUDED_INSTRUMENT_PATTERNS = [/ETF/i, /BEES/i, /LIQ/i, /GSEC/i, /SDL/i, /BOND/i, /NCD/i, /MUTUAL/i, /MULTICAP/i, /GILT/i, /VALUE360/i, /MIDSMALL/i, /SMALL250/i, /EQUAL/i, /NIFTY500/i, /50/i, /100/i, /150/i, /200/i, /250/i, /300/i, /350/i, /400/i, /500/i, /NEXT/i];
 function _isExcludedInstrument(row) {
     const ticker = row?.ticker || "";
     const name = row?.name || "";
@@ -12037,14 +12037,12 @@ function _isExcludedInstrument(row) {
 const _SCREENS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min in-memory fresh window
 const _LS_SCREENS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h localStorage stale-but-usable window
 
-let _mvScreensBaseCache = { rows: null, loadedAt: null };
 let _screensBreakoutCache = { rows: null, loadedAt: null };
 let _screensPivotCache = { rows: null, loadedAt: null };
 let _screensVolBreakCache = { rows: null, loadedAt: null };
 let _screensPullbackCache = { rows: null, loadedAt: null };
 let _screensMinerviniCache = { rows: null, loadedAt: null };
 
-const _LS_MV_SCREENS_BASE = "te_mv_screens_base_v1";
 const _LS_SCR_BREAKOUT = "te_scr_breakout_v1";
 const _LS_SCR_PIVOT = "te_scr_pivot_v1";
 const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
@@ -12052,7 +12050,6 @@ const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
 const _LS_SCR_MINERVINI = "te_scr_minervini_v1";
 
 // In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
-let _prefetchMvBasePromise = null;
 let _prefetchBreakoutPromise = null;
 let _prefetchPivotPromise = null;
 let _prefetchVolBreakPromise = null;
@@ -12062,7 +12059,6 @@ let _prefetchMinerviniPromise = null;
 // Seed all screens caches from localStorage on module load (SWR: serve stale on first paint)
 (function _seedScreensCaches() {
     const pairs = [
-        [_LS_MV_SCREENS_BASE, v => { _mvScreensBaseCache = v; }],
         [_LS_SCR_BREAKOUT, v => { _screensBreakoutCache = v; }],
         [_LS_SCR_PIVOT, v => { _screensPivotCache = v; }],
         [_LS_SCR_VOLBREAK, v => { _screensVolBreakCache = v; }],
@@ -12113,107 +12109,23 @@ async function _rpcScreens(fnName, body) {
     return rows;
 }
 
-// ─── Direct mv_screens_base fetch (replaces the get_screens_* RPCs) ─────────
-// Breakout / Pivot / VolBreak / Pullback all read from the same underlying
-// materialized view (mv_screens_base). Rather than round-tripping through a
-// Postgres RPC per scan, we pull the whole view once via PostgREST (paginated
-// with Range headers since Supabase caps a single response at ~1000 rows) and
-// derive every scan client-side from that single shared array. This mirrors
-// the exact SQL conditions the RPCs used to apply — see each _derive* fn below.
-async function _fetchMvScreensBase() {
-    const PAGE_SIZE = 1000;
-    let all = [];
-    let offset = 0;
-    for (;;) {
-        const r = await fetch(
-            `${SUPABASE_URL}/rest/v1/mv_screens_base?select=*&order=ticker.asc`,
-            {
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                    Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-                },
-            }
-        );
-        const page = await r.json();
-        if (!Array.isArray(page)) {
-            throw new Error(page?.message || "mv_screens_base returned a non-array response");
-        }
-        all = all.concat(page);
-        if (page.length < PAGE_SIZE) break;
-        offset += PAGE_SIZE;
-    }
-    return all;
-}
+// ─── Server-filtered screen fetches (get_screens_* RPCs) ────────────────────
+// Breakout / Pivot / VolBreak / Pullback each call their own Postgres RPC,
+// which filters mv_screens_base down to matching rows *in the database* and
+// returns only those (typically hundreds of rows, not the full ~2,000+ stock
+// universe). This replaces the old approach of paginating the entire
+// mv_screens_base view over PostgREST and filtering client-side — that path
+// shipped every stock's full indicator set (including guaranteed non-matches
+// like null-rs_rating rows and ETFs) across multiple sequential round trips,
+// then re-ran the filter logic 4-8 times in the browser. See screens_phase1.sql
+// / screens_phase2.sql for the SQL definitions.
+// Universe (All / Nifty 500) is intentionally NOT passed to the RPC here —
+// we always fetch p_universe='all' and let filterByUniverse() apply the
+// Nifty 500 filter reactively client-side (same as before), so toggling the
+// universe selector doesn't trigger a re-fetch.
 
-function _prefetchMvScreensBase() {
-    if (_mvScreensBaseCache.rows && _mvScreensBaseCache.rows.length > 0 &&
-        _mvScreensBaseCache.loadedAt && (Date.now() - _mvScreensBaseCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
-        return Promise.resolve(_mvScreensBaseCache.rows);
-    }
-    if (_prefetchMvBasePromise) return _prefetchMvBasePromise;
-    _prefetchMvBasePromise = (async () => {
-        try {
-            const rows = await _fetchMvScreensBase();
-            const cache = { rows, loadedAt: Date.now() };
-            _mvScreensBaseCache = cache;
-            _lsWriteScreens(_LS_MV_SCREENS_BASE, cache);
-            return rows;
-        } catch (e) { console.warn("[prefetch] mv_screens_base failed:", e); return []; }
-        finally { _prefetchMvBasePromise = null; }
-    })();
-    return _prefetchMvBasePromise;
-}
-
-// 52W High Breakout — within 7% of the 52W high, Stage-2 trend (close > sma50
-// > sma200), >25% up from the 52W low, volume >= 1.5x its 20D avg, rs >= 80.
-function _deriveScreensBreakout(rows) {
-    return rows.filter(r => {
-        const close = Number(r.close), sma50 = Number(r.sma50), sma200 = Number(r.sma200);
-        if (!(Number(r.pct_from_high) >= -7)) return false;
-        if (!(close > sma50 && sma50 > sma200)) return false;
-        if (!(Number(r.pct_from_low) > 25)) return false;
-        const vol = Number(r.volume), volMa = Number(r.volume_ma20);
-        if (!(volMa > 0 && vol / volMa >= 1.5)) return false;
-        if (!((r.rs_rating ?? 0) >= 80)) return false;
-        return true;
-    });
-}
-
-// Pivot Breakout base set — trend alignment only (sma50 > sma150 > sma200).
-// Which pivot level (10D/20D/10W/20W) the price must be above is picked
-// client-side by the pivotTF selector in dPivotBreakout, same as before.
-function _deriveScreensPivot(rows) {
-    return rows.filter(r => {
-        const s50 = Number(r.sma50), s150 = Number(r.sma150), s200 = Number(r.sma200);
-        return s50 > s150 && s150 > s200;
-    });
-}
-
-// Volume Breakout — Stage-2 trend, volume >= 2x its 20D avg, >15% up from
-// the 52W low. No upper bound on pct_from_high (catches all breakout levels).
-function _deriveScreensVolBreak(rows) {
-    return rows.filter(r => {
-        const close = Number(r.close), sma50 = Number(r.sma50), sma200 = Number(r.sma200);
-        if (!(close > sma50 && sma50 > sma200)) return false;
-        const vol = Number(r.volume), volMa = Number(r.volume_ma20);
-        if (!(volMa > 0 && vol / volMa >= 2.0)) return false;
-        if (!(Number(r.pct_from_low) > 15)) return false;
-        return true;
-    }).sort((a, b) => Number(b.rel_volume) - Number(a.rel_volume));
-}
-
-// Pullback base set — the 5 derived pullback scans (dPb50dma, dPbPivotRetest,
-// dPbShallow, dPbWeekly, dPbVolDryup) each apply their own rs_rating/sma/pivot
-// thresholds client-side already, so this just passes through rows with the
-// columns those scans need, normalizing volume_ma20 -> volume_20ma to match
-// the field name the existing pullback/detail-table code expects.
-function _deriveScreensPullback(rows) {
-    return rows
-        .filter(r => r.close != null && r.sma50 != null && r.sma200 != null)
-        .map(r => ({ ...r, volume_20ma: r.volume_ma20 }));
-}
-
+// 52W High Breakout — within 7% of the 52W high, Stage-2 trend, >25% up from
+// the 52W low, volume >= 1.5x its 20D avg, rs >= 80, cap_category classified.
 function _prefetchScreensBreakout() {
     if (_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0 &&
         _screensBreakoutCache.loadedAt && (Date.now() - _screensBreakoutCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
@@ -12222,8 +12134,7 @@ function _prefetchScreensBreakout() {
     if (_prefetchBreakoutPromise) return _prefetchBreakoutPromise;
     _prefetchBreakoutPromise = (async () => {
         try {
-            const base = await _prefetchMvScreensBase();
-            const rows = _deriveScreensBreakout(base);
+            const rows = await _rpcScreens("get_screens_breakout", { p_universe: "all" });
             const cache = { rows, loadedAt: Date.now() };
             _screensBreakoutCache = cache;
             _lsWriteScreens(_LS_SCR_BREAKOUT, cache);
@@ -12234,6 +12145,10 @@ function _prefetchScreensBreakout() {
     return _prefetchBreakoutPromise;
 }
 
+// Pivot Breakout base set — trend alignment (sma50 > sma150 > sma200), rs >= 30,
+// >15% up from the 52W low, cap_category classified. All four pivot levels
+// (10D/20D/10W/20W) come back on every row; the pivotTF selector in
+// dPivotBreakout still picks the level client-side, no re-fetch on TF change.
 function _prefetchScreensPivot() {
     if (_screensPivotCache.rows && _screensPivotCache.rows.length > 0 &&
         _screensPivotCache.loadedAt && (Date.now() - _screensPivotCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
@@ -12242,8 +12157,7 @@ function _prefetchScreensPivot() {
     if (_prefetchPivotPromise) return _prefetchPivotPromise;
     _prefetchPivotPromise = (async () => {
         try {
-            const base = await _prefetchMvScreensBase();
-            const rows = _deriveScreensPivot(base);
+            const rows = await _rpcScreens("get_screens_pivot", {});
             const cache = { rows, loadedAt: Date.now() };
             _screensPivotCache = cache;
             _lsWriteScreens(_LS_SCR_PIVOT, cache);
@@ -12254,6 +12168,8 @@ function _prefetchScreensPivot() {
     return _prefetchPivotPromise;
 }
 
+// Volume Breakout — Stage-2 trend, volume >= 2x its 20D avg, >15% up from
+// the 52W low. No cap_category or RS floor (matches original behavior).
 function _prefetchScreensVolBreak() {
     if (_screensVolBreakCache.rows && _screensVolBreakCache.rows.length > 0 &&
         _screensVolBreakCache.loadedAt && (Date.now() - _screensVolBreakCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
@@ -12262,8 +12178,7 @@ function _prefetchScreensVolBreak() {
     if (_prefetchVolBreakPromise) return _prefetchVolBreakPromise;
     _prefetchVolBreakPromise = (async () => {
         try {
-            const base = await _prefetchMvScreensBase();
-            const rows = _deriveScreensVolBreak(base);
+            const rows = await _rpcScreens("get_screens_volbreak", {});
             const cache = { rows, loadedAt: Date.now() };
             _screensVolBreakCache = cache;
             _lsWriteScreens(_LS_SCR_VOLBREAK, cache);
@@ -12274,6 +12189,11 @@ function _prefetchScreensVolBreak() {
     return _prefetchVolBreakPromise;
 }
 
+// Pullback base set — rs_rating >= 60 (below the tightest client-side pullback
+// threshold of 70, so it's a safe wide pre-filter), sma50/sma200 not null,
+// cap_category classified. The 5 derived pullback scans (dPb50dma,
+// dPbPivotRetest, dPbShallow, dPbWeekly, dPbVolDryup) still run as client-side
+// useMemos on top of this — no extra network calls when switching scans.
 function _prefetchScreensPullback() {
     if (_screensPullbackCache.rows && _screensPullbackCache.rows.length > 0 &&
         _screensPullbackCache.loadedAt && (Date.now() - _screensPullbackCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
@@ -12282,8 +12202,7 @@ function _prefetchScreensPullback() {
     if (_prefetchPullbackPromise) return _prefetchPullbackPromise;
     _prefetchPullbackPromise = (async () => {
         try {
-            const base = await _prefetchMvScreensBase();
-            const rows = _deriveScreensPullback(base);
+            const rows = await _rpcScreens("get_screens_pullback", {});
             const cache = { rows, loadedAt: Date.now() };
             _screensPullbackCache = cache;
             _lsWriteScreens(_LS_SCR_PULLBACK, cache);
@@ -18787,7 +18706,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
             box-shadow:none;
           }
         }
-        .sdv-techno-mobile { display:none; }
         /* Mobile back bar — hidden on desktop */
         .sdv-mobile-back {
           display:none;
@@ -18939,28 +18857,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                             </span>
 
                             <div style={{ width: 1, height: 14, background: T.border }} />
-
-                            {!tablesLoading && onTechnoFundaScan && filteredRows.length > 0 && (
-                                <button
-                                    className="sdv-techno-btn"
-                                    onClick={() => onTechnoFundaScan({ label: title, tickers: new Set(filteredRows.map(r => r.ticker)) })}
-                                    style={{
-                                        display: "inline-flex", alignItems: "center", gap: 5,
-                                        height: 26, padding: "0 11px",
-                                        border: `1px solid ${accentOrFallback}44`, borderRadius: 6,
-                                        background: `${accentOrFallback}0d`, color: accentOrFallback,
-                                        fontSize: 11, fontWeight: 600, fontFamily: sans,
-                                        cursor: "pointer", transition: "background .12s"
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.background = `${accentOrFallback}1c`}
-                                    onMouseLeave={e => e.currentTarget.style.background = `${accentOrFallback}0d`}>
-                                    <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                                        strokeWidth="2.2" strokeLinecap="round">
-                                        <circle cx="6" cy="6" r="4" /><line x1="9.5" y1="9.5" x2="14" y2="14" />
-                                    </svg>
-                                    TechnoFunda
-                                </button>
-                            )}
 
                             <div style={{ position: "relative" }} ref={colPanelRef}>
                                 <button
@@ -19146,26 +19042,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                         </button>
                     )}
 
-                    {/* Mobile-only TechnoFunda  visible 600px via CSS, hidden on desktop */}
-                    {!tablesLoading && onTechnoFundaScan && filteredRows.length > 0 && (
-                        <button
-                            className="sdv-techno-mobile"
-                            onClick={() => onTechnoFundaScan({ label: title, tickers: new Set(filteredRows.map(r => r.ticker)) })}
-                            style={{
-                                alignItems: "center", gap: 5,
-                                height: 28, padding: "0 11px",
-                                border: `1px solid ${accentOrFallback}44`, borderRadius: 6,
-                                background: `${accentOrFallback}0d`, color: accentOrFallback,
-                                fontSize: 11, fontWeight: 600, fontFamily: sans,
-                                cursor: "pointer", marginLeft: "auto"
-                            }}>
-                            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                                strokeWidth="2.2" strokeLinecap="round" style={{ marginRight: 4 }}>
-                                <circle cx="6" cy="6" r="4" /><line x1="9.5" y1="9.5" x2="14" y2="14" />
-                            </svg>
-                            TechnoFunda
-                        </button>
-                    )}
                 </div>
 
                 {/*  TABLE  */}
@@ -20078,7 +19954,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
 }
 
 function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
-    const { top52wHigh, topRS, trendAligned, rsRating,
+    const { topRS, trendAligned, rsRating,
         nameMap, industryMap, tablesLoading } = useBreadthData();
 
     const T = themeTokens || THEMES.light;
@@ -20167,7 +20043,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         [patternPreviewRows]
     );
 
-    const d52w = useMemo(() => filterByUniverse(top52wHigh).slice(0, 50), [top52wHigh, filterByUniverse]);
     const dRS3m = useMemo(() => filterByUniverse(topRS.rs3m).slice(0, 50), [topRS, filterByUniverse]);
     const dRS6m = useMemo(() => filterByUniverse(topRS.rs6m).slice(0, 50), [topRS, filterByUniverse]);
     const dRS12m = useMemo(() => filterByUniverse(topRS.rs12m).slice(0, 50), [topRS, filterByUniverse]);
@@ -20555,7 +20430,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [minerviniRawRows, filterByUniverse]);
 
-    const totalCount = d52w.length + dRS3m.length + dRS6m.length + dRS12m.length +
+    const totalCount = dRS3m.length + dRS6m.length + dRS12m.length +
         dMultiTF.length + dRsRating.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
@@ -20577,7 +20452,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         if (!pendingScreen || tablesLoading) return;
         const PILL_MAP = {
             "RS Leader": { rowKey: "ml-rsrating", title: "RS Rating Leaders", rows: dRsRating, scoreKey: "rs_rating", scoreLabel: "RS Rating", color: "#22c55e", formatVal: v => Math.round(v).toString() },
-            "Near 52W High": { rowKey: "ml-52w", title: "Near 52W High", rows: d52w, scoreKey: "pct_from_52w_high", scoreLabel: "From High", color: "#60a5fa", formatVal: v => `-${Number(v).toFixed(1)}%` },
             "Multi-TF RS": { rowKey: "ml-multitf", title: "Multi-TF RS Leaders", rows: dMultiTF, scoreKey: "combo", scoreLabel: "RS Composite", color: "#818cf8", formatVal: v => Number(v).toFixed(2) },
             "Vol Breakout": { rowKey: "bo-vol", title: "Volume Breakout", rows: dVolBreakout, scoreKey: "rel_volume", scoreLabel: "Rel Vol", color: "#34d399", formatVal: v => `${Number(v).toFixed(2)}x` },
             "52W High BO": { rowKey: "bo-52w", title: "52W High Breakout", rows: d52wBreakout, scoreKey: "pct_from_52w_high", scoreLabel: "From High", color: "#4ade80", formatVal: v => v <= 0 ? `+${Math.abs(v).toFixed(2)}%` : `-${Number(v).toFixed(2)}%` },
@@ -20597,7 +20471,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 scoreKey: sc.scoreKey, scoreLabel: sc.scoreLabel, formatVal: sc.formatVal
             });
         }
-    }, [pendingScreen, tablesLoading, dRsRating, d52w, dMultiTF,
+    }, [pendingScreen, tablesLoading, dRsRating, dMultiTF,
         dVolBreakout, d52wBreakout, dPivotBreakout, dPb50dma, dPbShallow, dPbWeekly, dPbVolDryup]);
 
     // Accent  a neutral blue separate from the app's green
@@ -20916,10 +20790,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             <CategorySection name="Market Leaders" color={ACCENT}
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
                                 count={tablesLoading ? "" : totalCount}>
-                                <ScreenRow rowKey="ml-52w" title="Near 52W High"
-                                    subtitle="Top momentum stocks within 5% of 52-week highs"
-                                    rows={d52w} scoreKey="pct_from_52w_high" scoreLabel="From High"
-                                    formatScore={v => `-${v.toFixed(1)}%`} tfLabel="Near 52W High" />
                                 <ScreenRow rowKey="ml-rsrating" title="RS Rating Leaders"
                                     subtitle="Composite relative strength score on a 0-99 scale"
                                     rows={dRsRating} scoreKey="rs_rating" scoreLabel="RS Rating"
