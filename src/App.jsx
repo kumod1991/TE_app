@@ -1648,6 +1648,7 @@ a:hover { text-decoration: underline; }
   background: ${T.card};
   box-shadow: ${D ? "0 12px 32px rgba(0,0,0,0.34)" : "0 1px 2px rgba(15,23,42,0.04), 0 12px 28px rgba(15,23,42,0.05)"};
 }
+.journal-hero.no-aside { grid-template-columns: 1fr; }
 .journal-hero-copy { min-width: 0; }
 .journal-hero-aside {
   display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
@@ -3477,8 +3478,10 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], mobileMetrics =
     const asideCards = (asideTitle || asideValue) ? [{ label: asideTitle, value: asideValue, sub: asideBody, tone: asideTone }] : [];
     const carouselCards = asideFirst ? [...asideCards, ...metricCards] : [...metricCards, ...asideCards];
 
+    const hasAside = !!(asideTitle || asideValue);
+
     return (
-        <section className="journal-hero">
+        <section className={`journal-hero${hasAside ? "" : " no-aside"}`}>
             <div className="journal-hero-copy">
                 <div className="journal-kicker-row">
                     <span className="journal-kicker">{kicker}</span>
@@ -3890,20 +3893,15 @@ function Analytics({ trades, tradeRows, stats: providedStats, T }) {
                 kicker="Journals / Analytics"
                 title="Trade Performance analytics"
                 metrics={[
-                    //{ label: "Best trade", value: stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : "--", tone: "positive", sub: "Largest realized winner" },
-                    //{ label: "Worst trade", value: stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : "--", tone: "negative", sub: "Largest realized drawdown" },
-                    //{ label: "Profit factor", value: pf || "--", sub: `${stats.closed.length} closed trades analysed` },
+                    { label: "Best Trade", value: stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : "--", tone: "positive", sub: "Largest realized winner" },
+                    { label: "Worst Trade", value: stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : "--", tone: "negative", sub: "Largest realized drawdown" },
+                    { label: "Closed Trades", value: `${stats.closed.length}`, sub: "Total closed positions" },
+                    { label: "Profit Factor", value: pf || "--", sub: `${stats.closed.length} closed trades analysed` },
                 ]}
                 asideTitle="Monthly cadence"
                 asideValue={`${monthly.length}`}
                 asideBody={monthly.length ? "Tracked months contributing to the current P&L rhythm." : "Add more closed trades to unlock trend analysis."}
             />
-            <div className="stats-row" style={{ marginBottom: 15, marginTop: 15 }}>
-                <div className="stat-card"><div className="stat-label">Best Trade</div><div className="stat-value green" style={{ fontSize: 16 }}>{stats.wins.length ? `+${Math.max(...stats.wins.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
-                <div className="stat-card"><div className="stat-label">Worst Trade</div><div className="stat-value red" style={{ fontSize: 16 }}>{stats.losses.length ? `${Math.min(...stats.losses.map(t => t.pnl)).toFixed(0)}` : ""}</div></div>
-                <div className="stat-card"><div className="stat-label">Closed Trades</div><div className="stat-value">{stats.closed.length}</div></div>
-                <div className="stat-card"><div className="stat-label">Profit Factor</div><div className="stat-value">{pf}</div></div>
-            </div>
             <div className="chart-grid">
                 <div className="chart-card" style={{ gridColumn: "span 2" }}><div className="chart-title">Monthly P&amp;L</div>
                     <div className="bar-chart">{monthly.length === 0 ? <div className="empty" style={{ padding: 16 }}>No data yet</div> : monthly.map(([month, pnl]) => (
@@ -4018,39 +4016,14 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
                 kicker="Journals / Capital Gains"
                 title="Financial-year gain book"
                 metrics={[
-                    //{ label: "Total realized P&L", value: `${totalPnl >= 0 ? "+" : ""}${inr(totalPnl)}`, tone: totalPnl >= 0 ? "positive" : "negative", sub: "Across all tracked years" },
-                    //{ label: "STCG", value: `${tot.st.pnl >= 0 ? "+" : ""}${inr(tot.st.pnl)}`, tone: tot.st.pnl >= 0 ? "positive" : "negative", sub: "Held 365 days or less" },
-                    //{ label: "LTCG", value: `${tot.lt.pnl >= 0 ? "+" : ""}${inr(tot.lt.pnl)}`, tone: tot.lt.pnl >= 0 ? "positive" : "negative", sub: "Held above 365 days" },
+                    { label: "Total P&L (All Years)", value: `${totalPnl >= 0 ? "+" : ""}${inr(totalPnl)}`, tone: totalPnl >= 0 ? "positive" : "negative", sub: "Short Term + Long Term" },
+                    { label: "Short Term P&L", value: `${tot.st.pnl >= 0 ? "+" : ""}${inr(tot.st.pnl)}`, tone: tot.st.pnl >= 0 ? "positive" : "negative", sub: "Held \u2264365 days \u00b7 Tax 20%" },
+                    { label: "Long Term P&L", value: `${tot.lt.pnl >= 0 ? "+" : ""}${inr(tot.lt.pnl)}`, tone: tot.lt.pnl >= 0 ? "positive" : "negative", sub: "Held >365 days \u00b7 Tax 12.5%" },
                 ]}
                 asideTitle="Current FY"
                 asideValue={curFY}
                 asideBody="Realized gains are bucketed by exit date into Indian financial years from April to March."
             />
-
-            {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 10, marginTop:10 }}>
-                <div className="stat-card hero">
-                    <div className="stat-label">Total P&amp;L (All Years)</div>
-                    <div className={`stat-value hero ${totalPnl >= 0 ? "green" : "red"}`} style={{ fontSize: 18 }}>
-                        {totalPnl >= 0 ? "+" : ""}{inr(totalPnl)}
-                    </div>
-                    <div className="stat-sub">Short Term + Long Term</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Short Term P&amp;L <span style={{ fontSize: 10, background: "rgba(5,150,105,.15)", color: "#34d399", borderRadius: 4, padding: "2px 6px", marginLeft: 4 }}>STCG</span></div>
-                    <div className="stat-value" style={{ fontSize: 18, color: tot.st.pnl >= 0 ? T.pos : T.neg }}>
-                        {tot.st.pnl >= 0 ? "+" : ""}{inr(tot.st.pnl)}
-                    </div>
-                    <div className="stat-sub">Held 365 days  Tax 20%</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Long Term P&amp;L <span style={{ fontSize: 10, background: "rgba(168,85,247,.15)", color: "#c084fc", borderRadius: 4, padding: "2px 6px", marginLeft: 4 }}>LTCG</span></div>
-                    <div className="stat-value" style={{ fontSize: 18, color: tot.lt.pnl >= 0 ? T.pos : T.neg }}>
-                        {tot.lt.pnl >= 0 ? "+" : ""}{inr(tot.lt.pnl)}
-                    </div>
-                    <div className="stat-sub">Held &gt;365 days  Tax 12.5%</div>
-                </div>
-            </div>
 
             {/* Main table */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: `0 2px 8px ${T.shadow}` }}>
@@ -5723,9 +5696,10 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 kicker="Journals / Funds & XIRR"
                 title="Capital flow cockpit"
                 metrics={[
-                    //{ label: "XIRR", value: xirrPct != null ? `${parseFloat(xirrPct) >= 0 ? "+" : ""}${xirrPct}%` : "--", tone: xirrRate == null ? "neutral" : xirrRate >= 0 ? "positive" : "negative", sub: xirrUsesLive ? "Using live unrealized P&L" : "Uses saved portfolio value when available" },
-                    //{ label: "Net invested", value: inr(netInvested), sub: `${sorted.length} cashflow entries` },
-                    //{ label: "Capital mix", value: `${inr(totalDeposited)} / ${inr(totalWithdrawn)}`, sub: "Deposits / withdrawals" },
+                    { label: "XIRR (Annualised)", value: xirrPct != null ? `${parseFloat(xirrPct) >= 0 ? "+" : ""}${xirrPct}%` : "--", tone: xirrRate == null ? "neutral" : xirrRate >= 0 ? "positive" : "negative", sub: xirrTerminal != null ? `${inr(xirrTerminal)} terminal value` : "Add fund entries to compute XIRR" },
+                    { label: "XIRR \u2014 Last 3 Years", value: fmtXirr(xirr3yr) || "--", tone: xirr3yr == null ? "neutral" : xirr3yr >= 0 ? "positive" : "negative", sub: xirr3yr == null ? "Not enough data" : "Annualised return \u00b7 3yr window" },
+                    { label: "XIRR \u2014 Last 5 Years", value: fmtXirr(xirr5yr) || "--", tone: xirr5yr == null ? "neutral" : xirr5yr >= 0 ? "positive" : "negative", sub: xirr5yr == null ? "Not enough data" : "Annualised return \u00b7 5yr window" },
+                    { label: "Net Invested", value: inr(netInvested), tone: netInvested >= 0 ? "positive" : "negative", sub: "Deposits minus withdrawals" },
                 ]}
                 actions={
                     <>
@@ -5737,9 +5711,6 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                         <button className="btn-add" onClick={handleAdd}> Add Entry</button>
                     </>
                 }
-                asideTitle="Return engine"
-                asideValue={xirr3yr != null ? fmtXirr(xirr3yr) : xirr5yr != null ? fmtXirr(xirr5yr) : "--"}
-                asideBody="Add funds added/withdrawn to/from demat A/c to accurately compute XIRR."
             />
             {importStatus && (
                 <div style={{
@@ -5752,56 +5723,6 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                     {importStatus.type === "success" ? "" : ""} {importStatus.msg}
                 </div>
             )}
-
-            {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 15, marginTop:15 }}>
-                {/* XIRR  hero card */}
-                <div className="stat-card hero" style={{ borderColor: xirrRate == null ? T.border : xirrRate >= 0 ? T.green : T.red + "88" }}>
-                    <div className="stat-label">XIRR (Annualised)</div>
-                    <div className="stat-value" style={{ fontSize: 28, fontWeight: 700, color: xirrColor, ...mono }}>
-                        {xirrPct != null ? `${parseFloat(xirrPct) >= 0 ? "+" : ""}${xirrPct}%` : ""}
-                    </div>
-                    {xirrTerminal != null ? (
-                        <div className="stat-sub" style={{ lineHeight: 1.8 }}>
-                            <span style={{ color: T.text, ...mono }}>{inr(xirrTerminal)}</span> terminal value
-                            <br />
-                            <span style={{ fontSize: 10, color: T.muted }}>
-                                Net invested <span style={{ color: T.text, ...mono }}>{inr(netInvested)}</span>
-                                {"  "}Realised <span style={{ color: xirrResult.realisedPnl >= 0 ? T.pos : T.neg, ...mono }}>{xirrResult.realisedPnl >= 0 ? "+" : ""}{inr(xirrResult.realisedPnl)}</span>
-                                {"  "}Unrealised <span style={{ color: xirrResult.unrealisedPnl >= 0 ? T.pos : T.neg, ...mono }}>{xirrResult.unrealisedPnl >= 0 ? "+" : ""}{inr(xirrResult.unrealisedPnl)}</span>
-                                {"  "}<span style={{ color: xirrUsesLive ? T.greenText : T.muted }}>
-                                    {xirrUsesLive
-                                        ? ` as of ${new Date(cachedUnrealized.ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
-                                        : " refresh holdings section to load live prices"}
-                                </span>
-                            </span>
-                        </div>
-                    ) : (
-                        <div className="stat-sub">Add fund entries to compute XIRR</div>
-                    )}
-                </div>
-                <div className="stat-card" style={{ borderColor: xirr3yr == null ? T.border : xirr3yr >= 0 ? T.green + "88" : T.red + "55" }}>
-                    <div className="stat-label">XIRR  Last 3 Years</div>
-                    <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: xirrRateColor(xirr3yr), ...mono }}>
-                        {fmtXirr(xirr3yr)}
-                    </div>
-                    <div className="stat-sub">{xirr3yr == null ? "Not enough data" : "Annualised return  3yr window"}</div>
-                </div>
-                <div className="stat-card" style={{ borderColor: xirr5yr == null ? T.border : xirr5yr >= 0 ? T.green + "88" : T.red + "55" }}>
-                    <div className="stat-label">XIRR  Last 5 Years</div>
-                    <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: xirrRateColor(xirr5yr), ...mono }}>
-                        {fmtXirr(xirr5yr)}
-                    </div>
-                    <div className="stat-sub">{xirr5yr == null ? "Not enough data" : "Annualised return  5yr window"}</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Net Invested</div>
-                    <div className="stat-value" style={{ fontSize: 18, ...mono, color: netInvested >= 0 ? T.greenText : T.redText }}>
-                        {inr(netInvested)}
-                    </div>
-                    <div className="stat-sub">Deposits minus withdrawals</div>
-                </div>
-            </div>
 
             {/* DP Breakdown */}
             {dpBreakdown.length > 0 && (
@@ -6209,9 +6130,9 @@ function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
                 kicker="Journals / Dividends"
                 title="Dividend income ledger"
                 metrics={[
-                    //{ label: "Total dividends", value: inr(totalDividend), tone: "positive", sub: `${sorted.length} payout entries` },
-                    //{ label: "Current view", value: inr(filteredTotal), sub: filterFY === "ALL" ? "Across all financial years" : `FY ${filterFY}` },
-                    //{ label: "Tracked FYs", value: `${Math.max(uniqueFYs.length - 1, 0)}`, sub: "Financial years with dividend history" },
+                    { label: "Total Dividend Received", value: inr(totalDividend), tone: "positive", sub: `${sorted.length} entries \u00b7 ${uniqueFYs.length - 1} FY${uniqueFYs.length - 1 !== 1 ? "s" : ""}` },
+                    { label: filterFY === "ALL" ? "This View" : `FY ${filterFY}`, value: inr(filteredTotal), sub: `${filtered.length} entries` },
+                    { label: "Best FY", value: fyBreakdown.length ? inr(fyBreakdown.reduce((a, b) => b[1] > a[1] ? b : a)[1]) : "--", tone: "positive", sub: fyBreakdown.length ? `FY ${fyBreakdown.reduce((a, b) => b[1] > a[1] ? b : a)[0]}` : "No data yet" },
                 ]}
                 actions={
                     <>
@@ -6238,30 +6159,6 @@ function Dividends({ dividends, onSave, onDelete, onImportCSV, T }) {
                     {importStatus.type === "success" ? "" : ""} {importStatus.msg}
                 </div>
             )}
-
-            {/* Summary cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 15,marginTop:15 }}>
-                <div className="stat-card hero" style={{ borderColor: T.green }}>
-                    <div className="stat-label">Total Dividend Received</div>
-                    <div className="stat-value green" style={{ fontSize: 26, fontWeight: 700, ...mono }}>{inr(totalDividend)}</div>
-                    <div className="stat-sub">{sorted.length} entries across {uniqueFYs.length - 1} financial year{uniqueFYs.length - 1 !== 1 ? "s" : ""}</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">{filterFY === "ALL" ? "This View" : "FY " + filterFY}</div>
-                    <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: T.greenText, ...mono }}>{inr(filteredTotal)}</div>
-                    <div className="stat-sub">{filtered.length} entries</div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-label">Best FY</div>
-                    {fyBreakdown.length > 0 ? (() => {
-                        const best = fyBreakdown.reduce((a, b) => b[1] > a[1] ? b : a);
-                        return <>
-                            <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: T.greenText, ...mono }}>{inr(best[1])}</div>
-                            <div className="stat-sub">FY {best[0]}</div>
-                        </>;
-                    })() : <div className="stat-value" style={{ color: T.muted }}></div>}
-                </div>
-            </div>
 
             {/* FY Breakdown bar chart */}
             {fyBreakdown.length > 0 && (
