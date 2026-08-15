@@ -1458,18 +1458,38 @@ a:hover { text-decoration: underline; }
   position: relative;
   background: ${T.card};
   border: 1px solid ${T.border};
-  border-radius: 14px; padding: 16px 16px;
-  transition: box-shadow .14s ease, transform .14s ease, border-color .14s ease;
-  box-shadow: ${D ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"};
+  border-radius: 16px; padding: 16px 17px;
+  transition: box-shadow .16s ease, transform .16s ease, border-color .16s ease;
+  box-shadow: ${D ? "0 1px 0 rgba(255,255,255,0.03) inset, 0 10px 22px rgba(0,0,0,0.22)" : "0 1px 0 rgba(255,255,255,0.7) inset, 0 1px 2px rgba(15,23,42,0.03), 0 10px 22px rgba(15,23,42,0.045)"};
 }
-.stat-card:hover { transform: translateY(-1px); border-color: ${D ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"}; }
-.stat-card.hero { border-color: ${T.border}; background: ${D ? "rgba(52,211,153,0.08)" : "rgba(5,150,105,0.06)"}; }
-.stat-label { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .11em; color: ${T.muted}; margin-bottom: 7px; font-family: 'IBM Plex Sans', -apple-system, sans-serif; }
-.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 800; color: ${T.text}; letter-spacing: -.03em; }
+.stat-card:hover { transform: translateY(-1px); border-color: ${D ? "rgba(96,165,250,0.38)" : "rgba(30,58,95,0.3)"}; }
+.stat-card:active { transform: scale(0.985); }
+.stat-card.hero {
+  border-color: ${D ? "rgba(52,211,153,0.26)" : "rgba(5,150,105,0.20)"};
+  background: ${D ? "linear-gradient(165deg, rgba(52,211,153,0.11), rgba(52,211,153,0.02) 65%)" : "linear-gradient(165deg, rgba(5,150,105,0.075), rgba(5,150,105,0.01) 65%)"};
+}
+.stat-card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.stat-card-icon {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.stat-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; color: ${T.muted}; font-family: 'IBM Plex Sans', -apple-system, sans-serif; }
+.stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 21px; font-weight: 800; color: ${T.text}; letter-spacing: -.02em; line-height: 1.1; }
+.stat-value.hero { font-size: 25px; }
 .stat-value.hero.green { color: ${T.pos}; }
-.stat-sub { font-size: 13px; color: ${T.subtext}; margin-top: 6px; line-height: 1.6; }
+.stat-sub { font-size: 12.5px; color: ${T.subtext}; margin-top: 6px; line-height: 1.55; }
+.stat-hero-split { display: flex; margin-top: 14px; padding-top: 12px; border-top: 1px solid ${D ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.07)"}; gap: 16px; }
+.stat-hero-split > div { flex: 1; min-width: 0; }
+.stat-hero-split-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: ${T.muted}; margin-bottom: 3px; }
+.stat-hero-split-value { font-family: 'IBM Plex Mono', monospace; font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+.stat-hero-split-sub { font-size: 11px; color: ${T.subtext}; margin-top: 2px; }
+.stat-hero-divider { width: 1px; background: ${D ? "rgba(255,255,255,0.09)" : "rgba(15,23,42,0.08)"}; flex-shrink: 0; }
+@media (max-width:640px) {
+  .stats-row, .stats-row-2 { align-items: start; }
+}
 @media (max-width:480px) {
-  .stat-card { padding: 14px 14px; border-radius: 12px; }
+  .stat-card { padding: 14px 14px; border-radius: 14px; }
+  .stat-card-icon { width: 25px; height: 25px; border-radius: 7px; }
   .stat-value { font-size: 18px; }
   .stat-value.hero { font-size: 22px; }
 }
@@ -2119,11 +2139,8 @@ td { padding:9px 13px; font-size:13px; white-space:nowrap; color:${T.text}; }
 .page-header { margin-bottom:20px; }
 .page-title { font-family:'IBM Plex Sans', -apple-system, sans-serif; font-size:20px; font-weight:800; color:${T.text}; letter-spacing:-.03em; margin-bottom:3px; }
 .page-sub { color:${T.subtext}; font-size:13px; margin-top:3px; }
-.stat-card.green { border-left:3px solid ${T.pos}; }
-.stat-card.red   { border-left:3px solid ${T.neg}; }
 .stat-value.green { color:${T.pos}; }
 .stat-value.red   { color:${T.neg}; }
-.stat-value.hero  { color:${T.green}; }
 .module-shell { flex:1; overflow-y:auto; background:${T.bg}; display:flex; flex-direction:column; }
 .module-topbar { background:${T.surface}; border-bottom:1px solid ${T.border}; padding:0 24px; display:flex; align-items:center; height:46px; gap:12px; flex-shrink:0; }
 .module-topbar-title { font-size:13px; font-weight:700; color:${T.text}; }
@@ -3565,6 +3582,42 @@ function WatchlistLandingPromo({ T, onLogin }) {
     );
 }
 
+// Minimal stroke-icon set for stat cards — kept local (no icon lib dependency)
+function StatGlyph({ type, size = 15 }) {
+    const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.1, strokeLinecap: "round", strokeLinejoin: "round" };
+    switch (type) {
+        case "pulse": // Net P&L
+            return <svg {...common}><path d="M3 12h4l2.5-7L14 19l2.5-7H21" /></svg>;
+        case "percent": // Win/Loss rate
+            return <svg {...common}><circle cx="7" cy="7" r="2.5" /><circle cx="17" cy="17" r="2.5" /><path d="M17 7 7 17" /></svg>;
+        case "trendUp": // Avg gain
+            return <svg {...common}><path d="M4 16 10 10 14 14 20 6" /><path d="M14 6h6v6" /></svg>;
+        case "trendDown": // Avg loss
+            return <svg {...common}><path d="M4 8 10 14 14 10 20 18" /><path d="M14 18h6v-6" /></svg>;
+        case "scale": // Reward/risk
+            return <svg {...common}><path d="M12 3v18M7 7l-4 8a4 4 0 0 0 8 0zM17 7l-4 8a4 4 0 0 0 8 0z" /><path d="M5 7h14" /></svg>;
+        case "wallet": // Portfolio value
+            return <svg {...common}><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><circle cx="16.5" cy="14.5" r="1" fill="currentColor" stroke="none" /></svg>;
+        case "clock": // Avg hold
+            return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></svg>;
+        default:
+            return null;
+    }
+}
+
+function StatCardHead({ T, icon, label, tone = "neutral" }) {
+    const bg = tone === "positive" ? T.posFill : tone === "negative" ? T.negFill : T.mutedFill;
+    const fg = tone === "positive" ? T.pos : tone === "negative" ? T.neg : T.subtext;
+    return (
+        <div className="stat-card-head">
+            <span className="stat-card-icon" style={{ background: bg, color: fg }}>
+                <StatGlyph type={icon} />
+            </span>
+            <span className="stat-label">{label}</span>
+        </div>
+    );
+}
+
 function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
 
@@ -3649,21 +3702,46 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
             {isDemo && <div className="demo-banner" style={{ display: "inline-flex", margin: "0 0 14px" }}> Demo Mode  Sign up to save your real trades.</div>}
             <div className="stats-row">
                 <div className="stat-card hero">
-                    <div className="stat-label">Net P&amp;L from Stocks</div>
+                    <StatCardHead T={T} icon="pulse" label="Net P&amp;L from Stocks" tone={combinedPnl >= 0 ? "positive" : "negative"} />
                     <div className={`stat-value hero ${combinedPnl >= 0 ? "green" : "red"}`}>{fmtPnl(combinedPnl)}</div>
-                    <div className="stat-sub" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <span>Realized: <span style={{ color: stats.totalPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{fmtPnl(stats.totalPnl)}</span>  {stats.closed.length} closed</span>
-                        <span>Unrealized: <span style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.green : T.red, fontWeight: 600 }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</span>{unrealizedPnl !== null ? `  ${openTrades.length} open` : "  refresh holdings section to load"}</span>
+                    <div className="stat-hero-split">
+                        <div>
+                            <div className="stat-hero-split-label">Realized</div>
+                            <div className="stat-hero-split-value" style={{ color: stats.totalPnl >= 0 ? T.pos : T.neg }}>{fmtPnl(stats.totalPnl)}</div>
+                            <div className="stat-hero-split-sub">{stats.closed.length} closed</div>
+                        </div>
+                        <div className="stat-hero-divider" />
+                        <div>
+                            <div className="stat-hero-split-label">Unrealized</div>
+                            <div className="stat-hero-split-value" style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.pos : T.neg }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</div>
+                            <div className="stat-hero-split-sub">{unrealizedPnl !== null ? `${openTrades.length} open` : "refresh holdings"}</div>
+                        </div>
                     </div>
                 </div>
-                <div className="stat-card"><div className="stat-label">Win / Loss Rate</div><div className="stat-value">{stats.winRate.toFixed(2)}%</div><div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div></div>
-                <div className="stat-card green"><div className="stat-label">Avg Gain</div><div className="stat-value green">+{stats.avgGain.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldWin.toFixed(1)} days</div></div>
-                <div className="stat-card red"><div className="stat-label">Avg Loss</div><div className="stat-value red">{stats.avgLoss.toFixed(2)}%</div><div className="stat-sub">Avg hold {stats.avgHoldLoss.toFixed(1)} days</div></div>
+                <div className="stat-card">
+                    <StatCardHead T={T} icon="percent" label="Win / Loss Rate" />
+                    <div className="stat-value">{stats.winRate.toFixed(2)}%</div>
+                    <div className="stat-sub">{stats.wins.length}W / {stats.losses.length}L</div>
+                </div>
+                <div className="stat-card">
+                    <StatCardHead T={T} icon="trendUp" label="Avg Gain" tone="positive" />
+                    <div className="stat-value green">+{stats.avgGain.toFixed(2)}%</div>
+                    <div className="stat-sub">Avg hold {stats.avgHoldWin.toFixed(1)} days</div>
+                </div>
+                <div className="stat-card">
+                    <StatCardHead T={T} icon="trendDown" label="Avg Loss" tone="negative" />
+                    <div className="stat-value red">{stats.avgLoss.toFixed(2)}%</div>
+                    <div className="stat-sub">Avg hold {stats.avgHoldLoss.toFixed(1)} days</div>
+                </div>
             </div>
             <div className="stats-row-2">
-                <div className="stat-card"><div className="stat-label">Reward / Risk</div><div className="stat-value">{stats.rr.toFixed(2)}</div><div className="stat-sub">Gain vs Loss ratio</div></div>
                 <div className="stat-card">
-                    <div className="stat-label">Portfolio Value (Live)</div>
+                    <StatCardHead T={T} icon="scale" label="Reward / Risk" />
+                    <div className="stat-value">{stats.rr.toFixed(2)}</div>
+                    <div className="stat-sub">Gain vs Loss ratio</div>
+                </div>
+                <div className="stat-card">
+                    <StatCardHead T={T} icon="wallet" label="Portfolio Value (Live)" />
                     <div className="stat-value" style={{ fontSize: 18, color: totalPortfolioValue !== null ? T.text : T.muted }}>
                         {totalPortfolioValue !== null
                             ? `${totalPortfolioValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
@@ -3675,8 +3753,14 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
                             : "Refresh holdings section below to load live prices"}
                     </div>
                 </div>
-                <div className="stat-card"><div className="stat-label">Avg Hold (Wins)</div><div className="stat-value">{stats.avgHoldWin.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div></div>
-                <div className="stat-card"><div className="stat-label">Avg Hold (Losses)</div><div className="stat-value">{stats.avgHoldLoss.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div></div>
+                <div className="stat-card">
+                    <StatCardHead T={T} icon="clock" label="Avg Hold (Wins)" />
+                    <div className="stat-value">{stats.avgHoldWin.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div>
+                </div>
+                <div className="stat-card">
+                    <StatCardHead T={T} icon="clock" label="Avg Hold (Losses)" />
+                    <div className="stat-value">{stats.avgHoldLoss.toFixed(1)}<span style={{ fontSize: 13, color: T.subtext }}> d</span></div>
+                </div>
             </div>
             <div className="chart-grid">
                 <div className="chart-card"><div className="chart-title">Cumulative P&amp;L</div><Sparkline data={stats.closed.map(t => t.pnl)} T={T} /></div>
