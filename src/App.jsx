@@ -1478,12 +1478,6 @@ a:hover { text-decoration: underline; }
 .stat-value.hero { font-size: 25px; }
 .stat-value.hero.green { color: ${T.pos}; }
 .stat-sub { font-size: 12.5px; color: ${T.subtext}; margin-top: 6px; line-height: 1.55; }
-.stat-hero-split { display: flex; margin-top: 14px; padding-top: 12px; border-top: 1px solid ${D ? "rgba(255,255,255,0.07)" : "rgba(15,23,42,0.07)"}; gap: 16px; }
-.stat-hero-split > div { flex: 1; min-width: 0; }
-.stat-hero-split-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: ${T.muted}; margin-bottom: 3px; }
-.stat-hero-split-value { font-family: 'IBM Plex Mono', monospace; font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
-.stat-hero-split-sub { font-size: 11px; color: ${T.subtext}; margin-top: 2px; }
-.stat-hero-divider { width: 1px; background: ${D ? "rgba(255,255,255,0.09)" : "rgba(15,23,42,0.08)"}; flex-shrink: 0; }
 @media (max-width:640px) {
   .stats-row, .stats-row-2 { align-items: start; }
 }
@@ -3473,15 +3467,15 @@ function HeroMobileCarousel({ cards, T }) {
     );
 }
 
-function JournalHero({ T, kicker, title, subtitle, metrics = [], actions = null, asideTitle = "", asideValue = "", asideBody = "", asideTone = "neutral" }) {
+function JournalHero({ T, kicker, title, subtitle, metrics = [], mobileMetrics = null, actions = null, asideTitle = "", asideValue = "", asideBody = "", asideTone = "neutral", asideFirst = false }) {
     const toneColor = (tone) => tone === "positive" ? T.pos : tone === "negative" ? T.neg : T.text;
     const asideColor = toneColor(asideTone);
 
-    // Same data that feeds the desktop chip row + aside box, reshaped into full-width swipeable cards for mobile.
-    const carouselCards = [
-        ...metrics.map((m) => ({ label: m.label, value: m.value, sub: m.sub, tone: m.tone })),
-        ...((asideTitle || asideValue) ? [{ label: asideTitle, value: asideValue, sub: asideBody, tone: asideTone }] : []),
-    ];
+    // Desktop chip row always uses `metrics`. Mobile carousel uses `mobileMetrics` when provided
+    // (lets a page show extra breakdown cards — e.g. Realized/Unrealized — only in the swipeable strip).
+    const metricCards = (mobileMetrics || metrics).map((m) => ({ label: m.label, value: m.value, sub: m.sub, tone: m.tone }));
+    const asideCards = (asideTitle || asideValue) ? [{ label: asideTitle, value: asideValue, sub: asideBody, tone: asideTone }] : [];
+    const carouselCards = asideFirst ? [...asideCards, ...metricCards] : [...metricCards, ...asideCards];
 
     return (
         <section className="journal-hero">
@@ -3684,6 +3678,14 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
         { label: "Win rate", value: `${stats.winRate.toFixed(2)}%`, sub: `${stats.wins.length} wins / ${stats.losses.length} losses` },
         { label: "Open exposure", value: `${openTrades.length}`, sub: hasLiveData ? `${quotedCount}/${openTickers.length} tickers live` : "Refresh holdings section for live prices" },
     ];
+    // Mobile carousel gets two extra breakdown cards (Realized / Unrealized) that desktop doesn't show as chips.
+    const dashboardMobileMetrics = [
+        dashboardHeroMetrics[0],
+        { label: "Realized P&L", value: fmtPnl(stats.totalPnl), tone: stats.totalPnl >= 0 ? "positive" : "negative", sub: `${stats.closed.length} closed` },
+        { label: "Unrealized P&L", value: unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : "", tone: unrealizedPnl === null ? "neutral" : unrealizedPnl >= 0 ? "positive" : "negative", sub: unrealizedPnl !== null ? `${openTrades.length} open` : "Refresh holdings section to load" },
+        dashboardHeroMetrics[1],
+        dashboardHeroMetrics[2],
+    ];
 
     return (
         <div>
@@ -3692,6 +3694,8 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
                 kicker="Journals / Dashboard"
                 title="My Trading Edge"
                 metrics={dashboardHeroMetrics}
+                mobileMetrics={dashboardMobileMetrics}
+                asideFirst
                 asideTitle="Live posture"
                 asideValue={totalPortfolioValue !== null ? inr(totalPortfolioValue) : "Pending"}
                 asideTone={combinedPnl >= 0 ? "positive" : "negative"}
@@ -3704,19 +3708,7 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
                 <div className="stat-card hero">
                     <StatCardHead T={T} icon="pulse" label="Net P&amp;L from Stocks" tone={combinedPnl >= 0 ? "positive" : "negative"} />
                     <div className={`stat-value hero ${combinedPnl >= 0 ? "green" : "red"}`}>{fmtPnl(combinedPnl)}</div>
-                    <div className="stat-hero-split">
-                        <div>
-                            <div className="stat-hero-split-label">Realized</div>
-                            <div className="stat-hero-split-value" style={{ color: stats.totalPnl >= 0 ? T.pos : T.neg }}>{fmtPnl(stats.totalPnl)}</div>
-                            <div className="stat-hero-split-sub">{stats.closed.length} closed</div>
-                        </div>
-                        <div className="stat-hero-divider" />
-                        <div>
-                            <div className="stat-hero-split-label">Unrealized</div>
-                            <div className="stat-hero-split-value" style={{ color: unrealizedPnl === null ? T.muted : unrealizedPnl >= 0 ? T.pos : T.neg }}>{unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : ""}</div>
-                            <div className="stat-hero-split-sub">{unrealizedPnl !== null ? `${openTrades.length} open` : "refresh holdings"}</div>
-                        </div>
-                    </div>
+                    <div className="stat-sub">{stats.closed.length} closed  {openTrades.length} open</div>
                 </div>
                 <div className="stat-card">
                     <StatCardHead T={T} icon="percent" label="Win / Loss Rate" />
