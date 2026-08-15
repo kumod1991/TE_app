@@ -1252,9 +1252,8 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
 // ONLY KEY UPDATED PARTS (StockRow + improvements)
 // Drop-in replacement for StockRow component
 
-const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, isKeySelected, T, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
+const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, isKeySelected, T, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
     const [hov, setHov] = useState(false);
-    const [showAllSignals, setShowAllSignals] = useState(false);
 
     // Resolve the best available price: Yahoo live (green) > bhav_copy > row.close
     const _bp = bestPriceFn ? bestPriceFn(row.ticker, price?.price ?? row.close) : null;
@@ -1284,9 +1283,6 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
             : row.trend === "stage4" ? "Stage 4"
                 : null;
 
-    // ── Screen/tag pills — shared derivation (see deriveRowScreens) ──
-    const tickerScreens = useMemo(() => deriveRowScreens(row), [row]);
-
     return (
         <div
             className="wl-stock-row"
@@ -1310,7 +1306,9 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                     : hov || isKeySelected || isExpanded
                         ? `0 10px 24px ${T.shadow || "rgba(15,23,42,0.08)"}`
                         : "none",
-                marginLeft: isMobile ? 2 : 0,
+                maxWidth: isMobile ? 420 : undefined,
+                marginLeft: isMobile ? "auto" : 0,
+                marginRight: isMobile ? "auto" : undefined,
                 marginBottom: 10,
                 borderRadius: isMobile ? 16 : 18,
                 cursor: "pointer",
@@ -1437,57 +1435,6 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 </button>
             </div>
 
-            {/* ROW 3 — Screen membership pills */}
-            {tickerScreens.length > 0 && (() => {
-                const sortedScreens = tickerScreens;
-                const MAX_VISIBLE = 2;
-                const visibleScreens = showAllSignals ? sortedScreens : sortedScreens.slice(0, MAX_VISIBLE);
-                const hiddenCount = sortedScreens.length - MAX_VISIBLE;
-                return (
-                    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 6, width: "100%", flexWrap: showAllSignals ? "wrap" : "nowrap", rowGap: 4 }}>
-                        <div style={{
-                            display: "flex", gap: 4, alignItems: "center", minWidth: 0, flex: "1 1 auto",
-                            overflow: showAllSignals ? "visible" : "hidden",
-                            flexWrap: showAllSignals ? "wrap" : "nowrap", rowGap: 4,
-                        }}>
-                            {visibleScreens.map(screenName => {
-                                const cfg = SCREEN_PILL_CFG[screenName] || { color: T.subtext, bg: "transparent", border: T.border };
-                                const canNav = !!onNavigateToScreen;
-                                return (
-                                    <span key={screenName}
-                                        title={canNav ? `View screen: ${screenName}` : screenName}
-                                        onClick={canNav ? e => { e.stopPropagation(); onNavigateToScreen(screenName); } : undefined}
-                                        style={{
-                                            fontSize: isMobile ? 9.5 : 10, fontWeight: 700, padding: "3px 7px", borderRadius: 5,
-                                            background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
-                                            whiteSpace: "nowrap", letterSpacing: "0.03em", textTransform: "uppercase",
-                                            flexShrink: 0, cursor: canNav ? "pointer" : "default", transition: "opacity 0.12s",
-                                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                        }}
-                                        onMouseEnter={canNav ? e => { e.currentTarget.style.opacity = "0.65"; } : undefined}
-                                        onMouseLeave={canNav ? e => { e.currentTarget.style.opacity = "1"; } : undefined}
-                                    >{screenName}</span>
-                                );
-                            })}
-                        </div>
-                        {!showAllSignals && hiddenCount > 0 && (
-                            <span onClick={e => { e.stopPropagation(); setShowAllSignals(true); }}
-                                style={{
-                                    fontSize: isMobile ? 9 : 10, color: T.green, flexShrink: 0, cursor: "pointer", fontWeight: 500,
-                                    fontFamily: "'IBM Plex Mono', monospace", opacity: 0.7
-                                }}>+{hiddenCount}</span>
-                        )}
-                        {showAllSignals && sortedScreens.length > MAX_VISIBLE && (
-                            <span onClick={e => { e.stopPropagation(); setShowAllSignals(false); }}
-                                style={{
-                                    fontSize: isMobile ? 9 : 10, color: T.subtext, flexShrink: 0, cursor: "pointer",
-                                    fontFamily: "'IBM Plex Mono', monospace", opacity: 0.5
-                                }}>less</span>
-                        )}
-                    </div>
-                );
-            })()}
-
             {/* ROW 4 — Upcoming earnings date */}
             {earningsDate && (() => {
                 const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1501,7 +1448,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                                 : T.subtext;
                 const dateStr = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
                 return (
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: tickerScreens.length > 0 ? 5 : 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
                         <span style={{
                             fontSize: isMobile ? 9 : 10, fontWeight: 500, padding: "2px 6px", borderRadius: 3,
                             background: `${urgColor}15`, border: `1px solid ${urgColor}40`,
@@ -3564,7 +3511,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             rowIndex={i}
                                             latestEvent={eventsMap[row.ticker]}
                                             earningsDate={earningsMap[row.ticker]}
-                                            onNavigateToScreen={onNavigateToScreen}
                                             bestPriceFn={_bestPrice}
                                             isPricePendingFn={_isPricePending}
                                             isMarketLiveFn={_isMarketLive}
