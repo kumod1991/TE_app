@@ -4183,7 +4183,9 @@ async function fetchBhavPrice(ticker) {
         const d = new Date(today);
         d.setDate(d.getDate() - daysBack);
         if (d.getDay() === 0 || d.getDay() === 6) continue; // skip weekends
-        const isoDate = d.toISOString().slice(0, 10);
+        // Build the date from LOCAL components, not toISOString() (which converts
+        // to UTC and can shift the date back by a day for IST users before 5:30am).
+        const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const url = `${SUPABASE_URL}/rest/v1/bhav_copy`
             + `?ticker=eq.${encodeURIComponent(ticker)}`
             + `&date=eq.${isoDate}`
@@ -4823,11 +4825,20 @@ function Portfolio({ trades, T, embedded = false }) {
         }
         setQuotes(results); setFailed(errs);
         setLastRefresh(new Date());
+        // Compute unrealised P&L from the results we just fetched  `totalUnrealized`
+        // (from the component's render-time useMemo) still reflects the OLD quotes
+        // captured when this closure was created, since setQuotes() above hasn't
+        // triggered a re-render yet. Using it here would persist a one-refresh-stale value.
+        const freshUnrealized = openPositions.reduce((sum, p) => {
+            const q = results[p.ticker];
+            const curVal = (q?.currentPrice || p.avgBuyPrice) * p.openQty;
+            return sum + curVal - p.totalBuyAmt;
+        }, 0);
         try {
             localStorage.setItem("tv_portfolio_quotes", JSON.stringify(results));
             localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
-            localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() }));
-            window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized } }));
+            localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: freshUnrealized, ts: Date.now() }));
+            window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized: freshUnrealized } }));
         } catch { }
         // Prices are done  stop the "Refreshing" spinner here. RS-6M still relies
         // on Yahoo Finance (slow multi-proxy history calls) and is fetched quietly
@@ -5348,6 +5359,7 @@ function FundModal({ fund, onClose, onSave, T }) {
                         <select style={selectStyle} value={form.type} onChange={set("type")}>
                             <option value="deposit"> Deposit</option>
                             <option value="withdrawal"> Withdrawal</option>
+                            <option value="charge"> Charges &amp; Taxes</option>
                         </select>
                     </div>
                 </div>
@@ -5443,7 +5455,8 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     //  Summary stats 
     const totalDeposited = sorted.filter(f => f.type === "deposit").reduce((s, f) => s + f.amount, 0);
     const totalWithdrawn = sorted.filter(f => f.type === "withdrawal").reduce((s, f) => s + f.amount, 0);
-    const netInvested = totalDeposited - totalWithdrawn;
+    const totalCharges = sorted.filter(f => f.type === "charge").reduce((s, f) => s + f.amount, 0);
+    const netInvested = totalDeposited - totalWithdrawn - totalCharges;
 
     //  XIRR computation 
     // Cashflows: deposits as negative (money going out of pocket into market),
@@ -5456,16 +5469,33 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
             .filter(t => t.exit_date)
             .reduce((s, t) => s + ((t.sell_qty || 0) * (t.sell_price || 0)) - (t.buy_qty * t.buy_price), 0);
 
-        // Unrealised P&L  use value last saved by the holdings section (live prices already applied there)
-        const unrealisedPnl = cachedUnrealized?.value ?? 0;
-        const usingLivePrices = cachedUnrealized != null;
+        // Unrealised P&L  compute LIVE from QuoteContext, same formula as Dashboard's
+        // combinedPnl (buy_qty * live price, per open trade row). This keeps the XIRR
+        // terminal value in sync with whatever "current value" is shown elsewhere,
+        // since both now read from the same live quotes instead of a stale snapshot.
+        const openTrades = trades.filter(t => !t.exit_date);
+        const hasLiveQuotes = openTrades.some(t => quotes[t.ticker]?.currentPrice);
+        const liveUnrealisedPnl = hasLiveQuotes
+            ? openTrades.reduce((s, t) => {
+                const live = quotes[t.ticker]?.currentPrice;
+                return live ? s + (live - t.buy_price) * t.buy_qty : s;
+            }, 0)
+            : null;
+
+        // Fall back to the cached snapshot from the holdings section only when this
+        // session has no live quotes loaded at all (e.g. Funds & XIRR opened first).
+        const unrealisedPnl = liveUnrealisedPnl !== null ? liveUnrealisedPnl : (cachedUnrealized?.value ?? 0);
+        const usingLivePrices = liveUnrealisedPnl !== null || cachedUnrealized != null;
 
         // Terminal value = Net Invested + Realised P&L + Unrealised P&L
         const terminalValue = netInvested + realisedPnl + unrealisedPnl;
         if (terminalValue <= 0) return null;
 
+        // Charges & Taxes aren't a cashflow to/from the investor  they're already
+        // netted out of terminalValue via netInvested  so only deposit/withdrawal
+        // entries become XIRR cashflow points.
         const cfs = [
-            ...sorted.map(f => ({
+            ...sorted.filter(f => f.type !== "charge").map(f => ({
                 date: new Date(f.date),
                 amount: f.type === "deposit" ? -f.amount : f.amount,
             })),
@@ -5477,17 +5507,18 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
         if (!hasNeg || !hasPos) return null;
 
         return { rate: xirr(cfs), terminalValue, realisedPnl, unrealisedPnl, usingLivePrices };
-    }, [funds, trades, netInvested, cachedUnrealized]);
+    }, [funds, trades, netInvested, cachedUnrealized, quotes]);
 
     //  Deposit by DP (for breakdown) 
     const dpBreakdown = useMemo(() => {
         const map = {};
         sorted.forEach(f => {
-            if (!map[f.dp]) map[f.dp] = { deposit: 0, withdrawal: 0 };
+            if (!map[f.dp]) map[f.dp] = { deposit: 0, withdrawal: 0, charges: 0 };
             if (f.type === "deposit") map[f.dp].deposit += f.amount;
+            else if (f.type === "charge") map[f.dp].charges += f.amount;
             else map[f.dp].withdrawal += f.amount;
         });
-        return Object.entries(map).map(([dp, v]) => ({ dp, net: v.deposit - v.withdrawal, ...v }));
+        return Object.entries(map).map(([dp, v]) => ({ dp, net: v.deposit - v.withdrawal - v.charges, ...v }));
     }, [sorted]);
 
     const handleAdd = () => { setEditFund(null); setShowModal(true); };
@@ -5566,7 +5597,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 header.forEach((h, idx) => row[h] = (cols[idx] ?? "").trim());
 
                 const typeVal = (row.type || "").toLowerCase().trim();
-                if (!["deposit", "withdrawal"].includes(typeVal)) {
+                if (!["deposit", "withdrawal", "charge"].includes(typeVal)) {
                     skippedReasons.push(`Row ${i + 1}: invalid type "${row.type}"`);
                     errors++; continue;
                 }
@@ -5612,7 +5643,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     };
 
     const downloadTemplate = () => {
-        const csv = `date,amount,type,dp,note\n2024-01-15,50000,deposit,Zerodha,Initial capital\n2024-02-01,25000,deposit,Groww,Monthly SIP\n2024-03-10,10000,withdrawal,Zerodha,Partial withdrawal\n`;
+        const csv = `date,amount,type,dp,note\n2024-01-15,50000,deposit,Zerodha,Initial capital\n2024-02-01,25000,deposit,Groww,Monthly SIP\n2024-03-10,10000,withdrawal,Zerodha,Partial withdrawal\n2024-03-31,450,charge,Zerodha,Quarterly STT & DP charges\n`;
         const blob = new Blob([csv], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -5666,13 +5697,14 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
         const after = sorted.filter(f => new Date(f.date) >= cutoff);
 
         // Net invested before the window = opening position cost on cutoff date
+        // (charges reduce it, same as withdrawal, via the else branch)
         const openingBalance = before.reduce((s, f) => f.type === "deposit" ? s + f.amount : s - f.amount, 0);
 
         const cfs = [];
         // Opening balance as a deposit on the cutoff date (if any capital was already deployed)
         if (openingBalance > 0) cfs.push({ date: cutoff, amount: -openingBalance });
-        // Cashflows within the window
-        after.forEach(f => cfs.push({ date: new Date(f.date), amount: f.type === "deposit" ? -f.amount : f.amount }));
+        // Cashflows within the window (charges excluded  see note in xirrResult above)
+        after.filter(f => f.type !== "charge").forEach(f => cfs.push({ date: new Date(f.date), amount: f.type === "deposit" ? -f.amount : f.amount }));
         // Terminal value (same as all-time)
         cfs.push({ date: new Date(), amount: xirrResult.terminalValue });
 
@@ -5699,7 +5731,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                     { label: "XIRR (Annualised)", value: xirrPct != null ? `${parseFloat(xirrPct) >= 0 ? "+" : ""}${xirrPct}%` : "--", tone: xirrRate == null ? "neutral" : xirrRate >= 0 ? "positive" : "negative", sub: xirrTerminal != null ? `${inr(xirrTerminal)} terminal value` : "Add fund entries to compute XIRR" },
                     { label: "XIRR \u2014 Last 3 Years", value: fmtXirr(xirr3yr) || "--", tone: xirr3yr == null ? "neutral" : xirr3yr >= 0 ? "positive" : "negative", sub: xirr3yr == null ? "Not enough data" : "Annualised return \u00b7 3yr window" },
                     { label: "XIRR \u2014 Last 5 Years", value: fmtXirr(xirr5yr) || "--", tone: xirr5yr == null ? "neutral" : xirr5yr >= 0 ? "positive" : "negative", sub: xirr5yr == null ? "Not enough data" : "Annualised return \u00b7 5yr window" },
-                    { label: "Net Invested", value: inr(netInvested), tone: netInvested >= 0 ? "positive" : "negative", sub: "Deposits minus withdrawals" },
+                    { label: "Net Invested", value: inr(netInvested), tone: netInvested >= 0 ? "positive" : "negative", sub: "Deposits minus withdrawals & charges" },
                 ]}
                 actions={
                     <>
@@ -5729,11 +5761,12 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px", marginBottom: 20, boxShadow: `0 2px 8px ${T.shadow}` }}>
                     <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: T.subtext, marginBottom: 14 }}>Broker-wise Breakdown</div>
                     <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                        {dpBreakdown.map(({ dp, deposit, withdrawal, net }) => (
+                        {dpBreakdown.map(({ dp, deposit, withdrawal, charges, net }) => (
                             <div key={dp} style={{ minWidth: 140 }}>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>{dp}</div>
                                 <div style={{ fontSize: 11, color: T.subtext, marginBottom: 2 }}>Deposited: <span style={{ color: T.greenText, ...mono }}>{inr(deposit)}</span></div>
                                 {withdrawal > 0 && <div style={{ fontSize: 11, color: T.subtext, marginBottom: 2 }}>Withdrawn: <span style={{ color: T.redText, ...mono }}>{inr(withdrawal)}</span></div>}
+                                {charges > 0 && <div style={{ fontSize: 11, color: T.subtext, marginBottom: 2 }}>Charges & Taxes: <span style={{ color: T.amber, ...mono }}>{inr(charges)}</span></div>}
                                 <div style={{ fontSize: 11, color: T.subtext }}>Net: <span style={{ fontWeight: 700, ...mono, color: net >= 0 ? T.pos : T.neg }}>{inr(net)}</span></div>
                                 <div style={{ marginTop: 6, height: 3, background: T.border, borderRadius: 2, overflow: "hidden" }}>
                                     <div style={{ height: "100%", width: `${Math.min((net / netInvested) * 100, 100)}%`, background: T.green, borderRadius: 2 }} />
@@ -5759,7 +5792,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                 <div className="empty">
                     <div className="empty-icon"></div>
                     <div className="empty-text">No fund entries yet</div>
-                    <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>Add your first deposit or withdrawal to start tracking XIRR.</div>
+                    <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>Add your first deposit, withdrawal, or charge to start tracking XIRR.</div>
                 </div>
             ) : (
                 <>
@@ -5823,6 +5856,12 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                             <tbody>
                                 {withBalance.map((f, i) => {
                                     const isDeposit = f.type === "deposit";
+                                    const isCharge = f.type === "charge";
+                                    const typeColor = isDeposit ? T.greenText : isCharge ? T.amber : T.redText;
+                                    const typeBg = isDeposit ? T.greenGlow : isCharge ? T.amberFill : T.redGlow;
+                                    const typeBorder = isDeposit ? T.green + "55" : isCharge ? T.amber + "55" : T.red + "44";
+                                    const typeLabel = isDeposit ? " Deposit" : isCharge ? " Charges & Taxes" : " Withdrawal";
+                                    const amountColor = isDeposit ? T.pos : isCharge ? T.amber : T.neg;
                                     const isChecked = selectedIds.has(f.id);
                                     const rowBg = isChecked ? T.redGlow : (i % 2 === 0 ? T.card : T.surface);
                                     return (
@@ -5844,16 +5883,16 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
                                             <td style={{ padding: "10px 16px" }}>
                                                 <span style={{
                                                     display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 700,
-                                                    background: isDeposit ? T.greenGlow : T.redGlow,
-                                                    color: isDeposit ? T.greenText : T.redText,
-                                                    border: `1px solid ${isDeposit ? T.green + "55" : T.red + "44"}`
+                                                    background: typeBg,
+                                                    color: typeColor,
+                                                    border: `1px solid ${typeBorder}`
                                                 }}>
-                                                    {isDeposit ? " Deposit" : " Withdrawal"}
+                                                    {typeLabel}
                                                 </span>
                                             </td>
                                             <td style={{
                                                 padding: "10px 16px", textAlign: "right", ...mono, fontSize: 13, fontWeight: 700,
-                                                color: isDeposit ? T.pos : T.neg
+                                                color: amountColor
                                             }}>
                                                 {isDeposit ? "+" : "-"}{inr(f.amount)}
                                             </td>
@@ -5895,7 +5934,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
 
             {/* XIRR explanation */}
             <div style={{ marginTop: 14, padding: "12px 16px", background: T.pill, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, color: T.subtext, lineHeight: 1.7 }}>
-                <strong style={{ color: T.text }}>How XIRR is calculated:</strong> Each deposit is a negative cashflow and each withdrawal is positive. The terminal cashflow is <em>Net Invested + Realised P&L (Dashboard) + Unrealised P&L (holdings section)</em>  i.e. what you put in, plus everything you've made. Live prices from the holdings section are used for unrealised P&L when available, otherwise cost basis is used. The rate is solved identically to Excel's <code style={{ background: T.surface, padding: "1px 5px", borderRadius: 4 }}>=XIRR()</code>.
+                <strong style={{ color: T.text }}>How XIRR is calculated:</strong> Each deposit is a negative cashflow and each withdrawal is positive. Charges & Taxes aren't a separate cashflow  they reduce Net Invested directly, the same way brokerage or STT quietly eats into your capital. The terminal cashflow is <em>Net Invested + Realised P&L (Dashboard) + Unrealised P&L (holdings section)</em>  i.e. what you put in, plus everything you've made. Live prices from the holdings section are used for unrealised P&L when available, otherwise cost basis is used. The rate is solved identically to Excel's <code style={{ background: T.surface, padding: "1px 5px", borderRadius: 4 }}>=XIRR()</code>.
             </div>
 
             {showModal && (

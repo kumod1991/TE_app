@@ -601,27 +601,6 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
     return { rows: rows.slice(start, start + pageSize), total };
 }
 
-// ─── Screen Membership ────────────────────────────────────────
-// Screens (RS Leader, Vol Breakout, Pullback 50DMA, etc.) are precomputed
-// once/day in Postgres (stock_analytics.screens). We only ask for the
-// tickers currently on screen instead of pulling every NSE ticker's
-// indicators + stock_52w rows to the browser and recomputing 13 "top 50"
-// rankings client-side on every load.
-async function fetchScreenMembership(tickers, token) {
-    if (!tickers || tickers.length === 0) return {};
-    try {
-        const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
-        const data = await GET(`stock_analytics?ticker=in.${tickerIn}&select=ticker,screens`, token);
-        const membership = {};
-        for (const row of (data || [])) {
-            if (row.ticker) membership[row.ticker] = row.screens || [];
-        }
-        return membership;
-    } catch {
-        return {};
-    }
-}
-
 // ─── Market Cap (for stat cards + Market Cap column) ───────────
 // Lightweight side-fetch from stock_ratios — avoids touching the
 // get_watchlist_rows RPC just to add one field.
@@ -927,8 +906,8 @@ const SCREEN_PILL_CFG = {
 const SCREEN_PRIORITY = ["RS Leader", "52W High BO", "Pivot BO", "Vol Breakout", "Pullback 50DMA", "Shallow PB", "Weekly PB", "Vol Dry-up", "Large Cap"];
 
 // Derives the screen/tag pills for a row from its raw fields — single
-// source of truth used by both the mobile card row and the desktop table.
-function deriveRowScreens(row, screenMembership) {
+// source of truth used by the mobile card row.
+function deriveRowScreens(row) {
     const rs = row.rs_rating ?? 0;
     const cl = row.close ?? 0;
     const s50 = row.sma50 ?? 0;
@@ -947,10 +926,6 @@ function deriveRowScreens(row, screenMembership) {
     if (p20w > 0 && cl < p20w && cl >= p20w * 0.95 && cl > s50 && rs >= 80) rowScreens.push("Shallow PB");
     if (p20w > 0 && cl >= p20w * 0.95 && cl > s50 && rs >= 75) rowScreens.push("Weekly PB");
     if (rv > 0 && rv < 0.7 && cl > s50 && cl > s200 && rs >= 60) rowScreens.push("Vol Dry-up");
-
-    const smScreens = screenMembership?.[row.ticker] ?? [];
-    if (!rowScreens.includes("Multi-TF RS") && smScreens.includes("Multi-TF RS")) rowScreens.push("Multi-TF RS");
-    if (!rowScreens.includes("RS Accel") && smScreens.includes("RS Accel")) rowScreens.push("RS Accel");
     if (rowScreens.length === 0 && (row.market_cap_cr ?? 0) >= 20000) rowScreens.push("Large Cap");
 
     return [...rowScreens].sort((a, b) => {
@@ -1277,7 +1252,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
 // ONLY KEY UPDATED PARTS (StockRow + improvements)
 // Drop-in replacement for StockRow component
 
-const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, isKeySelected, T, screenMembership, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
+const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, isKeySelected, T, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
     const [hov, setHov] = useState(false);
     const [showAllSignals, setShowAllSignals] = useState(false);
 
@@ -1310,7 +1285,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                 : null;
 
     // ── Screen/tag pills — shared derivation (see deriveRowScreens) ──
-    const tickerScreens = useMemo(() => deriveRowScreens(row, screenMembership), [row, screenMembership]);
+    const tickerScreens = useMemo(() => deriveRowScreens(row), [row]);
 
     return (
         <div
@@ -1549,7 +1524,7 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
 });
 
 // ─── Desktop Table (grid-based, matches template layout) ──────
-const WL_GRID_COLS = "34px minmax(140px,1.6fr) 84px 78px minmax(90px,1fr) 84px 84px 84px minmax(90px,1fr) minmax(150px,1.8fr) 26px";
+const WL_GRID_COLS = "34px minmax(140px,1.6fr) 84px 78px minmax(90px,1fr) 84px 84px 84px minmax(90px,1fr) 26px";
 
 const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
     const Head = ({ label, field, align = "left" }) => (
@@ -1559,7 +1534,7 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
                 display: "flex", alignItems: "center", gap: 3,
                 justifyContent: align === "right" ? "flex-end" : "flex-start",
                 cursor: field ? "pointer" : "default", userSelect: "none",
-                fontSize: 11, fontWeight: 800, color: sortCol === field ? T.text : T.muted,
+                fontSize: 12, fontWeight: 800, color: sortCol === field ? T.text : T.muted,
                 textTransform: "uppercase", letterSpacing: "0.09em",
                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
             }}
@@ -1582,24 +1557,18 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
             <Head label="6M Ret" field="ret_6m" align="right" />
             <Head label="12M Ret" field="ret_12m" align="right" />
             <Head label="Market Cap" align="right" />
-            <Head label="Screens" />
             <div />
         </div>
     );
 });
 
-const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isExpanded, T, screenMembership, onNavigateToScreen, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
+const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isExpanded, T, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
     const [hov, setHov] = useState(false);
-    const [showAllTags, setShowAllTags] = useState(false);
     const _bp = bestPriceFn ? bestPriceFn(row.ticker, price?.price ?? row.close) : null;
     const p = _bp?.price ?? price?.price ?? row.close;
     const isPending = isMarketLiveFn?.() && isPricePendingFn?.(row.ticker) && (price?.price ?? row.close) != null;
     const rsVal = row.rs_rating != null ? Math.round(+row.rs_rating) : null;
     const rc = v => v == null ? T.subtext : +v >= 0 ? T.pos : T.neg;
-    const tickerScreens = useMemo(() => deriveRowScreens(row, screenMembership), [row, screenMembership]);
-    const MAX_VISIBLE = 2;
-    const visible = showAllTags ? tickerScreens : tickerScreens.slice(0, MAX_VISIBLE);
-    const hidden = tickerScreens.length - MAX_VISIBLE;
 
     const STAGE_CFG = {
         stage1: { label: "Stage 1", color: T.subtext, bg: "transparent", border: T.border },
@@ -1616,7 +1585,7 @@ const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isEx
             onMouseLeave={() => setHov(false)}
             style={{
                 display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 10, alignItems: "center",
-                padding: "10px 14px",
+                padding: "12px 14px",
                 borderRadius: 10,
                 cursor: "pointer",
                 background: isExpanded ? `${T.green}12` : hov ? T.hover : "transparent",
@@ -1625,11 +1594,11 @@ const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isEx
                 transition: "background 0.12s ease",
             }}
         >
-            <div style={{ fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
+            <div style={{ fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
 
             <div style={{ minWidth: 0 }}>
                 <div style={{
-                    fontSize: 13, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: 14.5, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace",
                     letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
                     {row.ticker}
@@ -1639,7 +1608,7 @@ const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isEx
             <div>
                 {rsVal != null ? (
                     <span style={{
-                        display: "inline-block", fontSize: 12.5, fontWeight: 700,
+                        display: "inline-block", fontSize: 14, fontWeight: 700,
                         color: rsVal >= 90 ? T.green : rsVal >= 70 ? "#0ea5e9" : T.text,
                         background: rsVal >= 90 ? `${T.green}14` : rsVal >= 70 ? "rgba(14,165,233,0.10)" : "transparent",
                         border: `1px solid ${rsVal >= 90 ? `${T.green}45` : rsVal >= 70 ? "rgba(14,165,233,0.28)" : T.border}`,
@@ -1648,13 +1617,13 @@ const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isEx
                     }}>
                         {rsVal}
                     </span>
-                ) : <span style={{ color: T.subtext, fontSize: 12 }}>—</span>}
+                ) : <span style={{ color: T.subtext, fontSize: 13 }}>—</span>}
             </div>
 
             <div>
                 {stageCfg ? (
                     <span style={{
-                        display: "inline-block", fontSize: 10.5, fontWeight: 600,
+                        display: "inline-block", fontSize: 12, fontWeight: 600,
                         color: stageCfg.color, background: stageCfg.bg,
                         border: `1px solid ${stageCfg.border}`,
                         borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap",
@@ -1662,78 +1631,28 @@ const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isEx
                     }}>
                         {stageCfg.label}
                     </span>
-                ) : <span style={{ color: T.subtext, fontSize: 12 }}>—</span>}
+                ) : <span style={{ color: T.subtext, fontSize: 13 }}>—</span>}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 13, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 14.5, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {p != null ? `₹${(+p).toLocaleString("en-IN")}` : "—"}
                 {isPending && (
                     <span style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: "#34d399", opacity: 0.6, marginLeft: 4, animation: "wlPricePulse 1.2s ease-in-out infinite" }} />
                 )}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 500, color: rc(row.ret_3m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: rc(row.ret_3m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_3m != null ? `${Math.round(row.ret_3m) > 0 ? "+" : ""}${Math.round(row.ret_3m)}%` : "—"}
             </div>
-            <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 500, color: rc(row.ret_6m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: rc(row.ret_6m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_6m != null ? `${Math.round(row.ret_6m) > 0 ? "+" : ""}${Math.round(row.ret_6m)}%` : "—"}
             </div>
-            <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 500, color: rc(row.ret_12m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: rc(row.ret_12m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_12m != null ? `${Math.round(row.ret_12m) > 0 ? "+" : ""}${Math.round(row.ret_12m)}%` : "—"}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {marketCap != null ? fmt.marketCap(marketCap) : "—"}
-            </div>
-
-            <div style={{ display: "flex", gap: 4, alignItems: "center", width: "100%", flexWrap: showAllTags ? "wrap" : "nowrap", rowGap: 4 }}>
-                <div style={{
-                    display: "flex", gap: 4, alignItems: "center", minWidth: 0, flex: "1 1 auto",
-                    overflow: showAllTags ? "visible" : "hidden",
-                    flexWrap: showAllTags ? "wrap" : "nowrap", rowGap: 4,
-                }}>
-                    {visible.map(screenName => {
-                        const cfg = SCREEN_PILL_CFG[screenName] || { color: T.subtext, bg: "transparent", border: T.border };
-                        const canNav = !!onNavigateToScreen;
-                        return (
-                            <span key={screenName}
-                                title={canNav ? `View screen: ${screenName}` : screenName}
-                                onClick={canNav ? e => { e.stopPropagation(); onNavigateToScreen(screenName); } : undefined}
-                                style={{
-                                    fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
-                                    background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color,
-                                    whiteSpace: "nowrap", letterSpacing: "0.03em", textTransform: "uppercase",
-                                    flexShrink: 0, cursor: canNav ? "pointer" : "default",
-                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                    transition: "filter 0.12s ease",
-                                }}
-                                onMouseEnter={canNav ? e => { e.currentTarget.style.filter = "brightness(1.12)"; } : undefined}
-                                onMouseLeave={canNav ? e => { e.currentTarget.style.filter = "none"; } : undefined}
-                            >{screenName}</span>
-                        );
-                    })}
-                </div>
-                {!showAllTags && hidden > 0 && (
-                    <span
-                        onClick={e => { e.stopPropagation(); setShowAllTags(true); }}
-                        title={`Show ${hidden} more tag${hidden > 1 ? "s" : ""}`}
-                        style={{
-                            fontSize: 9.5, color: T.green, flexShrink: 0, fontWeight: 600,
-                            fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85, cursor: "pointer",
-                            padding: "2px 5px", borderRadius: 3, border: `1px solid ${T.green}35`,
-                        }}
-                    >+{hidden}</span>
-                )}
-                {showAllTags && tickerScreens.length > MAX_VISIBLE && (
-                    <span
-                        onClick={e => { e.stopPropagation(); setShowAllTags(false); }}
-                        style={{
-                            fontSize: 9.5, color: T.subtext, flexShrink: 0, cursor: "pointer",
-                            fontFamily: "'IBM Plex Mono', monospace", opacity: 0.6,
-                            padding: "2px 5px",
-                        }}
-                    >less</span>
-                )}
             </div>
 
             <button
@@ -1965,7 +1884,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [expandedTicker, setExpandedTicker] = useState(null);
     const [keySelectedIdx, setKeySelectedIdx] = useState(-1);
     const [compareOpen, setCompareOpen] = useState(false);
-    const [screenMembership, setScreenMembership] = useState({});
     const [marketCaps, setMarketCaps] = useState({});
     // Seeded synchronously from the module-level cache (memory + localStorage)
     // so previously-seen company names render on the very first paint.
@@ -2343,14 +2261,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     useEffect(() => {
         const tickers = rows.map(r => r.ticker).filter(Boolean);
         if (!tickers.length) return;
-        fetchScreenMembership(tickers, token)
-            .then(m => setScreenMembership(prev => ({ ...prev, ...m })))
-            .catch(() => { });
-    }, [rows, token]);
-
-    useEffect(() => {
-        const tickers = rows.map(r => r.ticker).filter(Boolean);
-        if (!tickers.length) return;
         fetchMarketCaps(tickers, token)
             .then(m => setMarketCaps(prev => ({ ...prev, ...m })))
             .catch(() => { });
@@ -2631,9 +2541,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     // Per-row derived screens (shared with the pill/tag rendering) — reused for stat-card counts
     const rowScreensMap = useMemo(() => {
         const m = {};
-        for (const r of rows) m[r.ticker] = deriveRowScreens(r, screenMembership);
+        for (const r of rows) m[r.ticker] = deriveRowScreens(r);
         return m;
-    }, [rows, screenMembership]);
+    }, [rows]);
     const bo52wCount = useMemo(() => rows.filter(r => rowScreensMap[r.ticker]?.includes("52W High BO")).length, [rows, rowScreensMap]);
     const pivotBoCount = useMemo(() => rows.filter(r => rowScreensMap[r.ticker]?.includes("Pivot BO")).length, [rows, rowScreensMap]);
     const avgMarketCap = useMemo(() => {
@@ -3651,7 +3561,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             isExpanded={expandedTicker === row.ticker}
                                             isKeySelected={keySelectedIdx === i}
                                             T={T}
-                                            screenMembership={screenMembership}
                                             rowIndex={i}
                                             latestEvent={eventsMap[row.ticker]}
                                             earningsDate={earningsMap[row.ticker]}
@@ -3673,8 +3582,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             onExpand={ticker => { setExpandedTicker(t => t === ticker ? null : ticker); setKeySelectedIdx(i); }}
                                             isExpanded={expandedTicker === row.ticker}
                                             T={T}
-                                            screenMembership={screenMembership}
-                                            onNavigateToScreen={onNavigateToScreen}
                                             bestPriceFn={_bestPrice}
                                             isPricePendingFn={_isPricePending}
                                             isMarketLiveFn={_isMarketLive}
