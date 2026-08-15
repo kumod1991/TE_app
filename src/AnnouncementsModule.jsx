@@ -3,41 +3,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const ANNOUNCEMENTS_SELECT = "seq_id,symbol,company_name,category,announcement_text,announcement_datetime,attachment_url,industry,tags,priority";
-const ANNOUNCEMENTS_RPC_TIMEOUT_MS = 15000;
 
 function isTimeoutLikeError(err) {
     const msg = String(err?.message || err || "");
     return err?.code === "57014" || /statement timeout|cancelling statement|timeout|retry/i.test(msg);
-}
-
-async function RPC(fn, params) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ANNOUNCEMENTS_RPC_TIMEOUT_MS);
-    try {
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            },
-            body: JSON.stringify(params),
-            signal: controller.signal,
-        });
-        if (!r.ok) {
-            const text = await r.text();
-            if (isTimeoutLikeError(text)) throw new Error("Announcements are still loading.");
-            throw new Error(text);
-        }
-        return r.json();
-    } catch (err) {
-        if (err?.name === "AbortError" || isTimeoutLikeError(err)) {
-            throw new Error("Announcements are still loading.");
-        }
-        throw err;
-    } finally {
-        clearTimeout(timer);
-    }
 }
 
 function groupByDate(items) {
@@ -118,14 +87,8 @@ const EXAMPLE_QUERIES = [
     "Buyback",
 ];
 
-const ADVANCED_QUERY_TOKEN_RE = /(^|\s)OR(\s|$)|(^|\s)-\S+|"/i;
-
 function normalizeAnnouncementQuery(query) {
     return (query || "").trim().replace(/\s+/g, " ");
-}
-
-function isAdvancedAnnouncementQuery(query) {
-    return ADVANCED_QUERY_TOKEN_RE.test(normalizeAnnouncementQuery(query));
 }
 
 function FilterModal({ existing, onSave, onClose, T }) {
@@ -252,6 +215,12 @@ function AnnouncementCard({ item, T, darkMode }) {
             border: `1px solid ${T.border}`,
             borderRadius: 14, alignItems: "flex-start",
             transition: "box-shadow .2s, border-color .2s",
+            // Skip layout/paint work for cards scrolled out of view — the
+            // browser treats them as roughly this size until they're near
+            // the viewport, then renders them for real. Keeps long lists
+            // cheap without needing a windowing library.
+            contentVisibility: "auto",
+            containIntrinsicSize: "0 96px",
         }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = darkMode ? "0 4px 24px rgba(0,0,0,0.45)" : "0 4px 20px rgba(0,0,0,0.09)";
@@ -378,6 +347,24 @@ const RESULTS_CATEGORY_KEYWORDS = ["Financial Results", "Quarterly Results", "An
  *  - Custom filters  → full-text search on text columns (no tags array needed)
  *  - Search box      → ilike on text columns
  */
+// Escape ILIKE wildcards so user-typed % or _ are treated literally.
+function escapeIlikeLiteral(term) {
+    return term.replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/**
+ * One OR-group covering every way someone would search for an
+ * announcement: ticker prefix match (fast, index-friendly — no leading
+ * wildcard), company_name/category/announcement_text substring match, and
+ * a full-text arm against the pre-computed `search_vector` column so
+ * stemmed/derived words (e.g. "warning" → "warned") still hit. Pair this
+ * with the GIN index on search_vector + trigram indexes noted below.
+ */
+function termSearchGroup(term) {
+    const safe = escapeIlikeLiteral(term);
+    return `or(symbol.ilike.${safe}*,company_name.ilike.*${safe}*,category.ilike.*${safe}*,announcement_text.ilike.*${safe}*,search_vector.plfts(english).${safe})`;
+}
+
 function buildServerParams(activeFilter, customFilters, debouncedSearch) {
     const base = {
         select: ANNOUNCEMENTS_SELECT,
@@ -412,8 +399,7 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
                     const exclude = w.startsWith("-");
                     const term = w.replace(/^-/, "").replace(/^"|"$/g, "").trim();
                     if (!term) return null;
-                    const safe = term.replace(/%/g, "\\%").replace(/_/g, "\\_");
-                    const cols = `or(company_name.ilike.*${safe}*,symbol.ilike.*${safe}*,category.ilike.*${safe}*,announcement_text.ilike.*${safe}*)`;
+                    const cols = termSearchGroup(term);
                     return exclude ? `not.${cols}` : cols;
                 }).filter(Boolean);
                 if (andParts.length === 0) return null;
@@ -428,25 +414,13 @@ function buildServerParams(activeFilter, customFilters, debouncedSearch) {
         }
     }
 
-    // ── Search box ──
+    // ── Search box (ticker / company name / category / text / full-text) ──
+    // ANDed with whatever tab or custom filter is already active above.
     if (debouncedSearch && debouncedSearch.trim()) {
-        const s = debouncedSearch.trim().replace(/%/g, "\\%").replace(/_/g, "\\_");
-        filterPairs.push(["or", `(company_name.ilike.*${s}*,symbol.ilike.*${s}*,category.ilike.*${s}*,announcement_text.ilike.*${s}*)`]);
+        filterPairs.push(["and", `(${termSearchGroup(debouncedSearch.trim())})`]);
     }
 
     return { ...base, _filterPairs: filterPairs };
-}
-
-function buildSimpleAnnouncementQuery(activeFilter, customFilters, debouncedSearch) {
-    const parts = [];
-    const filterQuery = typeof activeFilter === "number" ? normalizeAnnouncementQuery(customFilters[activeFilter]) : "";
-    const searchQuery = normalizeAnnouncementQuery(debouncedSearch);
-
-    if (filterQuery && !isAdvancedAnnouncementQuery(filterQuery)) parts.push(filterQuery);
-    if (searchQuery) parts.push(searchQuery);
-
-    const combined = parts.join(" ");
-    return combined || null;
 }
 
 // ─── Module-level cache (persists across tab navigations) ────────────────────
@@ -487,16 +461,12 @@ function writeStoredAnnouncementsCache() {
 readStoredAnnouncementsCache();
 
 async function fetchAnnouncementsPage(activeFilter, customFilters, debouncedSearch, pageOffset = 0) {
-    const simpleQuery = buildSimpleAnnouncementQuery(activeFilter, customFilters, debouncedSearch);
-
-    if (activeFilter === "all" || (typeof activeFilter === "number" && simpleQuery && !isAdvancedAnnouncementQuery(customFilters[activeFilter]))) {
-        return RPC("search_announcements", {
-            p_query: simpleQuery,
-            p_limit: PAGE_SIZE,
-            p_offset: pageOffset,
-        });
-    }
-
+    // Always read corporate_announcements directly via PostgREST — no RPC.
+    // The RPC path used to own the "all" tab (the default view) and search
+    // there against search_vector only, which never indexes the ticker
+    // symbol — that's why symbol/ticker search felt broken. Direct reads
+    // with the OR group below cover symbol + company_name + category +
+    // announcement_text + full-text every time, for every tab.
     const { _filterPairs, ...baseParams } = buildServerParams(activeFilter, customFilters, debouncedSearch);
     const url = new URL(`${SUPABASE_URL}/rest/v1/corporate_announcements`);
     Object.entries({ ...baseParams, limit: PAGE_SIZE, offset: pageOffset })
@@ -589,10 +559,14 @@ export default function AnnouncementsModule({ T }) {
 
     const fetchPage = useCallback(async (pageOffset, reset = false) => {
         const cacheKey = getCacheKey(activeFilter, debouncedSearch, customFilters);
+        // Declared here (not inside if(reset)) so the catch block below can
+        // always safely check it — previously this threw a ReferenceError
+        // on any error during a reset fetch, silently swallowing the error
+        // UI and retry button.
+        const cached = announcementsCache.get(cacheKey);
 
         if (reset) {
             setError(null);
-            const cached = announcementsCache.get(cacheKey);
             if (cached) {
                 // Show stale data immediately; refresh silently in background
                 setAnnouncements(cached.announcements);
@@ -645,6 +619,23 @@ export default function AnnouncementsModule({ T }) {
     }, [activeFilter, customFilters, debouncedSearch]);
 
     const loadMore = () => fetchPage(offset, false);
+
+    // Auto-load the next page when the sentinel at the bottom of the list
+    // scrolls into view — no click needed, on mobile or desktop. Falls
+    // back to the manual button below if IntersectionObserver is
+    // unavailable or a fetch is already in flight.
+    const sentinelRef = useRef(null);
+    useEffect(() => {
+        if (!hasMore || loading) return;
+        const node = sentinelRef.current;
+        if (!node || typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0]?.isIntersecting) loadMore();
+        }, { rootMargin: "600px 0px" });
+        observer.observe(node);
+        return () => observer.disconnect();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasMore, loading, offset]);
 
     const grouped = useMemo(() => groupByDate(announcements), [announcements]);
 
@@ -777,24 +768,47 @@ export default function AnnouncementsModule({ T }) {
                 </div>
             </div>
 
-            {/* Search */}
-            <div style={{ position: "relative", maxWidth: 480, marginBottom: 28 }}>
-                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", opacity: 0.4, pointerEvents: "none" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search company or announcement…"
-                    style={{
-                        width: "100%", padding: "11px 16px 11px 38px",
-                        border: `1.5px solid ${T.border}`, borderRadius: 10,
-                        background: T.surface, color: T.text, fontSize: 15,
-                        outline: "none", boxSizing: "border-box",
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = "#6366f1"}
-                    onBlur={(e) => e.target.style.borderColor = T.border}
-                />
+            {/* Search — sticky on mobile so it stays reachable while scrolling a long list */}
+            <div style={{
+                position: isMobile ? "sticky" : "relative",
+                top: isMobile ? 0 : undefined,
+                zIndex: isMobile ? 5 : undefined,
+                background: isMobile ? (T.shellBg || T.surface) : undefined,
+                paddingTop: isMobile ? 6 : undefined,
+                paddingBottom: isMobile ? 10 : undefined,
+                maxWidth: isMobile ? "100%" : 480,
+                marginBottom: isMobile ? 0 : 28,
+            }}>
+                <div style={{ position: "relative" }}>
+                    <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", opacity: 0.4, pointerEvents: "none" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by ticker, company, or keyword…"
+                        style={{
+                            width: "100%", padding: searchQuery ? "11px 38px 11px 38px" : "11px 16px 11px 38px",
+                            border: `1.5px solid ${T.border}`, borderRadius: 10,
+                            background: T.surface, color: T.text, fontSize: 15,
+                            outline: "none", boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = "#6366f1"}
+                        onBlur={(e) => e.target.style.borderColor = T.border}
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery("")}
+                            aria-label="Clear search"
+                            style={{
+                                position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                                width: 22, height: 22, borderRadius: "50%", border: "none",
+                                background: T.border, color: T.subtext, cursor: "pointer",
+                                fontSize: 13, lineHeight: "22px", padding: 0,
+                            }}
+                        >×</button>
+                    )}
+                </div>
             </div>
 
             {/* Content */}
@@ -851,7 +865,7 @@ export default function AnnouncementsModule({ T }) {
             ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
                     {Object.entries(grouped).map(([dateLabel, items]) => (
-                        <div key={dateLabel}>
+                        <div key={dateLabel} style={{ contentVisibility: "auto", containIntrinsicSize: "0 400px" }}>
                             {/* Date group header */}
                             <div style={{
                                 fontSize: 13, fontWeight: 700, color: T.subtext,
@@ -876,7 +890,8 @@ export default function AnnouncementsModule({ T }) {
                         </div>
                     ))}
 
-                    {/* Load more */}
+                    {/* Load more — auto-fires ~600px before this scrolls into view */}
+                    {hasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
                     {hasMore && (
                         <div style={{ textAlign: "center", paddingTop: 8, paddingBottom: 16 }}>
                             <button

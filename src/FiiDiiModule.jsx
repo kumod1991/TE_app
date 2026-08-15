@@ -395,20 +395,27 @@ async function fetchCashData(years, { preferCache = true } = {}) {
   return refreshCashData(boundedYears);
 }
 
-// ─── DERIVATIVES DATA — fii_dii_fo ─────────────────────────────────────────────
+// ─── DERIVATIVES DATA — fii_dii_fo_mv ─────────────────────────────────────────────
 // Lazy: only fetched the first time the Derivatives tab is actually opened (see
 // the component effect below), since most sessions never touch it.
 // Only the columns pivotDerivData() actually reads are selected — `select=*`
 // was pulling every stock-level/OI column in the table on every load.
 // Same range-capped, demand-driven fetch pattern as cash data: 5Y ceiling,
 // but only the currently-selected range is actually requested up front.
-const derivCache = makeCache("fiidii-deriv-cache-v4");
+const derivCache = makeCache("fiidii-deriv-cache-v5"); // v5: mv-backed, bump to invalidate old v4 shape
 let derivInflight = null, derivInflightYears = 0;
+// fii_dii_fo_mv is a pre-pivoted materialized view — one row per date with
+// fii_/dii_ columns already merged and net precomputed server-side.
+// Reading it directly instead of the raw fii_dii_fo table (2 rows/date,
+// FII + DII, requiring a client-side group-by/pivot) halves the rows
+// fetched and removes the JS pivot step, fixing the slow first-load on the
+// Derivatives tab. pivotDerivData() already has a fast-path for pre-pivoted
+// rows (no `client_type` column), so it's left in place as a no-op sort.
 const DERIV_SELECT = [
-  "date", "client_type",
-  "index_fut_long", "index_fut_short",
-  "index_call_long", "index_call_short",
-  "index_put_long", "index_put_short",
+  "date",
+  "fii_fut_long", "fii_fut_short",
+  "fii_long", "fii_short", "fii_net",
+  "dii_long", "dii_short", "dii_net",
 ].join(",");
 
 async function refreshDerivData(years) {
@@ -416,7 +423,7 @@ async function refreshDerivData(years) {
   if (derivInflight && derivInflightYears >= boundedYears) return derivInflight;
   derivInflightYears = boundedYears;
   derivInflight = (async () => {
-    const rows = await sbFetchAll("fii_dii_fo", {
+    const rows = await sbFetchAll("fii_dii_fo_mv", {
       select: DERIV_SELECT, order: "date.asc", date: `gte.${cutoffISOForYears(boundedYears)}`,
     });
     const data = pivotDerivData(rows);
@@ -988,7 +995,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     return () => { cancelled = true; };
   }, [overviewRange]);
 
-  // ── Derivatives data (fii_dii_fo) — lazy: fetched the first time the tab opens ──
+  // ── Derivatives data (fii_dii_fo_mv) — lazy: fetched the first time the tab opens ──
   // Same demand-driven pattern: only the selected derivRange is fetched, and
   // widening the range on this tab tops up rather than re-pulling everything.
   const derivLoadedYearsRef = useRef(0);
@@ -1364,7 +1371,7 @@ const CashFlowTab = memo(function CashFlowTab({ cashMemo, cashFlowAggRows, cashF
 });
 
 const DerivativesTab = memo(function DerivativesTab({ derivMemo, derivativesTabData, isMobile, T, card, sh, noData, derivRange, setDerivRange }) {
-  if (!derivMemo.rows?.length) return noData("No F&O data available. Check fii_dii_fo table format.");
+  if (!derivMemo.rows?.length) return noData("No F&O data available. Check fii_dii_fo_mv table format.");
   const { latest, lsRatio, buildUp } = derivMemo;
   const { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData } = derivativesTabData;
 
