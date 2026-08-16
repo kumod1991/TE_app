@@ -619,6 +619,52 @@ async function fetchMarketCaps(tickers, token) {
     }
 }
 
+// ─── Company Names (for search suggestions + ticker↔name display) ──
+// company_financials has one row per (ticker, exchange) — the same company
+// can appear once under NSE and once under BSE with different tickers.
+// We always prefer the NSE row when both exist for a given company name.
+async function fetchCompanyNames(tickers, token) {
+    if (!tickers || tickers.length === 0) return {};
+    try {
+        const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
+        const data = await GET(`company_financials?ticker=in.${tickerIn}&select=ticker,name,exchange`, token);
+        const map = {};
+        for (const row of (data || [])) {
+            if (row.ticker && row.name) map[row.ticker] = row.name;
+        }
+        return map;
+    } catch {
+        return {};
+    }
+}
+
+// ─── Ticker/Company search (autocomplete "Add Stocks") ─────────
+// Matches on ticker OR company name, then dedupes same-company rows that
+// exist on both NSE and BSE — keeping the NSE listing as the canonical one.
+async function searchCompanies(q, token) {
+    if (!q || !q.trim()) return [];
+    const term = q.trim();
+    try {
+        const filter = `or=(ticker.ilike.${encodeURIComponent(term)}*,name.ilike.*${encodeURIComponent(term)}*)`;
+        const data = await GET(
+            `company_financials?${filter}&select=ticker,name,exchange,current_price&limit=25&order=ticker.asc`,
+            token
+        );
+        const byName = new Map(); // name(lowercased) → chosen row
+        for (const row of (data || [])) {
+            if (!row.ticker || !row.name) continue;
+            const key = row.name.trim().toLowerCase();
+            const existing = byName.get(key);
+            if (!existing || (row.exchange === "NSE" && existing.exchange !== "NSE")) {
+                byName.set(key, row);
+            }
+        }
+        return Array.from(byName.values()).slice(0, 10);
+    } catch {
+        return [];
+    }
+}
+
 // ─── Default-Watchlist Seeding ────────────────────────────────
 // When a brand-new user has zero watchlists we clone kumodiit@gmail.com's
 // watchlists (names + tickers) into their account as a starting point.
@@ -1147,28 +1193,32 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
     );
 }
 
-// ─── Ticker Autocomplete ──────────────────────────────────────
-function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compact, isMobile = false }) {
+// ─── Ticker/Company Autocomplete ────────────────────────────────
+function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compact, isMobile = false, token }) {
     const [sugg, setSugg] = useState([]);
     const [open, setOpen] = useState(false);
     const [hi, setHi] = useState(-1);
     const [busy, setBusy] = useState(false);
     const ref = useRef(null);
+    const reqId = useRef(0);
     useEffect(() => {
         const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
         document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
     }, []);
     const search = useCallback(async q => {
         if (!q || q.length < 1) { setSugg([]); setOpen(false); return; }
+        const myReq = ++reqId.current;
         setBusy(true);
         try {
-            const r = await fetch(`${SUPABASE_URL}/rest/v1/stock_52w?ticker=ilike.${encodeURIComponent(q)}*&select=ticker,close&limit=10&order=ticker.asc`, { headers: hdrs(null) });
-            const data = r.ok ? await r.json() : [];
-            setSugg(data || []); setOpen((data || []).length > 0);
-        } catch { setSugg([]); }
-        setBusy(false);
-    }, []);
-    const pick = s => { onChange(s.ticker); onSelect(s.ticker); setSugg([]); setOpen(false); setHi(-1); };
+            const data = await searchCompanies(q, token);
+            if (myReq !== reqId.current) return; // stale response — a newer keystroke has fired since
+            setSugg(data); setOpen(data.length > 0);
+        } catch { if (myReq === reqId.current) setSugg([]); }
+        if (myReq === reqId.current) setBusy(false);
+    }, [token]);
+    // Selecting a suggestion stores the ticker (used for the API call / value)
+    // but hands the company name up too, so the caller can show it immediately.
+    const pick = s => { onChange(s.ticker); onSelect(s.ticker, s.name); setSugg([]); setOpen(false); setHi(-1); };
     const onKD = e => {
         if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h + 1, sugg.length - 1)); }
         else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
@@ -1184,7 +1234,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
                         onChange={e => { onChange(e.target.value); search(e.target.value); }}
                         onKeyDown={onKD}
                         onFocus={() => sugg.length > 0 && setOpen(true)}
-                        placeholder="Add ticker…"
+                        placeholder="Add ticker or company…"
                         style={{
                             width: "100%", padding: isMobile ? "12px 38px 12px 13px" : "8px 32px 8px 10px",
                             background: T.card, border: `1px solid ${addError ? "#dc2626" : T.border}`,
@@ -1228,12 +1278,25 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
                 )}
             </div>
             {open && sugg.length > 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 400, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, minWidth: "100%", maxHeight: 240, overflowY: "auto", boxShadow: "0 18px 44px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 400, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, minWidth: "100%", maxHeight: 260, overflowY: "auto", boxShadow: "0 18px 44px rgba(0,0,0,0.22)", overflow: "hidden" }}>
                     {sugg.map((s, i) => (
                         <div key={s.ticker} onMouseDown={() => pick(s)} onMouseEnter={() => setHi(i)}
-                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "10px 12px" : "8px 10px", cursor: "pointer", background: i === hi ? T.hover : "transparent", borderBottom: `1px solid ${T.border}` }}>
-                            <span style={{ fontWeight: 600, fontSize: 12, color: T.text, fontFamily: "'IBM Plex Mono',monospace" }}>{s.ticker}</span>
-                            {s.close != null && <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace" }}>₹{(+s.close).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: isMobile ? "10px 12px" : "8px 10px", cursor: "pointer", background: i === hi ? T.hover : "transparent", borderBottom: `1px solid ${T.border}` }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+                                <span style={{
+                                    fontWeight: 600, fontSize: 12.5, color: T.text,
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", textTransform: "none",
+                                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200,
+                                }}>{s.name}</span>
+                                <span style={{ fontSize: 10.5, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: "0.03em" }}>
+                                    {s.ticker}{s.exchange ? ` · ${s.exchange}` : ""}
+                                </span>
+                            </div>
+                            {s.current_price != null && (
+                                <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>
+                                    ₹{(+s.current_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                                </span>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -1252,7 +1315,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
 // ONLY KEY UPDATED PARTS (StockRow + improvements)
 // Drop-in replacement for StockRow component
 
-const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, isKeySelected, T, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
+const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onExpand, isExpanded, isKeySelected, T, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
     const [hov, setHov] = useState(false);
 
     // Resolve the best available price: Yahoo live (green) > bhav_copy > row.close
@@ -1332,6 +1395,16 @@ const StockRow = memo(({ row, price, sparkData, onRemove, onExpand, isExpanded, 
                     }}>
         {row.ticker}
                     </span>
+                    {companyName && (
+                        <span style={{
+                            fontSize: isMobile ? 10.5 : 11.5,
+                            color: T.subtext,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: isMobile ? 160 : 220,
+                        }}>
+                            {companyName}
+                        </span>
+                    )}
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1509,7 +1582,7 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
     );
 });
 
-const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isExpanded, T, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
+const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, onExpand, isExpanded, T, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
     const [hov, setHov] = useState(false);
     const _bp = bestPriceFn ? bestPriceFn(row.ticker, price?.price ?? row.close) : null;
     const p = _bp?.price ?? price?.price ?? row.close;
@@ -1550,6 +1623,14 @@ const WlTableRow = memo(({ row, rank, price, marketCap, onRemove, onExpand, isEx
                 }}>
                     {row.ticker}
                 </div>
+                {companyName && (
+                    <div style={{
+                        fontSize: 11.5, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1,
+                    }}>
+                        {companyName}
+                    </div>
+                )}
             </div>
 
             <div>
@@ -1818,8 +1899,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [sortAsc, setSortAsc] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const [addTicker, setAddTicker] = useState("");
+    const [addCompanyName, setAddCompanyName] = useState("");
     const [addError, setAddError] = useState("");
     const [addLoading, setAddLoading] = useState(false);
+    const [companyNames, setCompanyNames] = useState({}); // ticker → company name
     const [prices, setPrices] = useState({});
     const [priceLoading, setPriceLoading] = useState(false);
     const [sparklines, setSparklines] = useState({});
@@ -2213,6 +2296,15 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             .catch(() => { });
     }, [rows, token]);
 
+    useEffect(() => {
+        const tickers = rows.map(r => r.ticker).filter(t => t && !companyNames[t]);
+        if (!tickers.length) return;
+        fetchCompanyNames(tickers, token)
+            .then(m => setCompanyNames(prev => ({ ...prev, ...m })))
+            .catch(() => { });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rows, token]);
+
     // ── Background pre-warm: on first login, silently populate feed caches for ALL watchlists ──
     // This ensures the announcements panel feels instant on every watchlist switch.
     useEffect(() => {
@@ -2406,6 +2498,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         // Capture the watchlist we're adding to at call-time so a mid-flight
         // watchlist switch can't corrupt a different list's rows.
         const targetWl = activeWl;
+        // Name captured from the picked suggestion, if any — used so the
+        // optimistic row shows the company name immediately, before the
+        // background companyNames fetch (fetchCompanyNames) resolves it.
+        const pickedName = addCompanyName;
 
         // Optimistic update — scoped to the target watchlist only.
         // We tag the row with targetWl so it can be safely removed on error.
@@ -2416,6 +2512,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             if (prev.some(r => r.ticker === ticker)) return prev;
             return [{ ticker, loading: true, ret_3m: null, ret_6m: null, ret_12m: null, _optimistic: true }, ...prev];
         });
+        if (pickedName) {
+            setCompanyNames(prev => (prev[ticker] ? prev : { ...prev, [ticker]: pickedName }));
+        }
 
         try {
             await POST("watchlist_items", { watchlist_id: targetWl, ticker }, token);
@@ -2432,6 +2531,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             try { localStorage.removeItem(getRowsCacheKey(targetWl)); } catch { }
 
             setAddTicker("");
+            setAddCompanyName("");
             setTimeout(() => { setRefreshKey(k => k + 1); }, 50);
         } catch (e) {
             setAddError("Failed to add — ticker may not exist or is already in this list");
@@ -2439,7 +2539,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             setRows(prev => prev.filter(r => !(r.ticker === ticker && r._optimistic)));
         }
         setAddLoading(false);
-    }, [addTicker, activeWl, token]);
+    }, [addTicker, addCompanyName, activeWl, token]);
 
     const removeStock = useCallback(async (ticker) => {
         if (!activeWl) return;
@@ -2752,13 +2852,14 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         {isMobile && (
                             <TickerSearch
                                 value={addTicker}
-                                onChange={v => { setAddTicker(v); setAddError(""); }}
-                                onSelect={v => { setAddTicker(v); setAddError(""); }}
+                                onChange={v => { setAddTicker(v); setAddCompanyName(""); setAddError(""); }}
+                                onSelect={(t, name) => { setAddTicker(t); setAddCompanyName(name || ""); setAddError(""); }}
                                 onSubmit={addStock}
                                 addError={addError}
                                 T={T}
                                 compact
                                 isMobile={isMobile}
+                                token={token}
                             />
                         )}
                     </div>
@@ -3377,12 +3478,13 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 </div>
                                                 <TickerSearch
                                                     value={addTicker}
-                                                    onChange={v => { setAddTicker(v); setAddError(""); }}
-                                                    onSelect={v => { setAddTicker(v); setAddError(""); }}
+                                                    onChange={v => { setAddTicker(v); setAddCompanyName(""); setAddError(""); }}
+                                                    onSelect={(t, name) => { setAddTicker(t); setAddCompanyName(name || ""); setAddError(""); }}
                                                     onSubmit={addStock}
                                                     addError={addError}
                                                     T={T}
                                                     compact
+                                                    token={token}
                                                 />
                                                 {addError && (
                                                     <div style={{ fontSize: 11, color: "#dc2626", marginTop: 6 }}>{addError}</div>
@@ -3503,6 +3605,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             row={row}
                                             price={prices[row.ticker]}
                                             sparkData={sparklines[row.ticker]}
+                                            companyName={companyNames[row.ticker]}
                                             onRemove={removeStock}
                                             onExpand={ticker => { setExpandedTicker(t => t === ticker ? null : ticker); setKeySelectedIdx(i); }}
                                             isExpanded={expandedTicker === row.ticker}
@@ -3524,6 +3627,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             rank={page * PAGE_SIZE + i + 1}
                                             price={prices[row.ticker]}
                                             marketCap={marketCaps[row.ticker]}
+                                            companyName={companyNames[row.ticker]}
                                             onRemove={removeStock}
                                             onExpand={ticker => { setExpandedTicker(t => t === ticker ? null : ticker); setKeySelectedIdx(i); }}
                                             isExpanded={expandedTicker === row.ticker}
@@ -3589,6 +3693,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         <div>
                                                             <div style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5, opacity: 0.55, fontWeight: 700 }}>Detail</div>
                                                             <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{expandedRow.ticker}</div>
+                                                            {companyNames[expandedRow.ticker] && (
+                                                                <div style={{ fontSize: 12.5, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", marginTop: 1 }}>
+                                                                    {companyNames[expandedRow.ticker]}
+                                                                </div>
+                                                            )}
                                                             <div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2, letterSpacing: "-0.01em" }}>
                                                                 {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
                                                             </div>
@@ -3691,6 +3800,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     <div style={{ minWidth: 0 }}>
                                                         <div style={{ fontSize: 10, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5, opacity: 0.55, fontWeight: 700 }}>Detail</div>
                                                         <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.03em" }}>{expandedRow.ticker}</div>
+                                                        {companyNames[expandedRow.ticker] && (
+                                                            <div style={{ fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                                {companyNames[expandedRow.ticker]}
+                                                            </div>
+                                                        )}
                                                         <div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", marginTop: 3, letterSpacing: "-0.02em" }}>
                                                             {fmt.priceFull(prices[expandedRow.ticker]?.price ?? expandedRow.close)}
                                                         </div>
