@@ -641,19 +641,38 @@ async function fetchCompanyNames(tickers, token) {
 // ─── Ticker/Company search (autocomplete "Add Stocks") ─────────
 // Matches on ticker OR company name, then dedupes same-company rows that
 // exist on both NSE and BSE — keeping the NSE listing as the canonical one.
+// Strips common company-suffix variants ("Limited", "Ltd", "Ltd.", "Pvt Ltd",
+// "Private Limited", etc.) plus punctuation/whitespace differences, so
+// "Pajson Agro India" and "Pajson Agro India Limited" normalize to the same
+// dedupe key even though only one of the NSE/BSE rows carries the suffix.
+function normalizeCompanyName(name) {
+    return name
+        .toLowerCase()
+        .replace(/[.,()]/g, "")
+        .replace(/\b(private|pvt)\b/g, "")
+        .replace(/\b(limited|ltd)\b/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 async function searchCompanies(q, token) {
     if (!q || !q.trim()) return [];
     const term = q.trim();
     try {
-        const filter = `or=(ticker.ilike.${encodeURIComponent(term)}*,name.ilike.*${encodeURIComponent(term)}*)`;
+        const filter = `or=(ticker.ilike.${encodeURIComponent(term)}*,name.ilike.*${encodeURIComponent(term)}*,nse_code.ilike.${encodeURIComponent(term)}*,bse_code.ilike.${encodeURIComponent(term)}*)`;
         const data = await GET(
             `company_financials?${filter}&select=ticker,name,exchange,current_price&limit=25&order=ticker.asc`,
             token
         );
-        const byName = new Map(); // name(lowercased) → chosen row
+        // Dedupe by normalized company name — the same company can appear
+        // once under NSE and once under BSE, sometimes with a "Limited"/"Ltd"
+        // suffix on only one of the two rows. We keep the NSE row when both
+        // exist for a given company.
+        const byName = new Map(); // normalized name → chosen row
         for (const row of (data || [])) {
             if (!row.ticker || !row.name) continue;
-            const key = row.name.trim().toLowerCase();
+            const key = normalizeCompanyName(row.name);
+            if (!key) continue;
             const existing = byName.get(key);
             if (!existing || (row.exchange === "NSE" && existing.exchange !== "NSE")) {
                 byName.set(key, row);
@@ -1289,7 +1308,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
                                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200,
                                 }}>{s.name}</span>
                                 <span style={{ fontSize: 10.5, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: "0.03em" }}>
-                                    {s.ticker}{s.exchange ? ` · ${s.exchange}` : ""}
+                                    {s.ticker}
                                 </span>
                             </div>
                             {s.current_price != null && (
@@ -1554,19 +1573,20 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
                 display: "flex", alignItems: "center", gap: 3,
                 justifyContent: align === "right" ? "flex-end" : "flex-start",
                 cursor: field ? "pointer" : "default", userSelect: "none",
-                fontSize: 12, fontWeight: 800, color: sortCol === field ? T.text : T.muted,
-                textTransform: "uppercase", letterSpacing: "0.09em",
+                fontSize: 11, fontWeight: 700, color: sortCol === field ? T.text : T.muted,
+                textTransform: "uppercase", letterSpacing: "0.08em",
                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                transition: "color 0.12s ease",
             }}
         >
             {label}
-            {field && sortCol === field && <span style={{ fontSize: 9, opacity: 0.7 }}>{sortAsc ? "▲" : "▼"}</span>}
+            {field && sortCol === field && <span style={{ fontSize: 9, opacity: 0.7, color: T.accent }}>{sortAsc ? "▲" : "▼"}</span>}
         </div>
     );
     return (
         <div style={{
             display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 10, alignItems: "center",
-            padding: "0 14px 10px", borderBottom: `1px solid ${T.border}`, marginBottom: 4,
+            padding: "0 14px 9px", borderBottom: `1px solid ${T.border}`, marginBottom: 4,
         }}>
             <Head label="#" />
             <Head label="Stock" />
@@ -1589,13 +1609,17 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
     const isPending = isMarketLiveFn?.() && isPricePendingFn?.(row.ticker) && (price?.price ?? row.close) != null;
     const rsVal = row.rs_rating != null ? Math.round(+row.rs_rating) : null;
     const rc = v => v == null ? T.subtext : +v >= 0 ? T.pos : T.neg;
+    const zebra = rank % 2 === 0;
 
+    // Stage — a quiet dot + label rather than a filled box, so it doesn't
+    // compete visually when most rows in a well-curated list share Stage 2.
     const STAGE_CFG = {
-        stage1: { label: "Stage 1", color: T.subtext, bg: "transparent", border: T.border },
-        stage2: { label: "Stage 2", color: T.green, bg: `${T.green}12`, border: `${T.green}45` },
-        stage4: { label: "Stage 4", color: T.neg, bg: `${T.neg}12`, border: `${T.neg}45` },
+        stage1: { label: "Stage 1", color: T.subtext, dot: T.subtext },
+        stage2: { label: "Stage 2", color: T.greenText ?? T.green, dot: T.green },
+        stage4: { label: "Stage 4", color: T.redText ?? T.neg, dot: T.neg },
     };
     const stageCfg = STAGE_CFG[row.trend] || null;
+    const isLeader = rsVal != null && rsVal >= 90;
 
     return (
         <div
@@ -1605,21 +1629,22 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
             onMouseLeave={() => setHov(false)}
             style={{
                 display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 10, alignItems: "center",
-                padding: "12px 14px",
+                padding: "11px 14px",
                 borderRadius: 10,
                 cursor: "pointer",
-                background: isExpanded ? `${T.green}12` : hov ? T.hover : "transparent",
-                border: `1px solid ${isExpanded ? `${T.green}40` : "transparent"}`,
-                marginBottom: 2,
-                transition: "background 0.12s ease",
+                background: isExpanded ? `${T.accent}10` : hov ? T.hover : (zebra ? (T.tableAlt ?? "transparent") : "transparent"),
+                border: `1px solid ${isExpanded ? `${T.accent}35` : "transparent"}`,
+                borderLeft: `2px solid ${isExpanded ? T.accent : isLeader ? `${T.gold ?? T.green}80` : "transparent"}`,
+                marginBottom: 1,
+                transition: "background 0.12s ease, border-color 0.12s ease",
             }}
         >
-            <div style={{ fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
+            <div style={{ fontSize: 12.5, color: T.muted, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
 
             <div style={{ minWidth: 0 }}>
                 <div style={{
-                    fontSize: 14.5, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Mono', monospace",
-                    letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    fontSize: 14, fontWeight: 650, color: T.text, fontFamily: "'IBM Plex Mono', monospace",
+                    letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
                     {row.ticker}
                 </div>
@@ -1635,47 +1660,55 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
 
             <div>
                 {rsVal != null ? (
-                    <span style={{
-                        display: "inline-block", fontSize: 14, fontWeight: 700,
-                        color: rsVal >= 90 ? T.green : rsVal >= 70 ? "#0ea5e9" : T.text,
-                        background: rsVal >= 90 ? `${T.green}14` : rsVal >= 70 ? "rgba(14,165,233,0.10)" : "transparent",
-                        border: `1px solid ${rsVal >= 90 ? `${T.green}45` : rsVal >= 70 ? "rgba(14,165,233,0.28)" : T.border}`,
-                        borderRadius: 6, padding: "3px 9px",
-                        fontFamily: "'IBM Plex Mono', monospace",
-                    }}>
-                        {rsVal}
-                    </span>
-                ) : <span style={{ color: T.subtext, fontSize: 13 }}>—</span>}
+                    isLeader ? (
+                        <span style={{
+                            display: "inline-flex", alignItems: "baseline", gap: 1, fontSize: 13.5, fontWeight: 700,
+                            color: T.greenText ?? T.green,
+                            background: `${T.green}12`,
+                            borderRadius: 6, padding: "2.5px 8px",
+                            fontFamily: "'IBM Plex Mono', monospace",
+                        }}>
+                            {rsVal}
+                        </span>
+                    ) : (
+                        <span style={{
+                            fontSize: 13.5, fontWeight: 600,
+                            color: rsVal >= 70 ? T.text : T.subtext,
+                            fontFamily: "'IBM Plex Mono', monospace",
+                        }}>
+                            {rsVal}
+                        </span>
+                    )
+                ) : <span style={{ color: T.muted, fontSize: 13 }}>—</span>}
             </div>
 
             <div>
                 {stageCfg ? (
                     <span style={{
-                        display: "inline-block", fontSize: 12, fontWeight: 600,
-                        color: stageCfg.color, background: stageCfg.bg,
-                        border: `1px solid ${stageCfg.border}`,
-                        borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap",
-                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.02em",
+                        display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500,
+                        color: stageCfg.color, whiteSpace: "nowrap",
+                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.01em",
                     }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: stageCfg.dot, flexShrink: 0 }} />
                         {stageCfg.label}
                     </span>
-                ) : <span style={{ color: T.subtext, fontSize: 13 }}>—</span>}
+                ) : <span style={{ color: T.muted, fontSize: 13 }}>—</span>}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 14.5, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {p != null ? `₹${(+p).toLocaleString("en-IN")}` : "—"}
                 {isPending && (
-                    <span style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: "#34d399", opacity: 0.6, marginLeft: 4, animation: "wlPricePulse 1.2s ease-in-out infinite" }} />
+                    <span style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: T.green, opacity: 0.6, marginLeft: 4, animation: "wlPricePulse 1.2s ease-in-out infinite" }} />
                 )}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: rc(row.ret_3m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: rc(row.ret_3m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_3m != null ? `${Math.round(row.ret_3m) > 0 ? "+" : ""}${Math.round(row.ret_3m)}%` : "—"}
             </div>
-            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: rc(row.ret_6m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: rc(row.ret_6m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_6m != null ? `${Math.round(row.ret_6m) > 0 ? "+" : ""}${Math.round(row.ret_6m)}%` : "—"}
             </div>
-            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: rc(row.ret_12m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: rc(row.ret_12m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_12m != null ? `${Math.round(row.ret_12m) > 0 ? "+" : ""}${Math.round(row.ret_12m)}%` : "—"}
             </div>
 
@@ -1930,9 +1963,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [livePriceTick, setLivePriceTick] = useState(0);
 
     // ── Watchlist drag-to-reorder ────────────────────────────────
-    // Custom order is a client-side preference (no backend column for it),
-    // persisted per-user in localStorage and reconciled against the live list.
-    const [wlOrderIds, setWlOrderIds] = useState([]);
+    // Order is persisted to the `sort_order` column on the `watchlists` table
+    // (not localStorage) so a reorder made on desktop shows up on mobile and
+    // vice versa. localStorage is still used as an instant-paint cache for
+    // the initial load, but the backend value is always the source of truth.
     const [dragWlId, setDragWlId] = useState(null);   // id currently being dragged
     const [dragLiveOrder, setDragLiveOrder] = useState(null);   // live-reordered ids while dragging
     const dragMeta = useRef({ id: null, startY: 0, startIndex: 0, itemHeight: 56, moved: false });
@@ -2029,7 +2063,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             }
         } catch { }
         if (!hasCached) setWlLoading(true);
-        GET(`watchlists?user_id=eq.${userId}&order=created_at.asc&select=*`, token)
+        GET(`watchlists?user_id=eq.${userId}&order=sort_order.asc.nullslast,created_at.asc&select=*`, token)
             .then(async data => {
                 // Only seed brand-new users — those with zero watchlists AND no seed flag.
                 // Never touch existing users' data.
@@ -2038,7 +2072,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                 if (isNewUser) {
                     await seedDefaultWatchlists(userId, token);
                     // Re-fetch after seeding so the UI sees the freshly populated watchlists
-                    data = await GET(`watchlists?user_id=eq.${userId}&order=created_at.asc&select=*`, token).catch(() => []);
+                    data = await GET(`watchlists?user_id=eq.${userId}&order=sort_order.asc.nullslast,created_at.asc&select=*`, token).catch(() => []);
                 }
                 setWatchlists(data || []);
                 setActiveWl(prev => prev ?? (data?.[0]?.id || null));
@@ -2046,40 +2080,40 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             }).catch(() => { }).finally(() => setWlLoading(false));
     }, [userId, token]);
 
-    // Load the user's saved custom drag order for the watchlist sidebar
-    useEffect(() => {
-        if (!userId) return;
-        try {
-            const raw = localStorage.getItem(`wl_order_${userId}`);
-            if (raw) {
-                const ids = JSON.parse(raw);
-                if (Array.isArray(ids)) setWlOrderIds(ids);
-            }
-        } catch { }
-    }, [userId]);
-
-    const persistWlOrder = useCallback((idsArr) => {
-        setWlOrderIds(idsArr);
-        if (userId) {
-            try { localStorage.setItem(`wl_order_${userId}`, JSON.stringify(idsArr)); } catch { }
-        }
-    }, [userId]);
-
-    // Reconcile saved order against the live watchlist list: known ids keep their
-    // saved position, brand-new watchlists (not yet in the saved order) are appended.
+    // Reconcile order against the live watchlist list: rows with a sort_order
+    // are sorted by it; rows without one (e.g. pre-migration or brand-new)
+    // fall back to created_at and are appended after the ordered ones.
     const orderedWatchlists = useMemo(() => {
-        if (!wlOrderIds.length) return watchlists;
-        const byId = new Map(watchlists.map(w => [w.id, w]));
-        const ordered = [];
-        for (const id of wlOrderIds) {
-            const w = byId.get(id);
-            if (w) { ordered.push(w); byId.delete(id); }
-        }
-        for (const w of watchlists) {
-            if (byId.has(w.id)) ordered.push(w);
-        }
-        return ordered;
-    }, [watchlists, wlOrderIds]);
+        return [...watchlists].sort((a, b) => {
+            const ao = a.sort_order ?? Infinity;
+            const bo = b.sort_order ?? Infinity;
+            if (ao !== bo) return ao - bo;
+            return new Date(a.created_at) - new Date(b.created_at);
+        });
+    }, [watchlists]);
+
+    // Persist a new drag order: optimistically reflect it in `watchlists`
+    // (so the sidebar + local cache update instantly) and push each
+    // watchlist's new sort_order to Supabase so every device picks it up.
+    const persistWlOrder = useCallback((idsArr) => {
+        const orderMap = new Map(idsArr.map((id, idx) => [id, idx]));
+        setWatchlists(prev => {
+            const next = prev.map(w => orderMap.has(w.id) ? { ...w, sort_order: orderMap.get(w.id) } : w);
+            if (userId) {
+                try { localStorage.setItem(`wl_list_${userId}`, JSON.stringify({ ts: Date.now(), data: next })); } catch { }
+            }
+            return next;
+        });
+        if (!token) return;
+        // Fire off one PATCH per watchlist — the list is small (a handful of
+        // watchlists per user) so this stays cheap, and failures here are
+        // non-fatal: the optimistic local order still reflects the drag.
+        Promise.all(
+            idsArr.map((id, idx) =>
+                PATCH(`watchlists?id=eq.${id}`, { sort_order: idx }, token).catch(() => { })
+            )
+        );
+    }, [userId, token]);
 
     // Live-reordered list while a drag is in progress; falls back to the saved order otherwise.
     const displayWatchlists = useMemo(() => {
@@ -2646,6 +2680,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         </div>
     );
 
+    // Sidebar chrome — a quiet dark-ink rail (mirrors the top nav) gives the
+    // page real hierarchy instead of "everything is the same white panel".
+    const sc = {
+        bg: T.chromeBg ?? T.surface,
+        bgAlt: T.chromeBgAlt ?? T.surface,
+        border: T.chromeBorder ?? T.border,
+        text: T.chromeText ?? T.text,
+        textMuted: T.chromeTextMuted ?? T.subtext,
+        hover: T.chromeHover ?? T.hover,
+        activeBg: T.chromeActiveBg ?? `${T.green}22`,
+        activeBorder: T.chromeActiveBorder ?? `${T.green}60`,
+        activeText: T.chromeActiveText ?? T.text,
+    };
+
     return (
         <>
             <style>{`
@@ -2734,8 +2782,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     width: isMobile ? "min(86vw, 340px)" : (sidebarOpen ? 240 : 0),
                     maxWidth: isMobile ? 340 : 240,
                     flexShrink: 0,
-                    background: T.surface,
-                    border: `1px solid ${T.border}`,
+                    background: T.chromeBg ?? T.surface,
+                    border: `1px solid ${T.chromeBorder ?? T.border}`,
                     borderRadius: isMobile ? 0 : 16,
                     display: "flex",
                     flexDirection: "column",
@@ -2743,7 +2791,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     transition: isMobile
                         ? "transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease"
                         : "width 0.22s cubic-bezier(0.4,0,0.2,1)",
-                    boxShadow: isMobile ? "none" : (dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"),
+                    boxShadow: isMobile ? "none" : (T.shadowMd ?? (dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)")),
 
                     ...(isMobile ? {
                         position: "fixed",
@@ -2772,10 +2820,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     <div style={{
                         flexShrink: 0,
                         padding: isMobile ? "14px 14px 13px" : "16px 14px 12px",
-                        borderBottom: `1px solid ${T.border}`,
-                        background: isMobile
-                            ? (dark ? "rgba(8,15,28,0.78)" : "rgba(255,255,255,0.78)")
-                            : "transparent"
+                        borderBottom: `1px solid ${sc.border}`,
+                        background: isMobile ? sc.bgAlt : "transparent"
                     }}>
                         <div style={{
                             display: "flex",
@@ -2786,7 +2832,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             <span style={{
                                 fontSize: 10,
                                 fontWeight: 700,
-                                color: T.subtext,
+                                color: sc.textMuted,
                                 textTransform: "uppercase",
                                 letterSpacing: "0.16em"
                             }}>
@@ -2797,12 +2843,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 <span style={{
                                     fontSize: 11,
                                     fontWeight: 600,
-                                    color: atWatchlistLimit ? "#ef4444" : T.subtext,
-                                    opacity: 0.85,
+                                    color: atWatchlistLimit ? "#fb7185" : sc.textMuted,
+                                    opacity: 0.9,
                                     padding: isMobile ? "4px 8px" : 0,
                                     borderRadius: isMobile ? 999 : 0,
-                                    border: isMobile ? `1px solid ${T.border}` : "none",
-                                    background: isMobile ? (dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)") : "transparent"
+                                    border: isMobile ? `1px solid ${sc.border}` : "none",
+                                    background: isMobile ? sc.hover : "transparent"
                                 }}>
                                     {watchlists.length}/{MAX_WATCHLISTS}
                                 </span>
@@ -2810,12 +2856,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 {isMobile && (
                                     <button onClick={() => setSidebarOpen(false)}
                                         style={{
-                                            background: dark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.8)",
-                                            border: `1px solid ${T.border}`,
+                                            background: sc.hover,
+                                            border: `1px solid ${sc.border}`,
                                             borderRadius: 10,
                                             width: 34,
                                             height: 34,
-                                            color: T.subtext
+                                            color: sc.text
                                         }}>
                                         ✕
                                     </button>
@@ -2834,15 +2880,15 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 style={{
                                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                                     width: "100%", padding: "8px 10px", marginTop: 2,
-                                    borderRadius: 8, border: `1px dashed ${T.border}`,
-                                    background: "transparent", color: atWatchlistLimit ? T.subtext : T.text,
+                                    borderRadius: 8, border: `1px dashed ${sc.border}`,
+                                    background: "transparent", color: atWatchlistLimit ? sc.textMuted : sc.text,
                                     fontSize: 12, fontWeight: 600, cursor: atWatchlistLimit ? "not-allowed" : "pointer",
                                     opacity: atWatchlistLimit ? 0.45 : 1,
                                     fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                     transition: "background 0.14s ease, border-color 0.14s ease",
                                 }}
-                                onMouseEnter={e => { if (!atWatchlistLimit) { e.currentTarget.style.background = T.hover; e.currentTarget.style.borderColor = `${T.green}70`; } }}
-                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = T.border; }}
+                                onMouseEnter={e => { if (!atWatchlistLimit) { e.currentTarget.style.background = sc.hover; e.currentTarget.style.borderColor = `${T.green}70`; } }}
+                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = sc.border; }}
                             >
                                 <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add Watchlist
                             </button>
@@ -2894,6 +2940,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         setActiveWl(w.id);
                                         if (isMobile) setSidebarOpen(false);
                                     }}
+                                    onMouseEnter={e => { if (!isActive && !isDragging) e.currentTarget.style.background = sc.hover; }}
+                                    onMouseLeave={e => { if (!isActive && !isDragging) e.currentTarget.style.background = isMobile ? sc.bgAlt : "transparent"; }}
                                     style={{
                                         margin: isMobile ? "0 10px 6px" : "2px 10px",
                                         padding: isMobile ? "13px 12px" : "9px 10px",
@@ -2903,22 +2951,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         zIndex: isDragging ? 5 : "auto",
 
                                         background: isActive
-                                            ? (dark ? "rgba(16,185,129,0.13)" : "rgba(5,150,105,0.10)")
-                                            : (isMobile ? (dark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.75)") : "transparent"),
+                                            ? sc.activeBg
+                                            : (isMobile ? sc.bgAlt : "transparent"),
 
                                         borderLeft: isActive
                                             ? `2px solid ${T.green}`
                                             : "2px solid transparent",
 
-                                        border: `1px solid ${isActive ? `${T.green}40` : (isMobile ? `${T.border}b0` : "transparent")}`,
+                                        border: `1px solid ${isActive ? sc.activeBorder : (isMobile ? sc.border : "transparent")}`,
                                         boxShadow: isDragging
-                                            ? (dark ? "0 14px 28px rgba(2,6,23,0.4)" : "0 14px 28px rgba(15,23,42,0.18)")
+                                            ? "0 14px 28px rgba(2,6,23,0.4)"
                                             : isMobile
-                                                ? (isActive
-                                                    ? (dark ? "0 10px 22px rgba(2,6,23,0.16)" : "0 8px 20px rgba(15,23,42,0.07)")
-                                                    : "none")
+                                                ? (isActive ? "0 10px 22px rgba(2,6,23,0.16)" : "none")
                                                 : "none",
-                                        transition: isDragging ? "none" : "all 0.15s ease"
+                                        transition: isDragging ? "none" : "background 0.12s ease, border-color 0.12s ease"
                                     }}
                                 >
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
@@ -2931,7 +2977,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             style={{
                                                 flexShrink: 0,
                                                 cursor: "grab",
-                                                color: T.subtext,
+                                                color: sc.textMuted,
                                                 fontSize: isMobile ? 15 : 13,
                                                 lineHeight: 1,
                                                 padding: isMobile ? "6px 4px" : "2px 3px",
@@ -2945,8 +2991,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         </span>
 
                                         {!isRenaming && (
-                                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: isActive ? 1 : 0.55 }}>
-                                                <WlIcon active={isActive} color={isActive ? T.green : T.subtext} />
+                                            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: isActive ? 1 : 0.6 }}>
+                                                <WlIcon active={isActive} color={isActive ? T.green : sc.textMuted} />
                                             </span>
                                         )}
 
@@ -2969,8 +3015,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         minWidth: 0,
                                                         fontSize: isMobile ? 14 : 13,
                                                         fontWeight: 600,
-                                                        color: T.text,
-                                                        background: dark ? "rgba(255,255,255,0.06)" : "#fff",
+                                                        color: sc.text,
+                                                        background: "rgba(255,255,255,0.07)",
                                                         border: `1px solid ${T.green}80`,
                                                         borderRadius: 5,
                                                         padding: isMobile ? "5px 7px" : "2px 6px",
@@ -3013,7 +3059,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         background: "none",
                                                         border: "none",
                                                         cursor: "pointer",
-                                                        color: T.subtext,
+                                                        color: sc.textMuted,
                                                         fontSize: isMobile ? 14 : 12,
                                                         padding: isMobile ? "4px 6px" : "2px 4px",
                                                         borderRadius: 4,
@@ -3043,7 +3089,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 <span style={{
                                                     fontSize: isMobile ? 14 : 13,
                                                     letterSpacing: "0.01em",
-                                                    color: isActive ? T.text : T.subtext,
+                                                    color: isActive ? sc.activeText : sc.textMuted,
                                                     fontWeight: isActive ? 700 : 500,
                                                     overflow: "hidden",
                                                     textOverflow: "ellipsis",
@@ -3054,8 +3100,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 {w.stock_count != null && (
                                                     <span style={{
                                                         fontSize: isMobile ? 11 : 10.5,
-                                                        color: T.subtext,
-                                                        opacity: 0.55,
+                                                        color: sc.textMuted,
+                                                        opacity: 0.7,
                                                         fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                                     }}>
                                                         {w.stock_count} stocks
@@ -3078,7 +3124,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         background: "none",
                                                         border: "none",
                                                         cursor: "pointer",
-                                                        color: T.subtext,
+                                                        color: sc.textMuted,
                                                         fontSize: isMobile ? 13 : 11,
                                                         padding: isMobile ? "4px 6px" : "2px 4px",
                                                         borderRadius: 4,
@@ -3088,7 +3134,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         justifyContent: "center",
                                                     }}
                                                     onMouseEnter={e => { e.currentTarget.style.color = T.green; e.currentTarget.style.opacity = "1"; }}
-                                                    onMouseLeave={e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.opacity = isMobile ? "0.45" : "0"; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.color = sc.textMuted; e.currentTarget.style.opacity = isMobile ? "0.45" : "0"; }}
                                                 >
                                                     ✎
                                                 </button>
@@ -3105,7 +3151,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         background: "none",
                                                         border: "none",
                                                         cursor: "pointer",
-                                                        color: T.subtext,
+                                                        color: sc.textMuted,
                                                         fontSize: isMobile ? 14 : 12,
                                                         padding: isMobile ? "4px 6px" : "2px 4px",
                                                         borderRadius: 4,
@@ -3114,8 +3160,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                         alignItems: "center",
                                                         justifyContent: "center",
                                                     }}
-                                                    onMouseEnter={e => { e.currentTarget.style.color = "#f87171"; e.currentTarget.style.opacity = "1"; }}
-                                                    onMouseLeave={e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.opacity = isMobile ? "0.45" : "0"; }}
+                                                    onMouseEnter={e => { e.currentTarget.style.color = "#fb7185"; e.currentTarget.style.opacity = "1"; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.color = sc.textMuted; e.currentTarget.style.opacity = isMobile ? "0.45" : "0"; }}
                                                 >
                                                     ✕
                                                 </button>
@@ -3133,10 +3179,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         position: "sticky",
                         bottom: 0,
                         zIndex: 20,
-                        background: isMobile
-                            ? (dark ? "rgba(10,20,34,0.96)" : "rgba(248,250,252,0.96)")
-                            : T.surface,
-                        borderTop: `1px solid ${T.border}`,
+                        background: isMobile ? sc.bgAlt : sc.bg,
+                        borderTop: `1px solid ${sc.border}`,
 
                         // 🔥 CRITICAL SAFE AREA FIX
                         padding: isMobile
@@ -3151,11 +3195,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             <div style={{
                                 fontSize: 10,
                                 fontWeight: 700,
-                                color: T.subtext,
+                                color: sc.textMuted,
                                 textTransform: "uppercase",
                                 letterSpacing: "0.16em",
                                 marginBottom: 8,
-                                opacity: 0.75,
+                                opacity: 0.85,
                             }}>
                                 Create Collection
                             </div>
@@ -3171,9 +3215,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     flex: 1,
                                     padding: isMobile ? "12px 13px" : "8px 10px",
                                     borderRadius: isMobile ? 12 : 8,
-                                    border: `1px solid ${wlError ? "#ef4444" : T.border}`,
-                                    background: dark ? "rgba(255,255,255,0.04)" : T.card,
-                                    color: atWatchlistLimit ? T.subtext : T.text,
+                                    border: `1px solid ${wlError ? "#fb7185" : sc.border}`,
+                                    background: "rgba(255,255,255,0.05)",
+                                    color: atWatchlistLimit ? sc.textMuted : sc.text,
                                     opacity: atWatchlistLimit ? 0.45 : 1,
                                     outline: "none",
                                     fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
@@ -3181,11 +3225,11 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     transition: "border-color 0.16s ease, box-shadow 0.16s ease",
                                 }}
                                 onFocus={e => {
-                                    e.currentTarget.style.borderColor = wlError ? "#ef4444" : `${T.green}90`;
-                                    e.currentTarget.style.boxShadow = `0 0 0 3px ${T.green}16`;
+                                    e.currentTarget.style.borderColor = wlError ? "#fb7185" : `${T.green}90`;
+                                    e.currentTarget.style.boxShadow = `0 0 0 3px ${T.green}22`;
                                 }}
                                 onBlur={e => {
-                                    e.currentTarget.style.borderColor = wlError ? "#ef4444" : T.border;
+                                    e.currentTarget.style.borderColor = wlError ? "#fb7185" : sc.border;
                                     e.currentTarget.style.boxShadow = "none";
                                 }}
                             />
@@ -3199,8 +3243,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     alignItems: "center",
                                     justifyContent: "center",
                                     background: newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.green : "transparent",
-                                    color: newWlName.trim() && !creatingWl && !atWatchlistLimit ? "#06120c" : T.subtext,
-                                    border: `1px solid ${newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.green : T.border}`,
+                                    color: newWlName.trim() && !creatingWl && !atWatchlistLimit ? "#06120c" : sc.textMuted,
+                                    border: `1px solid ${newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.green : sc.border}`,
                                     borderRadius: isMobile ? 12 : 8,
                                     fontWeight: 700,
                                     cursor: !newWlName.trim() || creatingWl || atWatchlistLimit ? "not-allowed" : "pointer",
@@ -3404,10 +3448,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         <button onClick={() => setFeedOpen(o => !o)}
                                             style={{
                                                 padding: "6px 13px",
-                                                background: feedOpen ? `${T.green}15` : "transparent",
-                                                border: `1px solid ${feedOpen ? T.green : T.border}`,
+                                                background: feedOpen ? T.accentFill : "transparent",
+                                                border: `1px solid ${feedOpen ? T.accent : T.border}`,
                                                 borderRadius: 7,
-                                                color: feedOpen ? T.green : T.text,
+                                                color: feedOpen ? T.accent : T.text,
                                                 fontSize: 12, fontWeight: 600,
                                                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                                 cursor: "pointer",
@@ -3419,10 +3463,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         <button onClick={() => setEarningsOpen(o => !o)}
                                             style={{
                                                 padding: "6px 13px",
-                                                background: earningsOpen ? `rgba(251,191,36,0.12)` : "transparent",
-                                                border: `1px solid ${earningsOpen ? "rgba(251,191,36,0.6)" : T.border}`,
+                                                background: earningsOpen ? (T.goldFill ?? T.amberFill) : "transparent",
+                                                border: `1px solid ${earningsOpen ? (T.gold ?? T.amber) : T.border}`,
                                                 borderRadius: 7,
-                                                color: earningsOpen ? "#f59e0b" : T.text,
+                                                color: earningsOpen ? (T.gold ?? T.amber) : T.text,
                                                 fontSize: 12, fontWeight: 600,
                                                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                                 cursor: "pointer",
@@ -3513,13 +3557,13 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         <div style={{ flex: 1, display: "flex", overflow: "hidden", flexDirection: isMobile ? "column" : "row" }}>
                             {/* ── TABLE (flex) ───────────────────────────── */}
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, paddingBottom: isMobile ? 8 : 0 }}>
-                                {/* ── STAT CARDS — desktop only (matches Journal Dashboard .stat-card theme) ── */}
+                                {/* ── STAT CARDS — desktop only ── */}
                                 {!isMobile && rows.length > 0 && (
                                     <div style={{
                                         flexShrink: 0,
                                         display: "grid",
-                                        gridTemplateColumns: "repeat(5, 1fr)",
-                                        gap: 12,
+                                        gridTemplateColumns: "1.15fr 1fr 1fr 1fr 1fr",
+                                        gap: 10,
                                         padding: "14px 18px 0",
                                     }}>
                                         {[
@@ -3527,41 +3571,55 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 label: "Avg RS Rating",
                                                 value: avgRS != null ? String(avgRS) : "—",
                                                 tone: T.green,
+                                                accent: T.green,
+                                                hero: true,
                                                 hint: avgRS != null ? (avgRS >= 80 ? "Very Strong" : avgRS >= 60 ? "Strong" : avgRS >= 40 ? "Average" : "Weak") : null,
                                             },
-                                            { label: "RS Leaders", value: String(leaders), tone: T.text, hint: "stocks" },
-                                            { label: "52W High BO", value: String(bo52wCount), tone: T.text, hint: "stocks" },
-                                            { label: "Pivot BO", value: String(pivotBoCount), tone: T.text, hint: "stocks" },
-                                            { label: "Avg Market Cap", value: fmt.marketCap(avgMarketCap), tone: T.text, hint: avgMarketCap != null && avgMarketCap >= 20000 ? "Large Cap Focus" : null },
+                                            { label: "RS Leaders", value: String(leaders), tone: T.text, accent: T.gold ?? T.amber, hint: "stocks" },
+                                            { label: "52W High BO", value: String(bo52wCount), tone: T.text, accent: T.accent, hint: "stocks" },
+                                            { label: "Pivot BO", value: String(pivotBoCount), tone: T.text, accent: T.accent, hint: "stocks" },
+                                            { label: "Avg Market Cap", value: fmt.marketCap(avgMarketCap), tone: T.text, accent: T.subtext, hint: avgMarketCap != null && avgMarketCap >= 20000 ? "Large Cap Focus" : null },
                                         ].map(card => (
                                             <div key={card.label} className="wl-stat-card" style={{
                                                 position: "relative",
-                                                background: T.card,
-                                                border: `1px solid ${T.border}`,
+                                                background: card.hero
+                                                    ? (dark ? `linear-gradient(155deg, ${T.card} 0%, ${T.green}14 130%)` : `linear-gradient(155deg, ${T.card} 0%, ${T.green}0d 130%)`)
+                                                    : T.card,
+                                                border: `1px solid ${card.hero ? `${T.green}45` : T.border}`,
                                                 borderRadius: 14,
-                                                padding: "16px 16px",
+                                                padding: "15px 16px 14px",
                                                 minWidth: 0,
-                                                boxShadow: dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)",
+                                                overflow: "hidden",
+                                                boxShadow: T.shadowMd ?? (dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"),
                                                 transition: "box-shadow 0.14s ease, transform 0.14s ease, border-color 0.14s ease",
                                             }}
-                                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = dark ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"; }}
-                                                onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = T.border; }}
+                                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = T.shadowLg ?? e.currentTarget.style.boxShadow; }}
+                                                onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = T.shadowMd ?? e.currentTarget.style.boxShadow; }}
                                             >
                                                 <div style={{
-                                                    fontSize: 12, fontWeight: 800, color: T.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                                    textTransform: "uppercase", letterSpacing: "0.11em", marginBottom: 7,
+                                                    position: "absolute", top: 0, left: 0, right: 0, height: 2.5,
+                                                    background: card.accent, opacity: card.hero ? 0.9 : 0.35,
+                                                }} />
+                                                <div style={{
+                                                    fontSize: 11, fontWeight: 700, color: T.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                    textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8,
                                                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                                    display: "flex", alignItems: "center", gap: 6,
                                                 }}>
                                                     {card.label}
                                                 </div>
                                                 <div style={{
-                                                    fontSize: 22, fontWeight: 800, color: card.tone, fontFamily: "'IBM Plex Mono', monospace",
+                                                    fontSize: card.hero ? 27 : 21, fontWeight: 700, color: card.tone, fontFamily: "'IBM Plex Mono', monospace",
                                                     letterSpacing: "-0.03em", lineHeight: 1.1,
                                                 }}>
                                                     {card.value}
                                                 </div>
                                                 {card.hint && (
-                                                    <div style={{ fontSize: 13, color: T.subtext, marginTop: 6, lineHeight: 1.6, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                                                    <div style={{
+                                                        fontSize: 12, fontWeight: card.hero ? 600 : 400,
+                                                        color: card.hero ? T.green : T.subtext,
+                                                        marginTop: 6, lineHeight: 1.5, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
+                                                    }}>
                                                         {card.hint}
                                                     </div>
                                                 )}
@@ -4109,16 +4167,18 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
         return text.slice(0, n).trimEnd() + "…";
     };
 
-    // Derive badge color from category
+    // Derive badge color from category — now sourced from the theme's own
+    // semantic palette (T.*) so it stays coherent with the rest of the app
+    // instead of a hardcoded rainbow of ad-hoc hexes.
     const catColor = cat => {
         const c = (cat || "").toUpperCase();
-        if (c.includes("RESULT") || c.includes("EARNING") || c.includes("FINANCIAL")) return { color: "#f87171", bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.3)" };
-        if (c.includes("ORDER") || c.includes("CONTRACT") || c.includes("BAGGING")) return { color: "#34d399", bg: "rgba(52,211,153,0.1)", border: "rgba(52,211,153,0.3)" };
-        if (c.includes("MERGER") || c.includes("ACQUI")) return { color: "#c084fc", bg: "rgba(192,132,252,0.1)", border: "rgba(192,132,252,0.3)" };
-        if (c.includes("INVESTOR") || c.includes("ANALYST") || c.includes("MEET")) return { color: "#fbbf24", bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.25)" };
-        if (c.includes("BOARD")) return { color: "#60a5fa", bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.3)" };
-        if (c.includes("PRESS") || c.includes("MEDIA")) return { color: "#a78bfa", bg: "rgba(167,139,250,0.1)", border: "rgba(167,139,250,0.3)" };
-        return { color: "#64748b", bg: "rgba(100,116,139,0.08)", border: "rgba(100,116,139,0.2)" };
+        if (c.includes("RESULT") || c.includes("EARNING") || c.includes("FINANCIAL")) return { color: T.redText ?? T.red, bg: T.negFill ?? `${T.red}12`, dot: T.red };
+        if (c.includes("ORDER") || c.includes("CONTRACT") || c.includes("BAGGING")) return { color: T.greenText ?? T.green, bg: T.posFill ?? `${T.green}12`, dot: T.green };
+        if (c.includes("MERGER") || c.includes("ACQUI")) return { color: "#7c5cbf", bg: "rgba(124,92,191,0.10)", dot: "#7c5cbf" };
+        if (c.includes("INVESTOR") || c.includes("ANALYST") || c.includes("MEET")) return { color: T.gold ?? T.amber, bg: T.goldFill ?? T.amberFill, dot: T.gold ?? T.amber };
+        if (c.includes("BOARD")) return { color: T.accent, bg: T.accentFill, dot: T.accent };
+        if (c.includes("PRESS") || c.includes("MEDIA")) return { color: "#7c5cbf", bg: "rgba(124,92,191,0.10)", dot: "#7c5cbf" };
+        return { color: T.subtext, bg: T.mutedFill, dot: T.muted };
     };
 
     const shortCat = cat => {
@@ -4131,7 +4191,7 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
         <div
             onMouseEnter={onPanelEnter}
             style={{
-                width: isMobile ? "100%" : 480,
+                width: isMobile ? "100%" : 460,
                 flexShrink: 0,
                 flex: isMobile ? 1 : "none",
                 minHeight: 0,
@@ -4145,13 +4205,13 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
             <div style={{ flexShrink: 0, padding: isMobile ? "12px 18px 14px" : "16px 18px 12px", borderBottom: `1px solid ${T.border}`, background: T.surface }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: isMobile ? 16 : 15.5, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "-0.01em" }}>
+                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "-0.01em" }}>
                             Announcements
                         </span>
                         {announcements.length > 0 && (
                             <span style={{
-                                fontSize: isMobile ? 12 : 12, fontWeight: 700, color: T.subtext,
-                                fontFamily: "'IBM Plex Mono', monospace", background: T.hover,
+                                fontSize: isMobile ? 12 : 11.5, fontWeight: 600, color: T.subtext,
+                                fontFamily: "'IBM Plex Mono', monospace", background: T.mutedFill,
                                 borderRadius: 20, padding: "2px 9px",
                             }}>{announcements.length}</span>
                         )}
@@ -4166,17 +4226,17 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                     >✕</button>
                 </div>
                 {/* Category filters */}
-                <div style={{ display: "flex", gap: isMobile ? 7 : 6 }}>
+                <div style={{ display: "flex", gap: 6 }}>
                     {FILTERS.map(f => (
                         <button key={f.key} onClick={() => setFilter(f.key)}
                             style={{
-                                padding: isMobile ? "6px 14px" : "5px 12px", fontSize: isMobile ? 13 : 12.5,
-                                fontWeight: 700, borderRadius: 20, cursor: "pointer",
-                                background: filter === f.key ? "#22c55e" : "transparent",
-                                color: filter === f.key ? "#08210f" : T.subtext,
-                                border: `1px solid ${filter === f.key ? "#22c55e" : T.border}`,
+                                padding: isMobile ? "6px 14px" : "5px 12px", fontSize: isMobile ? 13 : 12,
+                                fontWeight: 600, borderRadius: 20, cursor: "pointer",
+                                background: filter === f.key ? T.accent : "transparent",
+                                color: filter === f.key ? "#ffffff" : T.subtext,
+                                border: `1px solid ${filter === f.key ? T.accent : T.border}`,
                                 transition: "all 0.15s", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                letterSpacing: "0.02em",
+                                letterSpacing: "0.01em",
                             }}
                             onMouseEnter={e => { if (filter !== f.key) e.currentTarget.style.background = T.hover; }}
                             onMouseLeave={e => { if (filter !== f.key) e.currentTarget.style.background = "transparent"; }}>
@@ -4217,29 +4277,29 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                 </div>
 
                                 {/* Items */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
                                     {items.map((ann, idx) => {
                                         const badge = catColor(ann.category);
                                         return (
                                             <div key={ann.seq_id ?? idx}
                                                 className="wl-announce-row"
                                                 style={{
-                                                    padding: "12px 14px",
-                                                    borderRadius: 12,
+                                                    padding: "11px 13px 11px 12px",
+                                                    borderRadius: 10,
                                                     border: `1px solid ${T.border}`,
+                                                    borderLeft: `2px solid ${badge.dot}`,
                                                     background: T.card,
-                                                    transition: "background 0.14s ease, border-color 0.14s ease, transform 0.14s ease",
+                                                    transition: "background 0.14s ease, border-color 0.14s ease",
                                                     cursor: ann.attachment_url ? "pointer" : "default",
-                                                    boxShadow: T.shadow || "none",
                                                 }}
                                                 onClick={ann.attachment_url ? () => window.open(ann.attachment_url, "_blank") : undefined}
-                                                onMouseEnter={e => { e.currentTarget.style.background = T.hover; e.currentTarget.style.borderColor = badge.border; }}
-                                                onMouseLeave={e => { e.currentTarget.style.background = T.card; e.currentTarget.style.borderColor = T.border; }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = T.hover; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = T.card; }}
                                             >
                                                 {/* Symbol + company name + time */}
-                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
+                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 5, gap: 8 }}>
                                                     <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-                                                        <span style={{ fontSize: 14, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>
+                                                        <span style={{ fontSize: 13.5, fontWeight: 650, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.02em" }}>
                                                             {ann.symbol}
                                                         </span>
                                                         {ann.company_name && (
@@ -4252,25 +4312,24 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <span style={{ fontSize: 12.5, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.75, flexShrink: 0, whiteSpace: "nowrap" }}>
+                                                    <span style={{ fontSize: 12, color: T.muted, fontFamily: "'IBM Plex Mono', monospace", flexShrink: 0, whiteSpace: "nowrap" }}>
                                                         {fmtTime(ann.announcement_datetime)}
                                                         {ann.attachment_url && <span style={{ marginLeft: 5, opacity: 0.6 }}>↗</span>}
                                                     </span>
                                                 </div>
 
-                                                {/* Category badge */}
-                                                <div style={{ marginBottom: 6 }}>
+                                                {/* Category label */}
+                                                <div style={{ marginBottom: 5 }}>
                                                     <span style={{
-                                                        fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
-                                                        background: badge.bg, border: `1px solid ${badge.border}`, color: badge.color,
-                                                        letterSpacing: "0.03em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
+                                                        fontSize: 10.5, fontWeight: 700, color: badge.color,
+                                                        letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
                                                     }}>
                                                         {shortCat(ann.category)}
                                                     </span>
                                                 </div>
 
                                                 {/* Text */}
-                                                <div style={{ fontSize: 13.5, color: T.subtext, lineHeight: 1.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.9 }}>
+                                                <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                                     {truncate(ann.announcement_text)}
                                                 </div>
                                             </div>

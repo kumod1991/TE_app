@@ -344,68 +344,77 @@ function useViewportBelow(maxWidth) {
 const THEMES = {
     light: {
 
-        bg: "#f0f4f8",   // page canvas
+        bg: "#f2f2f0",   // page canvas — warm quiet stone, not flat blue-grey
         surface: "#ffffff",   // panel / sidebar
         card: "#ffffff",   // card / popover
-        cardAlt: "#f8fafc",   // alternate card (e.g. table row)
+        cardAlt: "#f8f8f6",   // alternate card (e.g. table row)
 
-        border: "#dde3ec",   // default border
-        borderStrong: "#c8d1de",   // hover / emphasis border
-        borderSubtle: "#eef1f6",   // divider / hairline
+        border: "#e3e1da",   // default border — warm neutral hairline
+        borderStrong: "#c7c3b6",   // hover / emphasis border
+        borderSubtle: "#ececE7",   // divider / hairline
 
-        text: "#0a0f1e",   // primary label
-        subtext: "#475569",   // secondary label
-        muted: "#94a3b8",   // placeholder / disabled text
-        mutedFill: "#eef2f7",   // muted background (chips, skeleton base)
+        text: "#12161f",   // primary label — deep ink, slight warmth (not pure navy-black)
+        subtext: "#5c6270",   // secondary label
+        muted: "#9a9c95",   // placeholder / disabled text
+        mutedFill: "#eeede7",   // muted background (chips, skeleton base)
 
-        posText: "#047857",   // readable green text on light bg
-        posMid: "#059669",   // icon / badge stroke
-        posFill: "rgba(5,150,105,0.08)",  // tint bg
-        posGlow: "rgba(5,150,105,0.12)",  // box-shadow glow
+        posText: "#0d7a5f",   // readable green text on light bg
+        posMid: "#0f9d75",   // icon / badge stroke
+        posFill: "rgba(13,122,95,0.08)",  // tint bg
+        posGlow: "rgba(13,122,95,0.12)",  // box-shadow glow
 
-        green: "#059669",
-        greenText: "#047857",
-        greenGlow: "rgba(5,150,105,0.12)",
+        green: "#0f9d75",
+        greenText: "#0d7a5f",
+        greenGlow: "rgba(13,122,95,0.12)",
 
-        negText: "#e11d48",   // readable red text on light bg
-        negMid: "#f43f5e",   // icon / badge stroke
-        negFill: "rgba(244,63,94,0.07)",  // tint bg
-        negGlow: "rgba(244,63,94,0.10)",  // box-shadow glow
+        negText: "#b0273e",   // readable red text on light bg
+        negMid: "#d63e58",   // icon / badge stroke
+        negFill: "rgba(176,39,62,0.07)",  // tint bg
+        negGlow: "rgba(176,39,62,0.10)",  // box-shadow glow
 
-        red: "#f43f5e",
-        redText: "#e11d48",
-        redGlow: "rgba(244,63,94,0.10)",
-        pos: "#047857",   // alias for posText
-        neg: "#e11d48",   // alias for negText
+        red: "#d63e58",
+        redText: "#b0273e",
+        redGlow: "rgba(176,39,62,0.10)",
+        pos: "#0d7a5f",   // alias for posText
+        neg: "#b0273e",   // alias for negText
 
-        accent: "#2563eb",   // links, active ring, CTA
-        accentHover: "#1d4ed8",   // hover state of accent
-        accentFill: "rgba(37,99,235,0.08)", // selection bg
+        accent: "#1e3a63",   // links, active ring, CTA — deep ink-indigo (matches nav chrome, reads premium not "SaaS blue")
+        accentHover: "#152a49",   // hover state of accent
+        accentFill: "rgba(30,58,99,0.07)", // selection bg
 
-        amber: "#d97706",   // warning text (passes 4.5:1 on white)
-        amberFill: "rgba(217,119,6,0.09)", // warning bg tint
+        gold: "#96721f",   // signature premium accent — sparingly, for standout rank/quality markers
+        goldFill: "rgba(150,114,31,0.10)",
+        goldGlow: "rgba(150,114,31,0.16)",
 
-        inputBg: "#f8fafc",
-        inputBorder: "#dde3ec",
-        inputFocus: "#2563eb",   // focus ring color
-        placeholder: "#94a3b8",
+        amber: "#b4650a",   // warning text (passes 4.5:1 on white)
+        amberFill: "rgba(180,101,10,0.09)", // warning bg tint
 
-        hover: "#f1f5f9",   // row / item hover
-        selected: "#eff6ff",   // selected row bg
-        shadow: "rgba(10,15,30,0.08)",
+        inputBg: "#f8f8f6",
+        inputBorder: "#e3e1da",
+        inputFocus: "#1e3a63",   // focus ring color
+        placeholder: "#9a9c95",
 
-        tableHead: "#f6f9fc",
-        tableAlt: "#fafbfd",
-        tableHover: "#f1f5f9",
+        hover: "#f1f0eb",   // row / item hover
+        selected: "#eef1f6",   // selected row bg
+        shadow: "rgba(18,22,31,0.08)",
 
-        skeletonBase: "#eef2f7",
-        skeletonShimmer: "#dde3ec",
+        tableHead: "#f7f7f4",
+        tableAlt: "#fbfbf9",
+        tableHover: "#f1f0eb",
 
-        pill: "#eef2f7",
-        pillText: "#475569",
+        skeletonBase: "#eeede7",
+        skeletonShimmer: "#e3e1da",
 
-        thumbBg: "#cbd5e1",
-        thumbHover: "#94a3b8",
+        pill: "#eeede7",
+        pillText: "#5c6270",
+
+        thumbBg: "#d3d1c7",
+        thumbHover: "#9a9c95",
+
+        // ── Elevation system — soft, layered, not flat single-drop-shadow ──
+        shadowSm: "0 1px 2px rgba(18,22,31,0.04)",
+        shadowMd: "0 1px 2px rgba(18,22,31,0.03), 0 8px 20px rgba(18,22,31,0.05)",
+        shadowLg: "0 4px 10px rgba(18,22,31,0.05), 0 20px 44px rgba(18,22,31,0.09)",
 
         navBg: "#ffffff",   // white top bar in light mode
         navBorder: "rgba(0,0,0,0.08)",
@@ -413,15 +422,28 @@ const THEMES = {
         navTextActive: "#0a0f1e",
         navHover: "rgba(0,0,0,0.04)",
         navActive: "rgba(0,0,0,0.06)",
-        navAccent: "#059669",
+        navAccent: "#0f9d75",
+
+        // ── Dark chrome tokens — used for the sidebar/rail even in light mode ──
+        // (a quiet ink-navy rail against the warm paper canvas reads as considered,
+        //  not just "everything white"; mirrors the top-nav's own dark chrome)
+        chromeBg: "#0d1420",
+        chromeBgAlt: "#111a2b",
+        chromeBorder: "rgba(255,255,255,0.07)",
+        chromeText: "#c7d0dd",
+        chromeTextMuted: "#5c6f8a",
+        chromeHover: "rgba(255,255,255,0.05)",
+        chromeActiveBg: "rgba(15,157,117,0.16)",
+        chromeActiveBorder: "rgba(15,157,117,0.4)",
+        chromeActiveText: "#ffffff",
 
         series: [
-            "#2563eb",  // blue   
-            "#f59e0b",  // amber  
-            "#8b5cf6",  // violet
-            "#059669",  // green
-            "#f43f5e",  // rose
-            "#0ea5e9",  // sky
+            "#1e3a63",  // ink-indigo
+            "#b4650a",  // amber
+            "#7c5cbf",  // violet
+            "#0f9d75",  // green
+            "#d63e58",  // rose
+            "#2a86b8",  // steel blue
         ],
     },
     dark: {
@@ -464,6 +486,10 @@ const THEMES = {
         accentHover: "#93c5fd",   // hover state of accent
         accentFill: "rgba(96,165,250,0.10)", // selection bg
 
+        gold: "#d4af6a",   // signature premium accent — sparingly, for standout rank/quality markers
+        goldFill: "rgba(212,175,106,0.12)",
+        goldGlow: "rgba(212,175,106,0.16)",
+
         amber: "#fbbf24",   // warning text
         amberFill: "rgba(251,191,36,0.10)", // warning bg tint
 
@@ -489,6 +515,11 @@ const THEMES = {
         thumbBg: "#1e293b",
         thumbHover: "#2d3f55",
 
+        // ── Elevation system ──
+        shadowSm: "0 1px 2px rgba(0,0,0,0.3)",
+        shadowMd: "0 4px 16px rgba(0,0,0,0.35)",
+        shadowLg: "0 16px 40px rgba(0,0,0,0.5)",
+
         navBg: "#060d1a",
         navBorder: "rgba(255,255,255,0.06)",
         navText: "#4a6580",
@@ -496,6 +527,17 @@ const THEMES = {
         navHover: "rgba(255,255,255,0.04)",
         navActive: "rgba(255,255,255,0.07)",
         navAccent: "#60a5fa",   // active indicator dot / left bar
+
+        // ── Dark chrome tokens — in dark mode the rail simply matches surface ──
+        chromeBg: "#0b1220",
+        chromeBgAlt: "#0e1526",
+        chromeBorder: "rgba(255,255,255,0.06)",
+        chromeText: "#c7d0dd",
+        chromeTextMuted: "#4a6580",
+        chromeHover: "rgba(255,255,255,0.05)",
+        chromeActiveBg: "rgba(52,211,153,0.14)",
+        chromeActiveBorder: "rgba(52,211,153,0.4)",
+        chromeActiveText: "#ffffff",
 
         series: [
             "#60a5fa",  // blue  
