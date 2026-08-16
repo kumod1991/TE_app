@@ -1222,7 +1222,11 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
     const reqId = useRef(0);
     useEffect(() => {
         const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-        document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+        // Capture phase: this must run BEFORE the suggestion's own onMouseDown
+        // handler fires and unmounts the row (picking a suggestion removes it
+        // from the DOM), otherwise e.target is already detached by the time a
+        // bubble-phase listener checks .contains() and this closes wrongly.
+        document.addEventListener("mousedown", h, true); return () => document.removeEventListener("mousedown", h, true);
     }, []);
     const search = useCallback(async q => {
         if (!q || q.length < 1) { setSugg([]); setOpen(false); return; }
@@ -1996,8 +2000,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 
     useEffect(() => {
         const h = e => { if (addStocksRef.current && !addStocksRef.current.contains(e.target)) setAddStocksOpen(false); };
-        document.addEventListener("mousedown", h);
-        return () => document.removeEventListener("mousedown", h);
+        // Capture phase — see note in TickerSearch: picking a suggestion inside
+        // this popover unmounts the suggestion row on mousedown, so a bubble-phase
+        // listener here would see a detached e.target and wrongly close the whole
+        // "Add Stocks" popover before the person can click the submit button.
+        document.addEventListener("mousedown", h, true);
+        return () => document.removeEventListener("mousedown", h, true);
     }, []);
 
     useEffect(() => {
