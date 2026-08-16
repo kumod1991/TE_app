@@ -1213,7 +1213,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
 }
 
 // ─── Ticker/Company Autocomplete ────────────────────────────────
-function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compact, isMobile = false, token }) {
+function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compact, isMobile = false, token, chromeMode = false }) {
     const [sugg, setSugg] = useState([]);
     const [open, setOpen] = useState(false);
     const [hi, setHi] = useState(-1);
@@ -1256,24 +1256,25 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
                         placeholder="Add ticker or company…"
                         style={{
                             width: "100%", padding: isMobile ? "12px 38px 12px 13px" : "8px 32px 8px 10px",
-                            background: T.card, border: `1px solid ${addError ? "#dc2626" : T.border}`,
-                            borderRadius: isMobile ? 12 : 8, color: T.text, fontSize: isMobile ? 16 : 12, outline: "none",
+                            background: chromeMode ? "rgba(255,255,255,0.06)" : T.card,
+                            border: `1px solid ${addError ? "#f87171" : (chromeMode ? "rgba(255,255,255,0.12)" : T.border)}`,
+                            borderRadius: isMobile ? 12 : 8, color: chromeMode ? "#e7ecf5" : T.text, fontSize: isMobile ? 16 : 12, outline: "none",
                             fontFamily: "'IBM Plex Mono',monospace", textTransform: "uppercase",
                             letterSpacing: "0.04em",
                             boxShadow: addError ? "none" : "inset 0 1px 0 rgba(255,255,255,0.04)",
                             transition: "border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease",
                         }}
                         onFocusCapture={e => {
-                            e.currentTarget.style.borderColor = addError ? "#dc2626" : `${T.green}90`;
-                            e.currentTarget.style.boxShadow = `0 0 0 3px ${T.green}18`;
+                            e.currentTarget.style.borderColor = addError ? "#f87171" : `${T.accent}90`;
+                            e.currentTarget.style.boxShadow = `0 0 0 3px ${T.accent}22`;
                             if (sugg.length > 0) setOpen(true);
                         }}
                         onBlur={e => {
-                            e.currentTarget.style.borderColor = addError ? "#dc2626" : T.border;
+                            e.currentTarget.style.borderColor = addError ? "#f87171" : (chromeMode ? "rgba(255,255,255,0.12)" : T.border);
                             e.currentTarget.style.boxShadow = addError ? "none" : "inset 0 1px 0 rgba(255,255,255,0.04)";
                         }}
                     />
-                    <span style={{ position: "absolute", right: isMobile ? 12 : 9, top: "50%", transform: "translateY(-50%)", fontSize: busy ? 10 : 12, color: T.subtext, animation: busy ? "spin 0.8s linear infinite" : "none", display: "inline-block", pointerEvents: "none", opacity: 0.7 }}>{busy ? "..." : "+"}</span>
+                    <span style={{ position: "absolute", right: isMobile ? 12 : 9, top: "50%", transform: "translateY(-50%)", fontSize: busy ? 10 : 12, color: chromeMode ? "rgba(255,255,255,0.4)" : T.subtext, animation: busy ? "spin 0.8s linear infinite" : "none", display: "inline-block", pointerEvents: "none", opacity: 0.7 }}>{busy ? "..." : "+"}</span>
                 </div>
                 {compact && (
                     <button onClick={onSubmit} disabled={!value.trim()}
@@ -1283,9 +1284,9 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            background: value.trim() ? T.green : "transparent",
-                            color: value.trim() ? "#06120c" : T.subtext,
-                            border: `1px solid ${value.trim() ? T.green : T.border}`,
+                            background: value.trim() ? T.accent : "transparent",
+                            color: value.trim() ? "#ffffff" : (chromeMode ? "rgba(255,255,255,0.4)" : T.subtext),
+                            border: `1px solid ${value.trim() ? T.accent : (chromeMode ? "rgba(255,255,255,0.12)" : T.border)}`,
                             borderRadius: isMobile ? 12 : 8,
                             fontSize: 16,
                             fontWeight: 700,
@@ -1297,22 +1298,22 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
                 )}
             </div>
             {open && sugg.length > 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 400, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, minWidth: "100%", maxHeight: 260, overflowY: "auto", boxShadow: "0 18px 44px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 400, background: chromeMode ? "#111a2b" : T.surface, border: `1px solid ${chromeMode ? "rgba(255,255,255,0.1)" : T.border}`, borderRadius: 12, minWidth: "100%", maxHeight: 260, overflowY: "auto", boxShadow: "0 18px 44px rgba(0,0,0,0.28)", overflow: "hidden" }}>
                     {sugg.map((s, i) => (
                         <div key={s.ticker} onMouseDown={() => pick(s)} onMouseEnter={() => setHi(i)}
-                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: isMobile ? "10px 12px" : "8px 10px", cursor: "pointer", background: i === hi ? T.hover : "transparent", borderBottom: `1px solid ${T.border}` }}>
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: isMobile ? "10px 12px" : "8px 10px", cursor: "pointer", background: i === hi ? (chromeMode ? "rgba(255,255,255,0.06)" : T.hover) : "transparent", borderBottom: `1px solid ${chromeMode ? "rgba(255,255,255,0.08)" : T.border}` }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
                                 <span style={{
-                                    fontWeight: 600, fontSize: 12.5, color: T.text,
+                                    fontWeight: 600, fontSize: 12.5, color: chromeMode ? "#e7ecf5" : T.text,
                                     fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", textTransform: "none",
                                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200,
                                 }}>{s.name}</span>
-                                <span style={{ fontSize: 10.5, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: "0.03em" }}>
+                                <span style={{ fontSize: 10.5, color: chromeMode ? "rgba(255,255,255,0.42)" : T.subtext, fontFamily: "'IBM Plex Mono',monospace", letterSpacing: "0.03em" }}>
                                     {s.ticker}
                                 </span>
                             </div>
                             {s.current_price != null && (
-                                <span style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>
+                                <span style={{ fontSize: 11, color: chromeMode ? "rgba(255,255,255,0.42)" : T.subtext, fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>
                                     ₹{(+s.current_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                                 </span>
                             )}
@@ -2625,8 +2626,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         for (const r of rows) m[r.ticker] = deriveRowScreens(r);
         return m;
     }, [rows]);
-    const bo52wCount = useMemo(() => rows.filter(r => rowScreensMap[r.ticker]?.includes("52W High BO")).length, [rows, rowScreensMap]);
-    const pivotBoCount = useMemo(() => rows.filter(r => rowScreensMap[r.ticker]?.includes("Pivot BO")).length, [rows, rowScreensMap]);
     const avgMarketCap = useMemo(() => {
         const vals = rows.map(r => marketCaps[r.ticker]).filter(v => v != null);
         return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
@@ -2713,14 +2712,14 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         ::-webkit-scrollbar-thumb:hover{background:${T.subtext}}
         .wl-stock-row:hover .wl-remove-btn{opacity:0.4!important}
         .wl-remove-btn:hover{opacity:1!important;color:#ef4444!important}
-        .wl-sidebar-item:hover{background:${T.hover}!important}
+        .wl-sidebar-item:hover{background:${T.chromeHover ?? T.hover}!important}
         .wl-sidebar-item:hover .wl-item-actions{opacity:1!important}
         .wl-drag-handle{opacity:0;transition:opacity 0.15s;touch-action:none}
         .wl-sidebar-item:hover .wl-drag-handle{opacity:0.5}
         .wl-drag-handle:hover{opacity:1!important}
-        .wl-sidebar-item.wl-dragging{opacity:0.55;cursor:grabbing!important}
+        .wl-sidebar-item.wl-dragging{opacity:0.85;cursor:grabbing!important;background:${T.chromeActiveBg ?? T.chromeHover}!important}
         .wl-toolbar-btn:hover{background:${T.hover}!important;color:${T.text}!important}
-        .wl-add-stocks-btn:hover{transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 8px 20px rgba(34,197,94,0.35), inset 0 1px 0 rgba(255,255,255,0.25)!important}
+        .wl-add-stocks-btn:hover{transform:translateY(-1px);filter:brightness(1.15);box-shadow:0 8px 20px ${T.accent}45, inset 0 1px 0 rgba(255,255,255,0.15)!important}
         .wl-add-stocks-btn:active{transform:translateY(0)}
         .wl-stat-card{transition:transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease}
         .wl-stat-card:hover{transform:translateY(-1px);border-color:${dark ? "rgba(96,165,250,0.42)" : "rgba(30,58,95,0.42)"}}
@@ -2887,7 +2886,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                     transition: "background 0.14s ease, border-color 0.14s ease",
                                 }}
-                                onMouseEnter={e => { if (!atWatchlistLimit) { e.currentTarget.style.background = sc.hover; e.currentTarget.style.borderColor = `${T.green}70`; } }}
+                                onMouseEnter={e => { if (!atWatchlistLimit) { e.currentTarget.style.background = sc.hover; e.currentTarget.style.borderColor = `${T.accent}80`; } }}
                                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = sc.border; }}
                             >
                                 <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add Watchlist
@@ -2906,6 +2905,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 compact
                                 isMobile={isMobile}
                                 token={token}
+                                chromeMode
                             />
                         )}
                     </div>
@@ -3225,8 +3225,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     transition: "border-color 0.16s ease, box-shadow 0.16s ease",
                                 }}
                                 onFocus={e => {
-                                    e.currentTarget.style.borderColor = wlError ? "#fb7185" : `${T.green}90`;
-                                    e.currentTarget.style.boxShadow = `0 0 0 3px ${T.green}22`;
+                                    e.currentTarget.style.borderColor = wlError ? "#fb7185" : `${T.accent}90`;
+                                    e.currentTarget.style.boxShadow = `0 0 0 3px ${T.accent}25`;
                                 }}
                                 onBlur={e => {
                                     e.currentTarget.style.borderColor = wlError ? "#fb7185" : sc.border;
@@ -3242,9 +3242,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    background: newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.green : "transparent",
-                                    color: newWlName.trim() && !creatingWl && !atWatchlistLimit ? "#06120c" : sc.textMuted,
-                                    border: `1px solid ${newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.green : sc.border}`,
+                                    background: newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.accent : "transparent",
+                                    color: newWlName.trim() && !creatingWl && !atWatchlistLimit ? "#ffffff" : sc.textMuted,
+                                    border: `1px solid ${newWlName.trim() && !creatingWl && !atWatchlistLimit ? T.accent : sc.border}`,
                                     borderRadius: isMobile ? 12 : 8,
                                     fontWeight: 700,
                                     cursor: !newWlName.trim() || creatingWl || atWatchlistLimit ? "not-allowed" : "pointer",
@@ -3255,7 +3255,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             </button>
                         </div>
                         {wlError && (
-                            <div style={{ marginTop: 7, fontSize: 11, color: "#ef4444", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                            <div style={{ marginTop: 7, fontSize: 11, color: "#fb7185", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                 {wlError}
                             </div>
                         )}
@@ -3484,24 +3484,24 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             style={{
                                                 display: "flex", alignItems: "center", gap: 6,
                                                 padding: "7px 16px",
-                                                background: "#22c55e",
-                                                border: "1px solid #22c55e",
+                                                background: T.accent,
+                                                border: `1px solid ${T.accent}`,
                                                 borderRadius: 8,
-                                                color: "#08210f",
+                                                color: "#ffffff",
                                                 fontSize: 12.5,
                                                 fontWeight: 700,
                                                 letterSpacing: "0.01em",
                                                 cursor: "pointer",
                                                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                                boxShadow: "0 1px 2px rgba(15,23,42,0.06)",
+                                                boxShadow: T.shadowSm ?? "0 1px 2px rgba(15,23,42,0.06)",
                                                 transition: "filter 0.14s ease",
                                             }}
-                                            onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.06)"; }}
+                                            onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.15)"; }}
                                             onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}>
                                             <span style={{
                                                 display: "flex", alignItems: "center", justifyContent: "center",
                                                 width: 15, height: 15, borderRadius: "50%",
-                                                background: "rgba(8,33,15,0.16)", fontSize: 11, lineHeight: 1, fontWeight: 800,
+                                                background: "rgba(255,255,255,0.18)", fontSize: 11, lineHeight: 1, fontWeight: 800,
                                             }}>+</span>
                                             Add Stocks
                                         </button>
@@ -3562,8 +3562,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     <div style={{
                                         flexShrink: 0,
                                         display: "grid",
-                                        gridTemplateColumns: "1.15fr 1fr 1fr 1fr 1fr",
-                                        gap: 10,
+                                        gridTemplateColumns: "1.3fr 1fr 1fr 1fr",
+                                        gap: 12,
                                         padding: "14px 18px 0",
                                     }}>
                                         {[
@@ -3576,8 +3576,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 hint: avgRS != null ? (avgRS >= 80 ? "Very Strong" : avgRS >= 60 ? "Strong" : avgRS >= 40 ? "Average" : "Weak") : null,
                                             },
                                             { label: "RS Leaders", value: String(leaders), tone: T.text, accent: T.gold ?? T.amber, hint: "stocks" },
-                                            { label: "52W High BO", value: String(bo52wCount), tone: T.text, accent: T.accent, hint: "stocks" },
-                                            { label: "Pivot BO", value: String(pivotBoCount), tone: T.text, accent: T.accent, hint: "stocks" },
+                                            { label: "Stage 2", value: String(stage2Count), tone: T.greenText ?? T.green, accent: T.green, hint: rows.length ? `of ${rows.length} names` : null },
                                             { label: "Avg Market Cap", value: fmt.marketCap(avgMarketCap), tone: T.text, accent: T.subtext, hint: avgMarketCap != null && avgMarketCap >= 20000 ? "Large Cap Focus" : null },
                                         ].map(card => (
                                             <div key={card.label} className="wl-stat-card" style={{
@@ -4061,10 +4060,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     <button onClick={() => { setFeedOpen(o => !o); setEarningsOpen(false); }}
                         style={{
                             flex: 1, padding: "9px 8px",
-                            background: feedOpen ? `${T.green}12` : "transparent",
-                            border: `1px solid ${feedOpen ? `${T.green}50` : T.border}`,
+                            background: feedOpen ? T.accentFill : "transparent",
+                            border: `1px solid ${feedOpen ? T.accent : T.border}`,
                             borderRadius: 8,
-                            color: feedOpen ? T.green : T.subtext,
+                            color: feedOpen ? T.accent : T.subtext,
                             fontSize: 11, fontWeight: 600, cursor: "pointer",
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                             letterSpacing: "0.03em",
@@ -4076,10 +4075,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     <button onClick={() => { setEarningsOpen(o => !o); setFeedOpen(false); }}
                         style={{
                             flex: 1, padding: "9px 8px",
-                            background: earningsOpen ? "rgba(251,191,36,0.1)" : "transparent",
-                            border: `1px solid ${earningsOpen ? "rgba(251,191,36,0.5)" : T.border}`,
+                            background: earningsOpen ? (T.goldFill ?? T.amberFill) : "transparent",
+                            border: `1px solid ${earningsOpen ? (T.gold ?? T.amber) : T.border}`,
                             borderRadius: 8,
-                            color: earningsOpen ? "#f59e0b" : T.subtext,
+                            color: earningsOpen ? (T.gold ?? T.amber) : T.subtext,
                             fontSize: 11, fontWeight: 600, cursor: "pointer",
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                             letterSpacing: "0.03em",
@@ -4487,13 +4486,13 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
         } catch { return null; }
     };
 
-    // Color coding for urgency
+    // Color coding for urgency — tonal, drawn from the theme palette
     const urgencyColor = days => {
         if (days === null) return T.subtext;
-        if (days === 0) return "#f59e0b";
-        if (days <= 3) return "#f87171";
-        if (days <= 7) return "#fb923c";
-        if (days <= 14) return T.green;
+        if (days === 0) return T.redText ?? T.red;
+        if (days <= 3) return T.redText ?? T.red;
+        if (days <= 7) return T.gold ?? T.amber;
+        if (days <= 14) return T.greenText ?? T.green;
         return T.subtext;
     };
 
@@ -4504,7 +4503,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
         <div
             onMouseEnter={onPanelEnter}
             style={{
-                width: isMobile ? "100%" : 400,
+                width: isMobile ? "100%" : 460,
                 flexShrink: 0,
                 flex: isMobile ? 1 : "none",
                 minHeight: 0,
@@ -4516,38 +4515,40 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                 animation: isMobile ? "none" : "slideInRight 0.18s ease",
             }}>
             {/* Header */}
-            <div style={{ flexShrink: 0, padding: isMobile ? "10px 18px 12px" : "14px 16px 10px", borderBottom: `1px solid ${T.border}` }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 10 }}>
+            <div style={{ flexShrink: 0, padding: isMobile ? "12px 18px 14px" : "16px 18px 12px", borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 600, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                        <span style={{ fontSize: isMobile ? 16 : 15, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "-0.01em" }}>
                             Earnings Calendar
                         </span>
                         {!loading && (
-                            <span style={{ fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
-                                {filtered.length}
-                            </span>
+                            <span style={{
+                                fontSize: isMobile ? 12 : 11.5, fontWeight: 600, color: T.subtext,
+                                fontFamily: "'IBM Plex Mono', monospace", background: T.mutedFill,
+                                borderRadius: 20, padding: "2px 9px",
+                            }}>{filtered.length}</span>
                         )}
                     </div>
                     <button onClick={onClose}
                         style={{
-                            background: "none", border: `1px solid ${T.border}`, borderRadius: isMobile ? 8 : 4, cursor: "pointer",
-                            color: T.subtext, fontSize: 14, lineHeight: 1, padding: isMobile ? "6px 10px" : "3px 7px", transition: "all 0.15s"
+                            background: "none", border: `1px solid ${T.border}`, borderRadius: isMobile ? 8 : 7, cursor: "pointer",
+                            color: T.subtext, fontSize: 14, lineHeight: 1, padding: isMobile ? "6px 10px" : "5px 9px", transition: "all 0.15s"
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = T.text; e.currentTarget.style.color = T.text; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.subtext; }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = T.text; e.currentTarget.style.color = T.text; e.currentTarget.style.background = T.hover; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.subtext; e.currentTarget.style.background = "transparent"; }}
                     >✕</button>
                 </div>
 
                 {/* Mode toggle + Search */}
-                <div style={{ display: "flex", gap: isMobile ? 6 : 4, marginBottom: isMobile ? 12 : 8 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: isMobile ? 12 : 10 }}>
                     {[["all", "All Companies"], ["watchlist", "My Watchlist"]].map(([k, l]) => (
                         <button key={k} onClick={() => setMode(k)}
                             style={{
-                                padding: isMobile ? "6px 14px" : "3px 10px", fontSize: 13, fontWeight: 500, borderRadius: 20, cursor: "pointer",
-                                background: mode === k ? `${T.green}15` : "transparent",
-                                color: mode === k ? T.green : T.subtext,
-                                border: `1px solid ${mode === k ? T.green : T.border}`,
-                                transition: "all 0.15s", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.02em",
+                                padding: isMobile ? "6px 14px" : "5px 12px", fontSize: isMobile ? 13 : 12, fontWeight: 600, borderRadius: 20, cursor: "pointer",
+                                background: mode === k ? T.accentFill : "transparent",
+                                color: mode === k ? T.accent : T.subtext,
+                                border: `1px solid ${mode === k ? T.accent : T.border}`,
+                                transition: "all 0.15s", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.01em",
                                 opacity: mode === k ? 1 : (k === "watchlist" && watchlistTickers.length === 0 ? 0.35 : 1)
                             }}>
                             {l}
@@ -4563,31 +4564,31 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                         onChange={e => { setSearch(e.target.value); setVisibleCount(30); }}
                         placeholder="Search company or ticker…"
                         style={{
-                            width: "100%", padding: isMobile ? "10px 32px 10px 12px" : "6px 28px 6px 10px",
+                            width: "100%", padding: isMobile ? "10px 32px 10px 12px" : "8px 30px 8px 11px",
                             background: T.card, border: `1px solid ${T.border}`,
-                            borderRadius: isMobile ? 8 : 6, color: T.text,
-                            fontSize: isMobile ? 15 : 14,
-                            outline: "none", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", transition: "border-color 0.15s",
+                            borderRadius: isMobile ? 10 : 8, color: T.text,
+                            fontSize: isMobile ? 15 : 12.5,
+                            outline: "none", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", transition: "border-color 0.15s, box-shadow 0.15s",
                             boxSizing: "border-box"
                         }}
-                        onFocus={e => e.currentTarget.style.borderColor = T.green}
-                        onBlur={e => e.currentTarget.style.borderColor = T.border}
+                        onFocus={e => { e.currentTarget.style.borderColor = `${T.accent}90`; e.currentTarget.style.boxShadow = `0 0 0 3px ${T.accent}18`; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}
                     />
                     {search && (
                         <button onClick={() => setSearch("")}
                             style={{
-                                position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                                position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)",
                                 background: "none", border: "none", cursor: "pointer", color: T.subtext,
-                                fontSize: 13, padding: 0, lineHeight: 1
+                                fontSize: 12, padding: 0, lineHeight: 1
                             }}>✕</button>
                     )}
                 </div>
             </div>
 
             {/* Body */}
-            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
+            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", padding: "8px 14px 14px" }}>
                 {loading ? (
-                    <div style={{ padding: "24px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ padding: "24px 4px", display: "flex", flexDirection: "column", gap: 10 }}>
                         {[70, 90, 60, 80, 75, 55].map((w, i) => (
                             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                 <div style={{ width: 44, height: 14, borderRadius: 3, background: T.border, opacity: 0.5 }} />
@@ -4597,11 +4598,11 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                         ))}
                     </div>
                 ) : error ? (
-                    <div style={{ padding: "32px 16px", textAlign: "center", color: "#f87171", fontSize: 15, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                    <div style={{ padding: "32px 16px", textAlign: "center", color: T.redText ?? T.red, fontSize: 14, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                         {error}
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div style={{ padding: "32px 16px", textAlign: "center", color: T.subtext, fontSize: 15, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                    <div style={{ padding: "32px 16px", textAlign: "center", color: T.subtext, fontSize: 14, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                         {mode === "watchlist" ? "No upcoming earnings for your watchlist stocks." : search ? "No results match your search." : "No upcoming earnings found."}
                     </div>
                 ) : (
@@ -4613,20 +4614,20 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                 <div key={dateKey}>
                                     {/* Date group header */}
                                     <div style={{
-                                        padding: "8px 16px 5px", position: "sticky", top: 0, zIndex: 2,
-                                        background: T.surface, borderBottom: `1px solid ${T.border}`,
+                                        padding: "8px 6px 8px", position: "sticky", top: 0, zIndex: 2,
+                                        background: T.surface,
                                         display: "flex", alignItems: "center", justifyContent: "space-between"
                                     }}>
                                         <span style={{
-                                            fontSize: 12, fontWeight: 600, color: T.subtext,
-                                            textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
+                                            fontSize: 11.5, fontWeight: 700, color: T.subtext,
+                                            textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7
                                         }}>
                                             {fmtDate(dateKey)}
                                         </span>
                                         {days !== null && (
                                             <span style={{
-                                                fontSize: 12, fontWeight: 600, color: urgColor,
-                                                fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em"
+                                                fontSize: 11.5, fontWeight: 700, color: urgColor,
+                                                fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.02em"
                                             }}>
                                                 {days === 0 ? "Today" : days === 1 ? "Tomorrow" : `in ${days}d`}
                                             </span>
@@ -4634,54 +4635,58 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                     </div>
 
                                     {/* Earnings rows */}
-                                    {items.map((item, idx) => {
-                                        const inWl = isInWatchlist(item.ticker);
-                                        const days_i = daysUntil(item.result_date);
-                                        return (
-                                            <div key={item.id ?? `${dateKey}-${idx}`}
-                                                className="wl-announce-row"
-                                                style={{
-                                                    padding: "9px 16px", borderBottom: `1px solid ${T.border}`,
-                                                    transition: "background 0.1s", cursor: "default",
-                                                    borderLeft: `2px solid ${inWl ? T.green : "transparent"}`
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.background = T.hover; }}
-                                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                                            >
-                                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                                                    {/* Left: ticker + company */}
-                                                    <div style={{ minWidth: 0, flex: 1 }}>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                                                            <span style={{
-                                                                fontSize: 14, fontWeight: 700, color: T.text,
-                                                                fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.05em", flexShrink: 0
-                                                            }}>
-                                                                {item.ticker || "—"}
-                                                            </span>
-                                                            {inWl && (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                                        {items.map((item, idx) => {
+                                            const inWl = isInWatchlist(item.ticker);
+                                            return (
+                                                <div key={item.id ?? `${dateKey}-${idx}`}
+                                                    className="wl-announce-row"
+                                                    style={{
+                                                        padding: "10px 13px 10px 12px",
+                                                        borderRadius: 10,
+                                                        border: `1px solid ${T.border}`,
+                                                        borderLeft: `2px solid ${inWl ? T.green : T.border}`,
+                                                        background: T.card,
+                                                        transition: "background 0.14s ease",
+                                                        cursor: "default",
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = T.hover; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = T.card; }}
+                                                >
+                                                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                                                        {/* Left: ticker + company */}
+                                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                                                                 <span style={{
-                                                                    fontSize: 11, fontWeight: 600, padding: "1px 5px", borderRadius: 3,
-                                                                    background: `${T.green}15`, border: `1px solid ${T.green}50`,
-                                                                    color: T.green, textTransform: "uppercase", letterSpacing: "0.06em",
-                                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", flexShrink: 0
+                                                                    fontSize: 13.5, fontWeight: 650, color: T.text,
+                                                                    fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.02em", flexShrink: 0
                                                                 }}>
-                                                                    WL
+                                                                    {item.ticker || "—"}
                                                                 </span>
-                                                            )}
+                                                                {inWl && (
+                                                                    <span style={{
+                                                                        fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 20,
+                                                                        background: T.posFill ?? `${T.green}15`,
+                                                                        color: T.greenText ?? T.green, textTransform: "uppercase", letterSpacing: "0.06em",
+                                                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", flexShrink: 0
+                                                                    }}>
+                                                                        WL
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                                                            }}>
+                                                                {item.company_name || "—"}
+                                                            </div>
                                                         </div>
-                                                        <div style={{
-                                                            fontSize: 14, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
-                                                        }}>
-                                                            {item.company_name || "—"}
-                                                        </div>
-                                                    </div>
 
                                                     {/* Right: date + meta */}
                                                     <div style={{ textAlign: "right", flexShrink: 0 }}>
                                                         {item.meeting_type && (
                                                             <div style={{
-                                                                fontSize: 12, fontWeight: 600, color: "#f59e0b",
+                                                                fontSize: 11, fontWeight: 700, color: T.gold ?? T.amber,
                                                                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.04em",
                                                                 textTransform: "uppercase", marginBottom: 2
                                                             }}>
@@ -4689,7 +4694,7 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                                             </div>
                                                         )}
                                                         {item.result_type && (
-                                                            <div style={{ fontSize: 12, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                                                            <div style={{ fontSize: 11.5, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
                                                                 {item.result_type}
                                                             </div>
                                                         )}
@@ -4722,23 +4727,24 @@ function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef,
                                             </div>
                                         );
                                     })}
+                                    </div>
                                 </div>
                             );
                         })}
 
                         {grouped.hasMore && (
-                            <div style={{ padding: isMobile ? "12px 16px calc(20px + env(safe-area-inset-bottom, 0px))" : "12px 16px 16px", borderTop: `1px solid ${T.border}` }}>
+                            <div style={{ padding: isMobile ? "6px 2px calc(20px + env(safe-area-inset-bottom, 0px))" : "6px 2px 8px" }}>
                                 <button
                                     onClick={() => setVisibleCount(c => c + 30)}
                                     style={{
-                                        width: "100%", padding: "7px 0", background: "transparent",
-                                        border: `1px solid ${T.border}`, borderRadius: 6, color: T.subtext,
-                                        fontSize: 14, fontWeight: 500, cursor: "pointer",
-                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.03em",
-                                        transition: "color 0.15s, border-color 0.15s"
+                                        width: "100%", padding: "9px 0", background: "transparent",
+                                        border: `1px dashed ${T.border}`, borderRadius: 10, color: T.subtext,
+                                        fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.02em",
+                                        transition: "color 0.15s, border-color 0.15s, background 0.15s"
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.color = "#f59e0b"; e.currentTarget.style.borderColor = "rgba(245,158,11,0.5)"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.borderColor = T.border; }}
+                                    onMouseEnter={e => { e.currentTarget.style.color = T.accent; e.currentTarget.style.borderColor = `${T.accent}50`; e.currentTarget.style.background = T.accentFill; }}
+                                    onMouseLeave={e => { e.currentTarget.style.color = T.subtext; e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = "transparent"; }}
                                 >
                                     Show {grouped.remaining} more
                                 </button>

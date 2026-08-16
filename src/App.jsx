@@ -429,12 +429,12 @@ const THEMES = {
         //  not just "everything white"; mirrors the top-nav's own dark chrome)
         chromeBg: "#0d1420",
         chromeBgAlt: "#111a2b",
-        chromeBorder: "rgba(255,255,255,0.07)",
-        chromeText: "#c7d0dd",
-        chromeTextMuted: "#5c6f8a",
-        chromeHover: "rgba(255,255,255,0.05)",
-        chromeActiveBg: "rgba(15,157,117,0.16)",
-        chromeActiveBorder: "rgba(15,157,117,0.4)",
+        chromeBorder: "rgba(255,255,255,0.08)",
+        chromeText: "#eceff5",
+        chromeTextMuted: "rgba(236,239,245,0.5)",
+        chromeHover: "rgba(255,255,255,0.06)",
+        chromeActiveBg: "rgba(15,157,117,0.18)",
+        chromeActiveBorder: "rgba(15,157,117,0.45)",
         chromeActiveText: "#ffffff",
 
         series: [
@@ -531,12 +531,12 @@ const THEMES = {
         // ── Dark chrome tokens — in dark mode the rail simply matches surface ──
         chromeBg: "#0b1220",
         chromeBgAlt: "#0e1526",
-        chromeBorder: "rgba(255,255,255,0.06)",
-        chromeText: "#c7d0dd",
-        chromeTextMuted: "#4a6580",
-        chromeHover: "rgba(255,255,255,0.05)",
-        chromeActiveBg: "rgba(52,211,153,0.14)",
-        chromeActiveBorder: "rgba(52,211,153,0.4)",
+        chromeBorder: "rgba(255,255,255,0.07)",
+        chromeText: "#eceff5",
+        chromeTextMuted: "rgba(236,239,245,0.46)",
+        chromeHover: "rgba(255,255,255,0.06)",
+        chromeActiveBg: "rgba(52,211,153,0.16)",
+        chromeActiveBorder: "rgba(52,211,153,0.42)",
         chromeActiveText: "#ffffff",
 
         series: [
