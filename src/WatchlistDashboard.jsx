@@ -1906,12 +1906,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const token = session?.access_token || null;
     const userId = session?.user?.id || null;
 
-    // Add near top of WatchlistDashboard component body:
-    const getFreshToken = useCallback(async () => {
-        if (getToken) return getToken();
-        return session?.access_token || null;
-    }, [getToken, session]);
-
     // ── Mobile detection ─────────────────────────────────────────
     const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
     useEffect(() => {
@@ -2628,12 +2622,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const avgRS = useMemo(() => rows.length ? Math.round(rows.reduce((a, r) => a + (r.rs_rating ?? 0), 0) / rows.length) : null, [rows]);
     const leaders = useMemo(() => rows.filter(r => (r.rs_rating ?? 0) >= 90).length, [rows]);
     const stage2Count = useMemo(() => rows.filter(r => r.trend === "stage2").length, [rows]);
-    // Per-row derived screens (shared with the pill/tag rendering) — reused for stat-card counts
-    const rowScreensMap = useMemo(() => {
-        const m = {};
-        for (const r of rows) m[r.ticker] = deriveRowScreens(r);
-        return m;
-    }, [rows]);
     const avgMarketCap = useMemo(() => {
         const vals = rows.map(r => marketCaps[r.ticker]).filter(v => v != null);
         return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;

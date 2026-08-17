@@ -211,8 +211,18 @@ const supabase = {
                 return null;
             }
         },
-        signInWithGoogle() {
-            window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(PUBLIC_SITE_URL)}`;
+        async signInWithGoogle() {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: {
+                    redirectTo: PUBLIC_SITE_URL,
+                },
+            });
+
+            if (error) {
+                console.error("Google sign-in error:", error);
+                throw error;
+            }
         },
         async getSessionFromHash() {
             const hash = window.location.hash;
@@ -237,6 +247,41 @@ const supabase = {
         };
     },
 };
+
+// ── Global 401/expired-JWT interceptor ──────────────────────────────────────
+// The proactive refresh loop below (see `checkAndRefresh` in App()) renews the
+// access token ~5 min before it's due to expire, and logs out if that refresh
+// fails. But that's a *timer*-based safety net: on mobile, tab throttling,
+// backgrounding, or the token being invalidated server-side (revoked session,
+// password change elsewhere, etc.) can all mean a real request comes back 401
+// before the timer would have caught it. Patching `fetch` once here catches
+// EVERY authenticated Supabase REST call, from every module (App, Watchlist,
+// FiiDii, Ownership, Announcements, ...), on both desktop and mobile web, and
+// forces an immediate, real logout the moment the server says the JWT is no
+// longer valid — instead of leaving a stale "logged in" UI with silently
+// failing requests underneath it.
+if (typeof window !== "undefined" && !window.__teFetch401Patched) {
+    window.__teFetch401Patched = true;
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+        const res = await _origFetch(...args);
+        try {
+            const reqUrl = typeof args[0] === "string" ? args[0] : args[0]?.url;
+            // Only react to Supabase *data* calls (/rest/v1/, /storage/v1/), not
+            // the /auth/v1/ endpoints themselves — signIn/signUp/refreshSession
+            // already handle their own error responses (e.g. wrong password).
+            if (
+                res.status === 401 &&
+                reqUrl && reqUrl.startsWith(SUPABASE_URL) &&
+                !reqUrl.includes("/auth/v1/") &&
+                typeof window.__teForceLogout === "function"
+            ) {
+                window.__teForceLogout();
+            }
+        } catch { /* never let the interceptor break the real fetch */ }
+        return res;
+    };
+}
 
 const DEMO_TRADES = [
     { id: 1, ticker: "TATAMOTORS", entry_date: "2018-03-13", buy_qty: 60, buy_price: 353.42, exit_date: "2018-03-16", sell_qty: 60, sell_price: 346.0 },
@@ -24011,6 +24056,7 @@ export default function App() {
     const initialRoute = parseAppRoute(typeof window !== "undefined" ? window.location.pathname : "/");
     const restoringHistoryRef = useRef(false);
     const [session, setSession] = useState(null);
+    const [sessionExpiredNotice, setSessionExpiredNotice] = useState(false);
     const [openDropdown, setOpenDropdown] = useState(null);
     const [isDemo, setIsDemo] = useState(false);
     const [trades, setTrades] = useState([]);
@@ -24368,8 +24414,7 @@ export default function App() {
             } else {
                 // Refresh token is dead — the session is genuinely over.
                 // Log the user out properly instead of leaving a stale "logged in" UI.
-                clearPersistedSession();
-                handleLogout();
+                forceLogoutRef.current?.();
             }
         };
 
@@ -24445,6 +24490,25 @@ export default function App() {
             setTrades([]); setFunds([]); setDividends([]);
         }
     };
+
+    // Logout triggered by an expired/invalid JWT (as opposed to the user
+    // clicking "Log out" themselves) — same effect, plus a brief on-screen
+    // notice so the sudden logged-out state doesn't look like a glitch.
+    const forceLogoutRef = useRef(null);
+    forceLogoutRef.current = () => {
+        clearPersistedSession();
+        handleLogout();
+        setSessionExpiredNotice(true);
+        setTimeout(() => setSessionExpiredNotice(false), 6000);
+    };
+
+    // Expose the latest forceLogout to the module-level fetch interceptor
+    // (registered once, outside React) so ANY 401 from ANY module — on
+    // desktop or mobile — triggers a real logout immediately.
+    useEffect(() => {
+        window.__teForceLogout = () => forceLogoutRef.current?.();
+        return () => { window.__teForceLogout = null; };
+    }, []);
 
     const handleSave = async (form) => {
         // _tab is a UI-only hint, not a DB field
@@ -24858,6 +24922,20 @@ export default function App() {
     return (
         <>
             <style>{makeCSS(T)}</style>
+            {sessionExpiredNotice && (
+                <div
+                    role="status"
+                    style={{
+                        position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)",
+                        zIndex: 10000, background: T.card ?? "#1a1a1a", color: T.text ?? "#fff",
+                        border: `1px solid ${T.border ?? "#333"}`, borderRadius: 10,
+                        padding: "10px 16px", fontSize: 13, fontFamily: "'IBM Plex Sans', sans-serif",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.25)", maxWidth: "90vw",
+                    }}
+                >
+                    Your session expired — you've been logged out. Please sign in again.
+                </div>
+            )}
             <div className="app-shell">
 
                 {/* 
