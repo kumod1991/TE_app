@@ -211,18 +211,8 @@ const supabase = {
                 return null;
             }
         },
-        async signInWithGoogle() {
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: {
-                    redirectTo: PUBLIC_SITE_URL,
-                },
-            });
-
-            if (error) {
-                console.error("Google sign-in error:", error);
-                throw error;
-            }
+        signInWithGoogle() {
+            window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(PUBLIC_SITE_URL)}`;
         },
         async getSessionFromHash() {
             const hash = window.location.hash;
