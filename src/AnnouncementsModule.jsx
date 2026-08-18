@@ -87,10 +87,6 @@ const EXAMPLE_QUERIES = [
     "Buyback",
 ];
 
-function normalizeAnnouncementQuery(query) {
-    return (query || "").trim().replace(/\s+/g, " ");
-}
-
 function FilterModal({ existing, onSave, onClose, T }) {
     const [query, setQuery] = useState(existing || "");
     const inputRef = useRef(null);
@@ -205,8 +201,6 @@ function AnnouncementCard({ item, T, darkMode }) {
             return typeof item.tags === "string" ? JSON.parse(item.tags) : (item.tags || []);
         } catch { return []; }
     }, [item.tags]);
-
-    const initials = item.symbol?.slice(0, 4) || "??";
 
     return (
         <div style={{

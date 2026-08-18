@@ -167,7 +167,6 @@ function Sparkline({ values, color, height = 70 }) {
     const wrapRef = useRef(null);
     const containerRef = useRef(null);
     const chartRef = useRef(null);
-    const seriesRef = useRef(null);
     const tooltipRef = useRef(null);
     const [ready, setReady] = useState(!!window?.LightweightCharts);
     const data = useMemo(() => {

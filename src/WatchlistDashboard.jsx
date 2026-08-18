@@ -2626,27 +2626,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         const vals = rows.map(r => marketCaps[r.ticker]).filter(v => v != null);
         return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
     }, [rows, marketCaps]);
-    const avgRet3m = useMemo(() => {
-        const vals = rows.map(r => r.ret_3m).filter(v => v != null && !Number.isNaN(Number(v)));
-        return vals.length ? vals.reduce((a, v) => a + Number(v), 0) / vals.length : null;
-    }, [rows]);
-    const avgRelVol = useMemo(() => {
-        const vals = rows.map(r => r.rel_vol).filter(v => v != null && !Number.isNaN(Number(v)));
-        return vals.length ? vals.reduce((a, v) => a + Number(v), 0) / vals.length : null;
-    }, [rows]);
-    const topLeaders = useMemo(() => {
-        return [...rows]
-            .sort((a, b) => (b.rs_rating ?? -1) - (a.rs_rating ?? -1))
-            .slice(0, 5)
-            .map(r => r.ticker)
-            .filter(Boolean);
-    }, [rows]);
-    const today = new Date().toDateString();
-    const highImpactToday = useMemo(() => rows.filter(r => {
-        const ev = eventsMap[r.ticker];
-        if (!ev || ev.priority < 4) return false;
-        return ev.datetime && new Date(ev.datetime).toDateString() === today;
-    }).length, [rows, eventsMap, today]);
 
     const displayRows = useMemo(() => eventFilter === "high"
         ? rows.filter(r => (eventsMap[r.ticker]?.priority ?? 0) >= 4)
@@ -2657,12 +2636,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         { key: "pullback", label: "Pullback" },
         { key: "leaders", label: "Leaders" },
     ];
-    const insightCards = activeWl ? [
-        { label: "Average RS", value: avgRS != null ? `${avgRS}` : "—", tone: T.green, hint: `${leaders} leaders above 90` },
-        { label: "Average 3M", value: avgRet3m != null ? `${avgRet3m >= 0 ? "+" : ""}${avgRet3m.toFixed(1)}%` : "—", tone: avgRet3m != null ? retColor(avgRet3m, T) : T.subtext, hint: `${stage2Count}/${rows.length || 0} in Stage 2` },
-        { label: "Liquidity", value: avgRelVol != null ? `${avgRelVol.toFixed(2)}×` : "—", tone: avgRelVol != null && avgRelVol >= 1.5 ? T.pos : T.text, hint: highImpactToday > 0 ? `${highImpactToday} key event${highImpactToday > 1 ? "s" : ""} today` : "No critical events today" },
-        { label: "Top 5 Leaders", value: topLeaders.length ? topLeaders.join(", ") : "—", tone: T.text, hint: totalCount > 0 ? `${totalCount} stocks tracked` : "Build this watchlist", compactList: true },
-    ] : [];
 
     // No-auth state
     if (!session) return (
