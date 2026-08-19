@@ -501,7 +501,7 @@ const wlAnalyticsCache = new Map(); // watchlistId -> { ts, rows: rawRow[] }
 const WL_ANALYTICS_TTL = 60_000; // 60s — independent of the page/filter-keyed cache above
 
 const STOCK_ANALYTICS_COLS =
-    "ticker,close,ret_3m,ret_6m,ret_12m,rs_rating,pct_from_high,pct_from_low,pivot_high_20w,high_52w,low_52w,rel_vol,trend,signals,sma50,sma150,sma200";
+    "ticker,name,close,ret_3m,ret_6m,ret_12m,rs_rating,pct_from_high,pct_from_low,pivot_high_20w,high_52w,low_52w,rel_vol,trend,signals,sma50,sma150,sma200";
 
 // Bust the raw-analytics cache for one watchlist (or all, if called with no arg).
 // Call this whenever watchlist_items changes (add/remove stock) so stale
@@ -553,6 +553,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
     // Normalize once — PostgREST returns `numeric` columns as strings.
     let rows = raw.map(r => ({
         ticker: r.ticker,
+        name: r.name ?? null,
         ret_3m: numOrNull(r.ret_3m),
         ret_6m: numOrNull(r.ret_6m),
         ret_12m: numOrNull(r.ret_12m),
@@ -619,26 +620,29 @@ async function fetchMarketCaps(tickers, token) {
     }
 }
 
-// ─── Company Names (for search suggestions + ticker↔name display) ──
-// company_financials has one row per (ticker, exchange) — the same company
-// can appear once under NSE and once under BSE with different tickers.
-// We always prefer the NSE row when both exist for a given company name.
-async function fetchCompanyNames(tickers, token) {
-    if (!tickers || tickers.length === 0) return {};
-    try {
-        const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
-        const data = await GET(`company_financials?ticker=in.${tickerIn}&select=ticker,name,exchange`, token);
-        const map = {};
-        for (const row of (data || [])) {
-            if (row.ticker && row.name) map[row.ticker] = row.name;
-        }
-        return map;
-    } catch {
-        return {};
-    }
+// ─── Ticker/Company search (autocomplete "Add Stocks") ─────────
+// company_financials.name isn't consistently cased in the DB (unlike
+// bhav_copy.name) — some rows come back all-lowercase. We title-case on
+// display so suggestions always look right regardless of source casing.
+// Keeps short connector words lowercase ("of", "and", "&") unless they're
+// the first word, and leaves existing all-caps tokens (e.g. "NSE", "IT")
+// alone rather than mangling them.
+const NAME_MINOR_WORDS = new Set(["of", "and", "the", "for", "&", "in", "on", "at", "to"]);
+function toTitleCaseCompanyName(name) {
+    if (!name) return name;
+    return name
+        .split(" ")
+        .map((word, i) => {
+            if (!word) return word;
+            // Leave tokens that are already mixed/upper-case as-is (e.g. "IT", "NCD", "Ltd.")
+            if (/[A-Z]/.test(word) && !/^[a-z]/.test(word)) return word;
+            const lower = word.toLowerCase();
+            if (i > 0 && NAME_MINOR_WORDS.has(lower)) return lower;
+            return lower.charAt(0).toUpperCase() + lower.slice(1);
+        })
+        .join(" ");
 }
 
-// ─── Ticker/Company search (autocomplete "Add Stocks") ─────────
 // Matches on ticker OR company name, then dedupes same-company rows that
 // exist on both NSE and BSE — keeping the NSE listing as the canonical one.
 // Strips common company-suffix variants ("Limited", "Ltd", "Ltd.", "Pvt Ltd",
@@ -678,7 +682,9 @@ async function searchCompanies(q, token) {
                 byName.set(key, row);
             }
         }
-        return Array.from(byName.values()).slice(0, 10);
+        return Array.from(byName.values())
+            .slice(0, 10)
+            .map(row => ({ ...row, name: toTitleCaseCompanyName(row.name) }));
     } catch {
         return [];
     }
@@ -1934,7 +1940,13 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [addCompanyName, setAddCompanyName] = useState("");
     const [addError, setAddError] = useState("");
     const [addLoading, setAddLoading] = useState(false);
-    const [companyNames, setCompanyNames] = useState({}); // ticker → company name
+    // ticker → company name, sourced directly from stock_analytics (already
+    // fetched into `rows`) — no separate network call needed anymore.
+    const companyNames = useMemo(() => {
+        const m = {};
+        for (const r of rows) if (r.ticker && r.name) m[r.ticker] = r.name;
+        return m;
+    }, [rows]);
     const [prices, setPrices] = useState({});
     const [priceLoading, setPriceLoading] = useState(false);
     const [sparklines, setSparklines] = useState({});
@@ -2333,15 +2345,6 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             .catch(() => { });
     }, [rows, token]);
 
-    useEffect(() => {
-        const tickers = rows.map(r => r.ticker).filter(t => t && !companyNames[t]);
-        if (!tickers.length) return;
-        fetchCompanyNames(tickers, token)
-            .then(m => setCompanyNames(prev => ({ ...prev, ...m })))
-            .catch(() => { });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rows, token]);
-
     // ── Background pre-warm: on first login, silently populate feed caches for ALL watchlists ──
     // This ensures the announcements panel feels instant on every watchlist switch.
     useEffect(() => {
@@ -2535,9 +2538,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         // Capture the watchlist we're adding to at call-time so a mid-flight
         // watchlist switch can't corrupt a different list's rows.
         const targetWl = activeWl;
-        // Name captured from the picked suggestion, if any — used so the
-        // optimistic row shows the company name immediately, before the
-        // background companyNames fetch (fetchCompanyNames) resolves it.
+        // Name captured from the picked suggestion, if any — attached directly
+        // to the optimistic row (companyNames is now derived from `rows`, so
+        // this is what makes the name show up immediately, before the real
+        // stock_analytics row lands on next fetch/refresh).
         const pickedName = addCompanyName;
 
         // Optimistic update — scoped to the target watchlist only.
@@ -2547,11 +2551,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             if (targetWl !== activeWl) return prev;
             // Prevent duplicate phantom rows
             if (prev.some(r => r.ticker === ticker)) return prev;
-            return [{ ticker, loading: true, ret_3m: null, ret_6m: null, ret_12m: null, _optimistic: true }, ...prev];
+            return [{ ticker, name: pickedName || null, loading: true, ret_3m: null, ret_6m: null, ret_12m: null, _optimistic: true }, ...prev];
         });
-        if (pickedName) {
-            setCompanyNames(prev => (prev[ticker] ? prev : { ...prev, [ticker]: pickedName }));
-        }
 
         try {
             await POST("watchlist_items", { watchlist_id: targetWl, ticker }, token);
