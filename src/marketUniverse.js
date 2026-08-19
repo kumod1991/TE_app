@@ -99,14 +99,13 @@ export async function ensureAllowedTickerSet(force = false) {
                 apikey: SUPABASE_ANON_KEY,
                 Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
             };
-            const latestRes = await fetch(
-                `${SUPABASE_URL}/rest/v1/bhav_copy?select=date&exchange=eq.NSE&order=date.desc&limit=1`,
-                { headers }
-            );
-            const latestRows = await latestRes.json().catch(() => []);
-            const latestDate = latestRows?.[0]?.date;
-            if (!latestDate) return cached || null;
 
+            // allowed_tickers is precomputed server-side (security_series
+            // exclusion + latest-date filtering already applied by
+            // refresh_allowed_tickers(), kept fresh by a trigger on bhav_copy
+            // sync). This is a single filtered table now — no separate
+            // "latest date" lookup, no security_series to filter client-side,
+            // and typically 1-2 pages instead of the full day's bhav_copy.
             const fetchAllPages = async (baseUrl, pageSize = 1000) => {
                 let all = [], offset = 0;
                 while (true) {
@@ -121,20 +120,19 @@ export async function ensureAllowedTickerSet(force = false) {
             };
 
             const rows = await fetchAllPages(
-                `${SUPABASE_URL}/rest/v1/bhav_copy?exchange=eq.NSE&date=eq.${latestDate}&select=ticker,security_series&order=ticker.asc`
+                `${SUPABASE_URL}/rest/v1/allowed_tickers?select=ticker&order=ticker.asc`
             );
+            if (!rows || rows.length === 0) return cached || null;
+
             const allowed = new Set();
-            for (const row of rows || []) {
+            for (const row of rows) {
                 const ticker = normalizeTicker(row?.ticker);
-                if (!ticker) continue;
-                if (!isAllowedSecuritySeries(row?.security_series)) continue;
-                allowed.add(ticker);
+                if (ticker) allowed.add(ticker);
             }
             _allowedTickerSet = allowed;
             _allowedTickerLoadedAt = Date.now();
             _writeCache({
                 loadedAt: _allowedTickerLoadedAt,
-                latestDate,
                 tickers: [...allowed],
             });
             return allowed;
