@@ -21490,11 +21490,6 @@ export default function App() {
                                         <StockDashboard
                                             T={T}
                                             userToken={session?.access_token}
-                                            onTickerClick={(ticker) => {
-                                                setTopbarSearch(ticker);
-                                                topbarResolvedSymRef.current = ticker;
-                                                navigateToTicker(ticker);
-                                            }}
                                             onLogin={() => setShowLoginModal(true)}
                                             onNavigate={(tab, sub) => {
                                                 if (tab === "technical") {

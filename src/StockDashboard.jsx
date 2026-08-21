@@ -1970,10 +1970,10 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
     );
 }
 
-function RsTable({ T, data, loading, onTickerClick, isCompact }) {
+function RsTable({ T, data, loading, isCompact }) {
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
-    const { wrapRef, hoverOnlyHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
+    const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
 
     // Pre-warm chart cache for visible rows so hover popover is instant
     useEffect(() => {
@@ -2067,20 +2067,20 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
             </thead>
             <tbody>
                 {sorted.map((row, i) => {
-                    const preview = hoverOnlyHandlers(row.ticker, row);
+                    const preview = rowPreviewHandlers(row.ticker, row);
                     return (
                     <tr
                         key={row.ticker}
-                        onClick={() => onTickerClick?.(row.ticker)}
                         style={{
                             borderBottom: i < sorted.length - 1
                                 ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                 : "none",
-                            cursor: onTickerClick ? "pointer" : "default",
+                            cursor: "pointer",
                             transition: "background 0.12s ease",
                         }}
                         onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.84)"; preview.onMouseEnter(e); }}
                         onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
+                        onClick={preview.onClick}
                     >
                         {/* Name + ticker cell – mirrors MoversTable layout */}
                         <td data-preview-anchor="1" style={{ padding: "11px 14px", maxWidth: 260, minWidth: 180 }}>
@@ -2122,11 +2122,11 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
 
 
 // --- ALL RS TABLE (Top 50 stocks by RS Rating from indicators) ---
-const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerClick, isCompact }) {
+const AllRsTable = React.memo(function AllRsTable({ T, data, loading, isCompact }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
-    const { wrapRef, hoverOnlyHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
+    const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
 
     useEffect(() => {
         setVisibleCount(MOVERS_INITIAL_ROWS);
@@ -2229,20 +2229,20 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerCl
             </thead>
             <tbody>
                 {visibleRows.map((row, i) => {
-                    const preview = hoverOnlyHandlers(row.ticker, row);
+                    const preview = rowPreviewHandlers(row.ticker, row);
                     return (
                     <tr
                         key={row.ticker}
-                        onClick={() => onTickerClick?.(row.ticker)}
                         style={{
                             borderBottom: i < visibleRows.length - 1
                                 ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                 : "none",
-                            cursor: onTickerClick ? "pointer" : "default",
+                            cursor: "pointer",
                             transition: "background 0.12s ease",
                         }}
                         onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.84)"; preview.onMouseEnter(e); }}
                         onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
+                        onClick={preview.onClick}
                     >
                         <td style={{ padding: "11px 14px", color: T.muted, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                         {/* Name + ticker cell – mirrors MoversTable layout */}
@@ -2314,7 +2314,7 @@ function normalizeMinerviniRow(r) {
     };
 }
 
-function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
+function TrendTemplateCard({ T, userToken, isCompact }) {
     const _cached = useMemo(() => {
         const hit = cacheGet(MINERVINI_PATH, MINERVINI_TTL);
         return hit ? hit.data || [] : null;
@@ -2326,7 +2326,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
-    const { wrapRef, hoverOnlyHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
+    const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
 
     useEffect(() => {
         let cancelled = false;
@@ -2514,20 +2514,20 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                         </thead>
                         <tbody>
                             {visibleRows.map((row, i) => {
-                                const preview = hoverOnlyHandlers(row.ticker, row);
+                                const preview = rowPreviewHandlers(row.ticker, row);
                                 return (
                                 <tr
                                     key={row.ticker}
-                                    onClick={() => onTickerClick?.(row.ticker)}
                                     style={{
                                         borderBottom: i < visibleRows.length - 1
                                             ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                             : "none",
-                                        cursor: onTickerClick ? "pointer" : "default",
+                                        cursor: "pointer",
                                         transition: "background 0.12s ease",
                                     }}
                                     onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; preview.onMouseEnter(e); }}
                                     onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
+                                    onClick={preview.onClick}
                                 >
                                     <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                                     <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
@@ -3246,7 +3246,7 @@ export async function warmStockDashboardCaches(userToken) {
     return _stockDashboardWarmPromise;
 }
 
-export default function StockDashboard({ T, userToken, onTickerClick, onLogin, onNavigate }) {
+export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     const D = useMemo(() => buildDashboardTheme(T), [T]);
     const { isCompact, isTablet } = useViewportFlags();
     // â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4233,9 +4233,9 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                                 </TabBar>
                                 <RsLoginGate T={D} isLocked={false} onLogin={onLogin}>
                                     {activeRsTab === "all" ? (
-                                        <AllRsTable T={D} data={allHighRsStocks} loading={loadingAllRs} onTickerClick={onTickerClick} isCompact={isCompact} />
+                                        <AllRsTable T={D} data={allHighRsStocks} loading={loadingAllRs} isCompact={isCompact} />
                                     ) : industry ? (
-                                        <RsTable T={D} data={rsIndustryStocks} loading={loadingRs} onTickerClick={onTickerClick} isCompact={isCompact} />
+                                        <RsTable T={D} data={rsIndustryStocks} loading={loadingRs} isCompact={isCompact} />
                                     ) : (
                                         <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
                                     )}
@@ -4249,7 +4249,7 @@ export default function StockDashboard({ T, userToken, onTickerClick, onLogin, o
                 {/* â”€â”€ TREND TEMPLATE (MINERVINI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                 {/* Own standalone card — shown regardless of which mobile tab (pulse/movers/
                     leaders) is active, since it isn't one of the tabbed panels above. */}
-                <TrendTemplateCard T={D} userToken={userToken} onTickerClick={onTickerClick} isCompact={isCompact} />
+                <TrendTemplateCard T={D} userToken={userToken} isCompact={isCompact} />
 
                 <style>{`
                 .stock-dashboard-shell * {
