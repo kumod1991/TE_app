@@ -50,23 +50,48 @@ const _weeklyChartCache = new Map();
 // In-flight promise registry so concurrent callers await the same fetch
 const _weeklyChartInFlight = new Map();
 
-// Aggregate daily rows → weekly OHLC candles (week starts Monday)
+// Aggregate daily rows → weekly OHLC candles (week starts Monday).
+//
+// Back-adjusts O/H/L for corporate actions (splits/bonuses) using the ratio
+// between adj_close and the raw close. Without this, a bonus/split shows up
+// as a fake overnight "crash" in the chart — e.g. CUPID's 4:1 bonus (record
+// date 9-Mar-2026) made the raw close jump from ~₹527 to ~₹105 territory
+// even though nothing actually happened to the position's value. Dividing
+// the pre-action open/high/low by the same factor keeps the whole series on
+// one continuous, comparable price scale.
 function _aggregateToWeekly(dailyRows) {
     const sorted = [...dailyRows].sort((a, b) => (a.date < b.date ? -1 : 1));
     const weeks = {};
     for (const r of sorted) {
+        const rawClose = Number(r.close);
+        const adjClose = r.adj_close != null ? Number(r.adj_close) : null;
+        // Adjustment factor: 1 when there's no adj_close data (or it matches
+        // raw close, i.e. no corporate action that day). <1 for dates before
+        // a bonus/split, scaling that day's price down to today's share
+        // count so the series stays continuous instead of cliff-jumping.
+        // Guard against adj_close being 0/negative (bad or missing upstream
+        // data) — without the `adjClose > 0` check, a single such row turns
+        // that day's o/h/l into ~0, which drags the whole log-scale range
+        // down and squashes every real candle into a sliver at the top.
+        const factor = (adjClose != null && adjClose > 0 && rawClose > 0) ? adjClose / rawClose : 1;
+
+        const o = Number(r.open) * factor;
+        const h = Number(r.high) * factor;
+        const l = Number(r.low) * factor;
+        const c = (adjClose != null && adjClose > 0) ? adjClose : rawClose;
+
         const d = new Date(r.date);
         const day = d.getDay(); // 0=Sun … 6=Sat
         const diff = day === 0 ? -6 : 1 - day;
         const mon = new Date(d); mon.setDate(d.getDate() + diff);
         const key = mon.toISOString().slice(0, 10);
         if (!weeks[key]) {
-            weeks[key] = { date: key, o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume ?? 0 };
+            weeks[key] = { date: key, o, h, l, c, v: r.volume ?? 0 };
         } else {
             const w = weeks[key];
-            if (r.high > w.h) w.h = r.high;
-            if (r.low < w.l) w.l = r.low;
-            w.c = r.close;
+            if (h > w.h) w.h = h;
+            if (l < w.l) w.l = l;
+            w.c = c;
             w.v += r.volume ?? 0;
         }
     }
@@ -94,7 +119,7 @@ export async function fetchWeeklyOHLCFromDB(ticker) {
                     + `?ticker=eq.${encodeURIComponent(ticker)}`
                     + `&exchange=eq.${exchange}`
                     + `&date=gte.${cutoffStr}`
-                    + `&select=date,open,high,low,close,volume`
+                    + `&select=date,open,high,low,close,adj_close,volume`
                     + `&order=date.asc`
                     + `&limit=400`;
                 const r = await fetch(url, {
@@ -191,13 +216,31 @@ export function MiniCandleChart({ candles, T, accentColor, width = 250, height =
     const W = width - pad.l - pad.r;
     const H = height - pad.t - pad.b;     // price panel inner height
 
-    // ── price helpers ──
-    const valid = candles.filter(c => c.h != null && c.l != null);
+    // ── price helpers (log scale — so a move from ₹80→₹160 looks the same
+    // size as ₹160→₹320, matching how traders read % moves rather than
+    // absolute rupee moves) ──
+    // Only candles with sane, positive, finite highs/lows count toward the
+    // price range. A single bad row (e.g. 0 from a data glitch or a botched
+    // corporate-action adjustment) must never drag the whole log-scale range
+    // toward zero — that's what squashes every real candle into a sliver.
+    const valid = candles.filter(c =>
+        Number.isFinite(c.h) && Number.isFinite(c.l) && c.h > 0 && c.l > 0
+    );
+    if (valid.length === 0) return null;
     const pMin = Math.min(...valid.map(c => c.l));
     const pMax = Math.max(...valid.map(c => c.h));
-    const pRange = pMax - pMin || 1;
+    // Guard against a degenerate (zero-width) range — log() is undefined at/
+    // below 0, and a flat range would collapse logRange to 0.
+    const safeMin = pMin > 0 ? pMin : 0.01;
+    const safeMax = pMax > safeMin ? pMax : safeMin * 1.01;
+    const logMin = Math.log(safeMin);
+    const logMax = Math.log(safeMax);
+    const logRange = (logMax - logMin) || 1;
 
-    const py = (v) => pad.t + H - ((v - pMin) / pRange) * H;
+    const py = (v) => {
+        const lv = Math.log(v > 0 ? v : safeMin);
+        return pad.t + H - ((lv - logMin) / logRange) * H;
+    };
     const n = candles.length;
     const slotW = W / n;
     const bodyW = Math.max(1.2, slotW * 0.58);
@@ -228,7 +271,9 @@ export function MiniCandleChart({ candles, T, accentColor, width = 250, height =
     }).filter(Boolean).join(" ");
 
     const priceFmt = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : Math.round(v).toString();
-    const axisVals = [pMin, pMin + pRange * 0.5, pMax];
+    // Midpoint uses the geometric mean (log-space midpoint), so the middle
+    // gridline actually lands visually centered on a log-scaled chart.
+    const axisVals = [pMin, Math.exp((logMin + logMax) / 2), pMax];
 
     return (
         <svg width={width} height={totalH} style={{ display: "block", overflow: "visible" }}>
