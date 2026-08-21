@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 import { ensureAllowedTickerSet, getAllowedTickerSetSync, isAllowedTicker } from "./marketUniverse";
+import { useChartRowPreview, prefetchWeeklyCharts } from "./ChartPreviewPopover";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -1972,6 +1973,13 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
 function RsTable({ T, data, loading, onTickerClick, isCompact }) {
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
+    const { wrapRef, hoverOnlyHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
+
+    // Pre-warm chart cache for visible rows so hover popover is instant
+    useEffect(() => {
+        if (!data || data.length === 0) return;
+        prefetchWeeklyCharts(data.map(r => r.ticker));
+    }, [data]);
 
     const handleSort = key => {
         if (sortKey === key) {
@@ -2046,6 +2054,7 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
     };
 
     return (
+        <div ref={wrapRef} style={{ position: "relative" }}>
         <PremiumTableShell T={T} minWidth={580} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
@@ -2057,7 +2066,9 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
                 </tr>
             </thead>
             <tbody>
-                {sorted.map((row, i) => (
+                {sorted.map((row, i) => {
+                    const preview = hoverOnlyHandlers(row.ticker, row);
+                    return (
                     <tr
                         key={row.ticker}
                         onClick={() => onTickerClick?.(row.ticker)}
@@ -2068,11 +2079,11 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
                             cursor: onTickerClick ? "pointer" : "default",
                             transition: "background 0.12s ease",
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.84)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                        onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.84)"; preview.onMouseEnter(e); }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
                     >
                         {/* Name + ticker cell – mirrors MoversTable layout */}
-                        <td style={{ padding: "11px 14px", maxWidth: 260, minWidth: 180 }}>
+                        <td data-preview-anchor="1" style={{ padding: "11px 14px", maxWidth: 260, minWidth: 180 }}>
                             <NameCell T={T} name={row.name} ticker={row.ticker} size={30} nameFontSize={15} tickerFontSize={13} />
                         </td>
                         <td style={{ padding: "11px 14px", textAlign: "right" }}>
@@ -2100,9 +2111,12 @@ function RsTable({ T, data, loading, onTickerClick, isCompact }) {
                             }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
                         ))}
                     </tr>
-                ))}
+                    );
+                })}
             </tbody>
         </PremiumTableShell>
+        {PreviewPopover}
+        </div>
     );
 }
 
@@ -2112,9 +2126,16 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerCl
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
+    const { wrapRef, hoverOnlyHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
 
     useEffect(() => {
         setVisibleCount(MOVERS_INITIAL_ROWS);
+    }, [data]);
+
+    // Pre-warm chart cache for visible rows so hover popover is instant
+    useEffect(() => {
+        if (!data || data.length === 0) return;
+        prefetchWeeklyCharts(data.map(r => r.ticker));
     }, [data]);
 
     const handleSort = key => {
@@ -2194,7 +2215,7 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerCl
     );
 
     return (
-        <>
+        <div ref={wrapRef} style={{ position: "relative" }}>
         <PremiumTableShell T={T} minWidth={660} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
@@ -2207,7 +2228,9 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerCl
                 </tr>
             </thead>
             <tbody>
-                {visibleRows.map((row, i) => (
+                {visibleRows.map((row, i) => {
+                    const preview = hoverOnlyHandlers(row.ticker, row);
+                    return (
                     <tr
                         key={row.ticker}
                         onClick={() => onTickerClick?.(row.ticker)}
@@ -2218,12 +2241,12 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerCl
                             cursor: onTickerClick ? "pointer" : "default",
                             transition: "background 0.12s ease",
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.84)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                        onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.84)"; preview.onMouseEnter(e); }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
                     >
                         <td style={{ padding: "11px 14px", color: T.muted, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                         {/* Name + ticker cell – mirrors MoversTable layout */}
-                        <td style={{ padding: "11px 14px", maxWidth: 260, minWidth: 180 }}>
+                        <td data-preview-anchor="1" style={{ padding: "11px 14px", maxWidth: 260, minWidth: 180 }}>
                             <NameCell T={T} name={row.name} ticker={row.ticker} size={30} nameFontSize={15} tickerFontSize={13} />
                         </td>
                         <td style={{ padding: "11px 14px", textAlign: "right" }}>
@@ -2251,11 +2274,13 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, onTickerCl
                             }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
                         ))}
                     </tr>
-                ))}
+                    );
+                })}
             </tbody>
         </PremiumTableShell>
         <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
-        </>
+        {PreviewPopover}
+        </div>
     );
 });
 
@@ -2301,6 +2326,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
+    const { wrapRef, hoverOnlyHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
 
     useEffect(() => {
         let cancelled = false;
@@ -2359,6 +2385,12 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
 
     const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
     const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+
+    // Pre-warm chart cache for visible rows so hover popover is instant
+    useEffect(() => {
+        if (!visibleRows || visibleRows.length === 0) return;
+        prefetchWeeklyCharts(visibleRows.map(r => r.ticker));
+    }, [visibleRows]);
 
     const handleSort = key => {
         if (sortKey === key) {
@@ -2462,7 +2494,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                     {searchTerm ? "No matching stocks" : "No stocks currently pass all 8 criteria"}
                 </div>
             ) : (
-                <>
+                <div ref={wrapRef} style={{ position: "relative" }}>
                     <PremiumTableShell T={T} minWidth={1110} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
                         <thead>
                             <tr>
@@ -2481,7 +2513,9 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {visibleRows.map((row, i) => (
+                            {visibleRows.map((row, i) => {
+                                const preview = hoverOnlyHandlers(row.ticker, row);
+                                return (
                                 <tr
                                     key={row.ticker}
                                     onClick={() => onTickerClick?.(row.ticker)}
@@ -2492,11 +2526,11 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                                         cursor: onTickerClick ? "pointer" : "default",
                                         transition: "background 0.12s ease",
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; preview.onMouseEnter(e); }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
                                 >
                                     <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
-                                    <td style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
+                                    <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
                                         <NameCell T={T} name={row.name} ticker={row.ticker} />
                                     </td>
                                     <td style={{
@@ -2535,11 +2569,13 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
                                         }}>{fmt(val)}</td>
                                     ))}
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </PremiumTableShell>
                     <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
-                </>
+                    {PreviewPopover}
+                </div>
             )}
         </SectionCard>
     );
@@ -2548,6 +2584,7 @@ function TrendTemplateCard({ T, userToken, onTickerClick, isCompact }) {
 // â”€â”€â”€ MOVERS TABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const MoversTable = React.memo(function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
+    const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
     const [sortKey, setSortKey] = useState(() => {
         if (type === "gainers" || type === "losers") return "change_pct";
         if (type === "near_high" || type === "near_low") return "dist_pct";
@@ -2599,6 +2636,12 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
         await onLoadMore();
         setVisibleCount(prev => prev + MOVERS_LOAD_MORE_ROWS);
     };
+
+    // Pre-warm chart cache for visible rows so hover popover is instant
+    useEffect(() => {
+        if (!visibleRows || visibleRows.length === 0) return;
+        prefetchWeeklyCharts(visibleRows.map(r => r.ticker));
+    }, [visibleRows]);
 
     if (loading) {
         return (
@@ -2685,7 +2728,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
     };
 
     return (
-        <>
+        <div ref={wrapRef} style={{ position: "relative" }}>
         <PremiumTableShell T={T} minWidth={showDist ? 1010 : 870} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
@@ -2704,6 +2747,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
                     const isPos = chg != null && chg > 0;
                     const isNeg = chg != null && chg < 0;
                     const chgColor = isPos ? (T.pos || "#0ea67a") : isNeg ? (T.neg || "#ef4444") : T.muted;
+                    const preview = rowPreviewHandlers(row.ticker, row);
 
                     return (
                         <tr
@@ -2713,14 +2757,16 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
                                     ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                     : "none",
                                 transition: "background 0.12s ease",
+                                cursor: "pointer",
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; preview.onMouseEnter(e); }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
+                            onClick={preview.onClick}
                         >
                             {/* Row index */}
                             <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                             {/* Name cell */}
-                            <td style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
+                            <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
                                 <NameCell T={T} name={row.name} ticker={row.ticker} />
                             </td>
                             {/* LTP */}
@@ -2787,7 +2833,8 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
             </tbody>
         </PremiumTableShell>
         <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
-        </>
+        {PreviewPopover}
+        </div>
     );
 });
 
@@ -2795,6 +2842,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
 // ─── VOLUME SHOCKERS TABLE ───────────────────────────────────────────────────
 const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
+    const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
     const [sortKey, setSortKey] = useState("volume_ratio");
     const [sortDir, setSortDir] = useState("desc");
 
@@ -2829,6 +2877,12 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
         await onLoadMore();
         setVisibleCount(prev => prev + MOVERS_LOAD_MORE_ROWS);
     };
+
+    // Pre-warm chart cache for visible rows so hover popover is instant
+    useEffect(() => {
+        if (!visibleRows || visibleRows.length === 0) return;
+        prefetchWeeklyCharts(visibleRows.map(r => r.ticker));
+    }, [visibleRows]);
 
     if (loading) {
         return (
@@ -2907,7 +2961,7 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
     };
 
     return (
-        <>
+        <div ref={wrapRef} style={{ position: "relative" }}>
         <PremiumTableShell T={T} minWidth={720} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
@@ -2925,6 +2979,7 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
                         : vr >= 10 ? (T.pos || "#10b981")
                             : vr >= 5 ? "#f59e0b"
                                 : T.text;
+                    const preview = rowPreviewHandlers(row.ticker, row);
 
                     return (
                         <tr
@@ -2934,12 +2989,14 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
                                     ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                     : "none",
                                 transition: "background 0.12s ease",
+                                cursor: "pointer",
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                            onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.9)"; preview.onMouseEnter(e); }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
+                            onClick={preview.onClick}
                         >
                             <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
-                            <td style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
+                            <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
                                 <NameCell T={T} name={row.name} ticker={row.ticker} />
                             </td>
                             <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
@@ -2953,7 +3010,8 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
             </tbody>
         </PremiumTableShell>
         <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} hasMore={hasMore} loading={loadingMore} onLoadMore={loadMoreRows} />
-        </>
+        {PreviewPopover}
+        </div>
     );
 });
 

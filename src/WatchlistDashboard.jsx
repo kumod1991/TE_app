@@ -425,19 +425,61 @@ function setPersistedRows(watchlistId, rows, total) {
     lsSet(getRowsCacheKey(watchlistId), { rows: clean, total, ts: Date.now() });
 }
 
+// Ticker-list cache — short TTL, lets the announcements feed skip the
+// watchlist_items round trip on repeat visits (SWR: serve stale instantly,
+// refresh in background). Watchlist membership rarely changes second-to-second,
+// so a 5-minute window is plenty fresh while eliminating the wait almost always.
+const LS_TICKERS_TTL = 5 * 60 * 1000;
+function getTickersCacheKey(watchlistId) { return `wl_tickers_v1_${watchlistId}`; }
+function getPersistedTickers(watchlistId) {
+    const c = lsGet(getTickersCacheKey(watchlistId));
+    if (!c || !c.tickers) return null;
+    return { ...c, isFresh: Date.now() - c.ts < LS_TICKERS_TTL };
+}
+function setPersistedTickers(watchlistId, tickers) {
+    lsSet(getTickersCacheKey(watchlistId), { tickers, ts: Date.now() });
+}
+
+// Batched, on-demand fetch of full announcement_text for just the rows
+// currently visible in the feed — keeps the bulk list query lightweight
+// (see fetchAnnouncements above / the feed effect below, which both omit
+// announcement_text from their select).
+async function fetchAnnouncementTexts(seqIds, token) {
+    if (!seqIds || !seqIds.length) return {};
+    try {
+        const idIn = `(${seqIds.join(",")})`;
+        const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/corporate_announcements?seq_id=in.${idIn}&select=seq_id,announcement_text`,
+            { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-199" } }
+        );
+        if (!r.ok) return {};
+        const data = await r.json();
+        const map = {};
+        for (const row of (data || [])) {
+            if (row?.seq_id != null) map[row.seq_id] = row.announcement_text || "";
+        }
+        return map;
+    } catch { return {}; }
+}
+
 function getPersistedFeed(userId, watchlistId) {
     // Strictly watchlist-scoped — never fall back to a cross-watchlist key.
     // The old wl_feed_v2_<userId> fallback was the root cause of showing
     // a different watchlist's announcements when the per-WL key was cold.
+    //
+    // v3 -> v4: bumped so any cache written before the announcement_text
+    // trim + 150-row cap (previously up to 1000 rows, with full text) gets
+    // silently invalidated on next load instead of being served stale for
+    // up to LS_FEED_TTL (24h) on devices that already had a v3 entry.
     if (!userId || !watchlistId) return null;
-    const c = lsGet(`wl_feed_v3_${userId}_${watchlistId}`);
+    const c = lsGet(`wl_feed_v4_${userId}_${watchlistId}`);
     if (!c || !c.data || Date.now() - c.ts > LS_FEED_TTL) return null;
     return c; // { data, ts }
 }
 function setPersistedFeed(userId, watchlistId, data) {
     // Only write to the watchlist-scoped key — never pollute a shared userId key.
     if (!userId || !watchlistId) return;
-    lsSet(`wl_feed_v3_${userId}_${watchlistId}`, { data, ts: Date.now() });
+    lsSet(`wl_feed_v4_${userId}_${watchlistId}`, { data, ts: Date.now() });
 }
 function getCacheKey(params) { return JSON.stringify(params); }
 function getCached(params) {
@@ -1574,30 +1616,30 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onExpand,
 });
 
 // ─── Desktop Table (grid-based, matches template layout) ──────
-const WL_GRID_COLS = "34px minmax(140px,1.6fr) 84px 78px minmax(90px,1fr) 84px 84px 84px minmax(90px,1fr) 26px";
+const WL_GRID_COLS = "36px minmax(150px,1.6fr) 90px 84px minmax(96px,1fr) 88px 88px 88px minmax(96px,1fr) 26px";
 
 const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
     const Head = ({ label, field, align = "left" }) => (
         <div
             onClick={field ? () => onSort(field) : undefined}
             style={{
-                display: "flex", alignItems: "center", gap: 3,
+                display: "flex", alignItems: "center", gap: 4,
                 justifyContent: align === "right" ? "flex-end" : "flex-start",
                 cursor: field ? "pointer" : "default", userSelect: "none",
-                fontSize: 11, fontWeight: 700, color: sortCol === field ? T.text : T.muted,
-                textTransform: "uppercase", letterSpacing: "0.08em",
+                fontSize: 12.5, fontWeight: 700, color: sortCol === field ? T.text : T.muted,
+                textTransform: "uppercase", letterSpacing: "0.07em",
                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                 transition: "color 0.12s ease",
             }}
         >
             {label}
-            {field && sortCol === field && <span style={{ fontSize: 9, opacity: 0.7, color: T.accent }}>{sortAsc ? "▲" : "▼"}</span>}
+            {field && sortCol === field && <span style={{ fontSize: 10, opacity: 0.7, color: T.accent }}>{sortAsc ? "▲" : "▼"}</span>}
         </div>
     );
     return (
         <div style={{
-            display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 10, alignItems: "center",
-            padding: "0 14px 9px", borderBottom: `1px solid ${T.border}`, marginBottom: 4,
+            display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 12, alignItems: "center",
+            padding: "0 16px 10px", borderBottom: `1px solid ${T.border}`, marginBottom: 5,
         }}>
             <Head label="#" />
             <Head label="Stock" />
@@ -1639,8 +1681,8 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
             onMouseEnter={() => setHov(true)}
             onMouseLeave={() => setHov(false)}
             style={{
-                display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 10, alignItems: "center",
-                padding: "11px 14px",
+                display: "grid", gridTemplateColumns: WL_GRID_COLS, gap: 12, alignItems: "center",
+                padding: "13px 16px",
                 borderRadius: 10,
                 cursor: "pointer",
                 background: isExpanded ? `${T.accent}10` : hov ? T.hover : (zebra ? (T.tableAlt ?? "transparent") : "transparent"),
@@ -1650,19 +1692,19 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
                 transition: "background 0.12s ease, border-color 0.12s ease",
             }}
         >
-            <div style={{ fontSize: 12.5, color: T.muted, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
+            <div style={{ fontSize: 13.5, color: T.muted, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
 
             <div style={{ minWidth: 0 }}>
                 <div style={{
-                    fontSize: 14, fontWeight: 650, color: T.text, fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: 15.5, fontWeight: 650, color: T.text, fontFamily: "'IBM Plex Mono', monospace",
                     letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
                     {row.ticker}
                 </div>
                 {companyName && (
                     <div style={{
-                        fontSize: 11.5, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1,
+                        fontSize: 12.5, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2,
                     }}>
                         {companyName}
                     </div>
@@ -1673,57 +1715,57 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
                 {rsVal != null ? (
                     isLeader ? (
                         <span style={{
-                            display: "inline-flex", alignItems: "baseline", gap: 1, fontSize: 13.5, fontWeight: 700,
+                            display: "inline-flex", alignItems: "baseline", gap: 1, fontSize: 15, fontWeight: 700,
                             color: T.greenText ?? T.green,
                             background: `${T.green}12`,
-                            borderRadius: 6, padding: "2.5px 8px",
+                            borderRadius: 6, padding: "3px 9px",
                             fontFamily: "'IBM Plex Mono', monospace",
                         }}>
                             {rsVal}
                         </span>
                     ) : (
                         <span style={{
-                            fontSize: 13.5, fontWeight: 600,
+                            fontSize: 15, fontWeight: 600,
                             color: rsVal >= 70 ? T.text : T.subtext,
                             fontFamily: "'IBM Plex Mono', monospace",
                         }}>
                             {rsVal}
                         </span>
                     )
-                ) : <span style={{ color: T.muted, fontSize: 13 }}>—</span>}
+                ) : <span style={{ color: T.muted, fontSize: 14 }}>—</span>}
             </div>
 
             <div>
                 {stageCfg ? (
                     <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500,
+                        display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500,
                         color: stageCfg.color, whiteSpace: "nowrap",
                         fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.01em",
                     }}>
                         <span style={{ width: 5, height: 5, borderRadius: "50%", background: stageCfg.dot, flexShrink: 0 }} />
                         {stageCfg.label}
                     </span>
-                ) : <span style={{ color: T.muted, fontSize: 13 }}>—</span>}
+                ) : <span style={{ color: T.muted, fontSize: 14 }}>—</span>}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 14, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 15.5, fontWeight: 500, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {p != null ? `₹${(+p).toLocaleString("en-IN")}` : "—"}
                 {isPending && (
                     <span style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: T.green, opacity: 0.6, marginLeft: 4, animation: "wlPricePulse 1.2s ease-in-out infinite" }} />
                 )}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: rc(row.ret_3m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 15, fontWeight: 500, color: rc(row.ret_3m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_3m != null ? `${Math.round(row.ret_3m) > 0 ? "+" : ""}${Math.round(row.ret_3m)}%` : "—"}
             </div>
-            <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: rc(row.ret_6m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 15, fontWeight: 500, color: rc(row.ret_6m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_6m != null ? `${Math.round(row.ret_6m) > 0 ? "+" : ""}${Math.round(row.ret_6m)}%` : "—"}
             </div>
-            <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: rc(row.ret_12m), fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 15, fontWeight: 500, color: rc(row.ret_12m), fontFamily: "'IBM Plex Mono', monospace" }}>
                 {row.ret_12m != null ? `${Math.round(row.ret_12m) > 0 ? "+" : ""}${Math.round(row.ret_12m)}%` : "—"}
             </div>
 
-            <div style={{ textAlign: "right", fontSize: 13, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div style={{ textAlign: "right", fontSize: 14, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {marketCap != null ? fmt.marketCap(marketCap) : "—"}
             </div>
 
@@ -1733,7 +1775,7 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
                 style={{
                     opacity: hov ? 0.5 : 0, transition: "opacity 0.15s",
                     background: "none", border: "none", cursor: "pointer",
-                    fontSize: 11, color: T.subtext, padding: 0,
+                    fontSize: 12, color: T.subtext, padding: 0,
                     display: "flex", alignItems: "center", justifyContent: "center",
                 }}
             >✕</button>
@@ -2365,10 +2407,18 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     ).then(r => r.ok ? r.json() : []);
                     const syms = (items || []).map(x => x.ticker);
                     if (!syms.length) return;
+                    // Populate the ticker cache too, so the main feed effect
+                    // (below) can skip this same watchlist_items round trip
+                    // entirely when the user actually opens this watchlist.
+                    setPersistedTickers(w.id, syms);
                     const symIn = `(${syms.map(s => `"${encodeURIComponent(s)}"`).join(",")})`;
+                    // (A) Capped at 150 rows — matches what the feed can realistically
+                    // page through, instead of pulling up to 1000 per watchlist.
+                    // (C) announcement_text dropped — fetched lazily per-visible-row
+                    // by AnnouncementsFeed via fetchAnnouncementTexts().
                     const data = await fetch(
-                        `${SUPABASE_URL}/rest/v1/corporate_announcements?symbol=in.${symIn}&select=symbol,company_name,announcement_datetime,category,announcement_text,attachment_url,seq_id,priority&order=announcement_datetime.desc`,
-                        { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-999" } }
+                        `${SUPABASE_URL}/rest/v1/corporate_announcements?symbol=in.${symIn}&select=symbol,company_name,announcement_datetime,category,attachment_url,seq_id,priority&order=announcement_datetime.desc`,
+                        { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-149" } }
                     ).then(r => r.ok ? r.json() : []);
                     setPersistedFeed(userId, w.id, data || []);
                 } catch { }
@@ -2452,28 +2502,42 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             if (!cancelled) setFeedLoading(false);
         }
 
-        // ── PHASE 2: Always fetch ALL tickers for this watchlist from watchlist_items.
+        // ── PHASE 2: Get ALL tickers for this watchlist from watchlist_items.
         // NEVER use `rows` here — rows is a paginated slice (e.g. 20 of 50 stocks).
         // Using rows would silently drop announcements for stocks on other pages.
-        const getSymbols = async () => {
+        //
+        // (B) SWR on the ticker list itself: on a warm cache (repeat visit to a
+        // watchlist within LS_TICKERS_TTL, or pre-warmed by the background
+        // effect above) this skips the watchlist_items round trip entirely —
+        // the announcements query fires immediately off the cached ticker list.
+        // Only a genuinely cold cache pays for the two sequential round trips.
+        const fetchSymbolsFresh = async () => {
             try {
                 const items = await fetch(
                     `${SUPABASE_URL}/rest/v1/watchlist_items?watchlist_id=eq.${activeWl}&select=ticker&order=added_at.asc`,
                     { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" } }
                 ).then(r => r.ok ? r.json() : []);
-                return (items || []).map(i => i.ticker);
+                const syms = (items || []).map(i => i.ticker);
+                if (syms.length) setPersistedTickers(activeWl, syms);
+                return syms;
             } catch { return []; }
         };
 
-        getSymbols().then(symbols => {
+        const runAnnouncementsFetch = symbols => {
             if (cancelled || !symbols.length) {
-                if (!cancelled) { setFeedAnnouncements([]); setFeedLoading(false); }
+                if (!cancelled && !symbols.length) { setFeedAnnouncements([]); setFeedLoading(false); }
                 return;
             }
             const symIn = `(${symbols.map(s => `"${encodeURIComponent(s)}"`).join(",")})`;
+            // (A) Capped at 150 rows instead of pulling the full history every
+            // load — the feed only ever renders FEED_PAGE_SIZE (8) at a time via
+            // client-side "Show more", so 150 is a generous working set.
+            // (C) announcement_text dropped from this bulk query — the feed
+            // lazily fetches full text only for the rows actually rendered
+            // (see AnnouncementsFeed / fetchAnnouncementTexts).
             fetch(
-                `${SUPABASE_URL}/rest/v1/corporate_announcements?symbol=in.${symIn}&select=symbol,company_name,announcement_datetime,category,announcement_text,attachment_url,seq_id,priority&order=announcement_datetime.desc`,
-                { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-999" } }
+                `${SUPABASE_URL}/rest/v1/corporate_announcements?symbol=in.${symIn}&select=symbol,company_name,announcement_datetime,category,attachment_url,seq_id,priority&order=announcement_datetime.desc`,
+                { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-149" } }
             ).then(r => r.ok ? r.json() : [])
                 .then(data => {
                     if (cancelled) return;
@@ -2482,7 +2546,22 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     if (userId) setPersistedFeed(userId, activeWl, list);
                     setFeedLoading(false);
                 }).catch(() => { if (!cancelled) setFeedLoading(false); });
-        });
+        };
+
+        const tickerCache = getPersistedTickers(activeWl);
+        if (tickerCache && tickerCache.tickers.length) {
+            // Warm ticker list — fire the announcements query immediately,
+            // no waiting on watchlist_items at all.
+            runAnnouncementsFetch(tickerCache.tickers);
+            // If the ticker cache itself is stale, refresh it quietly in the
+            // background so the NEXT visit (or a genuine add/remove) is caught,
+            // without blocking what's already on screen.
+            if (!tickerCache.isFresh) fetchSymbolsFresh();
+        } else {
+            // Cold ticker cache — only path that pays for both round trips
+            // sequentially.
+            fetchSymbolsFresh().then(runAnnouncementsFetch);
+        }
 
         return () => { cancelled = true; };
     }, [activeWl, token, userId]); // NOTE: intentionally NOT in rows dep — rows used opportunistically inside
@@ -3556,7 +3635,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     : T.card,
                                                 border: `1px solid ${card.hero ? `${T.green}45` : T.border}`,
                                                 borderRadius: 14,
-                                                padding: "15px 16px 14px",
+                                                padding: "17px 18px 16px",
                                                 minWidth: 0,
                                                 overflow: "hidden",
                                                 boxShadow: T.shadowMd ?? (dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"),
@@ -3570,24 +3649,24 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                     background: card.accent, opacity: card.hero ? 0.9 : 0.35,
                                                 }} />
                                                 <div style={{
-                                                    fontSize: 11, fontWeight: 700, color: T.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                                    textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8,
+                                                    fontSize: 12, fontWeight: 700, color: T.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                                    textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 9,
                                                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                                                     display: "flex", alignItems: "center", gap: 6,
                                                 }}>
                                                     {card.label}
                                                 </div>
                                                 <div style={{
-                                                    fontSize: card.hero ? 27 : 21, fontWeight: 700, color: card.tone, fontFamily: "'IBM Plex Mono', monospace",
+                                                    fontSize: card.hero ? 32 : 25, fontWeight: 700, color: card.tone, fontFamily: "'IBM Plex Mono', monospace",
                                                     letterSpacing: "-0.03em", lineHeight: 1.1,
                                                 }}>
                                                     {card.value}
                                                 </div>
                                                 {card.hint && (
                                                     <div style={{
-                                                        fontSize: 12, fontWeight: card.hero ? 600 : 400,
+                                                        fontSize: 13, fontWeight: card.hero ? 600 : 400,
                                                         color: card.hero ? T.green : T.subtext,
-                                                        marginTop: 6, lineHeight: 1.5, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
+                                                        marginTop: 7, lineHeight: 1.5, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
                                                     }}>
                                                         {card.hint}
                                                     </div>
@@ -3954,6 +4033,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 scrollRef={announcScrollRef}
                                                 onPanelEnter={() => { hoveredPanelRef.current = "announcements"; }}
                                                 isMobile={true}
+                                                token={token}
                                             />
                                         </div>
                                     </>
@@ -3966,6 +4046,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         onClose={() => setFeedOpen(false)}
                                         scrollRef={announcScrollRef}
                                         onPanelEnter={() => { hoveredPanelRef.current = "announcements"; }}
+                                        token={token}
                                     />
                                 )
                             )}
@@ -4074,9 +4155,16 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 // ═══════════════════════════════════════════════════════════════
 const FEED_PAGE_SIZE = 8; // announcements revealed per "Show more" click
 
-function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scrollRef, onPanelEnter, isMobile }) {
+function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scrollRef, onPanelEnter, isMobile, token }) {
     const [filter, setFilter] = useState("all");
     const [visibleCount, setVisibleCount] = useState(FEED_PAGE_SIZE);
+
+    // (C) announcement_text is no longer part of the bulk `announcements` fetch —
+    // it's loaded lazily here, in small batches, for only the rows currently
+    // rendered (grouped.entries below), instead of shipping full text for up
+    // to 150 rows when the user will only ever look at a handful.
+    const [textMap, setTextMap] = useState({});
+    const fetchedSeqIdsRef = useRef(new Set());
 
     // Reset pagination whenever the filter or announcement list changes
     useEffect(() => { setVisibleCount(FEED_PAGE_SIZE); }, [filter, announcements]);
@@ -4116,6 +4204,25 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
         const entries = Object.entries(groups).sort((a, b) => order(a[0]) - order(b[0]));
         return { entries, hasMore, remaining };
     }, [announcements, filter, visibleCount]);
+
+    // Lazily fetch full announcement_text for whatever is actually visible
+    // right now — fires whenever the visible set grows (filter change, or
+    // "Show more"). Already-fetched seq_ids are tracked in a ref so switching
+    // filters back and forth never re-fetches text we already have.
+    useEffect(() => {
+        const visibleSeqIds = grouped.entries
+            .flatMap(([, items]) => items)
+            .map(a => a.seq_id)
+            .filter(id => id != null && !fetchedSeqIdsRef.current.has(id));
+        if (!visibleSeqIds.length) return;
+        visibleSeqIds.forEach(id => fetchedSeqIdsRef.current.add(id));
+        let cancelled = false;
+        fetchAnnouncementTexts(visibleSeqIds, token).then(map => {
+            if (cancelled || !Object.keys(map).length) return;
+            setTextMap(prev => ({ ...prev, ...map }));
+        });
+        return () => { cancelled = true; };
+    }, [grouped.entries, token]);
 
     const FILTERS = [
         { key: "all", label: "All" },
@@ -4297,9 +4404,13 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                                                     </span>
                                                 </div>
 
-                                                {/* Text */}
+                                                {/* Text — lazily loaded per visible row, see textMap effect above */}
                                                 <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                                                    {truncate(ann.announcement_text)}
+                                                    {textMap[ann.seq_id] !== undefined ? (
+                                                        truncate(textMap[ann.seq_id])
+                                                    ) : (
+                                                        <span style={{ display: "inline-block", width: "80%", height: 11, borderRadius: 2, background: T.border, opacity: 0.3 }} />
+                                                    )}
                                                 </div>
                                             </div>
                                         );
