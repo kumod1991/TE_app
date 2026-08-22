@@ -3462,7 +3462,13 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         if (isLoadMore) {
             if (cfg.loadingMore || !cfg.hasMore) return;
             cfg.setLoadingMore(true);
-        } else {
+        } else if (!cfg.loadedRef.current) {
+            // Only show the skeleton on a genuine first load for this tab (no
+            // cached data yet). On every later call — including the mount-time
+            // revalidation that runs even when cache seeding already painted
+            // rows — skip flipping loading back to true, so the table doesn't
+            // flash skeleton->data on every navigation to the page. Data still
+            // updates seamlessly via cfg.setData() below/in applyFreshPage.
             cfg.setLoading(true);
         }
         try {

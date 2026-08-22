@@ -1554,6 +1554,7 @@ export default function OwnershipScansModule({ T }) {
       const key = METRICS[id].key;
       let rising = 0, falling = 0;
       for (const s of processed) {
+        if ((s.publicTrend ?? 0) > 5) continue; // exclude stocks where public shareholding rose >5%
         const v = s[key] ?? 0;
         if (v > 0) rising++; else if (v < 0) falling++;
       }
@@ -1566,7 +1567,7 @@ export default function OwnershipScansModule({ T }) {
 
   const tableRows = useMemo(() => {
     if (!activeMetric) return [];
-    let list = processed;
+    let list = processed.filter(x => (x.publicTrend ?? 0) <= 5); // exclude public shareholding up >5%
     const q = deferredSearchQ.trim().toLowerCase();
     if (q) list = list.filter(x => x.ticker.toLowerCase().includes(q) || (x.name || "").toLowerCase().includes(q));
     return [...list].sort((a, b) => {

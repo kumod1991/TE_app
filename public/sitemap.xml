@@ -4,7 +4,6 @@
   <url><loc>https://tradeedge.in/dashboard</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
   <url><loc>https://tradeedge.in/watchlist</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://tradeedge.in/about</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://tradeedge.in/faq</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://tradeedge.in/learn</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://tradeedge.in/learn/stock-screening-guide</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://tradeedge.in/learn/market-breadth-guide</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
