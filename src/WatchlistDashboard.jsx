@@ -407,8 +407,47 @@ function lsSet(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch { }
 }
 
-function getRowsCacheKey(watchlistId) { return `wl_rows_v2_${watchlistId}`; }
+function getRowsCacheKey(watchlistId) { return `wl_rows_v3_${watchlistId}`; }
 function getFeedCacheKey(userId) { return `wl_feed_v2_${userId}`; }
+
+function clearWatchlistCaches(watchlistId) {
+    if (!watchlistId) return;
+    for (const [key] of watchlistCache) {
+        try {
+            const parsed = JSON.parse(key);
+            if (parsed?.watchlistId === watchlistId) watchlistCache.delete(key);
+        } catch {
+            watchlistCache.delete(key);
+        }
+    }
+    invalidateWatchlistAnalyticsCache(watchlistId);
+    try { localStorage.removeItem(getRowsCacheKey(watchlistId)); } catch { }
+}
+
+function getStarCacheKey(watchlistId) { return `wl_starred_v1_${watchlistId}`; }
+function getPersistedStarSet(watchlistId) {
+    if (!watchlistId) return new Set();
+    try {
+        const raw = localStorage.getItem(getStarCacheKey(watchlistId));
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr.map(t => String(t).toUpperCase()) : []);
+    } catch {
+        return new Set();
+    }
+}
+function setPersistedStarSet(watchlistId, set) {
+    if (!watchlistId) return;
+    try { localStorage.setItem(getStarCacheKey(watchlistId), JSON.stringify(Array.from(set || []))); } catch { }
+}
+function updatePersistedStarSet(watchlistId, ticker, starred) {
+    const next = getPersistedStarSet(watchlistId);
+    const t = (ticker || "").toUpperCase();
+    if (!t) return next;
+    if (starred) next.add(t);
+    else next.delete(t);
+    setPersistedStarSet(watchlistId, next);
+    return next;
+}
 
 function getPersistedRows(watchlistId) {
     const c = lsGet(getRowsCacheKey(watchlistId));
@@ -557,12 +596,30 @@ async function fetchWatchlistAnalytics(watchlistId, token) {
     const cached = wlAnalyticsCache.get(watchlistId);
     if (cached && Date.now() - cached.ts < WL_ANALYTICS_TTL) return cached.rows;
 
-    const itemsRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/watchlist_items?watchlist_id=eq.${watchlistId}&select=ticker&order=added_at.asc`,
-        { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" } }
-    );
-    const items = itemsRes.ok ? await itemsRes.json() : [];
+    const itemHeaders = { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" };
+    const fetchItems = async (selectCols) => {
+        const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/watchlist_items?watchlist_id=eq.${watchlistId}&select=${selectCols}&order=added_at.asc`,
+            { headers: itemHeaders }
+        );
+        return res.ok ? res.json() : null;
+    };
+    let items = await fetchItems("ticker,is_starred");
+    let hasStarColumn = Array.isArray(items);
+    if (!hasStarColumn) {
+        items = await fetchItems("ticker");
+        // is_starred select failed (e.g. PostgREST schema cache stale after a
+        // migration, or a transient network/RLS issue) — do NOT report is_starred
+        // as known-false here, or it will permanently override the localStorage
+        // fallback below via `??`, which is what causes stars to silently revert.
+        console.warn("[Watchlist] is_starred column unavailable; falling back to localStorage star cache");
+    }
+    if (!Array.isArray(items)) items = [];
     const tickers = (items || []).map(i => i.ticker);
+    const itemMeta = new Map(
+        (items || []).map(i => [i.ticker, { is_starred: hasStarColumn ? !!i.is_starred : undefined }])
+    );
+    const localStars = getPersistedStarSet(watchlistId);
 
     if (!tickers.length) {
         wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows: [] });
@@ -580,7 +637,11 @@ async function fetchWatchlistAnalytics(watchlistId, token) {
     // for them yet (e.g. newly listed / not yet backfilled) — matches old RPC's
     // LEFT JOIN behavior so stocks don't silently vanish from the watchlist.
     const byTicker = new Map((data || []).map(r => [r.ticker, r]));
-    const rows = tickers.map(t => byTicker.get(t) || { ticker: t });
+    const rows = tickers.map(t => {
+        const base = byTicker.get(t) || { ticker: t };
+        const serverStar = itemMeta.get(t)?.is_starred;
+        return { ...base, is_starred: serverStar ?? localStars.has((t || "").toUpperCase()) };
+    });
 
     wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows });
     return rows;
@@ -612,6 +673,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
         sma50: numOrNull(r.sma50),
         sma150: numOrNull(r.sma150),
         sma200: numOrNull(r.sma200),
+        is_starred: !!r.is_starred,
     }));
 
     // ── Filters (mirrors get_watchlist_rows semantics) ──────────────
@@ -625,6 +687,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
     if (f.sma50_gt_sma150) rows = rows.filter(r => r.sma50 != null && r.sma150 != null && r.sma50 > r.sma150);
     if (f.sma50_gt_sma200) rows = rows.filter(r => r.sma50 != null && r.sma200 != null && r.sma50 > r.sma200);
     if (f.sma150_gt_sma200) rows = rows.filter(r => r.sma150 != null && r.sma200 != null && r.sma150 > r.sma200);
+    if (f.starredOnly) rows = rows.filter(r => r.is_starred);
     // f.quick: not currently wired to any button (setQuickFilter is never called
     // anywhere in this file), so there's no defined semantics to port — left as a no-op.
 
@@ -1387,7 +1450,7 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
 // ONLY KEY UPDATED PARTS (StockRow + improvements)
 // Drop-in replacement for StockRow component
 
-const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onExpand, isExpanded, isKeySelected, T, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
+const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onToggleStar, onExpand, isExpanded, isKeySelected, T, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
     const [hov, setHov] = useState(false);
 
     // Resolve the best available price: Yahoo live (green) > bhav_copy > row.close
@@ -1396,19 +1459,26 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onExpand,
     const isLivePrice = _bp?.source === "yahoo";
     const isPending = isMarketLiveFn?.() && isPricePendingFn?.(row.ticker) && (price?.price ?? row.close) != null;
     const rsVal = row.rs_rating != null ? Math.round(+row.rs_rating) : null;
+    const isStarred = !!row.is_starred;
 
     const isLeader = rsVal >= 90;
     const isStage2 = row.trend === "stage2";
+    const starTone = T.gold ?? "#f59e0b";
+    const isDark = T.surface !== "#ffffff" && T.surface !== "#f8fafc";
 
     const bg = isExpanded
         ? `${T.green}12`
         : isKeySelected || hov
             ? T.hover
-            : "transparent";
+            : isStarred
+                ? (isDark ? `${starTone}10` : `${starTone}08`)
+                : "transparent";
 
-    const borderLeft = isLeader
-        ? `3px solid ${T.green}`
-        : "3px solid transparent";
+    const borderLeft = isStarred
+        ? `3px solid ${starTone}`
+        : isLeader
+            ? `3px solid ${T.green}`
+            : "3px solid transparent";
 
     const rc = v => v == null ? T.subtext : +v >= 0 ? T.pos : T.neg;
 
@@ -1427,14 +1497,10 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onExpand,
             style={{
                 background: isExpanded
                     ? (T.green ? `${T.green}14` : T.hover)
-                    : hov || isKeySelected
-                        ? (T.hover || "transparent")
-                        : (T.card || "transparent"),
+                    : bg,
                 border: `1px solid ${isExpanded ? `${T.green}40` : hov || isKeySelected ? T.border : `${T.border}80`}`,
                 borderBottom: `1px solid ${isExpanded ? `${T.green}40` : `${T.border}80`}`,
-                borderLeft: isLeader
-                    ? `4px solid ${T.green}`
-                    : "4px solid transparent",
+                borderLeft,
                 padding: isMobile ? "12px 14px 12px 10px" : "10px 16px 10px 14px",
                 boxShadow: isLeader
                     ? `inset 3px 0 0 ${T.green}, 0 10px 24px ${T.shadow || "rgba(15,23,42,0.08)"}`
@@ -1480,6 +1546,34 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onExpand,
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                        onClick={e => { e.stopPropagation(); onToggleStar?.(row.ticker, !isStarred); }}
+                        title={isStarred ? "Unstar this stock" : "Star this stock"}
+                        aria-label={isStarred ? "Unstar this stock" : "Star this stock"}
+                        style={{
+                            width: isMobile ? 26 : 28, height: isMobile ? 26 : 28,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            borderRadius: 8,
+                            border: `1px solid ${isStarred ? `${starTone}44` : T.border}`,
+                            background: isStarred ? `${starTone}14` : "transparent",
+                            color: isStarred ? starTone : T.subtext,
+                            cursor: "pointer",
+                            transition: "all 0.14s ease",
+                            boxShadow: isStarred ? `0 0 0 1px ${starTone}12 inset` : "none",
+                            flexShrink: 0,
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.background = isStarred ? `${starTone}1f` : T.hover;
+                            e.currentTarget.style.color = isStarred ? starTone : T.text;
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.background = isStarred ? `${starTone}14` : "transparent";
+                            e.currentTarget.style.color = isStarred ? starTone : T.subtext;
+                        }}
+                    >
+                        {isStarred ? "★" : "☆"}
+                    </button>
+
                     {rsVal != null && (
                         <span style={{
                             fontSize: isMobile ? 11 : 12,
@@ -1616,7 +1710,7 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onExpand,
 });
 
 // ─── Desktop Table (grid-based, matches template layout) ──────
-const WL_GRID_COLS = "36px minmax(150px,1.6fr) 90px 84px minmax(96px,1fr) 88px 88px 88px minmax(96px,1fr) 26px";
+const WL_GRID_COLS = "36px 36px minmax(150px,1.6fr) 90px 84px minmax(96px,1fr) 88px 88px 88px minmax(96px,1fr) 26px";
 
 const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
     const Head = ({ label, field, align = "left" }) => (
@@ -1624,7 +1718,7 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
             onClick={field ? () => onSort(field) : undefined}
             style={{
                 display: "flex", alignItems: "center", gap: 4,
-                justifyContent: align === "right" ? "flex-end" : "flex-start",
+                justifyContent: align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start",
                 cursor: field ? "pointer" : "default", userSelect: "none",
                 fontSize: 12.5, fontWeight: 700, color: sortCol === field ? T.text : T.muted,
                 textTransform: "uppercase", letterSpacing: "0.07em",
@@ -1642,6 +1736,7 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
             padding: "0 16px 10px", borderBottom: `1px solid ${T.border}`, marginBottom: 5,
         }}>
             <Head label="#" />
+            <Head label="★" align="center" />
             <Head label="Stock" />
             <Head label="RS" field="rs_rating" />
             <Head label="Stage" />
@@ -1655,7 +1750,7 @@ const WlTableHeader = memo(({ T, sortCol, sortAsc, onSort }) => {
     );
 });
 
-const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, onExpand, isExpanded, T, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
+const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, onToggleStar, onExpand, isExpanded, T, bestPriceFn, isPricePendingFn, isMarketLiveFn }) => {
     const [hov, setHov] = useState(false);
     const _bp = bestPriceFn ? bestPriceFn(row.ticker, price?.price ?? row.close) : null;
     const p = _bp?.price ?? price?.price ?? row.close;
@@ -1673,6 +1768,8 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
     };
     const stageCfg = STAGE_CFG[row.trend] || null;
     const isLeader = rsVal != null && rsVal >= 90;
+    const isStarred = !!row.is_starred;
+    const starTone = T.gold ?? "#f59e0b";
 
     return (
         <div
@@ -1685,14 +1782,39 @@ const WlTableRow = memo(({ row, rank, price, marketCap, companyName, onRemove, o
                 padding: "13px 16px",
                 borderRadius: 10,
                 cursor: "pointer",
-                background: isExpanded ? `${T.accent}10` : hov ? T.hover : (zebra ? (T.tableAlt ?? "transparent") : "transparent"),
+                background: isExpanded ? `${T.accent}10` : hov ? T.hover : (isStarred ? `${starTone}08` : (zebra ? (T.tableAlt ?? "transparent") : "transparent")),
                 border: `1px solid ${isExpanded ? `${T.accent}35` : "transparent"}`,
-                borderLeft: `2px solid ${isExpanded ? T.accent : isLeader ? `${T.gold ?? T.green}80` : "transparent"}`,
+                borderLeft: `2px solid ${isExpanded ? T.accent : isStarred ? `${starTone}88` : isLeader ? `${T.gold ?? T.green}80` : "transparent"}`,
                 marginBottom: 1,
                 transition: "background 0.12s ease, border-color 0.12s ease",
             }}
         >
             <div style={{ fontSize: 13.5, color: T.muted, fontFamily: "'IBM Plex Mono', monospace" }}>{rank}</div>
+
+            <div style={{ display: "flex", justifyContent: "center" }}>
+                <button
+                    onClick={e => { e.stopPropagation(); onToggleStar?.(row.ticker, !isStarred); }}
+                    title={isStarred ? "Unstar this stock" : "Star this stock"}
+                    aria-label={isStarred ? "Unstar this stock" : "Star this stock"}
+                    style={{
+                        width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                        borderRadius: 8, border: `1px solid ${isStarred ? `${starTone}44` : T.border}`,
+                        background: isStarred ? `${starTone}14` : "transparent",
+                        color: isStarred ? starTone : T.subtext, cursor: "pointer",
+                        transition: "all 0.14s ease", flexShrink: 0,
+                    }}
+                    onMouseEnter={e => {
+                        e.currentTarget.style.background = isStarred ? `${starTone}1f` : T.hover;
+                        e.currentTarget.style.color = isStarred ? starTone : T.text;
+                    }}
+                    onMouseLeave={e => {
+                        e.currentTarget.style.background = isStarred ? `${starTone}14` : "transparent";
+                        e.currentTarget.style.color = isStarred ? starTone : T.subtext;
+                    }}
+                >
+                    {isStarred ? "★" : "☆"}
+                </button>
+            </div>
 
             <div style={{ minWidth: 0 }}>
                 <div style={{
@@ -1995,6 +2117,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const [filterDraft, setFilterDraft] = useState({});
     const [filtersApplied, setFiltersApplied] = useState({});
     const [filterOpen, setFilterOpen] = useState(false);
+    const [showStarredOnly, setShowStarredOnly] = useState(false);
     const [addStocksOpen, setAddStocksOpen] = useState(false);
     const [quickFilter, setQuickFilter] = useState(null);
     const [expandedTicker, setExpandedTicker] = useState(null);
@@ -2272,7 +2395,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 
         const params = {
             watchlistId: activeWl, token, page, pageSize: PAGE_SIZE, sortCol, sortAsc,
-            filters: quickFilter ? { ...filtersApplied, quick: quickFilter } : filtersApplied
+            filters: quickFilter ? { ...filtersApplied, quick: quickFilter, starredOnly: showStarredOnly } : { ...filtersApplied, starredOnly: showStarredOnly }
         };
 
         // 1. Serve from in-memory cache (fastest)
@@ -2310,20 +2433,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                 if (page === 0) setPersistedRows(activeWl, rows, total);
             }).catch(console.error).finally(() => { if (!cancelled) setTableLoading(false); });
         return () => { cancelled = true; };
-    }, [activeWl, page, sortCol, sortAsc, filtersApplied, quickFilter, token, refreshKey]);
+    }, [activeWl, page, sortCol, sortAsc, filtersApplied, quickFilter, showStarredOnly, token, refreshKey]);
 
     // Prefetch next page
     useEffect(() => {
         if (!activeWl) return;
         const nextParams = {
             watchlistId: activeWl, token, page: page + 1, pageSize: PAGE_SIZE, sortCol, sortAsc,
-            filters: quickFilter ? { ...filtersApplied, quick: quickFilter } : filtersApplied
+            filters: quickFilter ? { ...filtersApplied, quick: quickFilter, starredOnly: showStarredOnly } : { ...filtersApplied, starredOnly: showStarredOnly }
         };
         if (getCached(nextParams)) return;
         dedupedFetch(nextParams, () => loadWatchlistRows(nextParams)).then(res => setCache(nextParams, res)).catch(() => { });
-    }, [page, activeWl, sortCol, sortAsc, filtersApplied, quickFilter]);
+    }, [page, activeWl, sortCol, sortAsc, filtersApplied, quickFilter, showStarredOnly]);
 
-    useEffect(() => { setPage(0); }, [activeWl, filtersApplied, quickFilter]);
+    useEffect(() => { setPage(0); setKeySelectedIdx(-1); }, [activeWl, filtersApplied, quickFilter, showStarredOnly]);
 
     useEffect(() => {
         if (!rows.length) return;
@@ -2630,23 +2753,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             if (targetWl !== activeWl) return prev;
             // Prevent duplicate phantom rows
             if (prev.some(r => r.ticker === ticker)) return prev;
-            return [{ ticker, name: pickedName || null, loading: true, ret_3m: null, ret_6m: null, ret_12m: null, _optimistic: true }, ...prev];
+            return [{ ticker, name: pickedName || null, loading: true, ret_3m: null, ret_6m: null, ret_12m: null, is_starred: false, _optimistic: true }, ...prev];
         });
 
         try {
             await POST("watchlist_items", { watchlist_id: targetWl, ticker }, token);
-
-            // Bust ONLY the target watchlist's caches — never clear other watchlists.
-            // Clearing all caches was the root cause of phantom rows appearing elsewhere.
-            for (const [key] of watchlistCache) {
-                try {
-                    const parsed = JSON.parse(key);
-                    if (parsed?.watchlistId === targetWl) watchlistCache.delete(key);
-                } catch { watchlistCache.delete(key); } // malformed key — safe to evict
-            }
-            invalidateWatchlistAnalyticsCache(targetWl);
-            try { localStorage.removeItem(getRowsCacheKey(targetWl)); } catch { }
-
+            clearWatchlistCaches(targetWl);
             setAddTicker("");
             setAddCompanyName("");
             setTimeout(() => { setRefreshKey(k => k + 1); }, 50);
@@ -2664,18 +2776,36 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         setRows(prev => prev.filter(r => r.ticker !== ticker));
         try {
             await DELETE(`watchlist_items?watchlist_id=eq.${activeWl}&ticker=eq.${ticker}`, token);
-            // Bust caches for this watchlist so the removed ticker doesn't reappear
-            // from stale localStorage on the next load.
-            for (const [key] of watchlistCache) {
-                try { const p = JSON.parse(key); if (p?.watchlistId === activeWl) watchlistCache.delete(key); }
-                catch { watchlistCache.delete(key); }
-            }
-            invalidateWatchlistAnalyticsCache(activeWl);
-            try { localStorage.removeItem(getRowsCacheKey(activeWl)); } catch { }
+            clearWatchlistCaches(activeWl);
             setTimeout(() => { setRefreshKey(k => k + 1); }, 50);
         }
         catch { setRefreshKey(k => k + 1); }
     }, [activeWl, token]);
+
+    const toggleStarStock = useCallback(async (ticker, nextStar) => {
+        if (!activeWl) return;
+        const targetWl = activeWl;
+        updatePersistedStarSet(targetWl, ticker, nextStar);
+        setRows(prev => prev.map(r => r.ticker === ticker ? { ...r, is_starred: nextStar } : r));
+        if (showStarredOnly) {
+            setTotalCount(c => Math.max(0, c + (nextStar ? 1 : -1)));
+        }
+        try {
+            await PATCH(`watchlist_items?watchlist_id=eq.${targetWl}&ticker=eq.${ticker}`, { is_starred: nextStar }, token);
+            // Clear caches so the NEXT natural load (page reload, switching
+            // watchlists and back, cache TTL expiry) picks up the true server
+            // state — but don't force an immediate re-fetch here. The optimistic
+            // update above + updatePersistedStarSet (localStorage) already fully
+            // represent the new state, and racing a network round-trip against
+            // it is what was causing the star to instantly revert.
+            clearWatchlistCaches(targetWl);
+        } catch {
+            // Keep the local star state even if the backend update is unavailable.
+            // The next successful load will reconcile it from Supabase when the
+            // `is_starred` column exists and is writable.
+            console.warn("[Watchlist] star sync failed; keeping local state only");
+        }
+    }, [activeWl, showStarredOnly, token]);
 
     const toggleSort = useCallback(col => {
         const colToField = { from_high: "pct_from_high", from_low: "pct_from_low" };
@@ -2695,7 +2825,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 
     // ── Derived ──────────────────────────────────────────────────
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    const activeFiltersCount = Object.values(filtersApplied).filter(v => v != null).length;
+    const activeFiltersCount = Object.values(filtersApplied).filter(v => v != null).length + (showStarredOnly ? 1 : 0);
     const activeWlName = watchlists.find(w => w.id === activeWl)?.name || "";
     const atWatchlistLimit = watchlists.length >= MAX_WATCHLISTS;
     const expandedRow = rows.find(r => r.ticker === expandedTicker) || null;
@@ -2707,9 +2837,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
     }, [rows, marketCaps]);
 
-    const displayRows = useMemo(() => eventFilter === "high"
-        ? rows.filter(r => (eventsMap[r.ticker]?.priority ?? 0) >= 4)
-        : rows, [rows, eventFilter, eventsMap]);
+    const displayRows = useMemo(() => {
+        const base = eventFilter === "high"
+            ? rows.filter(r => (eventsMap[r.ticker]?.priority ?? 0) >= 4)
+            : rows;
+        return showStarredOnly ? base.filter(r => r.is_starred) : base;
+    }, [rows, eventFilter, eventsMap, showStarredOnly]);
 
     const QUICK_FILTERS = [
         { key: "stage2", label: "Stage 2" },
@@ -2741,6 +2874,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         activeBorder: T.chromeActiveBorder ?? `${T.green}60`,
         activeText: T.chromeActiveText ?? T.text,
     };
+    const starTone = T.gold ?? "#f59e0b";
 
     return (
         <>
@@ -3449,6 +3583,33 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     />
                                 </div>
 
+                                {/* Starred only */}
+                                <button
+                                    onClick={() => setShowStarredOnly(v => !v)}
+                                    title="Show starred stocks only"
+                                    style={{
+                                        padding: isMobile ? "6px 11px" : "6px 13px",
+                                        background: showStarredOnly ? `${starTone}12` : "transparent",
+                                        border: `1px solid ${showStarredOnly ? `${starTone}55` : T.border}`,
+                                        borderRadius: 7,
+                                        color: showStarredOnly ? starTone : T.text,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                        cursor: "pointer",
+                                        transition: "background 0.14s ease, border-color 0.14s ease, color 0.14s ease",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                        flexShrink: 0,
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = showStarredOnly ? `${starTone}1a` : T.hover; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = showStarredOnly ? `${starTone}12` : "transparent"; }}
+                                >
+                                    <span style={{ fontSize: 13, lineHeight: 1 }}>{showStarredOnly ? "★" : "☆"}</span>
+                                    {isMobile ? (showStarredOnly ? "Starred" : "Star") : "Starred"}
+                                </button>
+
                                 {/* Refresh */}
                                 <button onClick={refreshPrices}
                                     disabled={priceLoading || !rows.length}
@@ -3713,6 +3874,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             sparkData={sparklines[row.ticker]}
                                             companyName={companyNames[row.ticker]}
                                             onRemove={removeStock}
+                                            onToggleStar={toggleStarStock}
                                             onExpand={ticker => { setExpandedTicker(t => t === ticker ? null : ticker); setKeySelectedIdx(i); }}
                                             isExpanded={expandedTicker === row.ticker}
                                             isKeySelected={keySelectedIdx === i}
@@ -3735,6 +3897,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             marketCap={marketCaps[row.ticker]}
                                             companyName={companyNames[row.ticker]}
                                             onRemove={removeStock}
+                                            onToggleStar={toggleStarStock}
                                             onExpand={ticker => { setExpandedTicker(t => t === ticker ? null : ticker); setKeySelectedIdx(i); }}
                                             isExpanded={expandedTicker === row.ticker}
                                             T={T}
