@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -439,6 +439,10 @@ export function MansfieldRSChart({ series, T, width = 258, height = 54 }) {
     if (!series || series.length < 2) return null;
     const isDark = _resolveIsDark(T);
 
+    // Stable per-instance id so multiple charts on the page never share
+    // (or clobber) the same <linearGradient> definition.
+    const gradId = useMemo(() => `mrs-grad-${Math.random().toString(36).slice(2)}`, []);
+
     const pad = { l: 4, r: 34, t: 6, b: 12 };
     const W = width - pad.l - pad.r;
     const H = height - pad.t - pad.b;
@@ -459,11 +463,16 @@ export function MansfieldRSChart({ series, T, width = 258, height = 54 }) {
     const posClr = isDark ? "#4ade80" : "#16a34a";
     const negClr = isDark ? "#fb7185" : "#e11d48";
     const lastVal = vals[vals.length - 1];
-    const lineClr = lastVal >= 0 ? posClr : negClr;
+    const dotClr = lastVal >= 0 ? posClr : negClr;
     const zeroY = y(0);
+    // Fraction of the drawing area (0=top/highest value, 1=bottom/lowest
+    // value) where the zero line sits — used as a hard stop in the
+    // gradient below so color reflects the RS value at each point along
+    // the line, not just the latest reading.
+    const zeroFrac = Math.min(1, Math.max(0, zeroY / height));
 
     const points = series.map((s, i) => `${x(i)},${y(s.v)}`).join(" ");
-    // Filled area under the line down to the zero line, same color at low opacity
+    // Filled area under the line down to the zero line
     const areaPoints = `${x(0)},${zeroY} ${points} ${x(n - 1)},${zeroY}`;
 
     const mono = "'IBM Plex Mono',monospace";
@@ -471,17 +480,28 @@ export function MansfieldRSChart({ series, T, width = 258, height = 54 }) {
 
     return (
         <svg width={width} height={height} style={{ display: "block", overflow: "visible" }}>
+            <defs>
+                {/* Vertical split at the zero line: everything above it (positive
+                    RS) renders green, everything below (negative RS) renders red —
+                    regardless of what the most recent value happens to be. */}
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
+                    <stop offset={0} stopColor={posClr} />
+                    <stop offset={zeroFrac} stopColor={posClr} />
+                    <stop offset={zeroFrac} stopColor={negClr} />
+                    <stop offset={1} stopColor={negClr} />
+                </linearGradient>
+            </defs>
             {/* Zero reference line */}
             <line x1={pad.l} x2={pad.l + W} y1={zeroY} y2={zeroY}
                 stroke={T.border} strokeWidth="0.7" strokeDasharray="3,3" opacity="0.6" />
             {/* Filled area */}
-            <polygon points={areaPoints} fill={lineClr} opacity={isDark ? 0.12 : 0.09} />
+            <polygon points={areaPoints} fill={`url(#${gradId})`} opacity={isDark ? 0.14 : 0.1} />
             {/* Trend line */}
-            <polyline points={points} fill="none" stroke={lineClr}
-                strokeWidth="1.3" opacity="0.9"
+            <polyline points={points} fill="none" stroke={`url(#${gradId})`}
+                strokeWidth="1.3" opacity="0.95"
                 strokeLinejoin="round" strokeLinecap="round" />
             {/* Last-value marker */}
-            <circle cx={x(n - 1)} cy={y(lastVal)} r="2" fill={lineClr} />
+            <circle cx={x(n - 1)} cy={y(lastVal)} r="2" fill={dotClr} />
             {/* Axis labels: max / 0 / min */}
             <text x={pad.l + W + 3} y={y(safeMax) + 3}
                 fontSize="7.5" fill={T.muted} fontFamily={mono} opacity="0.75">
@@ -499,7 +519,7 @@ export function MansfieldRSChart({ series, T, width = 258, height = 54 }) {
             <text x={pad.l + 3} y={pad.t + H + 10}
                 fontSize="7" fill={T.muted} fontFamily={mono}
                 textAnchor="start" opacity="0.55">
-                RS Line
+                MANSFIELD RS
             </text>
         </svg>
     );
