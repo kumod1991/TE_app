@@ -10843,6 +10843,7 @@ let _screensVolBreakCache = { rows: null, loadedAt: null };
 let _screensPullbackCache = { rows: null, loadedAt: null };
 let _screensMinerviniCache = { rows: null, loadedAt: null };
 let _screensWeinsteinCache = { rows: null, loadedAt: null };
+let _screensStockAnalyticsCache = { rows: null, loadedAt: null };
 
 const _LS_SCR_BREAKOUT = "te_scr_breakout_v1";
 const _LS_SCR_PIVOT = "te_scr_pivot_v1";
@@ -10850,6 +10851,7 @@ const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
 const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
 const _LS_SCR_MINERVINI = "te_scr_minervini_v1";
 const _LS_SCR_WEINSTEIN = "te_scr_weinstein_v1";
+const _LS_SCR_STOCKANALYTICS = "te_scr_stockanalytics_v1";
 
 // In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
 let _prefetchBreakoutPromise = null;
@@ -10858,6 +10860,7 @@ let _prefetchVolBreakPromise = null;
 let _prefetchPullbackPromise = null;
 let _prefetchMinerviniPromise = null;
 let _prefetchWeinsteinPromise = null;
+let _prefetchStockAnalyticsPromise = null;
 
 // Seed all screens caches from localStorage on module load (SWR: serve stale on first paint)
 (function _seedScreensCaches() {
@@ -10868,6 +10871,7 @@ let _prefetchWeinsteinPromise = null;
         [_LS_SCR_PULLBACK, v => { _screensPullbackCache = v; }],
         [_LS_SCR_MINERVINI, v => { _screensMinerviniCache = v; }],
         [_LS_SCR_WEINSTEIN, v => { _screensWeinsteinCache = v; }],
+        [_LS_SCR_STOCKANALYTICS, v => { _screensStockAnalyticsCache = v; }],
     ];
     pairs.forEach(([key, setter]) => {
         try {
@@ -11073,6 +11077,38 @@ function _prefetchScreensWeinstein() {
         finally { _prefetchWeinsteinPromise = null; }
     })();
     return _prefetchWeinsteinPromise;
+}
+
+// stock_analytics is a materialized view already carrying rs_rating, rs_3m/6m/12m,
+// ret_3m/6m/12m, close, and a precomputed `screens` text[] tag column (e.g.
+// "RS Leader", "RS 3M Leader", "Multi-TF RS" — see stock_analytics_v2.sql). The
+// Market Leaders scans below used to go through the shared BreadthDataContext
+// (topRS/rsRating, itself several RPC calls); fetching stock_analytics directly
+// is one request and the tagging logic lives in one place (the view) instead of
+// being duplicated in both SQL and JS. market_cap_cr >= 500 is already applied
+// inside the view definition, so no extra filter is needed here.
+function _prefetchScreensStockAnalytics() {
+    if (_screensStockAnalyticsCache.rows && _screensStockAnalyticsCache.rows.length > 0 &&
+        _screensStockAnalyticsCache.loadedAt && (Date.now() - _screensStockAnalyticsCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
+        return Promise.resolve(_screensStockAnalyticsCache.rows);
+    }
+    if (_prefetchStockAnalyticsPromise) return _prefetchStockAnalyticsPromise;
+    _prefetchStockAnalyticsPromise = (async () => {
+        try {
+            const url = `${SUPABASE_URL}/rest/v1/stock_analytics?select=*&order=rs_rating.desc.nullslast&limit=3000`;
+            const r = await fetch(url, {
+                headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+            });
+            const rows = await r.json();
+            if (!Array.isArray(rows)) throw new Error(rows?.message || "stock_analytics returned a non-array response");
+            const cache = { rows, loadedAt: Date.now() };
+            _screensStockAnalyticsCache = cache;
+            _lsWriteScreens(_LS_SCR_STOCKANALYTICS, cache);
+            return rows;
+        } catch (e) { console.warn("[prefetch] stock_analytics failed:", e); return []; }
+        finally { _prefetchStockAnalyticsPromise = null; }
+    })();
+    return _prefetchStockAnalyticsPromise;
 }
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -15986,6 +16022,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         return a;
     }, {});
     const [visibleCols, setVisibleCols] = useState(defaultCols);
+    const [colPanelOpen, setColPanelOpen] = useState(false);
     const [filters, setFilters] = useState([]);
     const [addFilterOpen, setAddFilterOpen] = useState(false);
     const [sortKey, setSortKey] = useState(scoreKey || "ret_3m");
@@ -15993,6 +16030,7 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     // Chart preview popover
     const [hoveredRow, setHoveredRow] = useState(null); // { ticker, row, anchorRect }
     const addFilterRef = useRef(null);
+    const colPanelRef = useRef(null);
     const tableRef = useRef(null);
 
     // Pre-warm chart cache for visible rows so hover popover is instant
@@ -16006,6 +16044,12 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         const h = e => { if (addFilterRef.current && !addFilterRef.current.contains(e.target)) setAddFilterOpen(false); };
         document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
     }, [addFilterOpen]);
+
+    useEffect(() => {
+        if (!colPanelOpen) return;
+        const h = e => { if (colPanelRef.current && !colPanelRef.current.contains(e.target)) setColPanelOpen(false); };
+        document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+    }, [colPanelOpen]);
 
     // Dismiss chart preview when tapping outside the table (touch devices)
     useEffect(() => {
@@ -16356,6 +16400,84 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                     {filteredRows.length.toLocaleString("en-IN")}
                                 </strong>{" stocks"}
                             </span>
+
+                            <div style={{ width: 1, height: 14, background: T.border }} />
+
+                            <div style={{ position: "relative" }} ref={colPanelRef}>
+                                <button
+                                    onClick={() => setColPanelOpen(o => !o)}
+                                    style={{
+                                        ...chipBtn,
+                                        borderColor: colPanelOpen ? `${accentOrFallback}55` : T.border,
+                                        color: colPanelOpen ? accentOrFallback : T.subtext
+                                    }}>
+                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                                        strokeWidth="1.6" strokeLinecap="round">
+                                        <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" />
+                                        <line x1="1" y1="12" x2="15" y2="12" />
+                                        <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" />
+                                        <line x1="7" y1="10" x2="7" y2="14" />
+                                    </svg>
+                                    Columns
+                                </button>
+                                {colPanelOpen && (
+                                    <div style={{
+                                        position: "fixed", top: 0, right: 0, bottom: 0, width: 260, zIndex: 9999,
+                                        background: T.card, borderLeft: `1px solid ${T.border}`,
+                                        display: "flex", flexDirection: "column", fontFamily: sans,
+                                        boxShadow: isDark ? "-6px 0 24px rgba(0,0,0,0.5)" : "-6px 0 20px rgba(0,0,0,0.10)"
+                                    }}>
+                                        <div style={{
+                                            flexShrink: 0, padding: "13px 16px",
+                                            borderBottom: `1px solid ${T.border}`,
+                                            display: "flex", alignItems: "center", justifyContent: "space-between"
+                                        }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>Columns</span>
+                                            <button onClick={() => setColPanelOpen(false)}
+                                                style={{
+                                                    width: 24, height: 24, border: `1px solid ${T.border}`, borderRadius: 5,
+                                                    background: "transparent", color: T.subtext, cursor: "pointer",
+                                                    display: "flex", alignItems: "center", justifyContent: "center"
+                                                }}>
+                                                <svg width="8" height="8" viewBox="0 0 9 9" fill="none" stroke="currentColor"
+                                                    strokeWidth="1.6" strokeLinecap="round">
+                                                    <path d="M1 1l7 7M8 1L1 8" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
+                                            {ALL_COLUMNS.map(col => (
+                                                <div key={col.key}
+                                                    onClick={() => setVisibleCols(v => ({ ...v, [col.key]: !v[col.key] }))}
+                                                    style={{
+                                                        display: "flex", alignItems: "center", gap: 10,
+                                                        padding: "8px 16px", cursor: "pointer"
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = T.hover}
+                                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                                    <div style={{
+                                                        width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                                                        border: `1.5px solid ${visibleCols[col.key] ? accentOrFallback : T.border}`,
+                                                        background: visibleCols[col.key] ? accentOrFallback : "transparent",
+                                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                                        transition: "all .1s"
+                                                    }}>
+                                                        {visibleCols[col.key] && (
+                                                            <svg width="8" height="8" viewBox="0 0 10 10" fill="none"
+                                                                stroke="white" strokeWidth="2" strokeLinecap="round">
+                                                                <polyline points="1.5,5 4,7.5 8.5,2.5" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <span style={{ fontSize: 13, color: visibleCols[col.key] ? T.text : T.subtext }}>
+                                                        {col.label}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -17379,8 +17501,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
 }
 
 function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
-    const { topRS, trendAligned, rsRating,
-        nameMap, industryMap, tablesLoading } = useBreadthData();
+    const { nameMap, industryMap, tablesLoading } = useBreadthData();
 
     const T = themeTokens || THEMES.light;
     const isDark = T.bg !== THEMES.light.bg;
@@ -17468,29 +17589,94 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         [patternPreviewRows]
     );
 
-    const dRS3m = useMemo(() => filterByUniverse(topRS.rs3m).slice(0, 50), [topRS, filterByUniverse]);
-    const dRS6m = useMemo(() => filterByUniverse(topRS.rs6m).slice(0, 50), [topRS, filterByUniverse]);
-    const dRS12m = useMemo(() => filterByUniverse(topRS.rs12m).slice(0, 50), [topRS, filterByUniverse]);
-    const dRsRating = useMemo(() => filterByUniverse(rsRating || []).slice(0, 50), [rsRating, filterByUniverse]);
+    // Market Leaders scans — direct fetch from stock_analytics (see
+    // _prefetchScreensStockAnalytics above) instead of the shared breadth
+    // context. One request, filters just read the view's precomputed
+    // `screens` tags rather than re-deriving thresholds in JS.
+    const [stockAnalyticsRawRows, setStockAnalyticsRawRows] = useState(() => _screensStockAnalyticsCache.rows || []);
+    const [stockAnalyticsLoading, setStockAnalyticsLoading] = useState(!(_screensStockAnalyticsCache.rows && _screensStockAnalyticsCache.rows.length > 0));
 
-    const rs3mMap = useMemo(() => new Map(filterByUniverse(topRS.rs3m).map(r => [r.ticker, Number(r.rs_3m)])), [topRS, filterByUniverse]);
-    const rs6mMap = useMemo(() => new Map(filterByUniverse(topRS.rs6m).map(r => [r.ticker, Number(r.rs_6m)])), [topRS, filterByUniverse]);
-    const rs12mMap = useMemo(() => new Map(filterByUniverse(topRS.rs12m).map(r => [r.ticker, Number(r.rs_12m)])), [topRS, filterByUniverse]);
+    useEffect(() => {
+        let cancelled = false;
 
-    const dMultiTF = useMemo(() => {
-        // Build a returns lookup from the rs3m rows (which already carry ret_3m/6m/12m via withReturns)
-        const retMap = new Map(filterByUniverse(topRS.rs3m).map(r => [r.ticker, { ret_3m: r.ret_3m ?? null, ret_6m: r.ret_6m ?? null, ret_12m: r.ret_12m ?? null, close: r.close ?? null, rel_volume: r.rel_volume ?? null }]));
-        const arr = [];
-        for (const [ticker, v3m] of rs3mMap) {
-            if (v3m <= 0.8) continue;
-            const v6m = rs6mMap.get(ticker); if (v6m === undefined || v6m <= 1.0) continue;
-            const v12m = rs12mMap.get(ticker); if (v12m === undefined || v12m <= 1.2) continue;
-            const ret = retMap.get(ticker) || {};
-            arr.push({ ticker, rs_3m: v3m, rs_6m: v6m, rs_12m: v12m, combo: v3m + v6m + v12m, ...ret });
-        }
-        arr.sort((a, b) => b.combo - a.combo);
-        return arr.slice(0, 50);
-    }, [rs3mMap, rs6mMap, rs12mMap, filterByUniverse]);
+        const load = async () => {
+            try {
+                //  SWR: serve stale cache instantly, then revalidate 
+                const _sc = _screensStockAnalyticsCache;
+                const _scHasData = _sc.rows && _sc.rows.length > 0;
+                if (_scHasData) {
+                    if (!cancelled) { setStockAnalyticsRawRows(_sc.rows); setStockAnalyticsLoading(false); }
+                } else {
+                    setStockAnalyticsLoading(true);
+                }
+
+                const rows = await _prefetchScreensStockAnalytics();
+                if (!cancelled) setStockAnalyticsRawRows(rows);
+            } catch (e) {
+                if (!cancelled) console.error("[Market Leaders] fetch failed:", e);
+            } finally {
+                if (!cancelled) setStockAnalyticsLoading(false);
+            }
+        };
+
+        load();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Coerce numeric strings (PostgREST returns numeric columns as strings)
+    // and apply the universe filter, once, shared by all 5 derived screens below.
+    const dStockAnalyticsBase = useMemo(() => {
+        const mapped = (stockAnalyticsRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
+            ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
+            ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
+            rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
+            rs_12m: r.rs_12m != null ? Number(r.rs_12m) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        }));
+        return filterByUniverse(mapped);
+    }, [stockAnalyticsRawRows, filterByUniverse]);
+
+    // Each of these just reads the view's own `screens` tag array — the
+    // threshold logic (rs_rating >= 85, rs_3m > 0, etc.) lives once in
+    // stock_analytics_v2.sql, not duplicated here.
+    const dRsRating = useMemo(() =>
+        dStockAnalyticsBase.filter(r => r.screens?.includes("RS Leader"))
+            .sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity))
+            .slice(0, 50),
+        [dStockAnalyticsBase]);
+
+    const dRS3m = useMemo(() =>
+        dStockAnalyticsBase.filter(r => r.screens?.includes("RS 3M Leader"))
+            .sort((a, b) => (b.rs_3m ?? -Infinity) - (a.rs_3m ?? -Infinity))
+            .slice(0, 50),
+        [dStockAnalyticsBase]);
+
+    const dRS6m = useMemo(() =>
+        dStockAnalyticsBase.filter(r => r.screens?.includes("RS 6M Leader"))
+            .sort((a, b) => (b.rs_6m ?? -Infinity) - (a.rs_6m ?? -Infinity))
+            .slice(0, 50),
+        [dStockAnalyticsBase]);
+
+    const dRS12m = useMemo(() =>
+        dStockAnalyticsBase.filter(r => r.screens?.includes("RS 12M Leader"))
+            .sort((a, b) => (b.rs_12m ?? -Infinity) - (a.rs_12m ?? -Infinity))
+            .slice(0, 50),
+        [dStockAnalyticsBase]);
+
+    // "combo" kept as a field name (not just rs_rating) so the existing
+    // scoreKey="combo" / formatScore={v => v.toFixed(2)} wiring on the
+    // Multi-TF RS Leaders ScreenRow needs no changes.
+    const dMultiTF = useMemo(() =>
+        dStockAnalyticsBase.filter(r => r.screens?.includes("Multi-TF RS"))
+            .map(r => ({ ...r, combo: (r.rs_3m ?? 0) + (r.rs_6m ?? 0) + (r.rs_12m ?? 0) }))
+            .sort((a, b) => b.combo - a.combo)
+            .slice(0, 50),
+        [dStockAnalyticsBase]);
 
     //  52W High Breakout scan  dedicated Supabase fetch 
     // Fetches directly from stock_52w (not top52wHigh) because top52wHigh excludes
@@ -18282,27 +18468,32 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         <div className="scr-sections">
                             <CategorySection name="Market Leaders" color={ACCENT}
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
-                                count={tablesLoading ? "" : totalCount}>
+                                count={stockAnalyticsLoading ? "" : totalCount}>
                                 <ScreenRow rowKey="ml-rsrating" title="RS Rating Leaders"
                                     subtitle="Composite relative strength score on a 0-99 scale"
                                     rows={dRsRating} scoreKey="rs_rating" scoreLabel="RS Rating"
-                                    formatScore={v => Math.round(v).toString()} tfLabel="RS Rating Leaders" />
+                                    formatScore={v => Math.round(v).toString()} tfLabel="RS Rating Leaders"
+                                    loadingOverride={stockAnalyticsLoading} />
                                 <ScreenRow rowKey="ml-rs3m" title="RS 3-Month Leaders"
                                     subtitle="Stocks with strongest relative returns over the last 3 months"
                                     rows={dRS3m} scoreKey="rs_3m" scoreLabel="RS 3M"
-                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 3M Leaders" />
+                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 3M Leaders"
+                                    loadingOverride={stockAnalyticsLoading} />
                                 <ScreenRow rowKey="ml-rs6m" title="RS 6-Month Leaders"
                                     subtitle="Strongest relative performers over the last 6 months"
                                     rows={dRS6m} scoreKey="rs_6m" scoreLabel="RS 6M"
-                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 6M Leaders" />
+                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 6M Leaders"
+                                    loadingOverride={stockAnalyticsLoading} />
                                 <ScreenRow rowKey="ml-rs12m" title="RS 12-Month Leaders"
                                     subtitle="Strongest relative performers over the last 12 months"
                                     rows={dRS12m} scoreKey="rs_12m" scoreLabel="RS 12M"
-                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 12M Leaders" />
+                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 12M Leaders"
+                                    loadingOverride={stockAnalyticsLoading} />
                                 <ScreenRow rowKey="ml-multitf" title="Multi-TF RS Leaders"
                                     subtitle="Strong relative strength across 3M, 6M and 12M simultaneously"
                                     rows={dMultiTF} scoreKey="combo" scoreLabel="RS Composite"
-                                    formatScore={v => v.toFixed(2)} tfLabel="Multi-TF Leaders" />
+                                    formatScore={v => v.toFixed(2)} tfLabel="Multi-TF Leaders"
+                                    loadingOverride={stockAnalyticsLoading} />
                             </CategorySection>
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
