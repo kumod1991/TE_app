@@ -519,7 +519,7 @@ export function MansfieldRSChart({ series, T, width = 258, height = 54 }) {
             <text x={pad.l + 3} y={pad.t + H + 10}
                 fontSize="7" fill={T.muted} fontFamily={mono}
                 textAnchor="start" opacity="0.55">
-                MANSFIELD RS
+                RS Line
             </text>
         </svg>
     );

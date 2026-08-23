@@ -10842,12 +10842,14 @@ let _screensPivotCache = { rows: null, loadedAt: null };
 let _screensVolBreakCache = { rows: null, loadedAt: null };
 let _screensPullbackCache = { rows: null, loadedAt: null };
 let _screensMinerviniCache = { rows: null, loadedAt: null };
+let _screensWeinsteinCache = { rows: null, loadedAt: null };
 
 const _LS_SCR_BREAKOUT = "te_scr_breakout_v1";
 const _LS_SCR_PIVOT = "te_scr_pivot_v1";
 const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
 const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
 const _LS_SCR_MINERVINI = "te_scr_minervini_v1";
+const _LS_SCR_WEINSTEIN = "te_scr_weinstein_v1";
 
 // In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
 let _prefetchBreakoutPromise = null;
@@ -10855,6 +10857,7 @@ let _prefetchPivotPromise = null;
 let _prefetchVolBreakPromise = null;
 let _prefetchPullbackPromise = null;
 let _prefetchMinerviniPromise = null;
+let _prefetchWeinsteinPromise = null;
 
 // Seed all screens caches from localStorage on module load (SWR: serve stale on first paint)
 (function _seedScreensCaches() {
@@ -10864,6 +10867,7 @@ let _prefetchMinerviniPromise = null;
         [_LS_SCR_VOLBREAK, v => { _screensVolBreakCache = v; }],
         [_LS_SCR_PULLBACK, v => { _screensPullbackCache = v; }],
         [_LS_SCR_MINERVINI, v => { _screensMinerviniCache = v; }],
+        [_LS_SCR_WEINSTEIN, v => { _screensWeinsteinCache = v; }],
     ];
     pairs.forEach(([key, setter]) => {
         try {
@@ -11038,6 +11042,37 @@ function _prefetchScreensMinervini() {
         finally { _prefetchMinerviniPromise = null; }
     })();
     return _prefetchMinerviniPromise;
+}
+
+// weinstein_stages is a plain table (one row per ticker, refreshed daily by
+// refresh_weinstein_stages(), latest date only — see weinstein_stages_v2.sql),
+// not an RPC — fetch directly via PostgREST, same SWR cache/localStorage/
+// in-flight-promise pattern as minervini_screen above. Tier-I ("Legend Buy")
+// and Tier-II ("Near Breakout") are both derived client-side from this single
+// fetch (see dWeinsteinTier1 / dWeinsteinTier2 in ScreensModule) rather than
+// two separate network calls.
+function _prefetchScreensWeinstein() {
+    if (_screensWeinsteinCache.rows && _screensWeinsteinCache.rows.length > 0 &&
+        _screensWeinsteinCache.loadedAt && (Date.now() - _screensWeinsteinCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
+        return Promise.resolve(_screensWeinsteinCache.rows);
+    }
+    if (_prefetchWeinsteinPromise) return _prefetchWeinsteinPromise;
+    _prefetchWeinsteinPromise = (async () => {
+        try {
+            const url = `${SUPABASE_URL}/rest/v1/weinstein_stages?select=*&market_cap_cr=gte.500&order=rs_rating.desc.nullslast&limit=2000`;
+            const r = await fetch(url, {
+                headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+            });
+            const rows = await r.json();
+            if (!Array.isArray(rows)) throw new Error(rows?.message || "weinstein_stages returned a non-array response");
+            const cache = { rows, loadedAt: Date.now() };
+            _screensWeinsteinCache = cache;
+            _lsWriteScreens(_LS_SCR_WEINSTEIN, cache);
+            return rows;
+        } catch (e) { console.warn("[prefetch] Weinstein failed:", e); return []; }
+        finally { _prefetchWeinsteinPromise = null; }
+    })();
+    return _prefetchWeinsteinPromise;
 }
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -15803,12 +15838,25 @@ const ALL_COLUMNS = [
     { key: "sma50", label: "50 SMA", defaultOn: false },
     { key: "sma150", label: "150 SMA", defaultOn: false },
     { key: "sma200", label: "200 SMA", defaultOn: false },
+    { key: "stage_label", label: "Weinstein Stage", defaultOn: false },
+    { key: "mansfield_rs", label: "Mansfield RS", defaultOn: false },
+    { key: "mansfield_rs_slope", label: "Mansfield RS Slope", defaultOn: false },
+    { key: "sma150_slope_pct", label: "150 SMA Slope %", defaultOn: false },
+    { key: "breakout_level", label: "Breakout Level", defaultOn: false },
+    { key: "market_cap_cr", label: "Mkt Cap (Cr)", defaultOn: false },
+    { key: "pct_to_breakout", label: "% To Breakout", defaultOn: false },
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
 // (rel_vol is normalized to rel_volume in the dMinervini mapping above), so these
 // default-on columns match what the table actually has data for.
 const MINERVINI_DEFAULT_COLS = ["close", "pct_from_52w_high", "pct_from_52w_low", "ret_3m", "ret_6m", "ret_12m", "rel_volume", "sma50", "sma150", "sma200"];
+
+// weinstein_stages carries no ret_3m/6m/12m/volume history (it's a latest-date-
+// only snapshot table, see weinstein_stages_v2.sql), so the default-on columns
+// swap in the fields that table actually has: stage, RS trend, breakout level.
+const WEINSTEIN_TIER1_DEFAULT_COLS = ["close", "stage_label", "mansfield_rs", "mansfield_rs_slope", "rs_rating", "sma150", "breakout_level", "market_cap_cr"];
+const WEINSTEIN_TIER2_DEFAULT_COLS = ["close", "breakout_level", "pct_to_breakout", "rs_rating", "mansfield_rs_slope", "stage_label", "market_cap_cr"];
 
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
@@ -15822,6 +15870,10 @@ const FILTER_DEFS = [
     { key: "rs_rating", label: "RS Rating", defaultOp: ">", num: true },
     { key: "close", label: "Price ", defaultOp: ">", num: true },
     { key: "rel_volume", label: "Rel Volume", defaultOp: ">", num: true },
+    { key: "mansfield_rs", label: "Mansfield RS", defaultOp: ">", num: true },
+    { key: "mansfield_rs_slope", label: "Mansfield RS Slope", defaultOp: ">", num: true },
+    { key: "market_cap_cr", label: "Mkt Cap (Cr)", defaultOp: ">", num: true },
+    { key: "pct_to_breakout", label: "% To Breakout", defaultOp: ">", num: true },
 ];
 
 // Pattern Filter (Chart Patterns) numeric filters  full-screen view only
@@ -15846,6 +15898,8 @@ const PATTERN_FILTER_DEFS = [
 function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFundaScan, tablesLoading }) {
     const { title, subtitle, color, rows, scoreKey, scoreLabel, formatVal, pivotMode, pullbackMode } = detail;
     const minerviniMode = !!detail.minerviniMode;
+    const weinsteinTier1Mode = !!detail.weinsteinTier1Mode;
+    const weinsteinTier2Mode = !!detail.weinsteinTier2Mode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -15920,13 +15974,18 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
             // Minervini scan: swap in the columns it actually has data for
         } else if (minerviniMode) {
             a[c.key] = MINERVINI_DEFAULT_COLS.includes(c.key);
+            // Weinstein Tier-I/II scans: swap in the columns weinstein_stages
+            // actually has data for (stage, Mansfield RS, breakout level...)
+        } else if (weinsteinTier1Mode) {
+            a[c.key] = WEINSTEIN_TIER1_DEFAULT_COLS.includes(c.key);
+        } else if (weinsteinTier2Mode) {
+            a[c.key] = WEINSTEIN_TIER2_DEFAULT_COLS.includes(c.key);
         } else {
             a[c.key] = c.defaultOn;
         }
         return a;
     }, {});
     const [visibleCols, setVisibleCols] = useState(defaultCols);
-    const [colPanelOpen, setColPanelOpen] = useState(false);
     const [filters, setFilters] = useState([]);
     const [addFilterOpen, setAddFilterOpen] = useState(false);
     const [sortKey, setSortKey] = useState(scoreKey || "ret_3m");
@@ -15934,7 +15993,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     // Chart preview popover
     const [hoveredRow, setHoveredRow] = useState(null); // { ticker, row, anchorRect }
     const addFilterRef = useRef(null);
-    const colPanelRef = useRef(null);
     const tableRef = useRef(null);
 
     // Pre-warm chart cache for visible rows so hover popover is instant
@@ -15948,12 +16006,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         const h = e => { if (addFilterRef.current && !addFilterRef.current.contains(e.target)) setAddFilterOpen(false); };
         document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
     }, [addFilterOpen]);
-
-    useEffect(() => {
-        if (!colPanelOpen) return;
-        const h = e => { if (colPanelRef.current && !colPanelRef.current.contains(e.target)) setColPanelOpen(false); };
-        document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
-    }, [colPanelOpen]);
 
     // Dismiss chart preview when tapping outside the table (touch devices)
     useEffect(() => {
@@ -15981,6 +16033,12 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         if (key === "pct_from_sma50") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "pct_from_pivot") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "vol_ratio") return Number(v) > 0 ? `${Number(v).toFixed(2)}x` : null;
+        if (key === "stage_label") return String(v);
+        if (["mansfield_rs", "mansfield_rs_slope"].includes(key)) return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
+        if (key === "sma150_slope_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "breakout_level") return fmtINR(v);
+        if (key === "market_cap_cr") return `${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr`;
+        if (key === "pct_to_breakout") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         return String(v);
     };
 
@@ -15997,6 +16055,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         if (key === "pct_from_sma50") return Math.abs(Number(v)) <= 1.5 ? posClr : T.text;
         if (key === "pct_from_pivot") return Number(v) >= 0 ? posClr : negClr;
         if (key === "vol_ratio") return Number(v) < 0.7 ? posClr : Number(v) < 1 ? T.text : negClr;
+        if (["mansfield_rs", "mansfield_rs_slope", "sma150_slope_pct"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
+        if (key === "pct_to_breakout") return Math.abs(Number(v)) <= 3 ? posClr : T.text;
         return T.text;
     };
 
@@ -16069,6 +16129,13 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
         { key: "sma50", label: "50 SMA" },
         { key: "sma150", label: "150 SMA" },
         { key: "sma200", label: "200 SMA" },
+        { key: "stage_label", label: "Stage" },
+        { key: "mansfield_rs", label: "Mansfield RS" },
+        { key: "mansfield_rs_slope", label: "RS Slope" },
+        { key: "sma150_slope_pct", label: "150 SMA Slope %" },
+        { key: "breakout_level", label: "Breakout Lvl" },
+        { key: "market_cap_cr", label: "Mkt Cap (Cr)" },
+        { key: "pct_to_breakout", label: "% To Breakout" },
     ].filter(c => visibleCols[c.key] && c.key !== scoreKey);
 
     // Shared button style  no duplicate keys
@@ -16289,84 +16356,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                     {filteredRows.length.toLocaleString("en-IN")}
                                 </strong>{" stocks"}
                             </span>
-
-                            <div style={{ width: 1, height: 14, background: T.border }} />
-
-                            <div style={{ position: "relative" }} ref={colPanelRef}>
-                                <button
-                                    onClick={() => setColPanelOpen(o => !o)}
-                                    style={{
-                                        ...chipBtn,
-                                        borderColor: colPanelOpen ? `${accentOrFallback}55` : T.border,
-                                        color: colPanelOpen ? accentOrFallback : T.subtext
-                                    }}>
-                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-                                        strokeWidth="1.6" strokeLinecap="round">
-                                        <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" />
-                                        <line x1="1" y1="12" x2="15" y2="12" />
-                                        <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" />
-                                        <line x1="7" y1="10" x2="7" y2="14" />
-                                    </svg>
-                                    Columns
-                                </button>
-                                {colPanelOpen && (
-                                    <div style={{
-                                        position: "fixed", top: 0, right: 0, bottom: 0, width: 260, zIndex: 9999,
-                                        background: T.card, borderLeft: `1px solid ${T.border}`,
-                                        display: "flex", flexDirection: "column", fontFamily: sans,
-                                        boxShadow: isDark ? "-6px 0 24px rgba(0,0,0,0.5)" : "-6px 0 20px rgba(0,0,0,0.10)"
-                                    }}>
-                                        <div style={{
-                                            flexShrink: 0, padding: "13px 16px",
-                                            borderBottom: `1px solid ${T.border}`,
-                                            display: "flex", alignItems: "center", justifyContent: "space-between"
-                                        }}>
-                                            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>Columns</span>
-                                            <button onClick={() => setColPanelOpen(false)}
-                                                style={{
-                                                    width: 24, height: 24, border: `1px solid ${T.border}`, borderRadius: 5,
-                                                    background: "transparent", color: T.subtext, cursor: "pointer",
-                                                    display: "flex", alignItems: "center", justifyContent: "center"
-                                                }}>
-                                                <svg width="8" height="8" viewBox="0 0 9 9" fill="none" stroke="currentColor"
-                                                    strokeWidth="1.6" strokeLinecap="round">
-                                                    <path d="M1 1l7 7M8 1L1 8" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
-                                            {ALL_COLUMNS.map(col => (
-                                                <div key={col.key}
-                                                    onClick={() => setVisibleCols(v => ({ ...v, [col.key]: !v[col.key] }))}
-                                                    style={{
-                                                        display: "flex", alignItems: "center", gap: 10,
-                                                        padding: "8px 16px", cursor: "pointer"
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.background = T.hover}
-                                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                    <div style={{
-                                                        width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                                                        border: `1.5px solid ${visibleCols[col.key] ? accentOrFallback : T.border}`,
-                                                        background: visibleCols[col.key] ? accentOrFallback : "transparent",
-                                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                                        transition: "all .1s"
-                                                    }}>
-                                                        {visibleCols[col.key] && (
-                                                            <svg width="8" height="8" viewBox="0 0 10 10" fill="none"
-                                                                stroke="white" strokeWidth="2" strokeLinecap="round">
-                                                                <polyline points="1.5,5 4,7.5 8.5,2.5" />
-                                                            </svg>
-                                                        )}
-                                                    </div>
-                                                    <span style={{ fontSize: 13, color: visibleCols[col.key] ? T.text : T.subtext }}>
-                                                        {col.label}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -16697,6 +16686,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     const isRS = ["rs_3m", "rs_6m", "rs_12m"].includes(c.key);
                                                     const isRating = c.key === "rs_rating";
                                                     const isRelVol = c.key === "rel_volume";
+                                                    const isWeinsteinTrend = ["mansfield_rs", "mansfield_rs_slope", "sma150_slope_pct", "pct_to_breakout"].includes(c.key);
+                                                    const isStageLabel = c.key === "stage_label";
                                                     let cellColor = T.subtext;
                                                     if (isRet) cellColor = retColor(c.key, v);
                                                     else if (isRS) cellColor = isDark ? "#0ea5e9" : "#0284c7";
@@ -16706,11 +16697,15 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     } else if (isRelVol && v != null) {
                                                         const rv = Number(v);
                                                         cellColor = rv >= 2 ? posClr : rv >= 1 ? T.text : T.subtext;
+                                                    } else if (isWeinsteinTrend && v != null) {
+                                                        cellColor = retColor(c.key, v);
+                                                    } else if (isStageLabel && v != null) {
+                                                        cellColor = v === "Advancing" ? posClr : v === "Declining" ? negClr : T.subtext;
                                                     }
                                                     return (
                                                         <td key={c.key} style={{
                                                             padding: "12px 16px", fontFamily: mono,
-                                                            fontSize: 15.5, fontWeight: (isRet || isRating || isRelVol) ? 600 : 400,
+                                                            fontSize: 15.5, fontWeight: (isRet || isRating || isRelVol || isWeinsteinTrend || isStageLabel) ? 600 : 400,
                                                             textAlign: "right", fontVariantNumeric: "tabular-nums",
                                                             color: fmt == null ? T.muted : cellColor,
                                                             whiteSpace: "nowrap"
@@ -17860,12 +17855,95 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [minerviniRawRows, filterByUniverse]);
 
+    //  Weinstein Stage scans (Legend Screens)  dedicated fetch from the
+    // weinstein_stages table (latest date per ticker only, market_cap_cr >= 500
+    // already filtered server-side — see weinstein_stages_v2.sql). One raw
+    // fetch, two client-side derived tiers, same pattern as the Pullback scans
+    // above (single fetch → several useMemo-derived screens, no extra network
+    // calls when switching between them).
+    const [weinsteinRawRows, setWeinsteinRawRows] = useState(() => _screensWeinsteinCache.rows || []);
+    const [weinsteinLoading, setWeinsteinLoading] = useState(!(_screensWeinsteinCache.rows && _screensWeinsteinCache.rows.length > 0));
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                //  SWR: serve stale cache instantly, then revalidate 
+                const _wc = _screensWeinsteinCache;
+                const _wcHasData = _wc.rows && _wc.rows.length > 0;
+                if (_wcHasData) {
+                    if (!cancelled) { setWeinsteinRawRows(_wc.rows); setWeinsteinLoading(false); }
+                } else {
+                    setWeinsteinLoading(true);
+                }
+
+                const rows = await _prefetchScreensWeinstein();
+                if (!cancelled) setWeinsteinRawRows(rows);
+            } catch (e) {
+                if (!cancelled) console.error("[Weinstein] fetch failed:", e);
+            } finally {
+                if (!cancelled) setWeinsteinLoading(false);
+            }
+        };
+
+        load();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Normalize adj_close → close (matches the `close` key every other screen/
+    // table component in this file expects) and apply the universe filter.
+    const dWeinsteinBase = useMemo(() => {
+        const mapped = (weinsteinRawRows || []).map(r => ({
+            ...r,
+            close: r.adj_close != null ? Number(r.adj_close) : null,
+        }));
+        return filterByUniverse(mapped);
+    }, [weinsteinRawRows, filterByUniverse]);
+
+    // Tier-I  Legend Buy: confirmed Stage 2 advance with improving relative
+    // strength (rising 150 SMA, Mansfield RS positive AND still climbing,
+    // RS Rating >= 70). This is the "strong stocks to buy" bucket.
+    const dWeinsteinTier1 = useMemo(() => {
+        return dWeinsteinBase
+            .filter(r =>
+                r.stage === 2 &&
+                r.sma150_direction === "rising" &&
+                r.mansfield_rs != null && Number(r.mansfield_rs) > 0 &&
+                r.mansfield_rs_slope != null && Number(r.mansfield_rs_slope) > 0 &&
+                r.rs_rating != null && Number(r.rs_rating) >= 70
+            )
+            .sort((a, b) => Number(b.rs_rating ?? 0) - Number(a.rs_rating ?? 0));
+    }, [dWeinsteinBase]);
+
+    // Tier-II  Near Breakout: Stage 1/2 names trading within a tight band
+    // around their breakout_level (pivot_high_20w) with decent RS — watchlist
+    // candidates that haven't confirmed a Stage 2 breakout yet.
+    const dWeinsteinTier2 = useMemo(() => {
+        return dWeinsteinBase
+            .filter(r => {
+                if (![1, 2].includes(r.stage)) return false;
+                if (r.breakout_level == null || Number(r.breakout_level) <= 0) return false;
+                if (r.close == null) return false;
+                const bl = Number(r.breakout_level);
+                if (r.close < bl * 0.92 || r.close > bl * 1.02) return false;
+                if (r.rs_rating == null || Number(r.rs_rating) < 60) return false;
+                return true;
+            })
+            .map(r => ({
+                ...r,
+                pct_to_breakout: ((Number(r.breakout_level) - Number(r.close)) / Number(r.close)) * 100,
+            }))
+            .sort((a, b) => Math.abs(a.pct_to_breakout) - Math.abs(b.pct_to_breakout));
+    }, [dWeinsteinBase]);
+
     const totalCount = dRS3m.length + dRS6m.length + dRS12m.length +
         dMultiTF.length + dRsRating.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length;
     const minerviniCount = dMinervini.length;
+    const legendScreensCount = dMinervini.length + dWeinsteinTier1.length + dWeinsteinTier2.length;
 
     //  Pill navigation: consume window.__wl_openScreen set by WatchlistDashboard 
     // Effect 1: on mount, read the global and store in state
@@ -18012,6 +18090,11 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             const sVals = rows.map(r => r[scoreKey]).filter(v => v != null && !isNaN(Number(v)));
             if (sVals.length) {
                 const avg = sVals.reduce((s, v) => s + Number(v), 0) / sVals.length;
+                // pct_to_breakout (Weinstein Tier-II) is itself a % figure, unlike
+                // rs_rating/mansfield_rs — show it with the same +/-% styling as AVG 3M.
+                if (scoreKey === "pct_to_breakout") {
+                    return { count: rows.length, avg, label: "AVG TO BRK" };
+                }
                 return { count: rows.length, avg, label: "AVG SCORE", noSign: true };
             }
         }
@@ -18382,9 +18465,9 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 />
                             </CategorySection>
 
-                            <CategorySection name="Trend Template" color={isDark ? "#60a5fa" : "#2563eb"}
-                                desc="Stocks passing all 8 criteria of Mark Minervini's Trend Template"
-                                count={minerviniLoading ? "..." : minerviniCount}>
+                            <CategorySection name="Legend Screens" color={isDark ? "#60a5fa" : "#2563eb"}
+                                desc="Curated multi-criteria scans — Minervini's Trend Template and Weinstein Stage Analysis"
+                                count={(minerviniLoading || weinsteinLoading) ? "..." : legendScreensCount}>
                                 <ScreenRow
                                     rowKey="mv-trend"
                                     title="Trend Template — All 8 Criteria"
@@ -18396,6 +18479,30 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     tfLabel="Minervini Trend Template"
                                     loadingOverride={minerviniLoading}
                                     detailExtra={{ minerviniMode: true }}
+                                />
+                                <ScreenRow
+                                    rowKey="weinstein-tier1"
+                                    title="Weinstein Tier-I"
+                                    subtitle="Confirmed Stage 2 advance: 150 SMA rising, Mansfield RS positive and still improving, RS Rating >= 70 — strongest buy candidates"
+                                    rows={dWeinsteinTier1}
+                                    scoreKey="rs_rating"
+                                    scoreLabel="RS Rating"
+                                    formatScore={v => Math.round(Number(v)).toString()}
+                                    tfLabel="Weinstein Tier-I"
+                                    loadingOverride={weinsteinLoading}
+                                    detailExtra={{ weinsteinTier1Mode: true }}
+                                />
+                                <ScreenRow
+                                    rowKey="weinstein-tier2"
+                                    title="Weinstein Tier-II"
+                                    subtitle="Stage 1/2 names within 2% above to 8% below their breakout level, RS Rating >= 60 — near-breakout watchlist"
+                                    rows={dWeinsteinTier2}
+                                    scoreKey="pct_to_breakout"
+                                    scoreLabel="% To Breakout"
+                                    formatScore={v => `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`}
+                                    tfLabel="Weinstein Tier-II"
+                                    loadingOverride={weinsteinLoading}
+                                    detailExtra={{ weinsteinTier2Mode: true }}
                                 />
                             </CategorySection>
 
