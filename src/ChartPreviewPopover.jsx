@@ -157,6 +157,67 @@ export function isWeeklyChartWarm(ticker) {
     return _weeklyChartCache.get(ticker) !== undefined || _weeklyChartInFlight.has(ticker);
 }
 
+// ── Mansfield RS series (from the `indicators` table) ──────────────────
+// Same cache/in-flight/NSE→BSE-fallback pattern as fetchWeeklyOHLCFromDB
+// above, just pointed at `indicators` and pulling `date, mansfield_rs`
+// instead of daily OHLCV. Powers the small trend line under the popover's
+// metrics footer.
+const _mansfieldCache = new Map();
+const _mansfieldInFlight = new Map();
+
+export async function fetchMansfieldRSFromDB(ticker) {
+    const cached = _mansfieldCache.get(ticker);
+    if (cached !== undefined && cached !== "loading") return cached; // null or array
+
+    if (_mansfieldInFlight.has(ticker)) return _mansfieldInFlight.get(ticker);
+
+    const promise = (async () => {
+        try {
+            const cutoff = new Date();
+            cutoff.setFullYear(cutoff.getFullYear() - 1);
+            const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+            const fetchFor = async (exchange) => {
+                const url = `${SUPABASE_URL}/rest/v1/indicators`
+                    + `?ticker=eq.${encodeURIComponent(ticker)}`
+                    + `&exchange=eq.${exchange}`
+                    + `&date=gte.${cutoffStr}`
+                    + `&select=date,mansfield_rs`
+                    + `&order=date.asc`
+                    + `&limit=400`;
+                const r = await fetch(url, {
+                    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+                    signal: AbortSignal.timeout(8000),
+                });
+                if (!r.ok) return null;
+                const rows = await r.json();
+                return Array.isArray(rows) && rows.length >= 2 ? rows : null;
+            };
+
+            const rows = (await fetchFor("NSE")) || (await fetchFor("BSE"));
+            if (!rows) { _mansfieldCache.set(ticker, null); return null; }
+
+            // Drop rows before mansfield_rs has a value (early-history warmup
+            // period) and collapse to {date, v} pairs the chart can consume.
+            const series = rows
+                .filter(r => r.mansfield_rs != null && Number.isFinite(Number(r.mansfield_rs)))
+                .map(r => ({ date: r.date, v: Number(r.mansfield_rs) }));
+
+            const result = series.length >= 2 ? series : null;
+            _mansfieldCache.set(ticker, result);
+            return result;
+        } catch {
+            _mansfieldCache.set(ticker, null);
+            return null;
+        } finally {
+            _mansfieldInFlight.delete(ticker);
+        }
+    })();
+
+    _mansfieldInFlight.set(ticker, promise);
+    return promise;
+}
+
 // ── Global prefetch queue ───────────────────────────────────────────────
 // Every caller (TechLens/Screens tables, Market Movers, Volume Shockers, RS
 // Leaders, Trend Template) routes through ONE shared queue instead of each
@@ -369,6 +430,81 @@ export function MiniCandleChart({ candles, T, accentColor, width = 250, height =
     );
 }
 
+// Compact Mansfield RS trend line — no external deps. Mansfield RS
+// oscillates around 0 (positive = outperforming the market over the
+// trailing window, negative = underperforming), so the zero line is drawn
+// as a fixed reference and the line itself is colored green/red off its
+// most recent value rather than a fixed accent.
+export function MansfieldRSChart({ series, T, width = 258, height = 54 }) {
+    if (!series || series.length < 2) return null;
+    const isDark = _resolveIsDark(T);
+
+    const pad = { l: 4, r: 34, t: 6, b: 12 };
+    const W = width - pad.l - pad.r;
+    const H = height - pad.t - pad.b;
+
+    const vals = series.map(s => s.v);
+    const vMin = Math.min(...vals, 0);
+    const vMax = Math.max(...vals, 0);
+    const range = (vMax - vMin) || 1;
+    const cushion = range * 0.12;
+    const safeMin = vMin - cushion;
+    const safeMax = vMax + cushion;
+    const safeRange = (safeMax - safeMin) || 1;
+
+    const y = v => pad.t + H - ((v - safeMin) / safeRange) * H;
+    const n = series.length;
+    const x = i => pad.l + (n === 1 ? 0 : (i / (n - 1)) * W);
+
+    const posClr = isDark ? "#4ade80" : "#16a34a";
+    const negClr = isDark ? "#fb7185" : "#e11d48";
+    const lastVal = vals[vals.length - 1];
+    const lineClr = lastVal >= 0 ? posClr : negClr;
+    const zeroY = y(0);
+
+    const points = series.map((s, i) => `${x(i)},${y(s.v)}`).join(" ");
+    // Filled area under the line down to the zero line, same color at low opacity
+    const areaPoints = `${x(0)},${zeroY} ${points} ${x(n - 1)},${zeroY}`;
+
+    const mono = "'IBM Plex Mono',monospace";
+    const numFmt = (v) => (v >= 0 ? "" : "") + v.toFixed(v >= 100 || v <= -100 ? 0 : 1);
+
+    return (
+        <svg width={width} height={height} style={{ display: "block", overflow: "visible" }}>
+            {/* Zero reference line */}
+            <line x1={pad.l} x2={pad.l + W} y1={zeroY} y2={zeroY}
+                stroke={T.border} strokeWidth="0.7" strokeDasharray="3,3" opacity="0.6" />
+            {/* Filled area */}
+            <polygon points={areaPoints} fill={lineClr} opacity={isDark ? 0.12 : 0.09} />
+            {/* Trend line */}
+            <polyline points={points} fill="none" stroke={lineClr}
+                strokeWidth="1.3" opacity="0.9"
+                strokeLinejoin="round" strokeLinecap="round" />
+            {/* Last-value marker */}
+            <circle cx={x(n - 1)} cy={y(lastVal)} r="2" fill={lineClr} />
+            {/* Axis labels: max / 0 / min */}
+            <text x={pad.l + W + 3} y={y(safeMax) + 3}
+                fontSize="7.5" fill={T.muted} fontFamily={mono} opacity="0.75">
+                {numFmt(safeMax)}
+            </text>
+            <text x={pad.l + W + 3} y={zeroY + 3}
+                fontSize="7.5" fill={T.muted} fontFamily={mono} opacity="0.6">
+                0
+            </text>
+            <text x={pad.l + W + 3} y={y(safeMin) + 3}
+                fontSize="7.5" fill={T.muted} fontFamily={mono} opacity="0.75">
+                {numFmt(safeMin)}
+            </text>
+            {/* Label */}
+            <text x={pad.l + 3} y={pad.t + H + 10}
+                fontSize="7" fill={T.muted} fontFamily={mono}
+                textAnchor="start" opacity="0.55">
+                RS Line
+            </text>
+        </svg>
+    );
+}
+
 // Hover popover card — renders via portal, shows chart + key metrics.
 // `row` only needs a `ticker`; any of ret_3m/ret_6m/ret_12m/rs_rating/
 // rel_volume/pct_from_52w_high/close/ltp it has will be shown, everything
@@ -377,6 +513,7 @@ export function MiniCandleChart({ candles, T, accentColor, width = 250, height =
 export function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, nameMap, industryMap }) {
     const [candles, setCandles] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [mansfieldSeries, setMansfieldSeries] = useState(null);
     const isDark = _resolveIsDark(T);
     const mono = "'IBM Plex Mono', monospace";
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
@@ -404,9 +541,25 @@ export function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, n
         return () => { cancelled = true; };
     }, [ticker]);
 
+    // Mansfield RS trend — fetched independently of the candle chart so a
+    // slow/failed indicators lookup never blocks the price chart from
+    // rendering (and vice versa).
+    useEffect(() => {
+        let cancelled = false;
+        setMansfieldSeries(null);
+        const cached = _mansfieldCache.get(ticker);
+        if (Array.isArray(cached)) { setMansfieldSeries(cached); return; }
+        fetchMansfieldRSFromDB(ticker).then(s => {
+            if (!cancelled) setMansfieldSeries(Array.isArray(s) ? s : null);
+        }).catch(() => {
+            if (!cancelled) setMansfieldSeries(null);
+        });
+        return () => { cancelled = true; };
+    }, [ticker]);
+
     // Position popover to the right of the anchor cell, vertically centred.
     // Fully clamped so it never escapes the viewport on any edge.
-    const popW = 272, popH = 242;
+    const popW = 272, popH = 174 + (mansfieldSeries && mansfieldSeries.length >= 2 ? 70 : 0);
     const GAP = 10;   // gap between anchor and popover
     const EDGE = 8;    // min distance from viewport edge
 
@@ -539,32 +692,16 @@ export function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, n
                 )}
             </div>
 
-            {/* ── Footer: 6 key metrics ── */}
-            <div style={{
-                padding: "6px 12px 8px",
-                borderTop: `1px solid ${T.border}`,
-                display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px 6px",
-            }}>
-                {[
-                    { label: "3M Ret", val: row.ret_3m != null ? `${row.ret_3m >= 0 ? "+" : ""}${Number(row.ret_3m).toFixed(1)}%` : "", color: row.ret_3m == null ? T.muted : row.ret_3m >= 0 ? posClr : negClr },
-                    { label: "6M Ret", val: row.ret_6m != null ? `${row.ret_6m >= 0 ? "+" : ""}${Number(row.ret_6m).toFixed(1)}%` : "", color: row.ret_6m == null ? T.muted : row.ret_6m >= 0 ? posClr : negClr },
-                    { label: "12M Ret", val: row.ret_12m != null ? `${row.ret_12m >= 0 ? "+" : ""}${Number(row.ret_12m).toFixed(1)}%` : "", color: row.ret_12m == null ? T.muted : row.ret_12m >= 0 ? posClr : negClr },
-                    { label: "RS Rating", val: row.rs_rating != null ? Math.round(row.rs_rating) : "", color: row.rs_rating >= 90 ? posClr : row.rs_rating >= 75 ? (isDark ? "#f97316" : "#ea580c") : T.subtext },
-                    { label: "Rel Vol", val: row.rel_volume != null ? `${Number(row.rel_volume).toFixed(2)}x` : "", color: row.rel_volume >= 2 ? posClr : row.rel_volume >= 1 ? T.text : T.muted },
-                    { label: "From High", val: row.pct_from_52w_high != null ? `-${Number(row.pct_from_52w_high).toFixed(1)}%` : "", color: T.subtext },
-                ].map(({ label, val, color }) => (
-                    <div key={label} style={{ textAlign: "center" }}>
-                        <div style={{
-                            fontSize: 8.5, color: T.muted, textTransform: "uppercase",
-                            letterSpacing: ".05em", marginBottom: 1
-                        }}>{label}</div>
-                        <div style={{
-                            fontSize: 11, fontWeight: 700, color, fontFamily: mono,
-                            fontVariantNumeric: "tabular-nums"
-                        }}>{val}</div>
-                    </div>
-                ))}
-            </div>
+            {/* ── Mansfield RS trend ── */}
+            {mansfieldSeries && mansfieldSeries.length >= 2 && (
+                <div style={{
+                    padding: "6px 6px 8px",
+                    borderTop: `1px solid ${T.border}`,
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                }}>
+                    <MansfieldRSChart series={mansfieldSeries} T={T} width={258} height={54} />
+                </div>
+            )}
         </div>,
         document.body
     );
