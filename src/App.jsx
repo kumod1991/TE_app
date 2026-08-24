@@ -131,7 +131,7 @@ const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "owner
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "rotation"]);
 const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "funds", "dividends"]);
 const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact"]);
-const BreadthDataContext = createContext({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], nameMap: {}, industryMap: {}, tablesLoading: true });
+const BreadthDataContext = createContext({ industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
 
 const supabase = {
@@ -10783,10 +10783,7 @@ _seedScreenerCache();
 let _breadthCache = {
     data: null,          // chart rows (market_breadth time series)
     range: null,         // which range "1Y" etc. the data covers
-    top52wHigh: null,
-    topRS: null,
-    rsRating: null,
-    nameMap: null,
+    industryMap: null,   // ticker -> industry, from company_financials (see MarketBreadthModule)
     cfRows: null,        // company_financials (tickermc/industry/name)
     cfRowsTime: null,    // when cfRows was last fetched
     latestDate: null,
@@ -10796,15 +10793,9 @@ let _breadthCache = {
 (function _seedBreadthCache() {
     const saved = _lsRead(_LS_BREADTH_KEY);
     // Only restore if: not expired AND has actual data rows (guards against poisoned empty cache)
-    // Also validate that top52wHigh rows carry ret_3m/6m/12m -- older caches lacked these fields
     if (saved && saved.loadedAt && (Date.now() - saved.loadedAt) < _LS_MAX_AGE_MS
         && Array.isArray(saved.data) && saved.data.length > 0) {
-        const sample = Array.isArray(saved.top52wHigh) && saved.top52wHigh[0];
-        const hasReturns = !sample || (sample.ret_3m != null || sample.ret_6m != null || sample.ret_12m != null);
-        if (hasReturns) {
-            _breadthCache = { ..._breadthCache, ...saved };
-        }
-        // If returns are missing, discard the cache so a fresh fetch fills them in
+        _breadthCache = { ..._breadthCache, ...saved };
     }
 })();
 // Cache TTL: 20 min  prevents empty RS arrays from being served after a DB update
@@ -15145,19 +15136,20 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
  *   the full ~1,500-2,000 stock universe in JS, even though only the top 50
  *   rows of each list are ever rendered.
  *
- *   That's now a single call to the get_breadth_screens() Postgres RPC
- *   (see market_breadth_screens_migration.sql), which does the joins,
- *   filtering and ranking server-side and returns only the top ~300 rows
- *   per list (buffer for the client-side Nifty-500 filter).
+ *   That was later replaced with a single get_breadth_screens() Postgres RPC
+ *   call. Since then, the Market Leaders screens in ScreensModule moved to
+ *   reading the stock_analytics materialized view directly (see
+ *   _prefetchScreensStockAnalytics), which made every field that RPC
+ *   returned (top52wHigh/topRS/rsRating/trendAligned/nameMap) unused —
+ *   the only thing anything downstream still read was `industryMap`,
+ *   assembled as a side effect from whichever ~300 tickers happened to be
+ *   in those lists. So the RPC is gone too, replaced by a single lightweight
+ *   direct read of company_financials(ticker, industry) for the whole
+ *   universe, which also fixes the coverage gap the old top-300 cut had.
  *
  *   The chart time-series fetch (market_breadth table) is untouched  it
  *   was already a single lightweight query with no joins.
  *
- * Drop-in: replace the existing MarketBreadthModule function in App.jsx
- * with this one. No other files need to change except the small
- * _breadthCache seed object near the top of App.jsx (optional cleanup 
- * see note below); the existing shape still works fine as-is since JS
- * objects don't require pre-declared keys.
  * ============================================================================ */
 function MarketBreadthModule({ T, onDataReady }) {
     const exchange = "NSE";
@@ -15166,19 +15158,12 @@ function MarketBreadthModule({ T, onDataReady }) {
     // and pre-populate all state so the header renders on the very first paint.
     const _hasSeededCache = !!(
         _breadthCache.data && _breadthCache.data.length > 0 &&
-        _breadthCache.range && _breadthCache.top52wHigh && _breadthCache.topRS &&
-        _breadthCache.nameMap && _breadthCache.trendAligned &&
-        _breadthCache.rsRating
+        _breadthCache.range && _breadthCache.industryMap
     );
     const [data, setData] = useState(() => _hasSeededCache ? _breadthCache.data : []);
-    // These values are only ever written (fed into _breadthCache / onDataReady) and never
-    // read for this component's own render, so they're refs instead of state -- avoids
+    // industryMap is only ever written (fed into _breadthCache / onDataReady) and never
+    // read for this component's own render, so it's a ref instead of state -- avoids
     // triggering a re-render of MarketBreadthModule on every background data update.
-    const top52wHighRef = useRef(_hasSeededCache ? _breadthCache.top52wHigh : []);
-    const topRSRef = useRef(_hasSeededCache ? _breadthCache.topRS : { rs3m: [], rs6m: [], rs12m: [] });
-    const trendAlignedRef = useRef(_hasSeededCache ? _breadthCache.trendAligned : []);
-    const rsRatingRef = useRef(_hasSeededCache ? _breadthCache.rsRating : []);
-    const nameMapRef = useRef(_hasSeededCache ? (_breadthCache.nameMap || {}) : {});
     const industryMapRef = useRef(_hasSeededCache ? (_breadthCache.industryMap || {}) : {});
     const [loading, setLoading] = useState(!_hasSeededCache);
     const [refreshing, setRefreshing] = useState(false); // SWR: background refresh indicator
@@ -15202,12 +15187,19 @@ function MarketBreadthModule({ T, onDataReady }) {
     };
 
     // ------------------------------------------------------------------
-    // Screens data (Top 52W High Proximity / Top RS / RS Rating / RS
-    // Acceleration / Trend Aligned) now come from a single server-side
-    // RPC — get_breadth_screens() — instead of the client paginating
-    // through indicators (x3), stock_prices_daily, stock_returns,
-    // stock_52w, and company_financials and joining/sorting the full
-    // NSE universe in JS. See market_breadth_screens_migration.sql.
+    // Industry lookup (ticker -> industry, for the ChartPreviewPopover
+    // hover card) now comes from a lightweight direct read of
+    // company_financials instead of the old get_breadth_screens RPC.
+    // That RPC did joins/ranking/sorting across 5 screen lists (top52w
+    // high, topRS x3, rsRating, trendAligned) solely to harvest a
+    // name/industry field as a side effect -- and only for whichever
+    // ~300 tickers happened to land in those lists that day. None of
+    // top52wHigh/topRS/rsRating/trendAligned/nameMap were actually read
+    // anywhere downstream anymore (Market Leaders now reads stock_analytics
+    // directly, and name already falls back to row.name in
+    // ChartPreviewPopover), so this replaces a 5-list RPC with a single
+    // ticker->industry read that also fixes the coverage gap, since
+    // company_financials is keyed by the whole universe, not a top-300 cut.
     // ------------------------------------------------------------------
 
     useEffect(() => {
@@ -15218,26 +15210,15 @@ function MarketBreadthModule({ T, onDataReady }) {
             const hasStale = !!(
                 _breadthCache.data && _breadthCache.data.length > 0 &&
                 _breadthCache.range === range &&
-                _breadthCache.top52wHigh && _breadthCache.topRS && _breadthCache.nameMap &&
-                _breadthCache.trendAligned && _breadthCache.rsRating
+                _breadthCache.industryMap
             );
 
             //  STEP 1: serve stale instantly  no loading spinner 
             if (hasStale) {
                 setData(_breadthCache.data);
-                top52wHighRef.current = _breadthCache.top52wHigh;
-                topRSRef.current = _breadthCache.topRS;
-                nameMapRef.current = _breadthCache.nameMap;
                 if (_breadthCache.industryMap) industryMapRef.current = _breadthCache.industryMap;
-                trendAlignedRef.current = _breadthCache.trendAligned;
-                rsRatingRef.current = _breadthCache.rsRating;
                 setLoading(false); tablesLoadingRef.current = false;
                 if (onDataReady) onDataReady({
-                    top52wHigh: _breadthCache.top52wHigh,
-                    topRS: _breadthCache.topRS,
-                    trendAligned: _breadthCache.trendAligned,
-                    rsRating: _breadthCache.rsRating,
-                    nameMap: _breadthCache.nameMap,
                     industryMap: _breadthCache.industryMap || {},
                     tablesLoading: false,
                 });
@@ -15284,64 +15265,31 @@ function MarketBreadthModule({ T, onDataReady }) {
                 }
                 setLoading(false);
 
-                //  2) Screens  a single server-side RPC does the joins, filtering,
-                //     ranking and sorting inside Postgres and returns only the top
-                //     p_limit rows per list (default 300  a buffer for the client
-                //     -side Nifty-500 filter, since the UI only ever shows 50).
-                const screensRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_breadth_screens`, {
-                    method: "POST",
-                    headers: { ...H, "Content-Type": "application/json" },
-                    signal: sig,
-                    body: JSON.stringify({ p_exchange: exchange, p_min_market_cap: 500, p_limit: 300 }),
-                }).then(r => r.json()).catch(e => ({ __error: e.message }));
+                //  2) Industry map  a single lightweight direct read of
+                //     company_financials (ticker, industry only, whole
+                //     universe), replacing the get_breadth_screens RPC.
+                const cfRes = await fetch(
+                    `${SUPABASE_URL}/rest/v1/company_financials?select=ticker,industry&limit=3000`,
+                    { headers: H, signal: sig }
+                ).then(r => r.json()).catch(e => ({ __error: e.message }));
 
-                const screensFailed = !screensRes || screensRes.__error || screensRes.code || screensRes.message;
-                if (screensFailed) {
-                    if (!hasStale) console.warn("[Breadth] get_breadth_screens RPC failed:", screensRes);
-                    else console.warn("[Breadth] Background screens refresh failed, keeping stale data:", screensRes);
+                const cfFailed = !Array.isArray(cfRes) || cfRes?.__error || cfRes?.code || cfRes?.message;
+                if (cfFailed) {
+                    if (!hasStale) console.warn("[Breadth] company_financials industry fetch failed:", cfRes);
+                    else console.warn("[Breadth] Background industry refresh failed, keeping stale data:", cfRes);
                     tablesLoadingRef.current = false;
                     setRefreshing(false);
                     return;
                 }
 
-                const {
-                    latestDate,
-                    top52wHigh: top52wHighRows = [],
-                    topRS: topRSRows = { rs3m: [], rs6m: [], rs12m: [] },
-                    rsRating: rsRatingRows = [],
-                    trendAligned: trendAlignedRows = [],
-                } = screensRes;
-
-                // Build ticker  name/industry maps from whatever rows came back.
-                // Cheap now: each list is capped at p_limit rows (not the full
-                // ~1,500-2,000 stock universe), so this is a tiny dedup pass.
-                const nameMapInit = {};
                 const industryMap = {};
-                const allScreenRows = [
-                    ...top52wHighRows,
-                    ...topRSRows.rs3m, ...topRSRows.rs6m, ...topRSRows.rs12m,
-                    ...rsRatingRows, ...trendAlignedRows,
-                ];
-                allScreenRows.forEach(r => {
-                    if (!r?.ticker) return;
-                    if (r.name) nameMapInit[r.ticker] = r.name;
-                    if (r.industry) industryMap[r.ticker] = r.industry;
+                cfRes.forEach(r => {
+                    if (r?.ticker && r.industry) industryMap[r.ticker] = r.industry;
                 });
 
-                nameMapRef.current = nameMapInit;
                 industryMapRef.current = industryMap;
-                top52wHighRef.current = top52wHighRows;
-                topRSRef.current = topRSRows;
-                rsRatingRef.current = rsRatingRows;
-                trendAlignedRef.current = trendAlignedRows;
 
-                _breadthCache.nameMap = nameMapInit;
                 _breadthCache.industryMap = industryMap;
-                _breadthCache.latestDate = latestDate;
-                _breadthCache.top52wHigh = top52wHighRows;
-                _breadthCache.topRS = topRSRows?.rs3m?.length ? topRSRows : null;
-                _breadthCache.rsRating = rsRatingRows;
-                _breadthCache.trendAligned = trendAlignedRows;
                 _breadthCache.loadedAt = Date.now();
 
                 // Only persist to localStorage when we actually have data  never write empty cache
@@ -15349,22 +15297,12 @@ function MarketBreadthModule({ T, onDataReady }) {
                     _lsWrite(_LS_BREADTH_KEY, {
                         data: _breadthCache.data,
                         range: _breadthCache.range,
-                        top52wHigh: top52wHighRows,
-                        topRS: _breadthCache.topRS,
-                        rsRating: rsRatingRows,
-                        trendAligned: trendAlignedRows,
-                        nameMap: nameMapInit,
                         industryMap: industryMap,
                         loadedAt: _breadthCache.loadedAt,
                     });
                 }
 
                 if (onDataReady) onDataReady({
-                    top52wHigh: top52wHighRows,
-                    topRS: topRSRows,
-                    trendAligned: trendAlignedRows,
-                    rsRating: rsRatingRows,
-                    nameMap: nameMapInit,
                     industryMap: industryMap,
                     tablesLoading: false,
                 });
@@ -15931,7 +15869,7 @@ const PATTERN_FILTER_DEFS = [
 // 
 //  SCREEN DETAIL VIEW  full-width table, fills content area like screener
 // 
-function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFundaScan, tablesLoading }) {
+function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, tablesLoading }) {
     const { title, subtitle, color, rows, scoreKey, scoreLabel, formatVal, pivotMode, pullbackMode } = detail;
     const minerviniMode = !!detail.minerviniMode;
     const weinsteinTier1Mode = !!detail.weinsteinTier1Mode;
@@ -15942,6 +15880,9 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
     // Same derived theme StockDashboard's Trend Template table uses (tableHeadBg,
     // panelBorder, shadows, etc.) so this table matches it in fonts/colors/spacing.
     const D = useMemo(() => buildDashboardTheme(T), [T]);
+    // Smaller fonts/padding below 640px so more than 1-2 columns fit on screen
+    // without the user having to scroll horizontally right away.
+    const isMobileTable = useViewportBelow(640);
 
     // retestMode: same frozen-snapshot problem as pivotMode  local TF state needed
     const retestMode = !!detail.retestMode;
@@ -16628,27 +16569,27 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                         background: D.tableHeadBg, borderBottom: `1px solid ${D.panelBorder}`
                                     }}>
                                         <th style={{
-                                            padding: "11px 0 11px 16px", textAlign: "left",
-                                            fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                            padding: isMobileTable ? "8px 0 8px 8px" : "11px 0 11px 16px", textAlign: "left",
+                                            fontSize: isMobileTable ? 9.5 : 12, fontWeight: 800, textTransform: "uppercase",
                                             letterSpacing: ".12em", color: T.muted,
                                             position: "sticky", left: 0, zIndex: 11,
                                             background: D.tableHeadBg, borderRight: `1px solid ${D.panelBorder}`,
-                                            width: 40, whiteSpace: "nowrap"
+                                            width: isMobileTable ? 26 : 40, whiteSpace: "nowrap"
                                         }}>#</th>
                                         <th style={{
-                                            padding: "11px 16px 11px 10px", textAlign: "left",
-                                            fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                            padding: isMobileTable ? "8px 8px 8px 6px" : "11px 16px 11px 10px", textAlign: "left",
+                                            fontSize: isMobileTable ? 9.5 : 12, fontWeight: 800, textTransform: "uppercase",
                                             letterSpacing: ".12em", color: T.muted,
-                                            position: "sticky", left: 40, zIndex: 11,
+                                            position: "sticky", left: isMobileTable ? 26 : 40, zIndex: 11,
                                             background: D.tableHeadBg, borderRight: `1px solid ${D.panelBorder}`,
-                                            minWidth: 140, whiteSpace: "nowrap"
+                                            minWidth: isMobileTable ? 100 : 170, whiteSpace: "nowrap"
                                         }}>Company</th>
 
                                         {visibleCols.close && (
                                             <th onClick={() => handleSort("close")}
                                                 style={{
-                                                    padding: "11px 16px", textAlign: "right",
-                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                                    padding: isMobileTable ? "8px 8px" : "11px 16px", textAlign: "right",
+                                                    fontSize: isMobileTable ? 9.5 : 12, fontWeight: 800, textTransform: "uppercase",
                                                     letterSpacing: ".12em", whiteSpace: "nowrap",
                                                     cursor: "pointer", userSelect: "none",
                                                     color: sortKey === "close" ? accentOrFallback : T.muted,
@@ -16661,8 +16602,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                         {scoreKey && (
                                             <th onClick={() => handleSort(scoreKey)}
                                                 style={{
-                                                    padding: "11px 16px", textAlign: "right",
-                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                                    padding: isMobileTable ? "8px 8px" : "11px 16px", textAlign: "right",
+                                                    fontSize: isMobileTable ? 9.5 : 12, fontWeight: 800, textTransform: "uppercase",
                                                     letterSpacing: ".12em", whiteSpace: "nowrap",
                                                     cursor: "pointer", userSelect: "none", color: accentOrFallback,
                                                     background: isDark ? `${accentOrFallback}0d` : `${accentOrFallback}07`,
@@ -16675,8 +16616,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                         {dynColDefs.map(c => (
                                             <th key={c.key} onClick={() => handleSort(c.key)}
                                                 style={{
-                                                    padding: "11px 16px", textAlign: "right",
-                                                    fontSize: 12, fontWeight: 800, textTransform: "uppercase",
+                                                    padding: isMobileTable ? "8px 8px" : "11px 16px", textAlign: "right",
+                                                    fontSize: isMobileTable ? 9.5 : 12, fontWeight: 800, textTransform: "uppercase",
                                                     letterSpacing: ".12em", whiteSpace: "nowrap",
                                                     cursor: "pointer", userSelect: "none",
                                                     color: sortKey === c.key ? accentOrFallback : T.muted,
@@ -16740,43 +16681,62 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     }
                                                 }}>
                                                 <td data-sticky="1" style={{
-                                                    padding: "12px 0 12px 16px",
-                                                    fontSize: 13.5, color: T.muted, fontFamily: mono,
+                                                    padding: isMobileTable ? "8px 0 8px 8px" : "12px 0 12px 16px",
+                                                    fontSize: isMobileTable ? 10.5 : 13.5, color: T.muted, fontFamily: mono,
                                                     fontVariantNumeric: "tabular-nums", textAlign: "left",
                                                     position: "sticky", left: 0, background: stickyBg, zIndex: 2,
-                                                    borderRight: `1px solid ${D.panelBorder}`, width: 40
+                                                    borderRight: `1px solid ${D.panelBorder}`, width: isMobileTable ? 26 : 40
                                                 }}>
                                                     {idx + 1}
                                                 </td>
                                                 <td data-sticky="1" style={{
-                                                    padding: "12px 16px 12px 10px",
-                                                    position: "sticky", left: 40, background: stickyBg, zIndex: 2,
-                                                    borderRight: `1px solid ${D.panelBorder}`, minWidth: 140
+                                                    padding: isMobileTable ? "8px 8px 8px 6px" : "12px 16px 12px 10px",
+                                                    position: "sticky", left: isMobileTable ? 26 : 40, background: stickyBg, zIndex: 2,
+                                                    borderRight: `1px solid ${D.panelBorder}`, minWidth: isMobileTable ? 100 : 170
                                                 }}>
-                                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: isMobileTable ? 5 : 8 }}>
                                                         <div style={{
-                                                            flexShrink: 0, minWidth: 34, height: 22, borderRadius: 4,
+                                                            flexShrink: 0, minWidth: isMobileTable ? 24 : 34, height: isMobileTable ? 16 : 22, borderRadius: 4,
                                                             background: badgeBg, display: "flex", alignItems: "center",
-                                                            justifyContent: "center", padding: "0 5px", fontSize: 8.5,
+                                                            justifyContent: "center", padding: isMobileTable ? "0 3px" : "0 5px", fontSize: isMobileTable ? 7 : 8.5,
                                                             fontWeight: 700, letterSpacing: ".04em", color: badgeColor,
                                                             fontFamily: mono, textTransform: "uppercase"
                                                         }}>
                                                             {row.ticker.slice(0, 5)}
                                                         </div>
-                                                        <span style={{
-                                                            fontSize: 15.5, fontWeight: 600, color: T.text,
-                                                            whiteSpace: "nowrap", overflow: "hidden",
-                                                            textOverflow: "ellipsis", maxWidth: 120,
-                                                            fontFamily: sans, letterSpacing: "0"
-                                                        }}>
-                                                            {row.ticker}
-                                                        </span>
+                                                        {(row.stock_name || row.name) ? (
+                                                            <div style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.25 }}>
+                                                                <span style={{
+                                                                    fontSize: isMobileTable ? 10.5 : 14, fontWeight: 600, color: T.text,
+                                                                    whiteSpace: "nowrap", overflow: "hidden",
+                                                                    textOverflow: "ellipsis", maxWidth: isMobileTable ? 85 : 150,
+                                                                    fontFamily: sans, letterSpacing: "0"
+                                                                }}>
+                                                                    {row.stock_name || row.name}
+                                                                </span>
+                                                                <span style={{
+                                                                    fontSize: isMobileTable ? 9 : 11, fontWeight: 500, color: T.muted,
+                                                                    fontFamily: mono, letterSpacing: ".02em"
+                                                                }}>
+                                                                    {row.ticker}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{
+                                                                fontSize: isMobileTable ? 11 : 15.5, fontWeight: 600, color: T.text,
+                                                                whiteSpace: "nowrap", overflow: "hidden",
+                                                                textOverflow: "ellipsis", maxWidth: isMobileTable ? 75 : 120,
+                                                                fontFamily: sans, letterSpacing: "0"
+                                                            }}>
+                                                                {row.ticker}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
 
                                                 {visibleCols.close && (
                                                     <td style={{
-                                                        padding: "12px 16px", fontFamily: mono, fontSize: 15.5,
+                                                        padding: isMobileTable ? "8px 8px" : "12px 16px", fontFamily: mono, fontSize: isMobileTable ? 11.5 : 15.5,
                                                         color: T.text, fontWeight: 600,
                                                         textAlign: "right", fontVariantNumeric: "tabular-nums",
                                                         position: "relative"
@@ -16788,13 +16748,13 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     const sv = Number(row[scoreKey] ?? 0);
                                                     const sl = formatVal ? formatVal(sv, row) : sv.toFixed(2);
                                                     return (
-                                                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                                                        <td style={{ padding: isMobileTable ? "8px 8px" : "12px 16px", textAlign: "right" }}>
                                                             <span style={{
-                                                                display: "inline-block", padding: "3px 9px", borderRadius: 6,
+                                                                display: "inline-block", padding: isMobileTable ? "2px 6px" : "3px 9px", borderRadius: 6,
                                                                 background: withAlpha(accentOrFallback, isDark ? 0.18 : 0.10),
                                                                 border: `1px solid ${withAlpha(accentOrFallback, 0.28)}`,
                                                                 color: accentOrFallback, fontFamily: mono,
-                                                                fontWeight: 700, fontSize: 15.5, fontVariantNumeric: "tabular-nums"
+                                                                fontWeight: 700, fontSize: isMobileTable ? 11.5 : 15.5, fontVariantNumeric: "tabular-nums"
                                                             }}>
                                                                 {sl}
                                                             </span>
@@ -16826,8 +16786,8 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                                                     }
                                                     return (
                                                         <td key={c.key} style={{
-                                                            padding: "12px 16px", fontFamily: mono,
-                                                            fontSize: 15.5, fontWeight: (isRet || isRating || isRelVol || isWeinsteinTrend || isStageLabel) ? 600 : 400,
+                                                            padding: isMobileTable ? "8px 8px" : "12px 16px", fontFamily: mono,
+                                                            fontSize: isMobileTable ? 11.5 : 15.5, fontWeight: (isRet || isRating || isRelVol || isWeinsteinTrend || isStageLabel) ? 600 : 400,
                                                             textAlign: "right", fontVariantNumeric: "tabular-nums",
                                                             color: fmt == null ? T.muted : cellColor,
                                                             whiteSpace: "nowrap"
@@ -16903,7 +16863,6 @@ function ScreenDetailView({ detail, onBack, T, nameMap, industryMap, onTechnoFun
                         T={T}
                         accentColor={accentOrFallback}
                         anchorRect={hoveredRow.anchorRect}
-                        nameMap={nameMap}
                         industryMap={industryMap}
                     />
                 )}
@@ -16925,7 +16884,7 @@ const PATTERN_FILTER_TABS = [
     { id: "HAMMER", label: "Hammer", desc: "Small body near the top of the range with a long lower wick — sellers pushed price down, buyers pushed it back up." },
 ];
 
-function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, universe, nifty500Set, nifty500Loading }) {
+function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, nifty500Set, nifty500Loading }) {
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -17492,7 +17451,6 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
                     T={T}
                     accentColor={ACCENT}
                     anchorRect={hoveredRow.anchorRect}
-                    nameMap={nameMap}
                     industryMap={industryMap}
                 />
             )}
@@ -17501,7 +17459,7 @@ function PatternFilterModule({ T, onBack, initialTab, nameMap, industryMap, univ
 }
 
 function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
-    const { nameMap, industryMap, tablesLoading } = useBreadthData();
+    const { industryMap, tablesLoading } = useBreadthData();
 
     const T = themeTokens || THEMES.light;
     const isDark = T.bg !== THEMES.light.bg;
@@ -17641,13 +17599,12 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [stockAnalyticsRawRows, filterByUniverse]);
 
-    // Each of these just reads the view's own `screens` tag array — the
-    // threshold logic (rs_rating >= 85, rs_3m > 0, etc.) lives once in
-    // stock_analytics_v2.sql, not duplicated here.
+    // RS Rating Leaders filters directly on rs_rating > 90 (not the view's
+    // "RS Leader" tag, which uses a looser threshold) and shows every match,
+    // no top-50 cap.
     const dRsRating = useMemo(() =>
-        dStockAnalyticsBase.filter(r => r.screens?.includes("RS Leader"))
-            .sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity))
-            .slice(0, 50),
+        dStockAnalyticsBase.filter(r => r.rs_rating != null && r.rs_rating > 90)
+            .sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity)),
         [dStockAnalyticsBase]);
 
     const dRS3m = useMemo(() =>
@@ -17665,16 +17622,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const dRS12m = useMemo(() =>
         dStockAnalyticsBase.filter(r => r.screens?.includes("RS 12M Leader"))
             .sort((a, b) => (b.rs_12m ?? -Infinity) - (a.rs_12m ?? -Infinity))
-            .slice(0, 50),
-        [dStockAnalyticsBase]);
-
-    // "combo" kept as a field name (not just rs_rating) so the existing
-    // scoreKey="combo" / formatScore={v => v.toFixed(2)} wiring on the
-    // Multi-TF RS Leaders ScreenRow needs no changes.
-    const dMultiTF = useMemo(() =>
-        dStockAnalyticsBase.filter(r => r.screens?.includes("Multi-TF RS"))
-            .map(r => ({ ...r, combo: (r.rs_3m ?? 0) + (r.rs_6m ?? 0) + (r.rs_12m ?? 0) }))
-            .sort((a, b) => b.combo - a.combo)
             .slice(0, 50),
         [dStockAnalyticsBase]);
 
@@ -18124,7 +18071,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     }, [dWeinsteinBase]);
 
     const totalCount = dRS3m.length + dRS6m.length + dRS12m.length +
-        dMultiTF.length + dRsRating.length;
+        dRsRating.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length;
@@ -18146,7 +18093,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         if (!pendingScreen || tablesLoading) return;
         const PILL_MAP = {
             "RS Leader": { rowKey: "ml-rsrating", title: "RS Rating Leaders", rows: dRsRating, scoreKey: "rs_rating", scoreLabel: "RS Rating", color: "#22c55e", formatVal: v => Math.round(v).toString() },
-            "Multi-TF RS": { rowKey: "ml-multitf", title: "Multi-TF RS Leaders", rows: dMultiTF, scoreKey: "combo", scoreLabel: "RS Composite", color: "#818cf8", formatVal: v => Number(v).toFixed(2) },
             "Vol Breakout": { rowKey: "bo-vol", title: "Volume Breakout", rows: dVolBreakout, scoreKey: "rel_volume", scoreLabel: "Rel Vol", color: "#34d399", formatVal: v => `${Number(v).toFixed(2)}x` },
             "52W High BO": { rowKey: "bo-52w", title: "52W High Breakout", rows: d52wBreakout, scoreKey: "pct_from_52w_high", scoreLabel: "From High", color: "#4ade80", formatVal: v => v <= 0 ? `+${Math.abs(v).toFixed(2)}%` : `-${Number(v).toFixed(2)}%` },
             "Pivot BO": { rowKey: "bo-pivot", title: "Pivot Breakout", rows: dPivotBreakout, scoreKey: "pct_above_pivot", scoreLabel: "% Above Pivot", color: "#22c55e", formatVal: v => `+${Number(v).toFixed(2)}%` },
@@ -18165,7 +18111,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 scoreKey: sc.scoreKey, scoreLabel: sc.scoreLabel, formatVal: sc.formatVal
             });
         }
-    }, [pendingScreen, tablesLoading, dRsRating, dMultiTF,
+    }, [pendingScreen, tablesLoading, dRsRating,
         dVolBreakout, d52wBreakout, dPivotBreakout, dPb50dma, dPbShallow, dPbWeekly, dPbVolDryup]);
 
     // Accent  a neutral blue separate from the app's green
@@ -18178,7 +18124,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 detail={screenDetail}
                 onBack={() => setScreenDetail(null)}
                 T={T}
-                nameMap={nameMap}
                 industryMap={industryMap}
                 onTechnoFundaScan={onTechnoFundaScan}
                 tablesLoading={tablesLoading}
@@ -18191,7 +18136,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return (
             <PatternFilterModule T={T} initialTab={patternFilterInitialTab}
                 onBack={() => setPatternFilterOpen(false)}
-                nameMap={nameMap} industryMap={industryMap}
+                industryMap={industryMap}
                 universe={universe} nifty500Set={nifty500Set} nifty500Loading={nifty500Loading} />
         );
     }
@@ -18470,7 +18415,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
                                 count={stockAnalyticsLoading ? "" : totalCount}>
                                 <ScreenRow rowKey="ml-rsrating" title="RS Rating Leaders"
-                                    subtitle="Composite relative strength score on a 0-99 scale"
+                                    subtitle="Stocks with RS Rating above 90"
                                     rows={dRsRating} scoreKey="rs_rating" scoreLabel="RS Rating"
                                     formatScore={v => Math.round(v).toString()} tfLabel="RS Rating Leaders"
                                     loadingOverride={stockAnalyticsLoading} />
@@ -18488,11 +18433,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     subtitle="Strongest relative performers over the last 12 months"
                                     rows={dRS12m} scoreKey="rs_12m" scoreLabel="RS 12M"
                                     formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 12M Leaders"
-                                    loadingOverride={stockAnalyticsLoading} />
-                                <ScreenRow rowKey="ml-multitf" title="Multi-TF RS Leaders"
-                                    subtitle="Strong relative strength across 3M, 6M and 12M simultaneously"
-                                    rows={dMultiTF} scoreKey="combo" scoreLabel="RS Composite"
-                                    formatScore={v => v.toFixed(2)} tfLabel="Multi-TF Leaders"
                                     loadingOverride={stockAnalyticsLoading} />
                             </CategorySection>
 
@@ -19714,7 +19654,7 @@ function SectorRotationModule({ T }) {
 
 
 function TechnicalAnalyticsModule({ T, subPage = "breadth", onTechnoFundaScan }) {
-    const [breadthShared, setBreadthShared] = useState({ top52wHigh: [], topRS: { rs3m: [], rs6m: [], rs12m: [] }, trendAligned: [], rsRating: [], nameMap: {}, industryMap: {}, tablesLoading: true });
+    const [breadthShared, setBreadthShared] = useState({ industryMap: {}, tablesLoading: true });
     const isRotation = subPage === "rotation";
     return (
         <BreadthDataContext.Provider value={breadthShared}>
