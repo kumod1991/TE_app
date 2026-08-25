@@ -3016,6 +3016,173 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
 });
 
 // ─── RS LOGIN GATE ────────────────────────────────────────────────────────────
+// Bottom-of-dashboard promo strip. Mirrors the 5 real scan categories that
+// live on the TechLens → Screens page (ScreensModule's CategorySection list:
+// Market Leaders, Breakouts, Pullbacks, Legend Screens, Chart Patterns) so
+// the copy actually describes what that page contains, instead of a generic
+// "RS Rating" tagline. Guests get a login CTA; logged-in users get a direct
+// link into Screens since there's nothing left to gate here.
+const DASHBOARD_FOOTER_SCREEN_CATEGORIES = [
+    { label: "Market Leaders", desc: "RS Rating, 3M/6M/12M leaders", colorKey: "accent" },
+    { label: "Breakouts", desc: "Volume, 52W high & pivot breakouts", colorKey: "pos" },
+    { label: "Pullbacks", desc: "50 DMA, pivot retest, shallow & weekly pullbacks", colorKey: "amber" },
+    { label: "Legend Screens", desc: "Minervini Trend Template & Weinstein Stage", colorKey: "blue" },
+    { label: "Chart Patterns", desc: "Weekly Hammer, Engulfing & Morning Star scans", colorKey: "purple" },
+];
+
+function DashboardFooterPromo({ D, isCompact, isLoggedIn, onLogin, onNavigate }) {
+    const categoryColor = key => {
+        switch (key) {
+            case "accent": return D.accent || "#2563eb";
+            case "pos": return D.pos || (D.isDark ? "#34d399" : "#059669");
+            case "amber": return D.isDark ? "#fbbf24" : "#b45309";
+            case "blue": return D.isDark ? "#60a5fa" : "#2563eb";
+            case "purple": return D.isDark ? "#c084fc" : "#7c3aed";
+            default: return D.accent || "#2563eb";
+        }
+    };
+
+    return (
+        <section style={{
+            marginTop: isCompact ? 4 : 8,
+            marginBottom: isCompact ? 14 : 18,
+            borderRadius: 16,
+            border: `1px solid ${D.panelBorder}`,
+            background: D.panelBg,
+            boxShadow: D.shadowLg,
+            overflow: "hidden",
+        }}>
+            <div style={{
+                padding: isCompact ? "20px 18px" : "28px 30px",
+                background: `linear-gradient(135deg, ${withAlpha(D.accent || "#2563eb", D.isDark ? 0.14 : 0.08)}, transparent 60%)`,
+            }}>
+                <div style={{
+                    display: "flex",
+                    flexDirection: isCompact ? "column" : "row",
+                    alignItems: isCompact ? "flex-start" : "center",
+                    justifyContent: "space-between",
+                    gap: 18,
+                    marginBottom: 20,
+                }}>
+                    <div style={{ minWidth: 0, maxWidth: 640 }}>
+                        <div style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "5px 10px",
+                            borderRadius: 999,
+                            background: withAlpha(D.accent || "#2563eb", D.isDark ? 0.18 : 0.10),
+                            border: `1px solid ${withAlpha(D.accent || "#2563eb", 0.28)}`,
+                            color: D.accent || "#2563eb",
+                            fontSize: 11.5,
+                            fontWeight: 800,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                            marginBottom: 12,
+                        }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: D.accent || "#2563eb" }} />
+                            Screens
+                        </div>
+                        <h3 style={{
+                            margin: 0,
+                            color: D.text,
+                            fontSize: isCompact ? 19 : 22,
+                            fontWeight: 800,
+                            letterSpacing: "-0.02em",
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                        }}>
+                            {isLoggedIn
+                                ? "Jump into TechLens \u2192 Screens"
+                                : "5 scan categories, refreshed daily \u2014 free to run"}
+                        </h3>
+                        <p style={{
+                            margin: "8px 0 0",
+                            color: D.subtext,
+                            fontSize: 15,
+                            lineHeight: 1.6,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                        }}>
+                            {isLoggedIn
+                                ? "Screen the Market Leaders, Breakouts, Pullbacks, Legend Screens (Minervini + Weinstein) and weekly Chart Patterns \u2014  across the full NSE/BSE universe."
+                                : "From momentum leaders to breakout, pullback, Minervini/Weinstein and candlestick pattern scans across the full NSE/BSE universe. Login free to filter, save, and revisit any of them."}
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => isLoggedIn ? onNavigate?.("technical", "screens") : onLogin?.()}
+                        style={{
+                            flexShrink: 0,
+                            padding: "12px 26px",
+                            borderRadius: 999,
+                            background: D.accent || "#2563eb",
+                            color: "#fff",
+                            border: "none",
+                            fontSize: 16,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            fontFamily: "inherit",
+                            letterSpacing: "0.01em",
+                            whiteSpace: "nowrap",
+                            boxShadow: `0 4px 16px ${withAlpha(D.accent || "#2563eb", 0.28)}`,
+                            transition: "opacity 0.15s ease",
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
+                        onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                    >
+                        {isLoggedIn ? "Open Screens \u2192" : "Login \u2014 it's free"}
+                    </button>
+                </div>
+
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: isCompact ? "1fr" : "repeat(5, minmax(0, 1fr))",
+                    gap: 10,
+                }}>
+                    {DASHBOARD_FOOTER_SCREEN_CATEGORIES.map(cat => {
+                        const color = categoryColor(cat.colorKey);
+                        return (
+                            <div
+                                key={cat.label}
+                                onClick={() => isLoggedIn ? onNavigate?.("technical", "screens") : onLogin?.()}
+                                style={{
+                                    minWidth: 0,
+                                    borderRadius: 10,
+                                    padding: "12px 13px",
+                                    background: D.softFill || D.card,
+                                    border: `1px solid ${D.panelBorder}`,
+                                    cursor: "pointer",
+                                    transition: "border-color 0.15s ease",
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.borderColor = withAlpha(color, 0.5)}
+                                onMouseLeave={e => e.currentTarget.style.borderColor = D.panelBorder}
+                            >
+                                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                                    <span style={{
+                                        fontSize: 13.5,
+                                        fontWeight: 800,
+                                        color: D.text,
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                    }}>{cat.label}</span>
+                                </div>
+                                <div style={{
+                                    fontSize: 12.5,
+                                    color: D.subtext,
+                                    lineHeight: 1.4,
+                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                }}>{cat.desc}</div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </section>
+    );
+}
+
 function RsLoginGate({ T, isLocked, onLogin, children }) {
     if (isLocked) {
         return (
@@ -4256,6 +4423,9 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 {/* Own standalone card — shown regardless of which mobile tab (pulse/movers/
                     leaders) is active, since it isn't one of the tabbed panels above. */}
                 <TrendTemplateCard T={D} userToken={userToken} isCompact={isCompact} />
+
+                {/* ── FOOTER PROMO ── login CTA for guests, TechLens/Screens guide for logged-in users */}
+                <DashboardFooterPromo D={D} isCompact={isCompact} isLoggedIn={!!userToken} onLogin={onLogin} onNavigate={onNavigate} />
 
                 <style>{`
                 .stock-dashboard-shell * {
