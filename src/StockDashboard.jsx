@@ -928,6 +928,11 @@ function DashboardLensIcon({ type, size = 16 }) {
     if (type === "watchlist") return <svg {...common}><path d="M4 5h16" /><path d="M4 12h10" /><path d="M4 19h7" /><path d="M18 14v6" /><path d="M15 17h6" /></svg>;
     if (type === "journal") return <svg {...common}><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M14 3v5h5" /><path d="M9 14h6" /></svg>;
     if (type === "screens") return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9h10" /><path d="M7 14h6" /></svg>;
+    if (type === "leaders") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /><circle cx="19" cy="5" r="1.5" fill="currentColor" stroke="none" /></svg>;
+    if (type === "breakouts") return <svg {...common}><path d="M4 19h16" /><path d="M4 15l4-4 3 3 5-6 4 4" /><path d="M20 8v4h-4" /></svg>;
+    if (type === "pullbacks") return <svg {...common}><path d="M4 8l5 5 3-3 8 8" /><path d="M4 4v4h4" /></svg>;
+    if (type === "legend") return <svg {...common}><circle cx="12" cy="8" r="5" /><path d="M8.5 12.5L7 21l5-3 5 3-1.5-8.5" /></svg>;
+    if (type === "patterns") return <svg {...common}><path d="M6 4v4" /><rect x="4" y="8" width="4" height="6" rx="1" /><path d="M6 14v6" /><path d="M13 3v3" /><rect x="11" y="6" width="4" height="9" rx="1" /><path d="M13 15v6" /><path d="M19 9v3" /><rect x="17" y="12" width="4" height="5" rx="1" /><path d="M19 17v4" /></svg>;
     return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
 }
 
@@ -2403,7 +2408,7 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
 
     const thBase = {
         fontWeight: 800,
-        fontSize: 12,
+        fontSize: 10,
         color: T.muted,
         textTransform: "uppercase",
         letterSpacing: "0.12em",
@@ -2457,7 +2462,7 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
                             border: `1px solid ${T.panelBorder}`,
                             background: T.isDark ? "rgba(255,255,255,0.06)" : "#fff",
                             color: T.text,
-                            fontSize: 15,
+                            fontSize: 13,
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                             outline: "none",
                             transition: "border-color 0.15s",
@@ -2481,7 +2486,7 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
                     )}
                 </div>
             </div>
-            <div style={{ fontSize: 14, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
                 Stocks passing all 8 criteria of Mark Minervini's Trend Template
             </div>
 
@@ -2490,7 +2495,7 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
                     {[...Array(6)].map((_, i) => <Skeleton key={i} T={T} h={48} />)}
                 </div>
             ) : !sorted.length ? (
-                <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 17 }}>
+                <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 15 }}>
                     {searchTerm ? "No matching stocks" : "No stocks currently pass all 8 criteria"}
                 </div>
             ) : (
@@ -2529,7 +2534,7 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
                                     onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
                                     onClick={preview.onClick}
                                 >
-                                    <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                                    <td style={{ padding: "12px 16px", color: T.muted, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                                     <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
                                         <NameCell T={T} name={row.name} ticker={row.ticker} />
                                     </td>
@@ -3023,21 +3028,20 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
 // "RS Rating" tagline. Guests get a login CTA; logged-in users get a direct
 // link into Screens since there's nothing left to gate here.
 const DASHBOARD_FOOTER_SCREEN_CATEGORIES = [
-    { label: "Market Leaders", desc: "RS Rating, 3M/6M/12M leaders", colorKey: "accent" },
-    { label: "Breakouts", desc: "Volume, 52W high & pivot breakouts", colorKey: "pos" },
-    { label: "Pullbacks", desc: "50 DMA, pivot retest, shallow & weekly pullbacks", colorKey: "amber" },
-    { label: "Legend Screens", desc: "Minervini Trend Template & Weinstein Stage", colorKey: "blue" },
-    { label: "Chart Patterns", desc: "Weekly Hammer, Engulfing & Morning Star scans", colorKey: "purple" },
+    { label: "Market Leaders", desc: "RS Rating, 3M/6M/12M leaders", colorKey: "accent", type: "leaders" },
+    { label: "Breakouts", desc: "Volume, 52W high & pivot breakouts", colorKey: "pos", type: "breakouts" },
+    { label: "Pullbacks", desc: "50 DMA, pivot retest, shallow & weekly pullbacks", colorKey: "accent", type: "pullbacks" },
+    { label: "Legend Screens", desc: "Minervini Trend Template & Weinstein Stage", colorKey: "pos", type: "legend" },
+    { label: "Chart Patterns", desc: "Weekly Hammer, Engulfing & Morning Star scans", colorKey: "accent", type: "patterns" },
 ];
 
 function DashboardFooterPromo({ D, isCompact, isLoggedIn, onLogin, onNavigate }) {
+    // Stick to the app's two categorical tokens (accent/pos) instead of
+    // introducing off-palette amber/blue/purple hexes that exist nowhere
+    // else in the theme.
     const categoryColor = key => {
         switch (key) {
-            case "accent": return D.accent || "#2563eb";
             case "pos": return D.pos || (D.isDark ? "#34d399" : "#059669");
-            case "amber": return D.isDark ? "#fbbf24" : "#b45309";
-            case "blue": return D.isDark ? "#60a5fa" : "#2563eb";
-            case "purple": return D.isDark ? "#c084fc" : "#7c3aed";
             default: return D.accent || "#2563eb";
         }
     };
@@ -3053,8 +3057,7 @@ function DashboardFooterPromo({ D, isCompact, isLoggedIn, onLogin, onNavigate })
             overflow: "hidden",
         }}>
             <div style={{
-                padding: isCompact ? "20px 18px" : "28px 30px",
-                background: `linear-gradient(135deg, ${withAlpha(D.accent || "#2563eb", D.isDark ? 0.14 : 0.08)}, transparent 60%)`,
+                padding: isCompact ? "18px 16px" : "24px 26px",
             }}>
                 <div style={{
                     display: "flex",
@@ -3074,8 +3077,8 @@ function DashboardFooterPromo({ D, isCompact, isLoggedIn, onLogin, onNavigate })
                             background: withAlpha(D.accent || "#2563eb", D.isDark ? 0.18 : 0.10),
                             border: `1px solid ${withAlpha(D.accent || "#2563eb", 0.28)}`,
                             color: D.accent || "#2563eb",
-                            fontSize: 11.5,
-                            fontWeight: 800,
+                            fontSize: 12,
+                            fontWeight: 700,
                             letterSpacing: "0.08em",
                             textTransform: "uppercase",
                             fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
@@ -3141,40 +3144,56 @@ function DashboardFooterPromo({ D, isCompact, isLoggedIn, onLogin, onNavigate })
                     {DASHBOARD_FOOTER_SCREEN_CATEGORIES.map(cat => {
                         const color = categoryColor(cat.colorKey);
                         return (
-                            <div
+                            <button
                                 key={cat.label}
+                                type="button"
                                 onClick={() => isLoggedIn ? onNavigate?.("technical", "screens") : onLogin?.()}
                                 style={{
                                     minWidth: 0,
-                                    borderRadius: 10,
-                                    padding: "12px 13px",
-                                    background: D.softFill || D.card,
+                                    minHeight: isCompact ? 82 : 88,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "flex-start",
+                                    justifyContent: "space-between",
+                                    gap: 10,
+                                    textAlign: "left",
+                                    borderRadius: 14,
                                     border: `1px solid ${D.panelBorder}`,
+                                    background: D.card,
+                                    color: D.text,
                                     cursor: "pointer",
-                                    transition: "border-color 0.15s ease",
+                                    padding: "11px",
+                                    fontFamily: "inherit",
+                                    transition: "transform .14s ease, border-color .14s ease, background .14s ease",
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.borderColor = withAlpha(color, 0.5)}
-                                onMouseLeave={e => e.currentTarget.style.borderColor = D.panelBorder}
+                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(color, 0.42); }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
                             >
-                                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-                                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(color, D.isDark ? 0.18 : 0.10), color }}>
+                                    <DashboardLensIcon type={cat.type} />
+                                </span>
+                                <span style={{ minWidth: 0, width: "100%" }}>
                                     <span style={{
-                                        fontSize: 13.5,
-                                        fontWeight: 800,
+                                        display: "block",
+                                        fontSize: 14.5,
+                                        fontWeight: 700,
                                         color: D.text,
+                                        marginBottom: 3,
+                                        letterSpacing: "-0.01em",
                                         fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                                         whiteSpace: "nowrap",
                                         overflow: "hidden",
                                         textOverflow: "ellipsis",
                                     }}>{cat.label}</span>
-                                </div>
-                                <div style={{
-                                    fontSize: 12.5,
-                                    color: D.subtext,
-                                    lineHeight: 1.4,
-                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                }}>{cat.desc}</div>
-                            </div>
+                                    <span style={{
+                                        display: "block",
+                                        fontSize: 13,
+                                        color: D.subtext,
+                                        lineHeight: 1.4,
+                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                                    }}>{cat.desc}</span>
+                                </span>
+                            </button>
                         );
                     })}
                 </div>
