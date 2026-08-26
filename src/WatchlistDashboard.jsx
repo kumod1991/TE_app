@@ -21,6 +21,7 @@
 // ============================================================
 
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
+import { MansfieldRSChart, fetchMansfieldRSFromDB } from "./ChartPreviewPopover";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -340,6 +341,88 @@ function WlCandleSection({ ticker, T, width }) {
     );
 }
 
+// ─── RS Line section — Mansfield relative-strength trend ──────
+// Reuses MansfieldRSChart / fetchMansfieldRSFromDB from ChartPreviewPopover.jsx,
+// the same component that powers the RS line under the TechLens/Screens
+// hover-preview chart, so the two stay visually identical.
+function WlRsLineSection({ ticker, T, width }) {
+    const [series, setSeries] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const innerRef = useRef(null);
+    const [measuredWidth, setMeasuredWidth] = useState(width || 260);
+
+    useEffect(() => {
+        const el = innerRef.current;
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 40) setMeasuredWidth(Math.round(rect.width));
+
+        if (typeof ResizeObserver === "undefined") return;
+        const ro = new ResizeObserver(entries => {
+            const w = entries[0]?.contentRect?.width;
+            if (w && w > 40) setMeasuredWidth(Math.round(w));
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (!ticker) return;
+        let cancelled = false;
+        setLoading(true);
+        setSeries(null);
+        fetchMansfieldRSFromDB(ticker).then(data => {
+            if (!cancelled) { setSeries(Array.isArray(data) ? data : null); setLoading(false); }
+        }).catch(() => {
+            if (!cancelled) { setSeries(null); setLoading(false); }
+        });
+        return () => { cancelled = true; };
+    }, [ticker]);
+
+    const hasChart = Array.isArray(series) && series.length >= 2;
+
+    return (
+        <div style={{
+            background: T.card, border: `1px solid ${T.border}`, borderRadius: 12,
+            padding: "12px 12px 10px", overflow: "hidden", width: "100%",
+            boxSizing: "border-box", boxShadow: T.shadow || "none",
+            flexShrink: 0,
+        }}>
+            <div style={{
+                fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: "0.11em", marginBottom: 9, opacity: 0.62, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
+            }}>
+                RS Line · Mansfield
+            </div>
+            <div ref={innerRef} style={{ width: "100%" }}>
+                {loading ? (
+                    <div style={{
+                        height: 54, display: "flex", flexDirection: "column", alignItems: "center",
+                        justifyContent: "center", gap: 6, opacity: 0.45
+                    }}>
+                        <div style={{
+                            width: 14, height: 14, border: `1.5px solid ${T.border}`,
+                            borderTopColor: T.green, borderRadius: "50%",
+                            animation: "wlChartSpin 0.7s linear infinite"
+                        }} />
+                        <span style={{ fontSize: 10, color: T.subtext }}>Loading RS line</span>
+                    </div>
+                ) : hasChart ? (
+                    <MansfieldRSChart series={series} T={T} width={Math.max(150, measuredWidth)} height={54} />
+                ) : (
+                    <div style={{
+                        height: 40, display: "flex", alignItems: "center", justifyContent: "center",
+                        color: T.subtext, fontSize: 11, opacity: 0.4
+                    }}>
+                        RS data unavailable
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 async function fetchAnnouncements(symbols, token) {
     if (!symbols || symbols.length === 0) return {};
     try {
@@ -569,20 +652,16 @@ async function RPC(fn, params, token) {
 
 // ─── Data Loader ──────────────────────────────────────────────
 // Trend staging, breakout/pullback/vol-spike signals, relative volume,
-// pivots etc. are all precomputed in Postgres (stock_analytics matview).
-// Instead of a get_watchlist_rows RPC round trip, we now fetch the
-// watchlist's tickers + their stock_analytics rows directly via PostgREST,
-// and do filtering/sorting/pagination client-side. This is 2 REST calls
-// per watchlist (not per page — see wlAnalyticsCache below) instead of 1
-// RPC call per page, which is a net win once a watchlist is paginated,
-// re-sorted, or re-filtered, since none of that requires a network round
-// trip anymore.
+// pivots, market cap etc. are all precomputed in Postgres (stock_analytics
+// matview). A single SECURITY INVOKER RPC (get_watchlist_analytics) joins
+// watchlist_items -> stock_analytics server-side, so loading a watchlist
+// is exactly 1 network round trip (not per page — see wlAnalyticsCache
+// below) instead of the old 2-REST-call fetch. RLS on watchlist_items
+// still applies since the RPC is SECURITY INVOKER, so a user can only
+// ever pull rows for watchlists they own.
 
 const wlAnalyticsCache = new Map(); // watchlistId -> { ts, rows: rawRow[] }
 const WL_ANALYTICS_TTL = 60_000; // 60s — independent of the page/filter-keyed cache above
-
-const STOCK_ANALYTICS_COLS =
-    "ticker,name,close,ret_3m,ret_6m,ret_12m,rs_rating,pct_from_high,pct_from_low,pivot_high_20w,high_52w,low_52w,rel_vol,trend,signals,sma50,sma150,sma200";
 
 // Bust the raw-analytics cache for one watchlist (or all, if called with no arg).
 // Call this whenever watchlist_items changes (add/remove stock) so stale
@@ -592,66 +671,83 @@ function invalidateWatchlistAnalyticsCache(watchlistId) {
     else wlAnalyticsCache.clear();
 }
 
-async function fetchWatchlistAnalytics(watchlistId, token) {
+// Persisted (localStorage) SWR snapshot of the raw analytics rows, keyed
+// per-user per-watchlist. Lets a returning visit paint instantly from the
+// last-seen numbers while a background refetch brings them current — this
+// cache survives filter/sort changes, unlike the page/filter-keyed
+// watchlistCache above, since it's keyed on watchlistId alone.
+const LS_ANALYTICS_TTL = 24 * 60 * 60 * 1000; // 24h — stale but usable
+function getAnalyticsCacheKey(userId, watchlistId) { return `wl_analytics_v1_${userId}_${watchlistId}`; }
+function getPersistedAnalytics(userId, watchlistId) {
+    if (!userId || !watchlistId) return null;
+    const c = lsGet(getAnalyticsCacheKey(userId, watchlistId));
+    if (!c || !c.rows || Date.now() - c.ts > LS_ANALYTICS_TTL) return null;
+    return c; // { rows, ts }
+}
+function setPersistedAnalytics(userId, watchlistId, rows) {
+    if (!userId || !watchlistId) return;
+    lsSet(getAnalyticsCacheKey(userId, watchlistId), { rows, ts: Date.now() });
+}
+
+// Single-round-trip fetch via the get_watchlist_analytics RPC.
+async function fetchWatchlistAnalyticsFresh(watchlistId, token) {
+    const rows = await RPC("get_watchlist_analytics", { p_watchlist_id: watchlistId }, token);
+    const localStars = getPersistedStarSet(watchlistId);
+    let sawFallback = false;
+    const normalized = (rows || []).map(r => {
+        // r.is_starred is `false` when the column exists and is genuinely
+        // false, or `null` when the RPC's undefined_column fallback fired
+        // server-side (e.g. PostgREST/pg schema cache stale after a
+        // migration) — in the null case, defer to localStorage, matching
+        // the old two-call fetchItems() fallback behavior.
+        if (r.is_starred === null) sawFallback = true;
+        return {
+            ...r,
+            is_starred: r.is_starred ?? localStars.has((r.ticker || "").toUpperCase()),
+        };
+    });
+    if (sawFallback) {
+        console.warn("[Watchlist] is_starred column unavailable server-side; using localStorage star cache");
+    }
+    wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows: normalized });
+    return normalized;
+}
+
+// Stale-while-revalidate entry point:
+// 1. In-memory cache hit (<WL_ANALYTICS_TTL) → return instantly, no network.
+// 2. Else a localStorage snapshot exists → return it instantly, and kick off
+//    a background refetch that updates both caches and notifies the caller
+//    via onBackgroundUpdate so it can re-render with fresh numbers.
+// 3. Else (nothing cached anywhere) → await the network fetch directly.
+async function fetchWatchlistAnalytics(watchlistId, token, { userId, onBackgroundUpdate } = {}) {
     const cached = wlAnalyticsCache.get(watchlistId);
     if (cached && Date.now() - cached.ts < WL_ANALYTICS_TTL) return cached.rows;
 
-    const itemHeaders = { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" };
-    const fetchItems = async (selectCols) => {
-        const res = await fetch(
-            `${SUPABASE_URL}/rest/v1/watchlist_items?watchlist_id=eq.${watchlistId}&select=${selectCols}&order=added_at.asc`,
-            { headers: itemHeaders }
-        );
-        return res.ok ? res.json() : null;
-    };
-    let items = await fetchItems("ticker,is_starred");
-    let hasStarColumn = Array.isArray(items);
-    if (!hasStarColumn) {
-        items = await fetchItems("ticker");
-        // is_starred select failed (e.g. PostgREST schema cache stale after a
-        // migration, or a transient network/RLS issue) — do NOT report is_starred
-        // as known-false here, or it will permanently override the localStorage
-        // fallback below via `??`, which is what causes stars to silently revert.
-        console.warn("[Watchlist] is_starred column unavailable; falling back to localStorage star cache");
-    }
-    if (!Array.isArray(items)) items = [];
-    const tickers = (items || []).map(i => i.ticker);
-    const itemMeta = new Map(
-        (items || []).map(i => [i.ticker, { is_starred: hasStarColumn ? !!i.is_starred : undefined }])
-    );
-    const localStars = getPersistedStarSet(watchlistId);
-
-    if (!tickers.length) {
-        wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows: [] });
-        return [];
+    const persisted = userId ? getPersistedAnalytics(userId, watchlistId) : null;
+    if (persisted?.rows) {
+        fetchWatchlistAnalyticsFresh(watchlistId, token)
+            .then(fresh => {
+                if (userId) setPersistedAnalytics(userId, watchlistId, fresh);
+                onBackgroundUpdate?.(fresh);
+            })
+            .catch(() => { });
+        wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows: persisted.rows });
+        return persisted.rows;
     }
 
-    const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
-    const dataRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/stock_analytics?ticker=in.${tickerIn}&select=${STOCK_ANALYTICS_COLS}`,
-        { headers: { ...hdrs(token), "Range-Unit": "items", Range: "0-9999" } }
-    );
-    const data = dataRes.ok ? await dataRes.json() : [];
-
-    // Preserve watchlist order and keep tickers even if stock_analytics has no row
-    // for them yet (e.g. newly listed / not yet backfilled) — matches old RPC's
-    // LEFT JOIN behavior so stocks don't silently vanish from the watchlist.
-    const byTicker = new Map((data || []).map(r => [r.ticker, r]));
-    const rows = tickers.map(t => {
-        const base = byTicker.get(t) || { ticker: t };
-        const serverStar = itemMeta.get(t)?.is_starred;
-        return { ...base, is_starred: serverStar ?? localStars.has((t || "").toUpperCase()) };
-    });
-
-    wlAnalyticsCache.set(watchlistId, { ts: Date.now(), rows });
-    return rows;
+    const fresh = await fetchWatchlistAnalyticsFresh(watchlistId, token);
+    if (userId) setPersistedAnalytics(userId, watchlistId, fresh);
+    return fresh;
 }
 
 const numOrNull = v => (v == null ? null : (typeof v === "number" ? v : parseFloat(v)));
 
-async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, sortAsc, filters }) {
+// Normalize + filter + sort + paginate raw analytics rows into display rows.
+// Factored out so both the initial load and a background SWR update (which
+// arrives via onBackgroundUpdate, outside the async loadWatchlistRows call)
+// can share the exact same pipeline.
+function deriveDisplayRows(raw, { page, pageSize, sortCol, sortAsc, filters }) {
     const f = filters || {};
-    const raw = await fetchWatchlistAnalytics(watchlistId, token);
 
     // Normalize once — PostgREST returns `numeric` columns as strings.
     let rows = raw.map(r => ({
@@ -673,6 +769,7 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
         sma50: numOrNull(r.sma50),
         sma150: numOrNull(r.sma150),
         sma200: numOrNull(r.sma200),
+        market_cap_cr: numOrNull(r.market_cap_cr),
         is_starred: !!r.is_starred,
     }));
 
@@ -707,23 +804,19 @@ async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, 
     return { rows: rows.slice(start, start + pageSize), total };
 }
 
-// ─── Market Cap (for stat cards + Market Cap column) ───────────
-// Lightweight side-fetch from stock_ratios — avoids touching the
-// get_watchlist_rows RPC just to add one field.
-async function fetchMarketCaps(tickers, token) {
-    if (!tickers || tickers.length === 0) return {};
-    try {
-        const tickerIn = `(${tickers.map(t => `"${encodeURIComponent(t)}"`).join(",")})`;
-        const data = await GET(`stock_ratios?ticker=in.${tickerIn}&select=ticker,market_cap_cr`, token);
-        const map = {};
-        for (const row of (data || [])) {
-            if (row.ticker && row.market_cap_cr != null) map[row.ticker] = Number(row.market_cap_cr);
-        }
-        return map;
-    } catch {
-        return {};
-    }
+async function loadWatchlistRows({ watchlistId, token, page, pageSize, sortCol, sortAsc, filters, userId, onBackgroundUpdate }) {
+    const raw = await fetchWatchlistAnalytics(watchlistId, token, {
+        userId,
+        onBackgroundUpdate: onBackgroundUpdate
+            ? (freshRaw) => onBackgroundUpdate(deriveDisplayRows(freshRaw, { page, pageSize, sortCol, sortAsc, filters }))
+            : undefined,
+    });
+    return deriveDisplayRows(raw, { page, pageSize, sortCol, sortAsc, filters });
 }
+
+// Market cap now rides along in the same get_watchlist_analytics RPC call
+// (stock_analytics.market_cap_cr) — no separate stock_ratios fetch needed.
+// See market_cap_cr on each row returned by loadWatchlistRows/deriveDisplayRows.
 
 // ─── Ticker/Company search (autocomplete "Add Stocks") ─────────
 // company_financials.name isn't consistently cased in the DB (unlike
@@ -2424,7 +2517,22 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             || (persisted && Date.now() - persisted.ts < LS_ROWS_FRESH_TTL);
         if (isFresh && memCached) { return () => { cancelled = true; }; }
 
-        dedupedFetch(params, () => loadWatchlistRows(params))
+        const paramsWithUser = {
+            ...params,
+            userId,
+            onBackgroundUpdate: ({ rows: freshRows, total: freshTotal }) => {
+                // Fires when the analytics-level SWR cache served a stale
+                // localStorage snapshot above and the background refetch has
+                // now landed — patch in the current numbers without another
+                // loading-spinner flash.
+                if (cancelled) return;
+                setRows(freshRows); setTotalCount(freshTotal);
+                setCache(params, { rows: freshRows, total: freshTotal });
+                if (page === 0) setPersistedRows(activeWl, freshRows, freshTotal);
+            },
+        };
+
+        dedupedFetch(params, () => loadWatchlistRows(paramsWithUser))
             .then(({ rows, total }) => {
                 if (cancelled) return;
                 setRows(rows); setTotalCount(total);
@@ -2433,7 +2541,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                 if (page === 0) setPersistedRows(activeWl, rows, total);
             }).catch(console.error).finally(() => { if (!cancelled) setTableLoading(false); });
         return () => { cancelled = true; };
-    }, [activeWl, page, sortCol, sortAsc, filtersApplied, quickFilter, showStarredOnly, token, refreshKey]);
+    }, [activeWl, page, sortCol, sortAsc, filtersApplied, quickFilter, showStarredOnly, token, refreshKey, userId]);
 
     // Prefetch next page
     useEffect(() => {
@@ -2502,13 +2610,17 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rows, token]);
 
+    // market_cap_cr now arrives directly on each row from the
+    // get_watchlist_analytics RPC (stock_analytics.market_cap_cr) — no
+    // separate fetch needed, just derive the ticker -> cap map for the
+    // stat cards / Market Cap column, which key off `marketCaps` below.
     useEffect(() => {
-        const tickers = rows.map(r => r.ticker).filter(Boolean);
-        if (!tickers.length) return;
-        fetchMarketCaps(tickers, token)
-            .then(m => setMarketCaps(prev => ({ ...prev, ...m })))
-            .catch(() => { });
-    }, [rows, token]);
+        const next = {};
+        for (const r of rows) {
+            if (r.ticker && r.market_cap_cr != null) next[r.ticker] = r.market_cap_cr;
+        }
+        setMarketCaps(prev => ({ ...prev, ...next }));
+    }, [rows]);
 
     // ── Background pre-warm: on first login, silently populate feed caches for ALL watchlists ──
     // This ensures the announcements panel feels instant on every watchlist switch.
@@ -3764,7 +3876,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                             </div>
                         </div>
                     ) : (
-                        <div style={{ flex: 1, display: "flex", overflow: "hidden", flexDirection: isMobile ? "column" : "row" }}>
+                        <div style={{ flex: 1, display: "flex", overflow: "hidden", flexDirection: isMobile ? "column" : "row", position: "relative" }}>
                             {/* ── TABLE (flex) ───────────────────────────── */}
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, paddingBottom: isMobile ? 8 : 0 }}>
                                 {/* ── STAT CARDS — desktop only ── */}
@@ -4007,6 +4119,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 </div>
                                                 {/* Candlestick Chart — mobile */}
                                                 <WlCandleSection ticker={expandedRow.ticker} T={T} />
+                                                {/* RS Line Chart — mobile */}
+                                                <WlRsLineSection ticker={expandedRow.ticker} T={T} />
                                                 {[
                                                     {
                                                         label: "Performance", rows: [
@@ -4050,11 +4164,16 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         </div>
                                     </>
                                 ) : (
-                                    // Desktop inline panel
+                                    // Desktop panel — overlays the announcements slot instead of
+                                    // sitting inline in the flex row, so it doesn't squeeze the table
+                                    // and gets the full announcements-panel width to breathe in.
                                     <div style={{
-                                        width: 320, flexShrink: 0,
+                                        position: "absolute", top: 0, right: 0, bottom: 0,
+                                        width: 460,
+                                        zIndex: 30,
                                         background: T.surface,
                                         borderLeft: `1px solid ${T.border}`,
+                                        boxShadow: T.shadowLg ?? "-8px 0 24px rgba(15,23,42,0.12)",
                                         display: "flex", flexDirection: "column",
                                         overflow: "auto",
                                         animation: "slideInRight 0.18s ease",
@@ -4122,6 +4241,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 
                                             {/* Candlestick Chart */}
                                             <WlCandleSection ticker={expandedRow.ticker} T={T} />
+
+                                            {/* RS Line Chart */}
+                                            <WlRsLineSection ticker={expandedRow.ticker} T={T} />
 
                                             {[
                                                 {
@@ -4434,6 +4556,8 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
                 flexShrink: 0,
                 flex: isMobile ? 1 : "none",
                 minHeight: 0,
+                position: isMobile ? "static" : "relative",
+                zIndex: isMobile ? "auto" : 10,
                 background: T.surface,
                 borderLeft: isMobile ? "none" : `1px solid ${T.border}`,
                 display: "flex", flexDirection: "column",
