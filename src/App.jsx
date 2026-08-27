@@ -14892,8 +14892,16 @@ function FinancialAnalyticsModule({
 // 
 //  BREADTH LINE CHART  institutional-grade, chart-first design
 // 
-function BreadthLineChart({ data, lines, title, T, compact = false }) {
+function BreadthLineChart({ data, lines, title, T, compact = false, fullscreen = false, widthPx = null }) {
     const [hovIdx, setHovIdx] = useState(null);
+    // Unique per-instance id prefix -- prevents SVG <linearGradient>/<clipPath> id collisions
+    // when the same metric (e.g. "above_sma20") is rendered twice at once, such as a grid
+    // card sitting behind the fullscreen modal for that same chart. Without this, url(#id)
+    // resolves to whichever element the browser finds first in the DOM, silently clipping
+    // one chart to the other's (much smaller) clip rect.
+    const uidRef = useRef(null);
+    if (uidRef.current === null) uidRef.current = Math.random().toString(36).slice(2, 9);
+    const uid = uidRef.current;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -14901,7 +14909,7 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
     if (!data || data.length === 0) return (
         <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            height: compact ? 140 : 180, color: T.muted, fontSize: 12, fontFamily: sans
+            height: fullscreen ? 460 : (compact ? 140 : 180), color: T.muted, fontSize: 12, fontFamily: sans
         }}>
             <div style={{ textAlign: "center", opacity: .4 }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -14920,8 +14928,15 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
     const max = Math.min(100, Math.ceil(rawMax / 10) * 10);
     const range = max - min || 1;
 
-    const H_chart = compact ? 140 : 180;
-    const W = 800, PAD_L = 36, PAD_R = 12, PAD_T = 8, PAD_B = 24;
+    const H_chart = fullscreen ? 460 : (compact ? 140 : 180);
+    // "Dense" mode = fullscreen with an explicit widthPx (the scrollable, zoomed-in view).
+    // Plain fullscreen with no widthPx = "fit" mode: draw at a fixed intrinsic resolution
+    // (1400) and let CSS width:100% compress/expand it to the container, exactly like the
+    // compact chart does -- so switching lookback ranges visibly reshapes the chart instead
+    // of just growing an already-scrolled-away canvas that still shows the same recent slice.
+    const isDense = fullscreen && widthPx != null;
+    const W = isDense ? Math.max(1400, widthPx) : (fullscreen ? 1400 : 800);
+    const PAD_L = fullscreen ? 50 : 36, PAD_R = fullscreen ? 24 : 12, PAD_T = fullscreen ? 16 : 8, PAD_B = fullscreen ? 34 : 24;
     const cW = W - PAD_L - PAD_R, cH = H_chart - PAD_T - PAD_B;
 
     const xOf = i => PAD_L + (i / Math.max(data.length - 1, 1)) * cW;
@@ -14929,7 +14944,7 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
 
     const yTicks = [0, 25, 50, 75, 100].filter(v => v >= min && v <= max);
     const xTickIdxs = [];
-    const step = Math.max(1, Math.floor(data.length / 4));
+    const step = isDense ? Math.max(1, Math.floor(data.length / 26)) : fullscreen ? Math.max(1, Math.floor(data.length / 10)) : Math.max(1, Math.floor(data.length / 4));
     for (let i = 0; i < data.length; i += step) xTickIdxs.push(i);
     if (!xTickIdxs.includes(data.length - 1)) xTickIdxs.push(data.length - 1);
 
@@ -14948,54 +14963,72 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
 
     return (
         <div style={{ position: "relative" }}>
-            {/* Single-line chart header: value + trend + legend inline */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                {lines.length === 1 && latestVal !== null ? (
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                        <span style={{
-                            fontFamily: mono, fontSize: 20, fontWeight: 700,
-                            color: signalColor, letterSpacing: "-.02em", lineHeight: 1
-                        }}>
-                            {Number(latestVal).toFixed(1)}%
-                        </span>
-                        {trend !== null && (
+            {/* Single-line chart header: value + trend + legend inline (skipped in fullscreen  the modal shows its own larger header) */}
+            {!fullscreen && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    {lines.length === 1 && latestVal !== null ? (
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                             <span style={{
-                                fontFamily: mono, fontSize: 11,
-                                color: trend > 0 ? (isDark ? "#4ade80" : "#16a34a") : trend < 0 ? T.neg : T.muted,
-                                fontWeight: 600
+                                fontFamily: mono, fontSize: 20, fontWeight: 700,
+                                color: signalColor, letterSpacing: "-.02em", lineHeight: 1
                             }}>
-                                {trend > 0 ? "" : trend < 0 ? "" : ""}{Math.abs(trend).toFixed(1)}
+                                {Number(latestVal).toFixed(1)}%
                             </span>
-                        )}
-                        <span style={{ fontSize: 10, color: T.muted, fontFamily: sans }}>
-                            {latestVal >= 60 ? "Bullish" : latestVal <= 40 ? "Bearish" : "Neutral"}
-                        </span>
-                    </div>
-                ) : (
-                    <div /> /* spacer for multi-line */
-                )}
-                {/* Legend  right aligned, compact */}
-                {lines.length > 1 && (
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                        {lines.map(l => (
-                            <div key={l.key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <div style={{ width: 18, height: 1.5, background: l.color, borderRadius: 2, opacity: .9 }} />
-                                <span style={{ fontSize: 10, color: T.muted, fontFamily: sans, fontWeight: 500 }}>{l.label}</span>
-                                {hovData && (
-                                    <span style={{ fontSize: 10, color: T.text, fontFamily: mono, fontWeight: 700 }}>
-                                        {(hovData[l.key] != null && !isNaN(Number(hovData[l.key])) ? Number(hovData[l.key]).toFixed(1) : "-")}%
-                                    </span>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                            {trend !== null && (
+                                <span style={{
+                                    fontFamily: mono, fontSize: 11,
+                                    color: trend > 0 ? (isDark ? "#4ade80" : "#16a34a") : trend < 0 ? T.neg : T.muted,
+                                    fontWeight: 600
+                                }}>
+                                    {trend > 0 ? "" : trend < 0 ? "" : ""}{Math.abs(trend).toFixed(1)}
+                                </span>
+                            )}
+                            <span style={{ fontSize: 10, color: T.muted, fontFamily: sans }}>
+                                {latestVal >= 60 ? "Bullish" : latestVal <= 40 ? "Bearish" : "Neutral"}
+                            </span>
+                        </div>
+                    ) : (
+                        <div /> /* spacer for multi-line */
+                    )}
+                    {/* Legend  right aligned, compact */}
+                    {lines.length > 1 && (
+                        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                            {lines.map(l => (
+                                <div key={l.key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                    <div style={{ width: 18, height: 1.5, background: l.color, borderRadius: 2, opacity: .9 }} />
+                                    <span style={{ fontSize: 10, color: T.muted, fontFamily: sans, fontWeight: 500 }}>{l.label}</span>
+                                    {hovData && (
+                                        <span style={{ fontSize: 10, color: T.text, fontFamily: mono, fontWeight: 700 }}>
+                                            {(hovData[l.key] != null && !isNaN(Number(hovData[l.key])) ? Number(hovData[l.key]).toFixed(1) : "-")}%
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+            {/* Fullscreen legend  always shown above the chart when multiple lines are active */}
+            {fullscreen && lines.length > 1 && (
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 14 }}>
+                    {lines.map(l => (
+                        <div key={l.key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                            <div style={{ width: 22, height: 2, background: l.color, borderRadius: 2, opacity: .9 }} />
+                            <span style={{ fontSize: 12, color: T.muted, fontFamily: sans, fontWeight: 600 }}>{l.label}</span>
+                            {hovData && (
+                                <span style={{ fontSize: 12, color: T.text, fontFamily: mono, fontWeight: 700 }}>
+                                    {(hovData[l.key] != null && !isNaN(Number(hovData[l.key])) ? Number(hovData[l.key]).toFixed(1) : "-")}%
+                                </span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* SVG chart */}
             <div style={{ position: "relative", userSelect: "none" }}>
                 <svg viewBox={`0 0 ${W} ${H_chart}`}
-                    style={{ width: "100%", height: H_chart, display: "block", overflow: "visible" }}
+                    style={{ width: isDense ? W : "100%", height: H_chart, display: "block", overflow: "visible", minWidth: isDense ? W : undefined }}
                     onMouseMove={e => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         const px = (e.clientX - rect.left) / rect.width * W;
@@ -15005,12 +15038,12 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
                     onMouseLeave={() => setHovIdx(null)}>
                     <defs>
                         {lines.map(l => (
-                            <linearGradient key={`g-${l.key}`} id={`g-${l.key}`} x1="0" y1="0" x2="0" y2="1">
+                            <linearGradient key={`g-${l.key}`} id={`g-${uid}-${l.key}`} x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="0%" stopColor={l.color} stopOpacity={isDark ? "0.14" : "0.10"} />
                                 <stop offset="100%" stopColor={l.color} stopOpacity="0" />
                             </linearGradient>
                         ))}
-                        <clipPath id={`clip-${lines.map(l => l.key).join('-')}`}>
+                        <clipPath id={`clip-${uid}-${lines.map(l => l.key).join('-')}`}>
                             <rect x={PAD_L} y={PAD_T} width={cW} height={cH} />
                         </clipPath>
                     </defs>
@@ -15020,24 +15053,24 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
                         <g key={v}>
                             <line x1={PAD_L} y1={yOf(v)} x2={W - PAD_R} y2={yOf(v)}
                                 stroke={v === 50 ? T.subtext : T.border}
-                                strokeWidth={v === 50 ? "0.8" : "0.4"}
+                                strokeWidth={v === 50 ? (fullscreen ? "1" : "0.8") : (fullscreen ? "0.6" : "0.4")}
                                 strokeDasharray={v === 50 ? "4,4" : "2,5"}
                                 opacity={v === 50 ? "0.5" : "0.6"} />
-                            <text x={PAD_L - 6} y={yOf(v) + 3.5} textAnchor="end"
-                                fontSize="8.5" fill={T.muted} fontFamily={mono}>{v}</text>
+                            <text x={PAD_L - 8} y={yOf(v) + 4} textAnchor="end"
+                                fontSize={fullscreen ? "11" : "8.5"} fill={T.muted} fontFamily={mono}>{v}</text>
                         </g>
                     ))}
 
                     {/* 50% label on right edge */}
                     {min <= 50 && max >= 50 && (
-                        <text x={W - PAD_R + 3} y={yOf(50) + 3.5} textAnchor="start"
-                            fontSize="8" fill={T.muted} fontFamily={mono}>50</text>
+                        <text x={W - PAD_R + 4} y={yOf(50) + 4} textAnchor="start"
+                            fontSize={fullscreen ? "10.5" : "8"} fill={T.muted} fontFamily={mono}>50</text>
                     )}
 
                     {/* X labels */}
                     {xTickIdxs.map(i => (
-                        <text key={i} x={xOf(i)} y={H_chart - 3} textAnchor="middle"
-                            fontSize="8.5" fill={T.muted} fontFamily={mono}>
+                        <text key={i} x={xOf(i)} y={H_chart - (fullscreen ? 6 : 3)} textAnchor="middle"
+                            fontSize={fullscreen ? "10.5" : "8.5"} fill={T.muted} fontFamily={mono}>
                             {data[i].date?.slice(2, 10)}
                         </text>
                     ))}
@@ -15048,13 +15081,13 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
                         const bot = PAD_T + cH;
                         const areaPts = `${pts} ${xOf(data.length - 1).toFixed(2)},${bot.toFixed(2)} ${xOf(0).toFixed(2)},${bot.toFixed(2)}`;
                         return (
-                            <g key={l.key} clipPath={`url(#clip-${lines.map(l => l.key).join('-')})`}>
+                            <g key={l.key} clipPath={`url(#clip-${uid}-${lines.map(l => l.key).join('-')})`}>
                                 {/* Subtle area fill only for single-line charts */}
                                 {lines.length === 1 && (
-                                    <polygon points={areaPts} fill={`url(#g-${l.key})`} />
+                                    <polygon points={areaPts} fill={`url(#g-${uid}-${l.key})`} />
                                 )}
                                 <polyline points={pts} fill="none"
-                                    stroke={l.color} strokeWidth="1.5"
+                                    stroke={l.color} strokeWidth={fullscreen ? "2" : "1.5"}
                                     strokeLinecap="round" strokeLinejoin="round" />
                             </g>
                         );
@@ -15068,7 +15101,7 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
                             {lines.map(l => (
                                 <circle key={l.key}
                                     cx={xOf(hovIdx)} cy={yOf(data[hovIdx][l.key] ?? 0)}
-                                    r="3" fill={l.color} stroke={T.surface} strokeWidth="1.5" />
+                                    r={fullscreen ? "4" : "3"} fill={l.color} stroke={T.surface} strokeWidth="1.5" />
                             ))}
                         </>
                     )}
@@ -15151,6 +15184,179 @@ function BreadthLineChart({ data, lines, title, T, compact = false }) {
  *   was already a single lightweight query with no joins.
  *
  * ============================================================================ */
+// 
+//  BREADTH FULLSCREEN MODAL  a real component (not a helper fn) so it can safely
+//  own its own hooks: locking body scroll / Escape-to-close, and auto-scrolling the
+//  wide chart to the most recent date on open (matching what the compact card shows).
+// 
+function BreadthFullscreenModal({
+    cfg, data, T, isDark, lines, activeSeg, onToggleSeg, latestRow, prevRow,
+    getChartTone, range, CAP_SEGMENTS, shellBorder, onClose,
+}) {
+    const sans = "'IBM Plex Sans', system-ui, sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+    const scrollRef = useRef(null);
+    // Fullscreen is a pure enlargement of whatever the compact card is already showing --
+    // no independent range or zoom controls here, so there's nothing that can show a
+    // different chart than the small card. Always render at "fit" width.
+    const chartWidthPx = null;
+
+    const mainKey = lines[0]?.key;
+    const _lv = mainKey && latestRow ? latestRow[mainKey] : null;
+    const _pv = mainKey && prevRow ? prevRow[mainKey] : null;
+    const latestVal = (_lv != null && !isNaN(Number(_lv))) ? Number(_lv) : null;
+    const prevVal = (_pv != null && !isNaN(Number(_pv))) ? Number(_pv) : null;
+    const deltaVal = latestVal != null && prevVal != null ? +(latestVal - prevVal).toFixed(1) : null;
+    const tone = getChartTone(latestVal, cfg.id === "52low");
+
+    // Escape-to-close + lock background scroll while the modal is open
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", onKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            document.body.style.overflow = prevOverflow;
+        };
+    }, [onClose]);
+
+    return createPortal(
+        <div
+            onClick={onClose}
+            style={{
+                position: "fixed", inset: 0, zIndex: 4000,
+                background: isDark ? "rgba(3,6,12,0.78)" : "rgba(15,23,42,0.45)",
+                backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: 24,
+            }}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    position: "relative",
+                    width: "100%", maxWidth: 1240, maxHeight: "88vh",
+                    display: "flex", flexDirection: "column",
+                    borderRadius: 30, border: `1px solid ${shellBorder}`,
+                    background: isDark
+                        ? "linear-gradient(180deg, rgba(10,14,23,0.99), rgba(8,12,20,0.995))"
+                        : "linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,250,252,0.99))",
+                    boxShadow: isDark
+                        ? "0 40px 100px rgba(0,0,0,0.55)"
+                        : "0 40px 90px rgba(15,23,42,0.25)",
+                    overflow: "hidden",
+                }}
+            >
+                <div style={{
+                    position: "absolute", inset: 0, pointerEvents: "none",
+                    background: isDark
+                        ? `radial-gradient(circle at top right, ${tone.color}16, transparent 30%)`
+                        : `radial-gradient(circle at top right, ${tone.color}10, transparent 32%)`
+                }} />
+
+                {/* Header */}
+                <div style={{
+                    position: "relative", padding: "24px 28px 18px", borderBottom: `1px solid ${shellBorder}`,
+                    display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap"
+                }}>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".16em", marginBottom: 10 }}>
+                            {cfg.title}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                            <span style={{
+                                fontFamily: mono, fontSize: 34, fontWeight: 800,
+                                color: tone.color, letterSpacing: "-.03em", lineHeight: 1
+                            }}>
+                                {latestVal == null ? "-" : `${Number(latestVal).toFixed(1)}%`}
+                            </span>
+                            {deltaVal != null && (
+                                <span style={{
+                                    fontFamily: mono, fontSize: 14, fontWeight: 700,
+                                    color: deltaVal >= 0 ? T.green : T.neg
+                                }}>
+                                    {deltaVal >= 0 ? "+" : ""}{deltaVal} (1D)
+                                </span>
+                            )}
+                            <span style={{
+                                display: "inline-flex", alignItems: "center", padding: "5px 12px", borderRadius: 999,
+                                border: `1px solid ${tone.color}2a`, background: `${tone.color}12`,
+                                color: tone.color, fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase"
+                            }}>
+                                {tone.label}
+                            </span>
+                        </div>
+                        <div style={{ fontSize: 11.5, color: T.subtext }}>
+                            Breadth panel &middot; {range} lookback
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        aria-label="Close fullscreen chart"
+                        style={{
+                            width: 36, height: 36, borderRadius: 999, border: `1px solid ${shellBorder}`,
+                            background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.85)",
+                            color: T.subtext, cursor: "pointer", display: "flex", alignItems: "center",
+                            justifyContent: "center", flexShrink: 0, padding: 0
+                        }}
+                    >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+
+                {/* Controls: cap-size segments only -- same control the compact card exposes.
+                    No range or zoom toggle here: fullscreen is a straight enlargement of
+                    whatever the compact card is already showing, nothing else to pick. */}
+                <div style={{
+                    position: "relative", padding: "16px 28px", display: "flex", alignItems: "center",
+                    justifyContent: "flex-start", gap: 16, flexWrap: "wrap", borderBottom: `1px solid ${shellBorder}`
+                }}>
+                    <div style={{
+                        display: "flex", background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.72)",
+                        borderRadius: 999, padding: 4, gap: 4, border: `1px solid ${shellBorder}`
+                    }}>
+                        {CAP_SEGMENTS.map(seg => {
+                            const active = activeSeg.has(seg.id);
+                            return (
+                                <button
+                                    key={seg.id}
+                                    onClick={() => onToggleSeg(seg.id)}
+                                    style={{
+                                        height: 30, padding: "0 14px", border: "none", borderRadius: 999,
+                                        background: active ? (isDark ? "rgba(255,255,255,0.12)" : "#ffffff") : "transparent",
+                                        color: active ? T.text : T.muted, fontWeight: active ? 700 : 500,
+                                        fontSize: 11.5, fontFamily: sans, cursor: "pointer", transition: ".15s"
+                                    }}
+                                >
+                                    {seg.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Chart -- fills the container width, mirroring the compact card exactly */}
+                <div ref={scrollRef} className="breadth-fullscreen-scroll" style={{ position: "relative", flex: 1, overflow: "hidden", padding: "24px 28px 28px" }}>
+                    <div style={{ width: "100%" }}>
+                        <BreadthLineChart data={data} lines={lines} title="" T={T} compact={false} fullscreen widthPx={chartWidthPx} />
+                    </div>
+                </div>
+                <style>{`
+                    .breadth-fullscreen-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+                    .breadth-fullscreen-scroll::-webkit-scrollbar-track { background: transparent; }
+                    .breadth-fullscreen-scroll::-webkit-scrollbar-thumb { background: ${shellBorder}; border-radius: 10px; }
+                    .breadth-fullscreen-scroll::-webkit-scrollbar-thumb:hover { background: ${T.subtext}; }
+                `}</style>
+            </div>
+        </div>,
+        document.body
+    );
+}
+
 function MarketBreadthModule({ T, onDataReady }) {
     const exchange = "NSE";
     const [range, setRange] = useState("1Y");
@@ -15229,9 +15435,18 @@ function MarketBreadthModule({ T, onDataReady }) {
                 // Stale  revalidate silently
                 setRefreshing(true);
             } else {
-                // No cache at all  show spinner
-                setLoading(true);
+                // No cache for this range at all
                 tablesLoadingRef.current = true;
+                if (data.length > 0) {
+                    // We already have a previous range's chart on screen -- keep it
+                    // visible while the new range loads instead of swapping to a
+                    // blank spinner (which flashes visibly through the fullscreen
+                    // modal's blurred backdrop when switching 6M/1Y/2Y/3Y).
+                    setRefreshing(true);
+                } else {
+                    // True first load, nothing to show yet -- the spinner is appropriate.
+                    setLoading(true);
+                }
             }
             try {
                 const from = rangeDate();
@@ -15351,6 +15566,9 @@ function MarketBreadthModule({ T, onDataReady }) {
     const [chartSegs, setChartSegs] = useState(() =>
         Object.fromEntries(CHART_CONFIGS.map(c => [c.id, new Set(["all"])]))
     );
+
+    // ---- Fullscreen chart modal state ----
+    const [fullscreenId, setFullscreenId] = useState(null);
     const toggleSeg = (chartId, segId) => {
         setChartSegs(prev => {
             const cur = new Set(prev[chartId]);
@@ -15437,8 +15655,27 @@ function MarketBreadthModule({ T, onDataReady }) {
                         ? `radial-gradient(circle at top right, ${tone.color}18, transparent 28%)`
                         : `radial-gradient(circle at top right, ${tone.color}12, transparent 30%)`
                 }} />
+                {/* Fullscreen expand button */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); setFullscreenId(cfg.id); }}
+                    title="View fullscreen"
+                    aria-label={`View ${cfg.title} fullscreen`}
+                    style={{
+                        position: "absolute", top: compact ? 14 : 16, right: compact ? 14 : 16, zIndex: 3,
+                        width: compact ? 26 : 28, height: compact ? 26 : 28, borderRadius: 999,
+                        border: `1px solid ${shellBorder}`,
+                        background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.85)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", color: T.subtext, padding: 0,
+                        boxShadow: isDark ? "0 6px 16px rgba(2,6,23,0.3)" : "0 6px 14px rgba(15,23,42,0.08)"
+                    }}
+                >
+                    <svg width={compact ? 12 : 13} height={compact ? 12 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                </button>
                 <div style={{ position: "relative" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: compact ? 12 : 14, flexWrap: compact ? "wrap" : "nowrap" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: compact ? 12 : 14, flexWrap: compact ? "wrap" : "nowrap", paddingRight: 34 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{
                                 fontSize: 10, fontWeight: 800, color: T.muted,
@@ -15517,21 +15754,29 @@ function MarketBreadthModule({ T, onDataReady }) {
         );
     };
 
+    // ---- Fullscreen chart modal ----
+    const fullscreenCfg = CHART_CONFIGS.find(c => c.id === fullscreenId) || null;
+
     return (
         <div style={{ flex: 1, overflowY: "auto", background: T.bg, fontFamily: sans }}>
             <div style={{ width: "100%", maxWidth: 1400, margin: "0 auto" }}>
-                {refreshing && (
-                    <div style={{
-                        display: "flex", alignItems: "center", gap: 6, padding: "4px 24px",
-                        fontSize: 11, color: T.subtext, opacity: 0.55
-                    }}>
-                        <span style={{
-                            width: 6, height: 6, borderRadius: "50%", background: T.green,
-                            display: "inline-block", animation: "pulse 1.2s ease-in-out infinite"
-                        }} />
-                        Refreshing data...
-                    </div>
-                )}
+                {/* Fixed-height slot (always mounted) so this indicator toggling on/off never
+                    shifts the dashboard below it -- previously this was conditionally rendered,
+                    which inserted/removed 20px of height on every range switch and made the
+                    whole card grid visibly jump. */}
+                <div style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "4px 24px",
+                    height: 20, boxSizing: "content-box",
+                    fontSize: 11, color: T.subtext, opacity: refreshing ? 0.55 : 0,
+                    visibility: refreshing ? "visible" : "hidden",
+                    transition: "opacity .15s ease"
+                }}>
+                    <span style={{
+                        width: 6, height: 6, borderRadius: "50%", background: T.green,
+                        display: "inline-block", animation: "pulse 1.2s ease-in-out infinite"
+                    }} />
+                    Refreshing data...
+                </div>
 
                 {loading ? (
                     <div style={{
@@ -15579,7 +15824,7 @@ function MarketBreadthModule({ T, onDataReady }) {
                                                 Breadth Dashboard
                                             </div>
                                             <div style={{ fontSize: 24, fontWeight: 800, color: T.text, letterSpacing: "-.03em", marginBottom: 8 }}>
-                                                Market participation across trend horizons
+                                                Market Breadth
                                             </div>
 
                                         </div>
@@ -15729,6 +15974,24 @@ function MarketBreadthModule({ T, onDataReady }) {
                     </>
                 )}
             </div>
+            {fullscreenCfg && (
+                <BreadthFullscreenModal
+                    cfg={fullscreenCfg}
+                    data={data}
+                    T={T}
+                    isDark={isDark}
+                    lines={buildLines(fullscreenCfg)}
+                    activeSeg={chartSegs[fullscreenCfg.id]}
+                    onToggleSeg={(segId) => toggleSeg(fullscreenCfg.id, segId)}
+                    latestRow={latestRow}
+                    prevRow={prevRow}
+                    getChartTone={getChartTone}
+                    range={range}
+                    CAP_SEGMENTS={CAP_SEGMENTS}
+                    shellBorder={shellBorder}
+                    onClose={() => setFullscreenId(null)}
+                />
+            )}
         </div>
     );
 

@@ -830,6 +830,77 @@ const StatCard = memo(({ label, value, sub, color, T, badge }) => (
   </div>
 ));
 
+// Swipeable, one-card-at-a-time horizontal carousel for a StatCard group — mirrors the
+// horizontal-scroll/snap card strip used for hero metrics elsewhere in the app (mobile only).
+const MobileStatCarousel = memo(({ cards, T }) => {
+  const trackRef = useRef(null);
+  const [active, setActive] = useState(0);
+
+  const handleScroll = () => {
+    const el = trackRef.current;
+    if (!el || !el.clientWidth) return;
+    const idx = Math.round(el.scrollLeft / el.clientWidth);
+    setActive(Math.max(0, Math.min(cards.length - 1, idx)));
+  };
+
+  const goTo = (i) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+  };
+
+  if (!cards.length) return null;
+
+  return (
+    <div>
+      <div
+        ref={trackRef}
+        onScroll={handleScroll}
+        className="fdm-stat-carousel-track"
+        style={{
+          display: "flex", overflowX: "auto", scrollSnapType: "x mandatory",
+          WebkitOverflowScrolling: "touch", touchAction: "pan-x", scrollbarWidth: "none",
+          gap: 10, margin: "0 -2px", padding: "2px 2px 4px",
+        }}
+      >
+        {cards.map((c, i) => (
+          <div key={i} style={{ flex: "0 0 84%", scrollSnapAlign: "center", minWidth: 0 }}>
+            <StatCard {...c} T={T} />
+          </div>
+        ))}
+      </div>
+      {cards.length > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 2 }}>
+          {cards.map((_, i) => (
+            <span
+              key={i}
+              onClick={() => goTo(i)}
+              style={{
+                width: i === active ? 16 : 6, height: 6, borderRadius: 4, cursor: "pointer",
+                background: i === active ? (T.accent || GREEN) : (T.isDark ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.3)"),
+                transition: "all .15s ease",
+              }}
+            />
+          ))}
+        </div>
+      )}
+      <style>{`.fdm-stat-carousel-track::-webkit-scrollbar { display: none; }`}</style>
+    </div>
+  );
+});
+
+// Renders a row of StatCards as a fixed grid on desktop, or the swipeable
+// horizontal carousel above on mobile. `cards` is an array of StatCard props.
+const StatCardGroup = ({ cards, cols, isMobile, T }) => (
+  isMobile
+    ? <MobileStatCarousel cards={cards} T={T} />
+    : (
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
+        {cards.map((c, i) => <StatCard key={i} {...c} T={T} />)}
+      </div>
+    )
+);
+
 const ViewToggle = ({ options, value, onChange, T, dataSpanYears }) => (
   <div style={{ display: "flex", gap: 4, background: T.surface || T.bg, borderRadius: 999, padding: 4, border: `1px solid ${T.border}`, boxShadow: T.isDark ? "none" : "inset 0 1px 0 rgba(255,255,255,0.6)", flexShrink: 0 }}>
     {options.map(opt => {
@@ -1255,21 +1326,21 @@ const OverviewTab = memo(function OverviewTab({ cashMemo, overviewTabData, isMob
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <h2 style={sh}>Flow Summary <span style={{ fontSize: 12, color: T.subtext, fontWeight: 400 }}>as of {fmtDate(latest?.date)}</span></h2>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(6, 1fr)", gap: 10 }}>
-          <StatCard label="FII 1D"  value={fmtCrShort(fii1)}  color={getColor(fii1)}  badge={fii1 > 0 ? "BUY" : fii1 < 0 ? "SELL" : null} T={T} />
-          <StatCard label="FII 5D"  value={fmtCrShort(fii5)}  color={getColor(fii5)}  T={T} />
-          <StatCard label="FII 20D" value={fmtCrShort(fii20)} color={getColor(fii20)} T={T} />
-          <StatCard label="DII 1D"  value={fmtCrShort(dii1)}  color={getColor(dii1)}  badge={dii1 > 0 ? "BUY" : dii1 < 0 ? "SELL" : null} T={T} />
-          <StatCard label="DII 5D"  value={fmtCrShort(dii5)}  color={getColor(dii5)}  T={T} />
-          <StatCard label="DII 20D" value={fmtCrShort(dii20)} color={getColor(dii20)} T={T} />
-        </div>
+        <StatCardGroup isMobile={isMobile} T={T} cols={6} cards={[
+          { label: "FII 1D",  value: fmtCrShort(fii1),  color: getColor(fii1),  badge: fii1 > 0 ? "BUY" : fii1 < 0 ? "SELL" : null },
+          { label: "FII 5D",  value: fmtCrShort(fii5),  color: getColor(fii5) },
+          { label: "FII 20D", value: fmtCrShort(fii20), color: getColor(fii20) },
+          { label: "DII 1D",  value: fmtCrShort(dii1),  color: getColor(dii1),  badge: dii1 > 0 ? "BUY" : dii1 < 0 ? "SELL" : null },
+          { label: "DII 5D",  value: fmtCrShort(dii5),  color: getColor(dii5) },
+          { label: "DII 20D", value: fmtCrShort(dii20), color: getColor(dii20) },
+        ]} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: 10 }}>
-        <StatCard label="Total Inst. 1D"    value={fmtCrShort(totalInst1)} color={getColor(totalInst1)} T={T} />
-        <StatCard label="FII Participation" value={`${(participation * 100).toFixed(0)}%`} color={BLUE} sub="of institutional volume" T={T} />
-        <StatCard label="Absorption"        value={absorption} color={absorption.includes("Both Sell") ? RED : absorption.includes("Both Buy") ? GREEN : BLUE} T={T} />
-      </div>
+      <StatCardGroup isMobile={isMobile} T={T} cols={3} cards={[
+        { label: "Total Inst. 1D",    value: fmtCrShort(totalInst1), color: getColor(totalInst1) },
+        { label: "FII Participation", value: `${(participation * 100).toFixed(0)}%`, color: BLUE, sub: "of institutional volume" },
+        { label: "Absorption",        value: absorption, color: absorption.includes("Both Sell") ? RED : absorption.includes("Both Buy") ? GREEN : BLUE },
+      ]} />
 
       <div style={card}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
@@ -1313,12 +1384,12 @@ const CashFlowTab = memo(function CashFlowTab({ cashMemo, cashFlowAggRows, cashF
 
       <div>
         <h2 style={sh}>Rolling Flow Metrics</h2>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
-          <StatCard label="FII Rolling 5D"  value={fmtCrShort(fii5)}  color={getColor(fii5)}  T={T} />
-          <StatCard label="FII Rolling 20D" value={fmtCrShort(fii20)} color={getColor(fii20)} T={T} />
-          <StatCard label="DII Rolling 5D"  value={fmtCrShort(dii5)}  color={getColor(dii5)}  T={T} />
-          <StatCard label="DII Rolling 20D" value={fmtCrShort(dii20)} color={getColor(dii20)} T={T} />
-        </div>
+        <StatCardGroup isMobile={isMobile} T={T} cols={4} cards={[
+          { label: "FII Rolling 5D",  value: fmtCrShort(fii5),  color: getColor(fii5) },
+          { label: "FII Rolling 20D", value: fmtCrShort(fii20), color: getColor(fii20) },
+          { label: "DII Rolling 5D",  value: fmtCrShort(dii5),  color: getColor(dii5) },
+          { label: "DII Rolling 20D", value: fmtCrShort(dii20), color: getColor(dii20) },
+        ]} />
       </div>
 
       <div style={card}>
@@ -1377,12 +1448,12 @@ const DerivativesTab = memo(function DerivativesTab({ derivMemo, derivativesTabD
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
-        <StatCard label="FII Net Position" value={latest.fiiNet ? (latest.fiiNet>0?"+":"")+latest.fiiNet.toLocaleString("en-IN"):"—"} color={getColor(latest.fiiNet)} T={T} />
-        <StatCard label="FII L/S Ratio"    value={lsRatio} color={parseFloat(lsRatio)>1?GREEN:RED} sub={parseFloat(lsRatio)>1?"Net Long":"Net Short"} T={T} />
-        <StatCard label="DII Net Position" value={latest.diiNet ? (latest.diiNet>0?"+":"")+latest.diiNet.toLocaleString("en-IN"):"—"} color={getColor(latest.diiNet)} T={T} />
-        <StatCard label="Build-up"         value={buildUp} color={buildUp==="Long Build-up"?GREEN:buildUp==="Short Build-up"?RED:AMBER} T={T} />
-      </div>
+      <StatCardGroup isMobile={isMobile} T={T} cols={4} cards={[
+        { label: "FII Net Position", value: latest.fiiNet ? (latest.fiiNet>0?"+":"")+latest.fiiNet.toLocaleString("en-IN"):"—", color: getColor(latest.fiiNet) },
+        { label: "FII L/S Ratio",    value: lsRatio, color: parseFloat(lsRatio)>1?GREEN:RED, sub: parseFloat(lsRatio)>1?"Net Long":"Net Short" },
+        { label: "DII Net Position", value: latest.diiNet ? (latest.diiNet>0?"+":"")+latest.diiNet.toLocaleString("en-IN"):"—", color: getColor(latest.diiNet) },
+        { label: "Build-up",         value: buildUp, color: buildUp==="Long Build-up"?GREEN:buildUp==="Short Build-up"?RED:AMBER },
+      ]} />
 
       <div style={card}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
