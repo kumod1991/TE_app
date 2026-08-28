@@ -262,6 +262,43 @@ function WlMiniCandleChart({ candles, T, width = 280, height = 120 }) {
     );
 }
 
+// ─── Latest indicators-table snapshot (extra technicals not carried on the
+// stock_analytics row: sma20, intraday/weekly pivot ladder, rs_score,
+// rs_ratio, rs_base, mansfield_rs, cap_category). Fetched lazily per ticker
+// when the detail panel opens, cached like the weekly-chart data. ─────────
+const _wlIndicatorsCache = new Map(); // ticker → row | null
+const _wlIndicatorsInFlight = new Map(); // ticker → Promise
+
+async function fetchWlIndicatorsSnapshot(ticker, token) {
+    const cached = _wlIndicatorsCache.get(ticker);
+    if (cached !== undefined) return cached;
+    if (_wlIndicatorsInFlight.has(ticker)) return _wlIndicatorsInFlight.get(ticker);
+
+    const promise = (async () => {
+        try {
+            const rows = await GET(
+                `indicators?ticker=eq.${encodeURIComponent(ticker)}&exchange=eq.NSE`
+                + `&select=sma20,sma50,sma150,sma200,rs_3m,rs_6m,rs_12m,rs_score,rs_rating,`
+                + `pivot_high_10d,pivot_high_20d,pivot_high_10w,pivot_high_20w,rs_ratio,rs_base,`
+                + `mansfield_rs,market_cap_cr,cap_category,w52_high,w52_low,date`
+                + `&order=date.desc&limit=1`,
+                token
+            );
+            const row = Array.isArray(rows) && rows.length ? rows[0] : null;
+            _wlIndicatorsCache.set(ticker, row);
+            return row;
+        } catch {
+            _wlIndicatorsCache.set(ticker, null);
+            return null;
+        } finally {
+            _wlIndicatorsInFlight.delete(ticker);
+        }
+    })();
+
+    _wlIndicatorsInFlight.set(ticker, promise);
+    return promise;
+}
+
 // ─── Candlestick section (used in both desktop panel and mobile sheet) ────
 function WlCandleSection({ ticker, T, width }) {
     const [candles, setCandles] = useState(null);
@@ -393,7 +430,7 @@ function WlRsLineSection({ ticker, T, width }) {
                 fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase",
                 letterSpacing: "0.11em", marginBottom: 9, opacity: 0.62, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif"
             }}>
-                RS Line · Mansfield
+                RS Line 
             </div>
             <div ref={innerRef} style={{ width: "100%" }}>
                 {loading ? (
@@ -1154,7 +1191,197 @@ const fmt = {
         if (cr >= 1e5) return "₹" + (cr / 1e5).toFixed(2) + "L Cr";
         return "₹" + Math.round(cr).toLocaleString("en-IN") + " Cr";
     },
+    num: (v, d = 2) => v == null || isNaN(+v) ? "—" : (+v).toFixed(d),
 };
+
+// ═══════════════════════════════════════════════════════════════
+//  PREMIUM TECHNICALS DETAIL — shared by mobile sheet + desktop panel
+//  Merges the stock_analytics row (`row`) with the latest indicators-table
+//  snapshot (`ind`) into a clean, densely-informative but minimal set of
+//  metric cards. Every numeric value is computed once and reused across
+//  the visual (gauge/bar) and the printed figure so they can never disagree.
+// ═══════════════════════════════════════════════════════════════
+
+// Thin uppercase section label — the only "chrome" a card gets.
+function TechLabel({ children, T, right }) {
+    return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
+            <div style={{
+                fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: "0.13em", opacity: 0.5, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+            }}>{children}</div>
+            {right}
+        </div>
+    );
+}
+
+// One metric line: label left, mono value right, optional small sub-label
+// (e.g. "+4.2% from"), optional colored value.
+function TechRow({ label, value, color, sub, T, last }) {
+    return (
+        <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "baseline",
+            padding: "6.5px 0", borderBottom: last ? "none" : `1px solid ${T.border}`,
+        }}>
+            <span style={{ fontSize: 11.5, color: T.subtext, opacity: 0.72, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{label}</span>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                {sub != null && <span style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", color: color || T.subtext, opacity: 0.65 }}>{sub}</span>}
+                <span style={{ fontSize: 12, fontWeight: 700, color: color || T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.01em" }}>{value}</span>
+            </span>
+        </div>
+    );
+}
+
+// Card shell — identical footprint to the old ad-hoc section cards so the
+// rest of the layout (gaps, scroll behaviour) doesn't need to change.
+function TechCard({ title, T, children, right }) {
+    return (
+        <div style={{
+            background: T.card, border: `1px solid ${T.border}`, borderRadius: 12,
+            padding: "12px 14px 5px", boxShadow: T.shadow || "none", flexShrink: 0,
+        }}>
+            <TechLabel T={T} right={right}>{title}</TechLabel>
+            {children}
+        </div>
+    );
+}
+
+// RS Rating gauge — a slim 0–99 bar, red→amber→green, with a marker dot.
+// Reads instantly next to the raw number, the way an institutional RS
+// rating strip does.
+function RsGauge({ value, T, width = 84 }) {
+    if (value == null || isNaN(+value)) return null;
+    const v = Math.max(1, Math.min(99, +value));
+    const pct = v / 99;
+    const color = v >= 80 ? (T.green ?? "#22c55e") : v >= 50 ? (T.gold ?? T.amber ?? "#d97706") : (T.neg ?? "#e11d48");
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ position: "relative", width, height: 4, borderRadius: 99, background: T.border, opacity: 0.9 }}>
+                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct * 100}%`, borderRadius: 99, background: color }} />
+            </div>
+        </div>
+    );
+}
+
+// 52-week range position bar — shows where close sits between the low and
+// high, so "From High" / "From Low" percentages get a visual anchor.
+function RangeBar({ low, high, close, T, width = 108 }) {
+    if (low == null || high == null || close == null) return null;
+    const lo = +low, hi = +high, c = +close;
+    if (!(hi > lo)) return null;
+    const pct = Math.max(0, Math.min(1, (c - lo) / (hi - lo)));
+    const color = pct >= 0.8 ? (T.green ?? "#22c55e") : pct <= 0.2 ? (T.neg ?? "#e11d48") : (T.gold ?? T.amber ?? "#d97706");
+    return (
+        <div style={{ position: "relative", width, height: 4, borderRadius: 99, background: T.border, opacity: 0.9, margin: "2px 0 8px" }}>
+            <div style={{
+                position: "absolute", left: `calc(${pct * 100}% - 3px)`, top: -2, width: 8, height: 8,
+                borderRadius: "50%", background: color, border: `2px solid ${T.card}`, boxShadow: "0 0 0 1px " + T.border,
+            }} />
+        </div>
+    );
+}
+
+// Small structural check row — is price above/below a given MA — used to
+// give the moving-average ladder an at-a-glance read, not just raw numbers.
+function TrendDot({ above, T }) {
+    if (above == null) return null;
+    const color = above ? (T.green ?? "#22c55e") : (T.neg ?? "#e11d48");
+    return <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />;
+}
+
+// Full technicals body: Performance, Trend & Moving Averages, Relative
+// Strength, Pivot Levels, 52-Week Range, Volume & Size. `row` is the
+// stock_analytics record already on hand; `ind` is the (optionally still
+// loading — pass null) latest indicators-table snapshot with the deeper
+// fields stock_analytics doesn't carry.
+function TechnicalsDetail({ row, ind, T, resultInfo }) {
+    const rc = v => retColor(v, T);
+    const close = row.close;
+
+    // Trend & Moving Averages — prefer the indicators snapshot for sma20
+    // (not on stock_analytics) and fall back to stock_analytics for the rest
+    // so the section renders immediately, then fills in as `ind` arrives.
+    const sma20 = ind?.sma20 ?? null;
+    const sma50 = row.sma50 ?? ind?.sma50 ?? null;
+    const sma150 = row.sma150 ?? ind?.sma150 ?? null;
+    const sma200 = row.sma200 ?? ind?.sma200 ?? null;
+    const distPct = (ma) => (close != null && ma) ? `${close >= ma ? "+" : ""}${(((close - ma) / ma) * 100).toFixed(1)}%` : null;
+
+    // Relative Strength — rs_3m/6m/12m + rs_score are RS-vs-benchmark scores
+    // (not the same as ret_3m/6m/12m raw returns shown in Performance).
+    const rs3 = row.rs_3m ?? ind?.rs_3m ?? null;
+    const rs6 = row.rs_6m ?? ind?.rs_6m ?? null;
+    const rs12 = row.rs_12m ?? ind?.rs_12m ?? null;
+
+    // Pivot ladder — 20W pivot already rides on stock_analytics; the rest
+    // (10D/20D/10W) only exist in the indicators table.
+    const p10d = ind?.pivot_high_10d ?? null;
+    const p20d = ind?.pivot_high_20d ?? null;
+    const p10w = ind?.pivot_high_10w ?? null;
+    const p20w = row.pivot_20w ?? ind?.pivot_high_20w ?? null;
+
+    const marketCap = row.market_cap_cr ?? ind?.market_cap_cr ?? null;
+    const capCategory = ind?.cap_category ?? row.cap_category ?? null;
+
+    return (
+        <>
+            {/* Performance */}
+            <TechCard title="Performance" T={T}>
+                <TechRow T={T} label="3 Month" value={fmt.pct(row.ret_3m)} color={rc(row.ret_3m)} />
+                <TechRow T={T} label="6 Month" value={fmt.pct(row.ret_6m)} color={rc(row.ret_6m)} />
+                <TechRow T={T} label="12 Month" value={fmt.pct(row.ret_12m)} color={rc(row.ret_12m)} last={!resultInfo} />
+                {resultInfo && <TechRow T={T} label="Results Date" value={resultInfo.fullLabel} color={resultInfo.color || T.subtext} last />}
+            </TechCard>
+
+            {/* Trend & Moving Averages */}
+            <TechCard title="Trend & Moving Averages" T={T}>
+                {[["20 DMA", sma20], ["50 DMA", sma50], ["150 DMA", sma150], ["200 DMA", sma200]].map(([label, ma], i, arr) => (
+                    <TechRow key={label} T={T} last={i === arr.length - 1}
+                        label={<span style={{ display: "flex", alignItems: "center", gap: 6 }}><TrendDot T={T} above={ma != null && close != null ? close >= ma : null} />{label}</span>}
+                        value={fmt.priceFull(ma)}
+                        sub={ma != null ? distPct(ma) : null}
+                        color={ma != null && close != null ? (close >= ma ? T.green : (T.neg ?? "#e11d48")) : undefined}
+                    />
+                ))}
+            </TechCard>
+
+            {/* Relative Strength */}
+            <TechCard title="Relative Strength" T={T}
+                right={row.rs_rating != null ? <RsGauge T={T} value={row.rs_rating} /> : null}>
+                <TechRow T={T} label="RS Rating" value={row.rs_rating != null ? Math.round(row.rs_rating) : "—"} color={T.green} />
+                <TechRow T={T} label="RS 3 Month" value={fmt.num(rs3)} />
+                <TechRow T={T} label="RS 6 Month" value={fmt.num(rs6)} />
+                <TechRow T={T} label="RS 12 Month" value={fmt.num(rs12)} last />
+            </TechCard>
+
+            {/* Pivot Levels */}
+            <TechCard title="Pivot Levels" T={T}>
+                <TechRow T={T} label="10-Day High" value={fmt.priceFull(p10d)} />
+                <TechRow T={T} label="20-Day High" value={fmt.priceFull(p20d)} />
+                <TechRow T={T} label="10-Week High" value={fmt.priceFull(p10w)} />
+                <TechRow T={T} label="20-Week High" value={fmt.priceFull(p20w)}
+                    sub={p20w != null && close != null ? `${close >= p20w ? "+" : ""}${(((close - p20w) / p20w) * 100).toFixed(1)}%` : null}
+                    color={p20w != null && close != null ? (close >= p20w ? T.green : undefined) : undefined} last />
+            </TechCard>
+
+            {/* 52-Week Range */}
+            <TechCard title="52-Week Range" T={T}>
+                <RangeBar T={T} low={row.low_52w} high={row.high_52w} close={close} />
+                <TechRow T={T} label="52W High" value={fmt.priceFull(row.high_52w)} />
+                <TechRow T={T} label="52W Low" value={fmt.priceFull(row.low_52w)} />
+                <TechRow T={T} label="From High" value={fmt.pct(row.pct_from_high)} color={rc(row.pct_from_high)} />
+                <TechRow T={T} label="From Low" value={row.pct_from_low != null ? `+${Math.round(row.pct_from_low)}%` : "—"} color={T.green} last />
+            </TechCard>
+
+            {/* Volume & Size */}
+            <TechCard title="Volume & Size" T={T}>
+                <TechRow T={T} label="Rel Volume" value={row.rel_vol != null ? `${row.rel_vol.toFixed(1)}×` : "—"} color={row.rel_vol >= 2 ? T.pos : undefined} />
+                <TechRow T={T} label="Market Cap" value={fmt.marketCap(marketCap)} />
+                <TechRow T={T} label="Cap Category" value={capCategory ? capCategory[0].toUpperCase() + capCategory.slice(1) : "—"} last />
+            </TechCard>
+        </>
+    );
+}
 
 // ─── Screen-membership pill config (shared: table + card rows) ─
 // Solid-tint, high-legibility badges — matches the flat "TAGS / FILTERS" style.
@@ -2941,6 +3168,22 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
     const activeWlName = watchlists.find(w => w.id === activeWl)?.name || "";
     const atWatchlistLimit = watchlists.length >= MAX_WATCHLISTS;
     const expandedRow = rows.find(r => r.ticker === expandedTicker) || null;
+
+    // Latest indicators-table snapshot for the ticker currently open in the
+    // detail panel — carries the deeper technicals (sma20, daily/weekly pivot
+    // ladder, rs_score, rs_ratio/base, mansfield_rs, cap_category) that don't
+    // ride on the stock_analytics row. Fetched lazily on expand, cached after.
+    const [expandedIndicators, setExpandedIndicators] = useState(null);
+    useEffect(() => {
+        if (!expandedTicker) { setExpandedIndicators(null); return; }
+        let cancelled = false;
+        setExpandedIndicators(_wlIndicatorsCache.get(expandedTicker) ?? null);
+        fetchWlIndicatorsSnapshot(expandedTicker, token).then(snap => {
+            if (!cancelled) setExpandedIndicators(snap);
+        });
+        return () => { cancelled = true; };
+    }, [expandedTicker, token]);
+
     const avgRS = useMemo(() => rows.length ? Math.round(rows.reduce((a, r) => a + (r.rs_rating ?? 0), 0) / rows.length) : null, [rows]);
     const leaders = useMemo(() => rows.filter(r => (r.rs_rating ?? 0) >= 90).length, [rows]);
     const stage2Count = useMemo(() => rows.filter(r => r.trend === "stage2").length, [rows]);
@@ -4121,44 +4364,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 <WlCandleSection ticker={expandedRow.ticker} T={T} />
                                                 {/* RS Line Chart — mobile */}
                                                 <WlRsLineSection ticker={expandedRow.ticker} T={T} />
-                                                {[
-                                                    {
-                                                        label: "Performance", rows: [
-                                                            ["3M", fmt.pct(expandedRow.ret_3m), retColor(expandedRow.ret_3m, T)],
-                                                            ["6M", fmt.pct(expandedRow.ret_6m), retColor(expandedRow.ret_6m, T)],
-                                                            ["12M", fmt.pct(expandedRow.ret_12m), retColor(expandedRow.ret_12m, T)],
-                                                        ]
-                                                    },
-                                                    {
-                                                        label: "Levels", rows: [
-                                                            ["52W High", fmt.priceFull(expandedRow.high_52w), T.text],
-                                                            ["52W Low", fmt.priceFull(expandedRow.low_52w), T.text],
-                                                            ["50 DMA", fmt.priceFull(expandedRow.sma50), T.text],
-                                                            ["200 DMA", fmt.priceFull(expandedRow.sma200), T.text],
-                                                        ]
-                                                    },
-                                                    {
-                                                        label: "Quality", rows: [
-                                                            ["RS Rating", expandedRow.rs_rating != null ? Math.round(expandedRow.rs_rating) : "—", T.green],
-                                                            ["Rel Volume", expandedRow.rel_vol != null ? `${expandedRow.rel_vol.toFixed(1)}×` : "—", expandedRow.rel_vol >= 2 ? T.pos : T.text],
-                                                            ...(expandedRow.pct_from_high != null ? [["From High", fmt.pct(expandedRow.pct_from_high), retColor(expandedRow.pct_from_high, T)]] : []),
-                                                            ...(earningsBadgeInfo(earningsMap[expandedRow.ticker]) ? [["Results Date", earningsBadgeInfo(earningsMap[expandedRow.ticker]).fullLabel, earningsBadgeInfo(earningsMap[expandedRow.ticker]).color || T.subtext]] : []),
-                                                        ]
-                                                    },
-                                                ].map(section => (
-                                                    <div key={section.label} style={{
-                                                        background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
-                                                        padding: "12px 16px 2px", boxShadow: T.shadow || "none", flexShrink: 0,
-                                                    }}>
-                                                        <div style={{ fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6, opacity: 0.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
-                                                        {section.rows.map(([l, v, c]) => (
-                                                            <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
-                                                                <span style={{ fontSize: 14, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7 }}>{l}</span>
-                                                                <span style={{ fontSize: 14, fontWeight: 700, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ))}
+                                                <TechnicalsDetail
+                                                    row={expandedRow}
+                                                    ind={expandedIndicators}
+                                                    resultInfo={earningsBadgeInfo(earningsMap[expandedRow.ticker])}
+                                                    T={T}
+                                                />
                                                 <CorpActionsCard T={T} caInfo={caDetailMap[expandedRow.ticker]} compact />
                                             </div>
                                         </div>
@@ -4245,45 +4456,12 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             {/* RS Line Chart */}
                                             <WlRsLineSection ticker={expandedRow.ticker} T={T} />
 
-                                            {[
-                                                {
-                                                    label: "Performance", rows: [
-                                                        ["3M", fmt.pct(expandedRow.ret_3m), retColor(expandedRow.ret_3m, T)],
-                                                        ["6M", fmt.pct(expandedRow.ret_6m), retColor(expandedRow.ret_6m, T)],
-                                                        ["12M", fmt.pct(expandedRow.ret_12m), retColor(expandedRow.ret_12m, T)],
-                                                    ]
-                                                },
-                                                {
-                                                    label: "Levels", rows: [
-                                                        ["52W High", fmt.priceFull(expandedRow.high_52w), T.text],
-                                                        ["52W Low", fmt.priceFull(expandedRow.low_52w), T.text],
-                                                        ["50 DMA", fmt.priceFull(expandedRow.sma50), T.text],
-                                                        ["200 DMA", fmt.priceFull(expandedRow.sma200), T.text],
-                                                        ...(expandedRow.pivot_20w ? [["20W Pivot", fmt.priceFull(expandedRow.pivot_20w), T.text]] : []),
-                                                    ]
-                                                },
-                                                {
-                                                    label: "Quality", rows: [
-                                                        ["RS Rating", expandedRow.rs_rating != null ? Math.round(expandedRow.rs_rating) : "—", T.green],
-                                                        ["Rel Volume", expandedRow.rel_vol != null ? `${expandedRow.rel_vol.toFixed(1)}×` : "—", expandedRow.rel_vol >= 2 ? T.pos : T.text],
-                                                        ...(expandedRow.pct_from_high != null ? [["From High", fmt.pct(expandedRow.pct_from_high), retColor(expandedRow.pct_from_high, T)]] : []),
-                                                        ...(earningsBadgeInfo(earningsMap[expandedRow.ticker]) ? [["Results Date", earningsBadgeInfo(earningsMap[expandedRow.ticker]).fullLabel, earningsBadgeInfo(earningsMap[expandedRow.ticker]).color || T.subtext]] : []),
-                                                    ]
-                                                },
-                                            ].map(section => (
-                                                <div key={section.label} style={{
-                                                    background: T.card, border: `1px solid ${T.border}`, borderRadius: 12,
-                                                    padding: "12px 14px 4px", boxShadow: T.shadow || "none", flexShrink: 0,
-                                                }}>
-                                                    <div style={{ fontSize: 10, color: T.subtext, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4, opacity: 0.55, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{section.label}</div>
-                                                    {section.rows.map(([l, v, c]) => (
-                                                        <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
-                                                            <span style={{ fontSize: 11.5, color: T.subtext, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.7 }}>{l}</span>
-                                                            <span style={{ fontSize: 11.5, fontWeight: 700, color: c, fontFamily: "'IBM Plex Mono', monospace" }}>{v}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ))}
+                                            <TechnicalsDetail
+                                                row={expandedRow}
+                                                ind={expandedIndicators}
+                                                resultInfo={earningsBadgeInfo(earningsMap[expandedRow.ticker])}
+                                                T={T}
+                                            />
                                             <CorpActionsCard T={T} caInfo={caDetailMap[expandedRow.ticker]} />
 
                                         </div>

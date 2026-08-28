@@ -10828,27 +10828,15 @@ function _isExcludedInstrument(row) {
 const _SCREENS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min in-memory fresh window
 const _LS_SCREENS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h localStorage stale-but-usable window
 
-let _screensBreakoutCache = { rows: null, loadedAt: null };
-let _screensPivotCache = { rows: null, loadedAt: null };
-let _screensVolBreakCache = { rows: null, loadedAt: null };
-let _screensPullbackCache = { rows: null, loadedAt: null };
 let _screensMinerviniCache = { rows: null, loadedAt: null };
 let _screensWeinsteinCache = { rows: null, loadedAt: null };
 let _screensStockAnalyticsCache = { rows: null, loadedAt: null };
 
-const _LS_SCR_BREAKOUT = "te_scr_breakout_v1";
-const _LS_SCR_PIVOT = "te_scr_pivot_v1";
-const _LS_SCR_VOLBREAK = "te_scr_volbreak_v1";
-const _LS_SCR_PULLBACK = "te_scr_pullback_v1";
 const _LS_SCR_MINERVINI = "te_scr_minervini_v1";
 const _LS_SCR_WEINSTEIN = "te_scr_weinstein_v1";
 const _LS_SCR_STOCKANALYTICS = "te_scr_stockanalytics_v1";
 
 // In-flight promise refs — prevent duplicate concurrent fetches during prefetch + mount race
-let _prefetchBreakoutPromise = null;
-let _prefetchPivotPromise = null;
-let _prefetchVolBreakPromise = null;
-let _prefetchPullbackPromise = null;
 let _prefetchMinerviniPromise = null;
 let _prefetchWeinsteinPromise = null;
 let _prefetchStockAnalyticsPromise = null;
@@ -10856,10 +10844,6 @@ let _prefetchStockAnalyticsPromise = null;
 // Seed all screens caches from localStorage on module load (SWR: serve stale on first paint)
 (function _seedScreensCaches() {
     const pairs = [
-        [_LS_SCR_BREAKOUT, v => { _screensBreakoutCache = v; }],
-        [_LS_SCR_PIVOT, v => { _screensPivotCache = v; }],
-        [_LS_SCR_VOLBREAK, v => { _screensVolBreakCache = v; }],
-        [_LS_SCR_PULLBACK, v => { _screensPullbackCache = v; }],
         [_LS_SCR_MINERVINI, v => { _screensMinerviniCache = v; }],
         [_LS_SCR_WEINSTEIN, v => { _screensWeinsteinCache = v; }],
         [_LS_SCR_STOCKANALYTICS, v => { _screensStockAnalyticsCache = v; }],
@@ -10882,135 +10866,11 @@ function _lsWriteScreens(key, value) {
 }
 
 // ─── Background prefetch helpers ─────────────────────────────────────────────
-// All five scans now resolve server-side (Postgres RPCs backed by
-// mv_screens_base, refreshed once daily by the sync pipeline). Each prefetch
-// function is just: cache check → one RPC POST → cache write. The filtering,
-// joining, and sorting that used to happen here in JS (multi-endpoint fetch +
-// pagination + client-side join/filter/sort) now lives in the get_screens_*
-// SQL functions — see screens_phase1.sql / screens_phase2.sql.
-// The component useEffects call these same functions and reuse the in-flight
-// promise — no duplicate requests even if mount races with prefetch.
-
-async function _rpcScreens(fnName, body) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
-        method: "POST",
-        headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body || {}),
-    });
-    const rows = await r.json();
-    if (!Array.isArray(rows)) {
-        throw new Error(rows?.message || `${fnName} returned a non-array response`);
-    }
-    return rows;
-}
-
-// ─── Server-filtered screen fetches (get_screens_* RPCs) ────────────────────
-// Breakout / Pivot / VolBreak / Pullback each call their own Postgres RPC,
-// which filters mv_screens_base down to matching rows *in the database* and
-// returns only those (typically hundreds of rows, not the full ~2,000+ stock
-// universe). This replaces the old approach of paginating the entire
-// mv_screens_base view over PostgREST and filtering client-side — that path
-// shipped every stock's full indicator set (including guaranteed non-matches
-// like null-rs_rating rows and ETFs) across multiple sequential round trips,
-// then re-ran the filter logic 4-8 times in the browser. See screens_phase1.sql
-// / screens_phase2.sql for the SQL definitions.
-// Universe (All / Nifty 500) is intentionally NOT passed to the RPC here —
-// we always fetch p_universe='all' and let filterByUniverse() apply the
-// Nifty 500 filter reactively client-side (same as before), so toggling the
-// universe selector doesn't trigger a re-fetch.
-
-// 52W High Breakout — within 7% of the 52W high, Stage-2 trend, >25% up from
-// the 52W low, volume >= 1.5x its 20D avg, rs >= 80, cap_category classified.
-function _prefetchScreensBreakout() {
-    if (_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0 &&
-        _screensBreakoutCache.loadedAt && (Date.now() - _screensBreakoutCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
-        return Promise.resolve(_screensBreakoutCache.rows);
-    }
-    if (_prefetchBreakoutPromise) return _prefetchBreakoutPromise;
-    _prefetchBreakoutPromise = (async () => {
-        try {
-            const rows = await _rpcScreens("get_screens_breakout", { p_universe: "all" });
-            const cache = { rows, loadedAt: Date.now() };
-            _screensBreakoutCache = cache;
-            _lsWriteScreens(_LS_SCR_BREAKOUT, cache);
-            return rows;
-        } catch (e) { console.warn("[prefetch] Breakout failed:", e); return []; }
-        finally { _prefetchBreakoutPromise = null; }
-    })();
-    return _prefetchBreakoutPromise;
-}
-
-// Pivot Breakout base set — trend alignment (sma50 > sma150 > sma200), rs >= 30,
-// >15% up from the 52W low, cap_category classified. All four pivot levels
-// (10D/20D/10W/20W) come back on every row; the pivotTF selector in
-// dPivotBreakout still picks the level client-side, no re-fetch on TF change.
-function _prefetchScreensPivot() {
-    if (_screensPivotCache.rows && _screensPivotCache.rows.length > 0 &&
-        _screensPivotCache.loadedAt && (Date.now() - _screensPivotCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
-        return Promise.resolve(_screensPivotCache.rows);
-    }
-    if (_prefetchPivotPromise) return _prefetchPivotPromise;
-    _prefetchPivotPromise = (async () => {
-        try {
-            const rows = await _rpcScreens("get_screens_pivot", {});
-            const cache = { rows, loadedAt: Date.now() };
-            _screensPivotCache = cache;
-            _lsWriteScreens(_LS_SCR_PIVOT, cache);
-            return rows;
-        } catch (e) { console.warn("[prefetch] Pivot failed:", e); return []; }
-        finally { _prefetchPivotPromise = null; }
-    })();
-    return _prefetchPivotPromise;
-}
-
-// Volume Breakout — Stage-2 trend, volume >= 2x its 20D avg, >15% up from
-// the 52W low. No cap_category or RS floor (matches original behavior).
-function _prefetchScreensVolBreak() {
-    if (_screensVolBreakCache.rows && _screensVolBreakCache.rows.length > 0 &&
-        _screensVolBreakCache.loadedAt && (Date.now() - _screensVolBreakCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
-        return Promise.resolve(_screensVolBreakCache.rows);
-    }
-    if (_prefetchVolBreakPromise) return _prefetchVolBreakPromise;
-    _prefetchVolBreakPromise = (async () => {
-        try {
-            const rows = await _rpcScreens("get_screens_volbreak", {});
-            const cache = { rows, loadedAt: Date.now() };
-            _screensVolBreakCache = cache;
-            _lsWriteScreens(_LS_SCR_VOLBREAK, cache);
-            return rows;
-        } catch (e) { console.warn("[prefetch] VolBreak failed:", e); return []; }
-        finally { _prefetchVolBreakPromise = null; }
-    })();
-    return _prefetchVolBreakPromise;
-}
-
-// Pullback base set — rs_rating >= 60 (below the tightest client-side pullback
-// threshold of 70, so it's a safe wide pre-filter), sma50/sma200 not null,
-// cap_category classified. The 5 derived pullback scans (dPb50dma,
-// dPbPivotRetest, dPbShallow, dPbWeekly, dPbVolDryup) still run as client-side
-// useMemos on top of this — no extra network calls when switching scans.
-function _prefetchScreensPullback() {
-    if (_screensPullbackCache.rows && _screensPullbackCache.rows.length > 0 &&
-        _screensPullbackCache.loadedAt && (Date.now() - _screensPullbackCache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
-        return Promise.resolve(_screensPullbackCache.rows);
-    }
-    if (_prefetchPullbackPromise) return _prefetchPullbackPromise;
-    _prefetchPullbackPromise = (async () => {
-        try {
-            const rows = await _rpcScreens("get_screens_pullback", {});
-            const cache = { rows, loadedAt: Date.now() };
-            _screensPullbackCache = cache;
-            _lsWriteScreens(_LS_SCR_PULLBACK, cache);
-            return rows;
-        } catch (e) { console.warn("[prefetch] Pullback failed:", e); return []; }
-        finally { _prefetchPullbackPromise = null; }
-    })();
-    return _prefetchPullbackPromise;
-}
+// The old Breakout / Pivot / VolBreak / Pullback RPC-backed fetches have been
+// replaced by direct reads of the 9 dedicated screens tables (pullback_to_50dma,
+// pivot_retest, shallow_pullback, weekly_pullback, volume_dryup_pullback,
+// volume_breakout, high_52w_breakout, pivot_breakout, rs_rating_leaders) via
+// SCREENS_TABLE_FETCHERS, defined further below alongside _makeScreensTableFetcher.
 
 // minervini_screen is a plain table (refreshed daily by the sync pipeline),
 // not an RPC — fetch directly via PostgREST, same SWR cache/localStorage/
@@ -11101,6 +10961,64 @@ function _prefetchScreensStockAnalytics() {
     })();
     return _prefetchStockAnalyticsPromise;
 }
+
+// ─── Dedicated screens tables (pullback_to_50dma, pivot_retest, shallow_pullback,
+// weekly_pullback, volume_dryup_pullback, volume_breakout, high_52w_breakout,
+// pivot_breakout, rs_rating_leaders) ─────────────────────────────────────────
+// Each of these is now a plain, pre-computed Supabase table refreshed daily by
+// the sync pipeline (server-side filtering/joining already applied — the rows
+// returned already satisfy that screen's criteria), so every one of them uses
+// the exact same fetch → SWR-cache → localStorage-seed → in-flight-promise
+// pattern as minervini_screen / weinstein_stages above. This factory just
+// parameterizes that pattern by table name so we don't repeat it 9 times.
+function _makeScreensTableFetcher(tableName, lsKey, query) {
+    let cache = { rows: null, loadedAt: null };
+    try {
+        const s = localStorage.getItem(lsKey);
+        if (s) {
+            const parsed = JSON.parse(s);
+            if (parsed?.loadedAt && (Date.now() - parsed.loadedAt) < _LS_SCREENS_MAX_AGE_MS
+                && parsed.rows && parsed.rows.length > 0) {
+                cache = parsed;
+            }
+        }
+    } catch { /* ignore */ }
+    let inflight = null;
+    const fetchRows = () => {
+        if (cache.rows && cache.rows.length > 0 && cache.loadedAt && (Date.now() - cache.loadedAt) < _SCREENS_CACHE_TTL_MS) {
+            return Promise.resolve(cache.rows);
+        }
+        if (inflight) return inflight;
+        inflight = (async () => {
+            try {
+                const url = `${SUPABASE_URL}/rest/v1/${tableName}?${query}`;
+                const r = await fetch(url, {
+                    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+                });
+                const rows = await r.json();
+                if (!Array.isArray(rows)) throw new Error(rows?.message || `${tableName} returned a non-array response`);
+                cache = { rows, loadedAt: Date.now() };
+                _lsWriteScreens(lsKey, cache);
+                return rows;
+            } catch (e) { console.warn(`[prefetch] ${tableName} failed:`, e); return []; }
+            finally { inflight = null; }
+        })();
+        return inflight;
+    };
+    return { fetch: fetchRows, getCached: () => cache.rows || [] };
+}
+
+const SCREENS_TABLE_FETCHERS = {
+    pb50dma: _makeScreensTableFetcher("pullback_to_50dma", "te_scr_pb50dma_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    pivotRetest: _makeScreensTableFetcher("pivot_retest", "te_scr_pivotretest_v1", "select=*&order=pct_from_pivot.desc.nullslast&limit=2000"),
+    pbShallow: _makeScreensTableFetcher("shallow_pullback", "te_scr_pbshallow_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    pbWeekly: _makeScreensTableFetcher("weekly_pullback", "te_scr_pbweekly_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    pbVolDryup: _makeScreensTableFetcher("volume_dryup_pullback", "te_scr_pbvoldryup_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    volumeBreakout: _makeScreensTableFetcher("volume_breakout", "te_scr_volumebreakout_v1", "select=*&order=rel_vol.desc.nullslast&limit=1000"),
+    high52wBreakout: _makeScreensTableFetcher("high_52w_breakout", "te_scr_high52wbreakout_v1", "select=*&order=rel_vol.desc.nullslast&limit=1000"),
+    pivotBreakout: _makeScreensTableFetcher("pivot_breakout", "te_scr_pivotbreakout_v1", "select=*&order=pct_from_pivot.desc.nullslast&limit=2000"),
+    rsRatingLeaders: _makeScreensTableFetcher("rs_rating_leaders", "te_scr_rsratingleaders_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+};
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
 // Engulfing / Hammer) loaded directly from the `pattern_filters` Supabase table.
@@ -16150,8 +16068,11 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     // retestMode: same frozen-snapshot problem as pivotMode  local TF state needed
     const retestMode = !!detail.retestMode;
 
-    // Local TF state for both pivotMode and retestMode  initialised from detail snapshot
-    const [localPivotTF, setLocalPivotTF] = useState(() => detail.pivotTF || "pivot_high_10w");
+    // Local TF state for both pivotMode and retestMode  initialised from detail snapshot.
+    // detail.allPivotRows now comes straight from the pivot_breakout / pivot_retest
+    // tables, one row per ticker *per pivot_type* ("10D"/"20D"/"10W"/"20W"), so the
+    // TF selector just filters on pivot_type instead of picking a dynamic column.
+    const [localPivotTF, setLocalPivotTF] = useState(() => detail.pivotTF || "10W");
 
     const handlePivotTFChange = (tf) => {
         setLocalPivotTF(tf);
@@ -16167,38 +16088,32 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
             // set), so ETFs/liquid funds/bonds must be excluded here too or they
             // leak into the paginated Screen Detail table.
             .filter(r => !_isExcludedInstrument(r))
-            .map(row => {
-                const pivotLevel = row[localPivotTF];
-                if (pivotLevel == null || pivotLevel <= 0) return null;
-                if (row.close <= pivotLevel) return null;
-                const pctAbove = ((row.close - pivotLevel) / pivotLevel) * 100;
-                return { ...row, pivot_high: pivotLevel, pct_above_pivot: pctAbove };
-            })
-            .filter(Boolean)
-            .sort((a, b) => a.pct_above_pivot - b.pct_above_pivot);
+            .filter(r => r.pivot_type === localPivotTF)
+            .map(row => ({
+                ...row,
+                close: row.close != null ? Number(row.close) : null,
+                pivot_high: row.pivot_high != null ? Number(row.pivot_high) : null,
+                pct_above_pivot: row.pct_from_pivot != null ? Number(row.pct_from_pivot) : null,
+            }))
+            .sort((a, b) => (a.pct_above_pivot ?? 0) - (b.pct_above_pivot ?? 0));
     }, [pivotMode, detail.allPivotRows, localPivotTF]);
 
-    // retestMode: recompute pivot retest rows when TF changes
-    // Applies the same 3% zone filter around the selected pivot level
+    // retestMode: recompute pivot retest rows when TF changes. pivot_retest
+    // already contains only rows inside the retest zone (server-side), so this
+    // is just a pivot_type filter + field-name normalization, no re-derivation.
     const retestRows = useMemo(() => {
         if (!retestMode || !detail.allPivotRows) return null;
         return detail.allPivotRows
             // Same raw/unfiltered-source issue as pivotRows above.
             .filter(r => !_isExcludedInstrument(r))
-            .filter(r => {
-                if ((r.rs_rating ?? 0) < 75) return false;
-                if (r.sma50 <= r.sma200) return false;
-                if (r.close <= r.sma50) return false;
-                const p = r[localPivotTF];
-                if (!p || p <= 0) return false;
-                return r.close >= p * 0.97 && r.close <= p * 1.03;
-            })
+            .filter(r => r.pivot_type === localPivotTF)
             .map(r => ({
                 ...r,
-                pivot_high: r[localPivotTF],
-                pct_from_pivot: ((r.close - r[localPivotTF]) / r[localPivotTF]) * 100,
+                close: r.close != null ? Number(r.close) : null,
+                pivot_high: r.pivot_high != null ? Number(r.pivot_high) : null,
+                pct_from_pivot: r.pct_from_pivot != null ? Number(r.pct_from_pivot) : null,
             }))
-            .sort((a, b) => Math.abs(a.pct_from_pivot) - Math.abs(b.pct_from_pivot));
+            .sort((a, b) => Math.abs(a.pct_from_pivot ?? 0) - Math.abs(b.pct_from_pivot ?? 0));
     }, [retestMode, detail.allPivotRows, localPivotTF]);
 
     // Use recomputed rows if in pivot/retest mode, otherwise use the passed rows
@@ -17862,13 +17777,19 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [stockAnalyticsRawRows, filterByUniverse]);
 
-    // RS Rating Leaders filters directly on rs_rating > 90 (not the view's
-    // "RS Leader" tag, which uses a looser threshold) and shows every match,
-    // no top-50 cap.
-    const dRsRating = useMemo(() =>
-        dStockAnalyticsBase.filter(r => r.rs_rating != null && r.rs_rating > 90)
-            .sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity)),
-        [dStockAnalyticsBase]);
+    // RS Rating Leaders  dedicated fetch from the rs_rating_leaders table
+    // (already filtered/sorted server-side, rs_rating > 90), separate from the
+    // stock_analytics-derived Market Leaders scans below.
+    const [rsRatingRawRows, rsRatingLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.rsRatingLeaders);
+    const dRsRating = useMemo(() => {
+        const mapped = (rsRatingRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [rsRatingRawRows, filterByUniverse]);
 
     const dRS3m = useMemo(() =>
         dStockAnalyticsBase.filter(r => r.screens?.includes("RS 3M Leader"))
@@ -17888,17 +17809,13 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             .slice(0, 50),
         [dStockAnalyticsBase]);
 
-    //  52W High Breakout scan  dedicated Supabase fetch 
-    // Fetches directly from stock_52w (not top52wHigh) because top52wHigh excludes
-    // stocks where pct_from_high = 0.00 (exactly at 52W high  the best breakouts).
-    // SQL conditions:
-    //  1. pct_from_high >= -7     within 7% of 52W high (DB stores as negative, -7 = 7% below)
-    //  2. close > sma50 > sma200  Stage 2 trend
-    //  3. pct_from_low  > 25      momentum from base
-    //  4. vol / vol_ma20 >= 1.5   volume expansion
-    //  5. rs_rating >= 80         relative strength
-    const [breakoutRawRows, setBreakoutRawRows] = useState(() => _screensBreakoutCache.rows || []);
-    const [breakoutLoading, setBreakoutLoading] = useState(!(_screensBreakoutCache.rows && _screensBreakoutCache.rows.length > 0));
+    //  52W High Breakout scan  dedicated fetch from the high_52w_breakout table 
+    // The high_52w_breakout table is refreshed daily by the sync pipeline and
+    // already contains only stocks matching the screen criteria (within 7% of
+    // the 52W high, Stage-2 trend, momentum from base, volume expansion,
+    // rs_rating >= 80) — no client-side filtering needed, just fetch + normalize.
+    const [breakoutRawRows, setBreakoutRawRows] = useState(() => SCREENS_TABLE_FETCHERS.high52wBreakout.getCached());
+    const [breakoutLoading, setBreakoutLoading] = useState(!(SCREENS_TABLE_FETCHERS.high52wBreakout.getCached().length > 0));
 
     useEffect(() => {
         let cancelled = false;
@@ -17906,20 +17823,14 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         const load = async () => {
             try {
                 //  SWR: serve stale cache instantly, then revalidate 
-                const _bc = _screensBreakoutCache;
-                const _bcHasData = _bc.rows && _bc.rows.length > 0;
-                if (_bcHasData) {
-                    if (!cancelled) { setBreakoutRawRows(_bc.rows); setBreakoutLoading(false); }
+                const cached = SCREENS_TABLE_FETCHERS.high52wBreakout.getCached();
+                if (cached.length > 0) {
+                    if (!cancelled) { setBreakoutRawRows(cached); setBreakoutLoading(false); }
                 } else {
                     setBreakoutLoading(true);
                 }
 
-                // All filtering/joining/sorting now happens in get_screens_breakout()
-                // (Postgres RPC over mv_screens_base). _prefetchScreensBreakout()
-                // owns the freshness check against _screensBreakoutCache and the
-                // in-flight-promise dedupe, so a race with the module-level
-                // prefetch just resolves the same promise instead of double-fetching.
-                const rows = await _prefetchScreensBreakout();
+                const rows = await SCREENS_TABLE_FETCHERS.high52wBreakout.fetch();
                 if (!cancelled) setBreakoutRawRows(rows);
             } catch (e) {
                 if (!cancelled) console.error("[52W Breakout] fetch failed:", e);
@@ -17932,27 +17843,38 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return () => { cancelled = true; };
     }, []); // fetch once on mount  same lifecycle as the breadth data
 
-    // Apply universe filter (All / Nifty 500) reactively
-    const d52wBreakout = useMemo(
-        () => filterByUniverse(breakoutRawRows),
-        [breakoutRawRows, filterByUniverse]
-    );
+    // Normalize column names to what the shared table/preview components expect
+    // (rel_volume, pct_from_52w_high/low) and apply the universe filter reactively.
+    const d52wBreakout = useMemo(() => {
+        const mapped = (breakoutRawRows || []).map(r => {
+            const close = r.close != null ? Number(r.close) : null;
+            const low = r.low_52w != null ? Number(r.low_52w) : null;
+            return {
+                ...r,
+                close,
+                rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+                pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+                pct_from_52w_low: (low && low > 0 && close != null) ? ((close - low) / low) * 100 : null,
+            };
+        });
+        return filterByUniverse(mapped);
+    }, [breakoutRawRows, filterByUniverse]);
 
-    //  Pivot Breakout scan 
-    // Fetches indicators JOIN stock_52w on latest date.
-    // Conditions: s.close > i.pivot_high_Xd/Xw  AND  sma50 > sma150 > sma200
-    // The pivot timeframe (10d/20d/10w/20w) is driven by pivotTF state.
-    // Returns to the component as dPivotBreakout; sorted by % above pivot asc
-    // so tightest breakouts (nearest to the pivot level) appear first.
+    //  Pivot Breakout scan  dedicated fetch from the pivot_breakout table 
+    // pivot_breakout already contains only rows where close > pivot_high (one
+    // row per matching ticker *per timeframe*, tagged by pivot_type: "10D" /
+    // "20D" / "10W" / "20W") — the server has already done the join + filter
+    // that used to happen client-side. The pivotTF selector now just filters
+    // this single fetch down to the chosen pivot_type, no re-fetch on TF change.
     const PIVOT_TF_OPTIONS = [
-        { value: "pivot_high_10d", label: "10D" },
-        { value: "pivot_high_20d", label: "20D" },
-        { value: "pivot_high_10w", label: "10W" },
-        { value: "pivot_high_20w", label: "20W" },
+        { value: "10D", label: "10D" },
+        { value: "20D", label: "20D" },
+        { value: "10W", label: "10W" },
+        { value: "20W", label: "20W" },
     ];
-    const [pivotTF, setPivotTF] = useState("pivot_high_10w");
-    const [pivotRawRows, setPivotRawRows] = useState(() => _screensPivotCache.rows || []);
-    const [pivotLoading, setPivotLoading] = useState(!(_screensPivotCache.rows && _screensPivotCache.rows.length > 0));
+    const [pivotTF, setPivotTF] = useState("10W");
+    const [pivotRawRows, setPivotRawRows] = useState(() => SCREENS_TABLE_FETCHERS.pivotBreakout.getCached());
+    const [pivotLoading, setPivotLoading] = useState(!(SCREENS_TABLE_FETCHERS.pivotBreakout.getCached().length > 0));
     const [pivotLatestDate, setPivotLatestDate] = useState(null);
 
     useEffect(() => {
@@ -17961,18 +17883,14 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         const load = async () => {
             try {
                 //  SWR: serve stale cache instantly 
-                const _bc = _screensPivotCache;
-                const _bcHasData = _bc.rows && _bc.rows.length > 0;
-                if (_bcHasData) {
-                    if (!cancelled) { setPivotRawRows(_bc.rows); setPivotLoading(false); }
+                const cached = SCREENS_TABLE_FETCHERS.pivotBreakout.getCached();
+                if (cached.length > 0) {
+                    if (!cancelled) { setPivotRawRows(cached); setPivotLoading(false); }
                 } else {
                     setPivotLoading(true);
                 }
 
-                // All filtering/joining now happens in get_screens_pivot() (Postgres
-                // RPC over mv_screens_base). All four pivot levels still come back on
-                // every row so toggling pivotTF stays a client-side useMemo, no re-fetch.
-                const joined = await _prefetchScreensPivot();
+                const joined = await SCREENS_TABLE_FETCHERS.pivotBreakout.fetch();
                 if (!cancelled) setPivotRawRows(joined);
             } catch (e) {
                 if (!cancelled) console.error("[Pivot Breakout] fetch failed:", e);
@@ -17985,216 +17903,144 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return () => { cancelled = true; };
     }, []);
 
-    // Apply selected pivot TF + universe filter in useMemo  no re-fetch needed on TF change
+    // Filter to the selected pivot_type, normalize field names (pivot_high /
+    // pct_above_pivot) the shared table components expect, and apply the
+    // universe filter — all client-side, no re-fetch needed on TF change.
     const dPivotBreakout = useMemo(() => {
         const filtered = pivotRawRows
-            .map(row => {
-                const pivotLevel = row[pivotTF];
-                if (pivotLevel == null || pivotLevel <= 0) return null;
-                if (row.close <= pivotLevel) return null; // must be above the pivot
-                const pctAbove = ((row.close - pivotLevel) / pivotLevel) * 100;
-                return { ...row, pivot_high: pivotLevel, pct_above_pivot: pctAbove };
-            })
-            .filter(Boolean)
+            .filter(row => row.pivot_type === pivotTF)
+            .map(row => ({
+                ...row,
+                close: row.close != null ? Number(row.close) : null,
+                pivot_high: row.pivot_high != null ? Number(row.pivot_high) : null,
+                pct_above_pivot: row.pct_from_pivot != null ? Number(row.pct_from_pivot) : null,
+                rel_volume: row.rel_vol != null ? Number(row.rel_vol) : null,
+            }))
             // Tightest breakout (closest to pivot = smallest % above) first
-            .sort((a, b) => a.pct_above_pivot - b.pct_above_pivot);
+            .sort((a, b) => (a.pct_above_pivot ?? 0) - (b.pct_above_pivot ?? 0));
         return filterByUniverse(filtered);
     }, [pivotRawRows, pivotTF, filterByUniverse]);
 
-    //  PULLBACK SCANS  single shared fetch, 5 derived scans 
-    // All five pullback screens share one fetch of indicators + stock_52w + stock_returns.
-    // Each scan is a useMemo  no extra network calls when switching scans or universe.
-    //
-    // SQL source of truth (per user spec):
-    //  1. Pullback to 50 DMA  : sma50>sma200, close  [sma500.97, sma501.03], closesma50, rs70
-    //  2. Pivot Retest        : sma50>sma200, close > sma50, close  [p20d0.97, p20d1.03], rs75
-    //  3. Shallow Pullback    : sma50>sma200, close  [p20d0.95, p20d], rs80
-    //  4. Weekly Pullback     : sma50>sma200, close  [p10w0.95, p10w1.05], rs75
-    //  5. Volume Dry-up       : sma50>sma200, close  [sma500.97, sma501.03], closesma50,
-    //                           vol<vol_ma20, closehigh_52w0.85, rs70
-    const [pbRawRows, setPbRawRows] = useState(() => _screensPullbackCache.rows || []);
-    const [pbLoading, setPbLoading] = useState(!(_screensPullbackCache.rows && _screensPullbackCache.rows.length > 0));
+    //  PULLBACK SCANS  each is now its own dedicated, pre-computed table 
+    // pullback_to_50dma / pivot_retest / shallow_pullback / weekly_pullback /
+    // volume_dryup_pullback each already contain only the rows matching that
+    // screen's criteria (server-side, refreshed daily) — no client-side
+    // condition filtering needed anymore, just fetch + normalize field names
+    // to what the shared table/preview components expect.
 
-    useEffect(() => {
-        let cancelled = false;
-
-        const load = async () => {
-            try {
-                //  SWR: serve stale cache instantly 
-                const _bc = _screensPullbackCache;
-                const _bcHasData = _bc.rows && _bc.rows.length > 0;
-                if (_bcHasData) {
-                    if (!cancelled) { setPbRawRows(_bc.rows); setPbLoading(false); }
-                } else {
-                    setPbLoading(true);
+    // Small local helper: same fetch → state → loading lifecycle, repeated for
+    // each of the 5 pullback tables below.
+    function useScreensTableRows(fetcher) {
+        const [rows, setRows] = useState(() => fetcher.getCached());
+        const [loading, setLoading] = useState(!(fetcher.getCached().length > 0));
+        useEffect(() => {
+            let cancelled = false;
+            (async () => {
+                try {
+                    const cached = fetcher.getCached();
+                    if (cached.length > 0) {
+                        if (!cancelled) { setRows(cached); setLoading(false); }
+                    } else {
+                        setLoading(true);
+                    }
+                    const fresh = await fetcher.fetch();
+                    if (!cancelled) setRows(fresh);
+                } catch (e) {
+                    if (!cancelled) console.error("[Screens table] fetch failed:", e);
+                } finally {
+                    if (!cancelled) setLoading(false);
                 }
-
-                // All filtering/joining now happens in get_screens_pullback() (Postgres
-                // RPC over mv_screens_base). The 5 derived pullback scans below still
-                // run as client-side useMemos over this single shared row set.
-                const joined = await _prefetchScreensPullback();
-                if (!cancelled) setPbRawRows(joined);
-            } catch (e) {
-                if (!cancelled) console.error("[Pullback scans] fetch failed:", e);
-            } finally {
-                if (!cancelled) setPbLoading(false);
-            }
-        };
-
-        load();
-        return () => { cancelled = true; };
-    }, []);
+            })();
+            return () => { cancelled = true; };
+        }, [fetcher]);
+        return [rows, loading];
+    }
 
     // 1. Pullback to 50 DMA
-    // sma50 > sma200, close  [sma500.97, sma501.03], close  sma50 (holding support), rs70
+    const [pb50dmaRawRows, pb50dmaLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.pb50dma);
     const dPb50dma = useMemo(() => {
-        const rows = pbRawRows
-            .filter(r => {
-                if ((r.rs_rating ?? 0) < 70) return false;
-                if (r.sma50 <= r.sma200) return false;  // trend intact
-                if (r.close < r.sma50) return false;  // holding support
-                return r.close >= r.sma50 * 0.97 && r.close <= r.sma50 * 1.03;
-            })
-            .map(r => ({ ...r, pct_from_sma50: ((r.close - r.sma50) / r.sma50) * 100 }))
-            .sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
+        const rows = (pb50dmaRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pct_from_sma50: r.pct_from_50dma != null ? Number(r.pct_from_50dma) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
         return filterByUniverse(rows);
-    }, [pbRawRows, filterByUniverse]);
+    }, [pb50dmaRawRows, filterByUniverse]);
 
-    // 2. Pivot Retest  TF-selectable (10D / 20D / 10W / 20W)
-    // sma50 > sma200, close > sma50 (holding structure), close  [pivotTF0.97, pivotTF1.03], rs75
-    const [pbRetestTF, setPbRetestTF] = useState("pivot_high_20d");
-
+    // 2. Pivot Retest  TF-selectable (10D / 20D / 10W / 20W), driven by pivot_type
+    const [pbRetestTF, setPbRetestTF] = useState("20D");
+    const [pivotRetestRawRows, pivotRetestLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.pivotRetest);
     const dPbPivotRetest = useMemo(() => {
-        const rows = pbRawRows
-            .filter(r => {
-                if ((r.rs_rating ?? 0) < 75) return false;
-                if (r.sma50 <= r.sma200) return false;  // trend
-                if (r.close <= r.sma50) return false;  // holding structure
-                const p = r[pbRetestTF];
-                if (!p || p <= 0) return false;
-                return r.close >= p * 0.97 && r.close <= p * 1.03;
-            })
+        const rows = (pivotRetestRawRows || [])
+            .filter(r => r.pivot_type === pbRetestTF)
             .map(r => ({
                 ...r,
-                pivot_high: r[pbRetestTF],
-                pct_from_pivot: ((r.close - r[pbRetestTF]) / r[pbRetestTF]) * 100,
+                close: r.close != null ? Number(r.close) : null,
+                pivot_high: r.pivot_high != null ? Number(r.pivot_high) : null,
+                pct_from_pivot: r.pct_from_pivot != null ? Number(r.pct_from_pivot) : null,
+                rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
             }))
             // Closest to pivot first (tightest retest)
-            .sort((a, b) => Math.abs(a.pct_from_pivot) - Math.abs(b.pct_from_pivot));
+            .sort((a, b) => Math.abs(a.pct_from_pivot ?? 0) - Math.abs(b.pct_from_pivot ?? 0));
         return filterByUniverse(rows);
-    }, [pbRawRows, pbRetestTF, filterByUniverse]);
+    }, [pivotRetestRawRows, pbRetestTF, filterByUniverse]);
 
-    // 3. Shallow Pullback (tight leaders)
-    // sma50 > sma200, close  [p20d0.95, p20d] (below pivot, not above), rs80
+    // 3. Shallow Pullback (tight leaders, fixed at the 20D pivot)
+    const [pbShallowRawRows, pbShallowLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.pbShallow);
     const dPbShallow = useMemo(() => {
-        const rows = pbRawRows
-            .filter(r => {
-                if ((r.rs_rating ?? 0) < 80) return false;
-                if (r.sma50 <= r.sma200) return false;  // strong trend
-                const p = r.pivot_high_20d;
-                if (!p || p <= 0) return false;
-                return r.close >= p * 0.95 && r.close <= p; // tight range below pivot
-            })
-            .map(r => ({
-                ...r,
-                pivot_high: r.pivot_high_20d,
-                pct_from_pivot: ((r.close - r.pivot_high_20d) / r.pivot_high_20d) * 100,
-            }))
-            .sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
+        const rows = (pbShallowRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pivot_high: r.pivot_high_20d != null ? Number(r.pivot_high_20d) : null,
+            pct_from_pivot: r.pct_from_pivot != null ? Number(r.pct_from_pivot) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
         return filterByUniverse(rows);
-    }, [pbRawRows, filterByUniverse]);
+    }, [pbShallowRawRows, filterByUniverse]);
 
-    // 4. Weekly Pullback
-    // sma50 > sma200, close  [p10w0.95, p10w1.05] (weekly structure zone), rs75
+    // 4. Weekly Pullback (fixed at the 10W pivot)
+    const [pbWeeklyRawRows, pbWeeklyLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.pbWeekly);
     const dPbWeekly = useMemo(() => {
-        const rows = pbRawRows
-            .filter(r => {
-                if ((r.rs_rating ?? 0) < 75) return false;
-                if (r.sma50 <= r.sma200) return false;  // trend
-                const p = r.pivot_high_10w;
-                if (!p || p <= 0) return false;
-                return r.close >= p * 0.95 && r.close <= p * 1.05; // 5% weekly zone
-            })
-            .map(r => ({
-                ...r,
-                pivot_high: r.pivot_high_10w,
-                pct_from_pivot: ((r.close - r.pivot_high_10w) / r.pivot_high_10w) * 100,
-            }))
-            .sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
+        const rows = (pbWeeklyRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pivot_high: r.pivot_high_10w != null ? Number(r.pivot_high_10w) : null,
+            pct_from_pivot: r.pct_from_pivot != null ? Number(r.pct_from_pivot) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
         return filterByUniverse(rows);
-    }, [pbRawRows, filterByUniverse]);
+    }, [pbWeeklyRawRows, filterByUniverse]);
 
-    // 5. Volume Dry-up Pullback
-    // sma50>sma200, close  [sma500.97, sma501.03], closesma50 (holding),
-    // vol < vol_ma20 (low-volume pullback = bullish), close  high_52w0.85, rs70
+    // 5. Volume Dry-up Pullback  rel_vol *is* the low-volume ratio here (< 1
+    // means today's volume is running below its 20D average, i.e. dried up).
+    const [pbVolDryupRawRows, pbVolDryupLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.pbVolDryup);
     const dPbVolDryup = useMemo(() => {
-        const rows = pbRawRows
-            .filter(r => {
-                if ((r.rs_rating ?? 0) < 70) return false;
-                if (r.sma50 <= r.sma200) return false;  // Stage 2
-                if (r.close < r.sma50) return false;  // holding support
-                if (r.close < r.sma50 * 0.97) return false;  // pullback zone
-                if (r.close > r.sma50 * 1.03) return false;
-                const vol = r.volume ?? 0;
-                const volMa = r.volume_20ma ?? 0;
-                if (volMa <= 0 || vol >= volMa) return false;  // must be low-volume
-                const h52 = r.high_52w ?? 0;
-                if (h52 > 0 && r.close < h52 * 0.85) return false; // near 52W high
-                return true;
-            })
-            .map(r => ({
-                ...r,
-                pct_from_sma50: ((r.close - r.sma50) / r.sma50) * 100,
-                vol_ratio: r.volume_20ma > 0 ? (r.volume ?? 0) / r.volume_20ma : null,
-            }))
-            .sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
+        const rows = (pbVolDryupRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pct_from_sma50: r.pct_from_50dma != null ? Number(r.pct_from_50dma) : null,
+            vol_ratio: r.rel_vol != null ? Number(r.rel_vol) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.rs_rating ?? 0) - (a.rs_rating ?? 0));
         return filterByUniverse(rows);
-    }, [pbRawRows, filterByUniverse]);
+    }, [pbVolDryupRawRows, filterByUniverse]);
 
-    //  Volume Breakout scan  dedicated Supabase fetch 
-    // Stocks making a price breakout on unusually high volume ( 2 the 20-day avg).
-    // Conditions:
-    //  1. close > sma50 > sma200       Stage 2 uptrend (trend is your friend)
-    //  2. vol / vol_ma20 >= 2.0        volume surge  2 avg (institutional conviction)
-    //  3. pct_from_low > 15            has moved up from a base (not a dead-cat)
-    //  4. close > close * 0 (no upper bound on pct_from_high  catches all breakout levels)
-    // Sorted by: highest relative volume first
-    const [volBreakoutRawRows, setVolBreakoutRawRows] = useState(() => _screensVolBreakCache.rows || []);
-    const [volBreakoutLoading, setVolBreakoutLoading] = useState(!(_screensVolBreakCache.rows && _screensVolBreakCache.rows.length > 0));
+    const pbLoading = pb50dmaLoading || pivotRetestLoading || pbShallowLoading || pbWeeklyLoading || pbVolDryupLoading;
 
-    useEffect(() => {
-        let cancelled = false;
+    //  Volume Breakout scan  dedicated fetch from the volume_breakout table 
+    // volume_breakout already contains only Stage-2 stocks breaking out on
+    // unusually high relative volume (>= ~2x 20D avg), sorted by rel_vol desc.
+    const [volBreakoutRawRows, volBreakoutLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.volumeBreakout);
 
-        const load = async () => {
-            try {
-                //  SWR: serve stale cache instantly 
-                const _bc = _screensVolBreakCache;
-                const _bcHasData = _bc.rows && _bc.rows.length > 0;
-                if (_bcHasData) {
-                    if (!cancelled) { setVolBreakoutRawRows(_bc.rows); setVolBreakoutLoading(false); }
-                } else {
-                    setVolBreakoutLoading(true);
-                }
-
-                // All filtering/joining/sorting now happens in get_screens_volbreak()
-                // (Postgres RPC over mv_screens_base).
-                const joined = await _prefetchScreensVolBreak();
-                if (!cancelled) setVolBreakoutRawRows(joined);
-            } catch (e) {
-                if (!cancelled) console.error("[Vol Breakout] fetch failed:", e);
-            } finally {
-                if (!cancelled) setVolBreakoutLoading(false);
-            }
-        };
-
-        load();
-        return () => { cancelled = true; };
-    }, []);
-
-    const dVolBreakout = useMemo(
-        () => filterByUniverse(volBreakoutRawRows),
-        [volBreakoutRawRows, filterByUniverse]
-    );
+    const dVolBreakout = useMemo(() => {
+        const mapped = (volBreakoutRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        }));
+        return filterByUniverse(mapped);
+    }, [volBreakoutRawRows, filterByUniverse]);
 
     //  Minervini Trend Template scan  dedicated fetch from minervini_screen table 
     // The table is refreshed daily by the sync pipeline and already carries the
@@ -18794,7 +18640,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                         pivotTF: pbRetestTF,
                                         pivotTFOptions: PIVOT_TF_OPTIONS,
                                         onPivotTFChange: setPbRetestTF,
-                                        allPivotRows: pbRawRows,
+                                        allPivotRows: pivotRetestRawRows,
                                     }}
                                     extraControls={
                                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}
