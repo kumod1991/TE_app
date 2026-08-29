@@ -11018,6 +11018,36 @@ const SCREENS_TABLE_FETCHERS = {
     high52wBreakout: _makeScreensTableFetcher("high_52w_breakout", "te_scr_high52wbreakout_v1", "select=*&order=rel_vol.desc.nullslast&limit=1000"),
     pivotBreakout: _makeScreensTableFetcher("pivot_breakout", "te_scr_pivotbreakout_v1", "select=*&order=pct_from_pivot.desc.nullslast&limit=2000"),
     rsRatingLeaders: _makeScreensTableFetcher("rs_rating_leaders", "te_scr_rsratingleaders_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    // rs_improving: RS Rating today > RS Rating 1 week ago > RS Rating 2 weeks ago
+    // (rows already filtered server-side against that criteria), ordered by the
+    // 2-week RS change so the strongest improvers surface first.
+    rsImproving: _makeScreensTableFetcher("rs_improving", "te_scr_rsimproving_v1", "select=*&order=rs_change_2w.desc.nullslast&limit=1000"),
+    // fresh_breakout: close > 20D pivot high, close <= 103% of pivot, rel_vol >= 1.5,
+    // SMA50 > SMA150 > SMA200 (Stage 2), RS Rating >= 70  all filtering already
+    // done server-side, same pattern as the other 9 dedicated screens tables above.
+    freshBreakout: _makeScreensTableFetcher("fresh_breakout", "te_scr_freshbreakout_v1", "select=*&order=pct_from_pivot.desc.nullslast&limit=1000"),
+    // power_trend: Stage 2 leaders with strong relative strength across 3M/6M/12M
+    // timeframes (rs_3m/rs_6m/rs_12m ratios + rs_rating already computed server-side),
+    // same fetch/cache pattern as the other dedicated screens tables above.
+    powerTrend: _makeScreensTableFetcher("power_trend", "te_scr_powertrend_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    // stage2_early: early Stage-2 setups  close > SMA50, SMA50 > SMA150,
+    // SMA150 >= SMA200, RS Rating > 50, RS Rating improving (rows already
+    // filtered server-side), same fetch/cache pattern as the other dedicated
+    // screens tables above.
+    stage2Early: _makeScreensTableFetcher("stage2_early", "te_scr_stage2early_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    // leadership_tight_base: RS > 80, Stage 2, 20D range <= 10%, tightening
+    // (recent 10D range < prior 10D range) and volume contraction (recent 10D
+    // avg volume < prior 10D avg volume)  all filtering already done server-
+    // side, ordered so the tightest bases surface first.
+    leadershipTightBase: _makeScreensTableFetcher("leadership_tight_base", "te_scr_leadershiptightbase_v1", "select=*&order=range_20d_pct.asc.nullslast&limit=1000"),
+    // trend_template_7of8: relaxed Minervini Trend Template  stocks meeting at
+    // least 7 of the 8 criteria (price > SMA150/200, SMA150 > SMA200, SMA200
+    // rising ~1mo, SMA50 > SMA150/200, price > SMA50, price >= 25% above 52W
+    // low, price within 25% of 52W high, RS Rating >= 70)  already filtered
+    // server-side, same fetch/cache pattern as the other dedicated screens
+    // tables above (unlike minervini_screen, this is a plain table fetch, no
+    // passes_all query param needed).
+    trendTemplate7of8: _makeScreensTableFetcher("trend_template_7of8", "te_scr_trendtemplate7of8_v1", "select=*&order=criteria_met.desc.nullslast,rs_rating.desc.nullslast&limit=1000"),
 };
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -17725,61 +17755,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         [patternPreviewRows]
     );
 
-    // Market Leaders scans — direct fetch from stock_analytics (see
-    // _prefetchScreensStockAnalytics above) instead of the shared breadth
-    // context. One request, filters just read the view's precomputed
-    // `screens` tags rather than re-deriving thresholds in JS.
-    const [stockAnalyticsRawRows, setStockAnalyticsRawRows] = useState(() => _screensStockAnalyticsCache.rows || []);
-    const [stockAnalyticsLoading, setStockAnalyticsLoading] = useState(!(_screensStockAnalyticsCache.rows && _screensStockAnalyticsCache.rows.length > 0));
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const load = async () => {
-            try {
-                //  SWR: serve stale cache instantly, then revalidate 
-                const _sc = _screensStockAnalyticsCache;
-                const _scHasData = _sc.rows && _sc.rows.length > 0;
-                if (_scHasData) {
-                    if (!cancelled) { setStockAnalyticsRawRows(_sc.rows); setStockAnalyticsLoading(false); }
-                } else {
-                    setStockAnalyticsLoading(true);
-                }
-
-                const rows = await _prefetchScreensStockAnalytics();
-                if (!cancelled) setStockAnalyticsRawRows(rows);
-            } catch (e) {
-                if (!cancelled) console.error("[Market Leaders] fetch failed:", e);
-            } finally {
-                if (!cancelled) setStockAnalyticsLoading(false);
-            }
-        };
-
-        load();
-        return () => { cancelled = true; };
-    }, []);
-
-    // Coerce numeric strings (PostgREST returns numeric columns as strings)
-    // and apply the universe filter, once, shared by all 5 derived screens below.
-    const dStockAnalyticsBase = useMemo(() => {
-        const mapped = (stockAnalyticsRawRows || []).map(r => ({
-            ...r,
-            close: r.close != null ? Number(r.close) : null,
-            ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
-            ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
-            ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
-            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
-            rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
-            rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
-            rs_12m: r.rs_12m != null ? Number(r.rs_12m) : null,
-            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
-        }));
-        return filterByUniverse(mapped);
-    }, [stockAnalyticsRawRows, filterByUniverse]);
-
     // RS Rating Leaders  dedicated fetch from the rs_rating_leaders table
-    // (already filtered/sorted server-side, rs_rating > 90), separate from the
-    // stock_analytics-derived Market Leaders scans below.
+    // (already filtered/sorted server-side, rs_rating > 90).
     const [rsRatingRawRows, rsRatingLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.rsRatingLeaders);
     const dRsRating = useMemo(() => {
         const mapped = (rsRatingRawRows || []).map(r => ({
@@ -17791,23 +17768,86 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [rsRatingRawRows, filterByUniverse]);
 
-    const dRS3m = useMemo(() =>
-        dStockAnalyticsBase.filter(r => r.screens?.includes("RS 3M Leader"))
-            .sort((a, b) => (b.rs_3m ?? -Infinity) - (a.rs_3m ?? -Infinity))
-            .slice(0, 50),
-        [dStockAnalyticsBase]);
+    // RS Improving  dedicated fetch from the rs_improving table (already
+    // filtered server-side against RS Rating today > 1 week ago > 2 weeks ago),
+    // same fetch/cache pattern as the other dedicated screens tables.
+    const [rsImprovingRawRows, rsImprovingLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.rsImproving);
+    const dRsImproving = useMemo(() => {
+        const mapped = (rsImprovingRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            rs_rating_current: r.rs_rating_current != null ? Number(r.rs_rating_current) : null,
+            rs_rating_1w: r.rs_rating_1w != null ? Number(r.rs_rating_1w) : null,
+            rs_rating_2w: r.rs_rating_2w != null ? Number(r.rs_rating_2w) : null,
+            rs_change_1w: r.rs_change_1w != null ? Number(r.rs_change_1w) : null,
+            rs_change_2w: r.rs_change_2w != null ? Number(r.rs_change_2w) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.rs_change_2w ?? -Infinity) - (a.rs_change_2w ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [rsImprovingRawRows, filterByUniverse]);
 
-    const dRS6m = useMemo(() =>
-        dStockAnalyticsBase.filter(r => r.screens?.includes("RS 6M Leader"))
-            .sort((a, b) => (b.rs_6m ?? -Infinity) - (a.rs_6m ?? -Infinity))
-            .slice(0, 50),
-        [dStockAnalyticsBase]);
+    // Power Trend  dedicated fetch from the power_trend table (rows already
+    // filtered server-side: close > SMA50 > SMA150 > SMA200, RS Rating > 80,
+    // RS Rating today > 1-week-ago > 2-weeks-ago, and ret_3m > 0), same
+    // fetch/cache pattern as the other dedicated screens tables. ALL_COLUMNS
+    // already covers rs_3m/rs_6m/rs_12m/ret_3m/ret_6m/ret_12m/rs_rating/
+    // rel_volume/market_cap_cr, so this uses the plain generic ScreenDetailView
+    // mode  no detailExtra needed.
+    const [powerTrendRawRows, powerTrendLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.powerTrend);
+    const dPowerTrend = useMemo(() => {
+        const mapped = (powerTrendRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            sma50: r.sma50 != null ? Number(r.sma50) : null,
+            sma150: r.sma150 != null ? Number(r.sma150) : null,
+            sma200: r.sma200 != null ? Number(r.sma200) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            rs_rating_1w: r.rs_rating_1w != null ? Number(r.rs_rating_1w) : null,
+            rs_rating_2w: r.rs_rating_2w != null ? Number(r.rs_rating_2w) : null,
+            rs_change_1w: r.rs_change_1w != null ? Number(r.rs_change_1w) : null,
+            rs_change_2w: r.rs_change_2w != null ? Number(r.rs_change_2w) : null,
+            rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
+            rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
+            rs_12m: r.rs_12m != null ? Number(r.rs_12m) : null,
+            ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
+            ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
+            ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+        })).sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [powerTrendRawRows, filterByUniverse]);
 
-    const dRS12m = useMemo(() =>
-        dStockAnalyticsBase.filter(r => r.screens?.includes("RS 12M Leader"))
-            .sort((a, b) => (b.rs_12m ?? -Infinity) - (a.rs_12m ?? -Infinity))
-            .slice(0, 50),
-        [dStockAnalyticsBase]);
+    //  Stage 2 Early scan  dedicated fetch from the stage2_early table (rows
+    // already filtered server-side: close > SMA50, SMA50 > SMA150, SMA150 >=
+    // SMA200, RS Rating > 50, RS Rating improving vs 1W/2W ago). Same field
+    // shape as power_trend, so the same normalization applies.
+    const [stage2EarlyRawRows, stage2EarlyLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.stage2Early);
+    const dStage2Early = useMemo(() => {
+        const mapped = (stage2EarlyRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            sma50: r.sma50 != null ? Number(r.sma50) : null,
+            sma150: r.sma150 != null ? Number(r.sma150) : null,
+            sma200: r.sma200 != null ? Number(r.sma200) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            rs_rating_1w: r.rs_rating_1w != null ? Number(r.rs_rating_1w) : null,
+            rs_rating_2w: r.rs_rating_2w != null ? Number(r.rs_rating_2w) : null,
+            rs_change_1w: r.rs_change_1w != null ? Number(r.rs_change_1w) : null,
+            rs_change_2w: r.rs_change_2w != null ? Number(r.rs_change_2w) : null,
+            rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
+            rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
+            rs_12m: r.rs_12m != null ? Number(r.rs_12m) : null,
+            ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
+            ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
+            ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+        })).sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [stage2EarlyRawRows, filterByUniverse]);
 
     //  52W High Breakout scan  dedicated fetch from the high_52w_breakout table 
     // The high_52w_breakout table is refreshed daily by the sync pipeline and
@@ -18028,6 +18068,42 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     const pbLoading = pb50dmaLoading || pivotRetestLoading || pbShallowLoading || pbWeeklyLoading || pbVolDryupLoading;
 
+    // 6. Leadership Tight Base  dedicated fetch from the leadership_tight_base
+    // table (rows already filtered server-side: RS Rating > 80, Stage 2 trend,
+    // 20D range <= 10%, recent 10D range tighter than prior 10D range, and
+    // volume contracting recent-10D vs prior-10D). Own loading flag (not folded
+    // into pbLoading) since it's an independent fetch like Fresh Breakout/Stage
+    // 2 Early were for their sections.
+    const [leadershipTightBaseRawRows, leadershipTightBaseLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.leadershipTightBase);
+    const dLeadershipTightBase = useMemo(() => {
+        const mapped = (leadershipTightBaseRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            high_adj_close_20d: r.high_adj_close_20d != null ? Number(r.high_adj_close_20d) : null,
+            low_adj_close_20d: r.low_adj_close_20d != null ? Number(r.low_adj_close_20d) : null,
+            range_20d_pct: r.range_20d_pct != null ? Number(r.range_20d_pct) : null,
+            range_recent_10d_pct: r.range_recent_10d_pct != null ? Number(r.range_recent_10d_pct) : null,
+            range_prior_10d_pct: r.range_prior_10d_pct != null ? Number(r.range_prior_10d_pct) : null,
+            avg_volume_recent_10d: r.avg_volume_recent_10d != null ? Number(r.avg_volume_recent_10d) : null,
+            avg_volume_prior_10d: r.avg_volume_prior_10d != null ? Number(r.avg_volume_prior_10d) : null,
+            volume_contraction_pct: r.volume_contraction_pct != null ? Number(r.volume_contraction_pct) : null,
+            sma50: r.sma50 != null ? Number(r.sma50) : null,
+            sma150: r.sma150 != null ? Number(r.sma150) : null,
+            sma200: r.sma200 != null ? Number(r.sma200) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
+            rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
+            rs_12m: r.rs_12m != null ? Number(r.rs_12m) : null,
+            ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
+            ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
+            ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+        })).sort((a, b) => (a.range_20d_pct ?? Infinity) - (b.range_20d_pct ?? Infinity));
+        return filterByUniverse(mapped);
+    }, [leadershipTightBaseRawRows, filterByUniverse]);
+
     //  Volume Breakout scan  dedicated fetch from the volume_breakout table 
     // volume_breakout already contains only Stage-2 stocks breaking out on
     // unusually high relative volume (>= ~2x 20D avg), sorted by rel_vol desc.
@@ -18041,6 +18117,26 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         }));
         return filterByUniverse(mapped);
     }, [volBreakoutRawRows, filterByUniverse]);
+
+    //  Fresh Breakout scan  dedicated fetch from the fresh_breakout table 
+    // fresh_breakout already contains only rows passing all 5 conditions server-
+    // side (close > 20D pivot high, close <= 103% of pivot, rel_vol >= 1.5,
+    // SMA50 > SMA150 > SMA200, RS Rating >= 70), refreshed daily by the sync
+    // pipeline  same fetch  normalize  filterByUniverse pattern as the other
+    // dedicated screens tables above, no client-side condition filtering needed.
+    const [freshBreakoutRawRows, freshBreakoutLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.freshBreakout);
+
+    const dFreshBreakout = useMemo(() => {
+        const mapped = (freshBreakoutRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pivot_high: r.pivot_high_20d != null ? Number(r.pivot_high_20d) : null,
+            pct_from_pivot: r.pct_from_pivot != null ? Number(r.pct_from_pivot) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+        })).sort((a, b) => (a.pct_from_pivot ?? 0) - (b.pct_from_pivot ?? 0));
+        return filterByUniverse(mapped);
+    }, [freshBreakoutRawRows, filterByUniverse]);
 
     //  Minervini Trend Template scan  dedicated fetch from minervini_screen table 
     // The table is refreshed daily by the sync pipeline and already carries the
@@ -18096,6 +18192,38 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         });
         return filterByUniverse(mapped);
     }, [minerviniRawRows, filterByUniverse]);
+
+    //  Trend Template 7-of-8 (Legend Screens)  dedicated fetch from the
+    // trend_template_7of8 table (rows already filtered server-side: at least
+    // 7 of the 8 Minervini Trend Template criteria met). Plain dedicated-table
+    // fetch (unlike Minervini's passes_all-filtered special-case fetch above),
+    // normalized to the same field shape MINERVINI_DEFAULT_COLS expects.
+    const [tt7of8RawRows, tt7of8Loading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.trendTemplate7of8);
+    const dTrendTemplate7of8 = useMemo(() => {
+        const mapped = (tt7of8RawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            sma50: r.sma50 != null ? Number(r.sma50) : null,
+            sma150: r.sma150 != null ? Number(r.sma150) : null,
+            sma200: r.sma200 != null ? Number(r.sma200) : null,
+            sma200_1m_ago: r.sma200_1m_ago != null ? Number(r.sma200_1m_ago) : null,
+            high_52w: r.high_52w != null ? Number(r.high_52w) : null,
+            low_52w: r.low_52w != null ? Number(r.low_52w) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            criteria_met: r.criteria_met != null ? Number(r.criteria_met) : null,
+            pct_from_52w_high: r.pct_from_52w_high != null ? Number(r.pct_from_52w_high) : null,
+            pct_from_52w_low: r.pct_above_52w_low != null ? Number(r.pct_above_52w_low) : null,
+            rs_3m: r.rs_3m != null ? Number(r.rs_3m) : null,
+            rs_6m: r.rs_6m != null ? Number(r.rs_6m) : null,
+            rs_12m: r.rs_12m != null ? Number(r.rs_12m) : null,
+            ret_3m: r.ret_3m != null ? Number(r.ret_3m) : null,
+            ret_6m: r.ret_6m != null ? Number(r.ret_6m) : null,
+            ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+        })).sort((a, b) => (b.criteria_met ?? -Infinity) - (a.criteria_met ?? -Infinity) || (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [tt7of8RawRows, filterByUniverse]);
 
     //  Weinstein Stage scans (Legend Screens)  dedicated fetch from the
     // weinstein_stages table (latest date per ticker only, market_cap_cr >= 500
@@ -18179,13 +18307,12 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             .sort((a, b) => Math.abs(a.pct_to_breakout) - Math.abs(b.pct_to_breakout));
     }, [dWeinsteinBase]);
 
-    const totalCount = dRS3m.length + dRS6m.length + dRS12m.length +
-        dRsRating.length;
-    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length;
+    const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
+    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
-        dPbWeekly.length + dPbVolDryup.length;
+        dPbWeekly.length + dPbVolDryup.length + dLeadershipTightBase.length;
     const minerviniCount = dMinervini.length;
-    const legendScreensCount = dMinervini.length + dWeinsteinTier1.length + dWeinsteinTier2.length;
+    const legendScreensCount = dMinervini.length + dWeinsteinTier1.length + dWeinsteinTier2.length + dTrendTemplate7of8.length;
 
     //  Pill navigation: consume window.__wl_openScreen set by WatchlistDashboard 
     // Effect 1: on mount, read the global and store in state
@@ -18205,6 +18332,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             "Vol Breakout": { rowKey: "bo-vol", title: "Volume Breakout", rows: dVolBreakout, scoreKey: "rel_volume", scoreLabel: "Rel Vol", color: "#34d399", formatVal: v => `${Number(v).toFixed(2)}x` },
             "52W High BO": { rowKey: "bo-52w", title: "52W High Breakout", rows: d52wBreakout, scoreKey: "pct_from_52w_high", scoreLabel: "From High", color: "#4ade80", formatVal: v => v <= 0 ? `+${Math.abs(v).toFixed(2)}%` : `-${Number(v).toFixed(2)}%` },
             "Pivot BO": { rowKey: "bo-pivot", title: "Pivot Breakout", rows: dPivotBreakout, scoreKey: "pct_above_pivot", scoreLabel: "% Above Pivot", color: "#22c55e", formatVal: v => `+${Number(v).toFixed(2)}%` },
+            "Fresh BO": { rowKey: "bo-fresh", title: "Fresh Breakout", rows: dFreshBreakout, scoreKey: "pct_from_pivot", scoreLabel: "% Above Pivot", color: "#10b981", formatVal: v => `+${Number(v).toFixed(2)}%` },
             "Pullback 50DMA": { rowKey: "pb-50dma", title: "Pullback to 50 DMA", rows: dPb50dma, scoreKey: "pct_from_sma50", scoreLabel: "% From 50 SMA", color: "#fbbf24", formatVal: v => `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%` },
             "Shallow PB": { rowKey: "pb-shallow", title: "Shallow Pullback", rows: dPbShallow, scoreKey: "pct_from_pivot", scoreLabel: "% From Pivot", color: "#fb923c", formatVal: v => `${Number(v).toFixed(2)}%` },
             "Weekly PB": { rowKey: "pb-weekly", title: "Weekly Pullback", rows: dPbWeekly, scoreKey: "pct_from_pivot", scoreLabel: "% From 10W Pivot", color: "#f59e0b", formatVal: v => `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%` },
@@ -18221,7 +18349,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             });
         }
     }, [pendingScreen, tablesLoading, dRsRating,
-        dVolBreakout, d52wBreakout, dPivotBreakout, dPb50dma, dPbShallow, dPbWeekly, dPbVolDryup]);
+        dVolBreakout, d52wBreakout, dPivotBreakout, dFreshBreakout, dPb50dma, dPbShallow, dPbWeekly, dPbVolDryup]);
 
     // Accent  a neutral blue separate from the app's green
     const ACCENT = isDark ? "#6366f1" : "#4f46e5";
@@ -18522,32 +18650,32 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         <div className="scr-sections">
                             <CategorySection name="Market Leaders" color={ACCENT}
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
-                                count={stockAnalyticsLoading ? "" : totalCount}>
+                                count={(rsRatingLoading || rsImprovingLoading || powerTrendLoading || stage2EarlyLoading) ? "" : totalCount}>
                                 <ScreenRow rowKey="ml-rsrating" title="RS Rating Leaders"
                                     subtitle="Stocks with RS Rating above 90"
                                     rows={dRsRating} scoreKey="rs_rating" scoreLabel="RS Rating"
                                     formatScore={v => Math.round(v).toString()} tfLabel="RS Rating Leaders"
-                                    loadingOverride={stockAnalyticsLoading} />
-                                <ScreenRow rowKey="ml-rs3m" title="RS 3-Month Leaders"
-                                    subtitle="Stocks with strongest relative returns over the last 3 months"
-                                    rows={dRS3m} scoreKey="rs_3m" scoreLabel="RS 3M"
-                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 3M Leaders"
-                                    loadingOverride={stockAnalyticsLoading} />
-                                <ScreenRow rowKey="ml-rs6m" title="RS 6-Month Leaders"
-                                    subtitle="Strongest relative performers over the last 6 months"
-                                    rows={dRS6m} scoreKey="rs_6m" scoreLabel="RS 6M"
-                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 6M Leaders"
-                                    loadingOverride={stockAnalyticsLoading} />
-                                <ScreenRow rowKey="ml-rs12m" title="RS 12-Month Leaders"
-                                    subtitle="Strongest relative performers over the last 12 months"
-                                    rows={dRS12m} scoreKey="rs_12m" scoreLabel="RS 12M"
-                                    formatScore={v => `${v.toFixed(2)}x`} tfLabel="RS 12M Leaders"
-                                    loadingOverride={stockAnalyticsLoading} />
+                                    loadingOverride={rsRatingLoading} />
+                                <ScreenRow rowKey="ml-rsimproving" title="RS Improving"
+                                    subtitle="RS Rating rising: today's rating above 1-week-ago, above 2-weeks-ago"
+                                    rows={dRsImproving} scoreKey="rs_rating_current" scoreLabel="RS Rating"
+                                    formatScore={v => Math.round(v).toString()} tfLabel="RS Improving"
+                                    loadingOverride={rsImprovingLoading} />
+                                <ScreenRow rowKey="ml-powertrend" title="Power Trend"
+                                    subtitle="Close > SMA50 > SMA150 > SMA200, RS Rating > 80, RS rising vs 1W/2W ago, positive 3M return"
+                                    rows={dPowerTrend} scoreKey="rs_rating" scoreLabel="RS Rating"
+                                    formatScore={v => Math.round(v).toString()} tfLabel="Power Trend"
+                                    loadingOverride={powerTrendLoading} />
+                                <ScreenRow rowKey="ml-stage2early" title="Stage 2 Early"
+                                    subtitle="Close > SMA50, SMA50 > SMA150, SMA150 >= SMA200, RS Rating > 50, RS improving vs 1W/2W ago"
+                                    rows={dStage2Early} scoreKey="rs_rating" scoreLabel="RS Rating"
+                                    formatScore={v => Math.round(v).toString()} tfLabel="Stage 2 Early"
+                                    loadingOverride={stage2EarlyLoading} />
                             </CategorySection>
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
                                 desc="Stocks breaking above key resistance with volume confirmation"
-                                count={(volBreakoutLoading || breakoutLoading || pivotLoading) ? "..." : breakoutsCount}>
+                                count={(volBreakoutLoading || breakoutLoading || pivotLoading || freshBreakoutLoading) ? "..." : breakoutsCount}>
                                 <ScreenRow
                                     rowKey="bo-vol"
                                     title="Volume Breakout"
@@ -18606,11 +18734,22 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                         </div>
                                     }
                                 />
+                                <ScreenRow
+                                    rowKey="bo-fresh"
+                                    title="Fresh Breakout"
+                                    subtitle="Close > 20D pivot high (within 3%) on rel vol >= 1.5x with Stage 2 trend (SMA50 > SMA150 > SMA200) and RS Rating >= 70"
+                                    rows={dFreshBreakout}
+                                    scoreKey="pct_from_pivot"
+                                    scoreLabel="% Above Pivot"
+                                    formatScore={v => `+${Number(v).toFixed(2)}%`}
+                                    tfLabel="Fresh Breakout"
+                                    loadingOverride={freshBreakoutLoading}
+                                />
                             </CategorySection>
 
                             <CategorySection name="Pullbacks" color={isDark ? "#fbbf24" : "#b45309"}
                                 desc="Healthy retracements to key moving averages in uptrends"
-                                count={pbLoading ? "..." : pullbacksCount}>
+                                count={(pbLoading || leadershipTightBaseLoading) ? "..." : pullbacksCount}>
                                 <ScreenRow
                                     rowKey="pb-50dma"
                                     title="Pullback to 50 DMA"
@@ -18703,11 +18842,22 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     loadingOverride={pbLoading}
                                     detailExtra={{ pullbackMode: true, pullbackCols: ["pct_from_sma50", "vol_ratio", "volume", "volume_20ma", "sma50"] }}
                                 />
+                                <ScreenRow
+                                    rowKey="pb-tightbase"
+                                    title="Leadership Tight Base"
+                                    subtitle="RS Rating > 80, Stage 2 trend, 20D range <= 10%, tightening (recent 10D range < prior 10D range) on contracting volume"
+                                    rows={dLeadershipTightBase}
+                                    scoreKey="range_20d_pct"
+                                    scoreLabel="20D Range"
+                                    formatScore={v => `${Number(v).toFixed(2)}%`}
+                                    tfLabel="Leadership Tight Base"
+                                    loadingOverride={leadershipTightBaseLoading}
+                                />
                             </CategorySection>
 
                             <CategorySection name="Legend Screens" color={isDark ? "#60a5fa" : "#2563eb"}
                                 desc="Curated multi-criteria scans — Minervini's Trend Template and Weinstein Stage Analysis"
-                                count={(minerviniLoading || weinsteinLoading) ? "..." : legendScreensCount}>
+                                count={(minerviniLoading || weinsteinLoading || tt7of8Loading) ? "..." : legendScreensCount}>
                                 <ScreenRow
                                     rowKey="mv-trend"
                                     title="Trend Template — All 8 Criteria"
@@ -18719,6 +18869,18 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     tfLabel="Minervini Trend Template"
                                     loadingOverride={minerviniLoading}
                                     detailExtra={{ minerviniMode: true }}
+                                />
+                                <ScreenRow
+                                    rowKey="tt-7of8"
+                                    title="Trend Template — 7 of 8"
+                                    subtitle="Meets at least 7 of the 8 Trend Template criteria (price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA rising ~1mo, 50 SMA above 150/200 and price above 50 SMA, price 25%+ above 52W low, within 25% of 52W high, RS Rating >= 70)"
+                                    rows={dTrendTemplate7of8}
+                                    scoreKey="criteria_met"
+                                    scoreLabel="Criteria Met"
+                                    formatScore={v => `${Math.round(Number(v))}/8`}
+                                    tfLabel="Trend Template 7-of-8"
+                                    loadingOverride={tt7of8Loading}
+                                    detailExtra={{ pullbackMode: true, pullbackCols: ["close", "pct_from_52w_high", "pct_from_52w_low", "ret_3m", "ret_6m", "ret_12m", "rel_volume", "sma50", "sma150", "sma200"] }}
                                 />
                                 <ScreenRow
                                     rowKey="weinstein-tier1"
