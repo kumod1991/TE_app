@@ -16149,6 +16149,31 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     // Use recomputed rows if in pivot/retest mode, otherwise use the passed rows
     const activeRows = pivotRows || retestRows || rows;
 
+    // Data freshness: most recent updated_at across all rows in this screen
+    // (DB stores UTC timestamps; +5:30 converts to IST for display).
+    const dataUpdatedAt = useMemo(() => {
+        if (!activeRows || activeRows.length === 0) return null;
+        let maxTs = null;
+        for (const r of activeRows) {
+            if (!r.updated_at) continue;
+            const t = new Date(r.updated_at).getTime();
+            if (!isNaN(t) && (maxTs == null || t > maxTs)) maxTs = t;
+        }
+        return maxTs;
+    }, [activeRows]);
+
+    const fmtUpdatedAt = ts => {
+        if (ts == null) return null;
+        const d = new Date(ts + 5.5 * 60 * 60 * 1000); // shift UTC -> IST
+        const day = d.getUTCDate();
+        const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+        let hh = d.getUTCHours();
+        const mm = String(d.getUTCMinutes()).padStart(2, "0");
+        const ampm = hh >= 12 ? "PM" : "AM";
+        hh = hh % 12; if (hh === 0) hh = 12;
+        return `${day} ${month}, ${hh}:${mm} ${ampm} IST`;
+    };
+
     const defaultCols = ALL_COLUMNS.reduce((a, c) => {
         // In pivot mode, default-on the pivot-specific columns
         if (pivotMode && (c.key === "pivot_high" || c.key === "pct_above_pivot")) {
@@ -17020,7 +17045,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                         background: T.surface || T.card
                     }}>
                         <span className="sdv-price-footer" style={{ fontSize: 11, color: T.subtext, fontFamily: "'IBM Plex Mono',monospace" }}>
-                            Prices (EOD)
+                            Prices (EOD){dataUpdatedAt != null && ` \u00B7 Updated ${fmtUpdatedAt(dataUpdatedAt)}`}
                         </span>
 
                         {filteredRows.length > 0 && (
