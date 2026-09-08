@@ -11048,6 +11048,28 @@ const SCREENS_TABLE_FETCHERS = {
     // tables above (unlike minervini_screen, this is a plain table fetch, no
     // passes_all query param needed).
     trendTemplate7of8: _makeScreensTableFetcher("trend_template_7of8", "te_scr_trendtemplate7of8_v1", "select=*&order=criteria_met.desc.nullslast,rs_rating.desc.nullslast&limit=1000"),
+    // leadership_vcp: Volatility Contraction  20D  10D  5D  3D range
+    // contraction plus volume contraction (vcp_score already computed server-
+    // side), same dedicated-table fetch/cache pattern as leadership_tight_base.
+    leadershipVcp: _makeScreensTableFetcher("leadership_vcp", "te_scr_leadershipvcp_v1", "select=*&order=vcp_score.desc.nullslast&limit=1000"),
+    // leadership_near_breakout: Stage-2, RS > 80, tight 20D base (<=12%) that's
+    // tightening (recent 10D range < prior 10D range), price below the 20D-high
+    // pivot but within 5% of it, rel_vol >= 0.80 and volume not expanding
+    // excessively  all filtering already done server-side, with breakout_score
+    // (distance-from-pivot + RS + tightness, rolled up) computed server-side too,
+    // same dedicated-table fetch/cache pattern as leadership_vcp.
+    leadershipNearBreakout: _makeScreensTableFetcher("leadership_near_breakout", "te_scr_leadershipnearbreakout_v1", "select=*&order=breakout_score.desc.nullslast&limit=1000"),
+    // leadership_weekly_tight: weekly-chart analog of the tight-base screens 
+    // tightness measured week-over-week (range_4w_pct, prior/recent 2W range,
+    // per-week ranges) plus volume contraction and RS, rolled into
+    // weekly_tight_score server-side. Same dedicated-table fetch/cache pattern.
+    leadershipWeeklyTight: _makeScreensTableFetcher("leadership_weekly_tight", "te_scr_leadershipweeklytight_v1", "select=*&order=weekly_tight_score.desc.nullslast&limit=1000"),
+    // leadership_high_tight_flag: "high tight flag" pattern  a sharp prior
+    // advance (advance_pct) followed by a shallow drawdown/consolidation
+    // (drawdown_from_flag_high_pct, consolidation_range_pct) that's tightening
+    // (recent 10D range < prior 10D range) on contracting volume, rolled up
+    // server-side into high_tight_flag_score. Same dedicated-table fetch/cache pattern.
+    leadershipHighTightFlag: _makeScreensTableFetcher("leadership_high_tight_flag", "te_scr_leadershiphightightflag_v1", "select=*&order=high_tight_flag_score.desc.nullslast&limit=1000"),
 };
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -16030,6 +16052,29 @@ const ALL_COLUMNS = [
     { key: "breakout_level", label: "Breakout Level", defaultOn: false },
     { key: "market_cap_cr", label: "Mkt Cap (Cr)", defaultOn: false },
     { key: "pct_to_breakout", label: "% To Breakout", defaultOn: false },
+    { key: "vcp_score", label: "VCP Score", defaultOn: false },
+    { key: "range_20d_pct", label: "20D Range %", defaultOn: false },
+    { key: "range_recent_10d_pct", label: "Recent 10D Range %", defaultOn: false },
+    { key: "range_5d_pct", label: "5D Range %", defaultOn: false },
+    { key: "range_3d_pct", label: "3D Range %", defaultOn: false },
+    { key: "volume_contraction_pct", label: "Volume Contraction %", defaultOn: false },
+    { key: "breakout_score", label: "Breakout Score", defaultOn: false },
+    { key: "pivot_20d", label: "20D Pivot", defaultOn: false },
+    { key: "distance_from_pivot_pct", label: "% From Pivot", defaultOn: false },
+    { key: "volume_change_pct", label: "Volume Change %", defaultOn: false },
+    { key: "weekly_tight_score", label: "Weekly Tight Score", defaultOn: false },
+    { key: "range_4w_pct", label: "4W Range %", defaultOn: false },
+    { key: "range_prior_2w_pct", label: "Prior 2W Range %", defaultOn: false },
+    { key: "range_recent_2w_pct", label: "Recent 2W Range %", defaultOn: false },
+    { key: "week_1_range_pct", label: "Week 1 Range %", defaultOn: false },
+    { key: "week_2_range_pct", label: "Week 2 Range %", defaultOn: false },
+    { key: "week_3_range_pct", label: "Week 3 Range %", defaultOn: false },
+    { key: "week_4_range_pct", label: "Week 4 Range %", defaultOn: false },
+    { key: "high_tight_flag_score", label: "High Tight Flag Score", defaultOn: false },
+    { key: "advance_pct", label: "Prior Advance %", defaultOn: false },
+    { key: "drawdown_from_flag_high_pct", label: "Drawdown From High %", defaultOn: false },
+    { key: "consolidation_range_pct", label: "Consolidation Range %", defaultOn: false },
+    { key: "range_prior_10d_pct", label: "Prior 10D Range %", defaultOn: false },
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
@@ -16257,6 +16302,20 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "breakout_level") return fmtINR(v);
         if (key === "market_cap_cr") return `${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr`;
         if (key === "pct_to_breakout") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "vcp_score") return Math.round(Number(v)).toString();
+        if (["range_20d_pct", "range_recent_10d_pct", "range_5d_pct", "range_3d_pct"].includes(key)) return `${Number(v).toFixed(2)}%`;
+        if (key === "volume_contraction_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "breakout_score") return Math.round(Number(v)).toString();
+        if (key === "pivot_20d") return fmtINR(v);
+        if (key === "distance_from_pivot_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "volume_change_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "weekly_tight_score") return Math.round(Number(v)).toString();
+        if (["range_4w_pct", "range_prior_2w_pct", "range_recent_2w_pct", "week_1_range_pct", "week_2_range_pct", "week_3_range_pct", "week_4_range_pct"].includes(key)) return `${Number(v).toFixed(2)}%`;
+        if (key === "high_tight_flag_score") return Math.round(Number(v)).toString();
+        if (key === "advance_pct") return `+${Number(v).toFixed(2)}%`;
+        if (key === "drawdown_from_flag_high_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "consolidation_range_pct") return `${Number(v).toFixed(2)}%`;
+        if (key === "range_prior_10d_pct") return `${Number(v).toFixed(2)}%`;
         return String(v);
     };
 
@@ -16275,6 +16334,8 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "vol_ratio") return Number(v) < 0.7 ? posClr : Number(v) < 1 ? T.text : negClr;
         if (["mansfield_rs", "mansfield_rs_slope", "sma150_slope_pct"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         if (key === "pct_to_breakout") return Math.abs(Number(v)) <= 3 ? posClr : T.text;
+        if (key === "volume_contraction_pct") return Number(v) < 0 ? posClr : T.text;
+        if (key === "distance_from_pivot_pct") return Math.abs(Number(v)) <= 2 ? posClr : T.text;
         return T.text;
     };
 
@@ -16354,6 +16415,29 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         { key: "breakout_level", label: "Breakout Lvl" },
         { key: "market_cap_cr", label: "Mkt Cap (Cr)" },
         { key: "pct_to_breakout", label: "% To Breakout" },
+        { key: "vcp_score", label: "VCP Score" },
+        { key: "range_20d_pct", label: "20D Range %" },
+        { key: "range_recent_10d_pct", label: "Recent 10D Range %" },
+        { key: "range_5d_pct", label: "5D Range %" },
+        { key: "range_3d_pct", label: "3D Range %" },
+        { key: "volume_contraction_pct", label: "Volume Contraction %" },
+        { key: "breakout_score", label: "Breakout Score" },
+        { key: "pivot_20d", label: "20D Pivot" },
+        { key: "distance_from_pivot_pct", label: "% From Pivot" },
+        { key: "volume_change_pct", label: "Volume Change %" },
+        { key: "weekly_tight_score", label: "Weekly Tight Score" },
+        { key: "range_4w_pct", label: "4W Range %" },
+        { key: "range_prior_2w_pct", label: "Prior 2W Range %" },
+        { key: "range_recent_2w_pct", label: "Recent 2W Range %" },
+        { key: "week_1_range_pct", label: "Week 1 Range %" },
+        { key: "week_2_range_pct", label: "Week 2 Range %" },
+        { key: "week_3_range_pct", label: "Week 3 Range %" },
+        { key: "week_4_range_pct", label: "Week 4 Range %" },
+        { key: "high_tight_flag_score", label: "High Tight Flag Score" },
+        { key: "advance_pct", label: "Prior Advance %" },
+        { key: "drawdown_from_flag_high_pct", label: "Drawdown From High %" },
+        { key: "consolidation_range_pct", label: "Consolidation Range %" },
+        { key: "range_prior_10d_pct", label: "Prior 10D Range %" },
     ].filter(c => visibleCols[c.key] && c.key !== scoreKey);
 
     // Shared button style  no duplicate keys
@@ -18129,6 +18213,103 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [leadershipTightBaseRawRows, filterByUniverse]);
 
+    // 6b. Volatility Contraction — dedicated fetch from the leadership_vcp table
+    // (rows already filtered/scored server-side: 20D -> 10D -> 5D -> 3D range
+    // contraction plus volume contraction, rolled up into vcp_score). Own
+    // loading flag, same pattern as Leadership Tight Base above.
+    const [leadershipVcpRawRows, leadershipVcpLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.leadershipVcp);
+    const dVolatilityContraction = useMemo(() => {
+        const mapped = (leadershipVcpRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            vcp_score: r.vcp_score != null ? Number(r.vcp_score) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            range_20d_pct: r.range_20d_pct != null ? Number(r.range_20d_pct) : null,
+            range_recent_10d_pct: r.range_recent_10d_pct != null ? Number(r.range_recent_10d_pct) : null,
+            range_5d_pct: r.range_5d_pct != null ? Number(r.range_5d_pct) : null,
+            range_3d_pct: r.range_3d_pct != null ? Number(r.range_3d_pct) : null,
+            volume_contraction_pct: r.volume_contraction_pct != null ? Number(r.volume_contraction_pct) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+        })).sort((a, b) => (b.vcp_score ?? 0) - (a.vcp_score ?? 0));
+        return filterByUniverse(mapped);
+    }, [leadershipVcpRawRows, filterByUniverse]);
+
+    // 6c. Tight Near Breakout — dedicated fetch from the leadership_near_breakout
+    // table (rows already filtered/scored server-side: Stage-2 trend, RS > 80,
+    // tight tightening 20D base, price within 5% below the 20D-high pivot,
+    // rel_vol >= 0.80 without excessive volume expansion, rolled up into
+    // breakout_score). Own loading flag, same pattern as Volatility Contraction above.
+    const [leadershipNearBreakoutRawRows, leadershipNearBreakoutLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.leadershipNearBreakout);
+    const dTightNearBreakout = useMemo(() => {
+        const mapped = (leadershipNearBreakoutRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pivot_20d: r.pivot_20d != null ? Number(r.pivot_20d) : null,
+            distance_from_pivot_pct: r.distance_from_pivot_pct != null ? Number(r.distance_from_pivot_pct) : null,
+            range_20d_pct: r.range_20d_pct != null ? Number(r.range_20d_pct) : null,
+            range_recent_10d_pct: r.range_recent_10d_pct != null ? Number(r.range_recent_10d_pct) : null,
+            range_prior_10d_pct: r.range_prior_10d_pct != null ? Number(r.range_prior_10d_pct) : null,
+            volume_change_pct: r.volume_change_pct != null ? Number(r.volume_change_pct) : null,
+            sma50: r.sma50 != null ? Number(r.sma50) : null,
+            sma150: r.sma150 != null ? Number(r.sma150) : null,
+            sma200: r.sma200 != null ? Number(r.sma200) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+            breakout_score: r.breakout_score != null ? Number(r.breakout_score) : null,
+        })).sort((a, b) => (b.breakout_score ?? 0) - (a.breakout_score ?? 0));
+        return filterByUniverse(mapped);
+    }, [leadershipNearBreakoutRawRows, filterByUniverse]);
+
+    // 6d. Weekly Tight Base — dedicated fetch from the leadership_weekly_tight
+    // table (weekly-chart tightness: 4W range, prior/recent 2W range, each of
+    // the last 4 individual weekly ranges, plus volume contraction and RS,
+    // rolled up server-side into weekly_tight_score). Own loading flag, same
+    // pattern as the other Tight Bases screens above.
+    const [leadershipWeeklyTightRawRows, leadershipWeeklyTightLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.leadershipWeeklyTight);
+    const dWeeklyTightBase = useMemo(() => {
+        const mapped = (leadershipWeeklyTightRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            weekly_tight_score: r.weekly_tight_score != null ? Number(r.weekly_tight_score) : null,
+            range_4w_pct: r.range_4w_pct != null ? Number(r.range_4w_pct) : null,
+            range_prior_2w_pct: r.range_prior_2w_pct != null ? Number(r.range_prior_2w_pct) : null,
+            range_recent_2w_pct: r.range_recent_2w_pct != null ? Number(r.range_recent_2w_pct) : null,
+            week_1_range_pct: r.week_1_range_pct != null ? Number(r.week_1_range_pct) : null,
+            week_2_range_pct: r.week_2_range_pct != null ? Number(r.week_2_range_pct) : null,
+            week_3_range_pct: r.week_3_range_pct != null ? Number(r.week_3_range_pct) : null,
+            week_4_range_pct: r.week_4_range_pct != null ? Number(r.week_4_range_pct) : null,
+            volume_contraction_pct: r.volume_contraction_pct != null ? Number(r.volume_contraction_pct) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+        })).sort((a, b) => (b.weekly_tight_score ?? 0) - (a.weekly_tight_score ?? 0));
+        return filterByUniverse(mapped);
+    }, [leadershipWeeklyTightRawRows, filterByUniverse]);
+
+    // 6e. High Tight Flag — dedicated fetch from the leadership_high_tight_flag
+    // table (sharp prior advance followed by a shallow, tightening
+    // consolidation on contracting volume, rolled up server-side into
+    // high_tight_flag_score). Own loading flag, same pattern as the other
+    // Tight Bases screens above.
+    const [leadershipHighTightFlagRawRows, leadershipHighTightFlagLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.leadershipHighTightFlag);
+    const dHighTightFlag = useMemo(() => {
+        const mapped = (leadershipHighTightFlagRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            high_tight_flag_score: r.high_tight_flag_score != null ? Number(r.high_tight_flag_score) : null,
+            advance_pct: r.advance_pct != null ? Number(r.advance_pct) : null,
+            drawdown_from_flag_high_pct: r.drawdown_from_flag_high_pct != null ? Number(r.drawdown_from_flag_high_pct) : null,
+            consolidation_range_pct: r.consolidation_range_pct != null ? Number(r.consolidation_range_pct) : null,
+            range_prior_10d_pct: r.range_prior_10d_pct != null ? Number(r.range_prior_10d_pct) : null,
+            range_recent_10d_pct: r.range_recent_10d_pct != null ? Number(r.range_recent_10d_pct) : null,
+            volume_contraction_pct: r.volume_contraction_pct != null ? Number(r.volume_contraction_pct) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+        })).sort((a, b) => (b.high_tight_flag_score ?? 0) - (a.high_tight_flag_score ?? 0));
+        return filterByUniverse(mapped);
+    }, [leadershipHighTightFlagRawRows, filterByUniverse]);
+
     //  Volume Breakout scan  dedicated fetch from the volume_breakout table 
     // volume_breakout already contains only Stage-2 stocks breaking out on
     // unusually high relative volume (>= ~2x 20D avg), sorted by rel_vol desc.
@@ -18335,9 +18516,13 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
-        dPbWeekly.length + dPbVolDryup.length + dLeadershipTightBase.length;
+        dPbWeekly.length + dPbVolDryup.length;
     const minerviniCount = dMinervini.length;
     const legendScreensCount = dMinervini.length + dWeinsteinTier1.length + dWeinsteinTier2.length + dTrendTemplate7of8.length;
+    // Tight Bases  Strict Tight Base, Volatility Contraction, Tight Near
+    // Breakout, Weekly Tight Base and High Tight Flag (ex Leadership Tight
+    // Base, moved out of Pullbacks).
+    const tightBasesCount = dLeadershipTightBase.length + dVolatilityContraction.length + dTightNearBreakout.length + dWeeklyTightBase.length + dHighTightFlag.length;
 
     //  Pill navigation: consume window.__wl_openScreen set by WatchlistDashboard 
     // Effect 1: on mount, read the global and store in state
@@ -18774,7 +18959,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
                             <CategorySection name="Pullbacks" color={isDark ? "#fbbf24" : "#b45309"}
                                 desc="Healthy retracements to key moving averages in uptrends"
-                                count={(pbLoading || leadershipTightBaseLoading) ? "..." : pullbacksCount}>
+                                count={pbLoading ? "..." : pullbacksCount}>
                                 <ScreenRow
                                     rowKey="pb-50dma"
                                     title="Pullback to 50 DMA"
@@ -18867,16 +19052,81 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     loadingOverride={pbLoading}
                                     detailExtra={{ pullbackMode: true, pullbackCols: ["pct_from_sma50", "vol_ratio", "volume", "volume_20ma", "sma50"] }}
                                 />
+                            </CategorySection>
+
+                            <CategorySection name="Tight Bases" color={isDark ? "#f472b6" : "#db2777"}
+                                desc="Stocks consolidating in tight, low-volatility ranges ahead of a potential move"
+                                count={(leadershipTightBaseLoading || leadershipVcpLoading || leadershipNearBreakoutLoading || leadershipWeeklyTightLoading || leadershipHighTightFlagLoading) ? "..." : tightBasesCount}>
                                 <ScreenRow
-                                    rowKey="pb-tightbase"
-                                    title="Leadership Tight Base"
+                                    rowKey="tb-strict"
+                                    title="Strict Tight Base"
                                     subtitle="RS Rating > 80, Stage 2 trend, 20D range <= 10%, tightening (recent 10D range < prior 10D range) on contracting volume"
                                     rows={dLeadershipTightBase}
                                     scoreKey="range_20d_pct"
                                     scoreLabel="20D Range"
                                     formatScore={v => `${Number(v).toFixed(2)}%`}
-                                    tfLabel="Leadership Tight Base"
+                                    tfLabel="Strict Tight Base"
                                     loadingOverride={leadershipTightBaseLoading}
+                                />
+                                <ScreenRow
+                                    rowKey="tb-vcp"
+                                    title="Volatility Contraction"
+                                    subtitle="20D → 10D → 5D → 3D range contraction with volume contraction (vcp_score ranks the tightest, driest setups)"
+                                    rows={dVolatilityContraction}
+                                    scoreKey="vcp_score"
+                                    scoreLabel="VCP Score"
+                                    formatScore={v => Math.round(v).toString()}
+                                    tfLabel="Volatility Contraction"
+                                    loadingOverride={leadershipVcpLoading}
+                                    detailExtra={{
+                                        pullbackMode: true,
+                                        pullbackCols: ["range_20d_pct", "range_recent_10d_pct", "range_5d_pct", "range_3d_pct", "volume_contraction_pct", "rs_rating"]
+                                    }}
+                                />
+                                <ScreenRow
+                                    rowKey="tb-nearbo"
+                                    title="Tight Near Breakout"
+                                    subtitle="Stage 2 (Close > SMA50 > SMA150 > SMA200), RS Rating > 80, 20D range <= 12% and tightening (recent 10D range < prior 10D range), close below but within 5% of the 20D high, rel_vol >= 0.80 with recent 10D volume >= 60% of prior 10D volume, and close >= 90% of 52W high"
+                                    rows={dTightNearBreakout}
+                                    scoreKey="breakout_score"
+                                    scoreLabel="Breakout Score"
+                                    formatScore={v => Math.round(v).toString()}
+                                    tfLabel="Tight Near Breakout"
+                                    loadingOverride={leadershipNearBreakoutLoading}
+                                    detailExtra={{
+                                        pullbackMode: true,
+                                        pullbackCols: ["pivot_20d", "distance_from_pivot_pct", "range_20d_pct", "range_recent_10d_pct", "rs_rating", "rel_volume", "volume_change_pct"]
+                                    }}
+                                />
+                                <ScreenRow
+                                    rowKey="tb-weekly"
+                                    title="Weekly Tight Base"
+                                    subtitle="Stage 2 (Close > SMA50 > SMA150 > SMA200), RS Rating > 80, on completed weekly bars: 4W range <= 15%, tightening (recent 2W range < prior 2W range, Week 1 <= Week 3, Week 2 <= Week 4) on falling volume (recent 2W avg volume < prior 2W avg), close >= 85% of 52W high"
+                                    rows={dWeeklyTightBase}
+                                    scoreKey="weekly_tight_score"
+                                    scoreLabel="Weekly Tight Score"
+                                    formatScore={v => Math.round(v).toString()}
+                                    tfLabel="Weekly Tight Base"
+                                    loadingOverride={leadershipWeeklyTightLoading}
+                                    detailExtra={{
+                                        pullbackMode: true,
+                                        pullbackCols: ["range_4w_pct", "range_prior_2w_pct", "range_recent_2w_pct", "week_1_range_pct", "week_2_range_pct", "week_3_range_pct", "week_4_range_pct", "volume_contraction_pct", "rs_rating"]
+                                    }}
+                                />
+                                <ScreenRow
+                                    rowKey="tb-htf"
+                                    title="High Tight Flag"
+                                    subtitle="Prior 21-60 session advance >= 30% with a shallow pullback (close >= 85% of that advance's peak), latest 20D consolidation range <= 15% and tightening (recent 10D range < prior 10D range) on falling volume (recent 10D avg < prior 10D avg), Stage 2 trend, RS Rating > 80, close >= 85% of 52W high"
+                                    rows={dHighTightFlag}
+                                    scoreKey="high_tight_flag_score"
+                                    scoreLabel="High Tight Flag Score"
+                                    formatScore={v => Math.round(v).toString()}
+                                    tfLabel="High Tight Flag"
+                                    loadingOverride={leadershipHighTightFlagLoading}
+                                    detailExtra={{
+                                        pullbackMode: true,
+                                        pullbackCols: ["advance_pct", "drawdown_from_flag_high_pct", "consolidation_range_pct", "range_prior_10d_pct", "range_recent_10d_pct", "volume_contraction_pct", "rs_rating"]
+                                    }}
                                 />
                             </CategorySection>
 
