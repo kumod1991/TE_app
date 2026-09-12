@@ -4490,180 +4490,108 @@ async function triggerBseFinancials(ticker) {
 
 
 function Portfolio({ trades, T, embedded = false }) {
-    const openPositions = useMemo(() => {
-        // Group trades by ticker
-        const map = {};
-        trades.forEach(t => {
-            const key = t.ticker;
-            if (!map[key]) map[key] = { ticker: key, buys: [], sells: [] };
-            // Every trade has a buy leg
-            map[key].buys.push({ qty: Number(t.buy_qty), price: Number(t.buy_price), date: t.entry_date });
-            // Only closed trades have a sell leg
-            if (t.exit_date && t.sell_qty) {
-                map[key].sells.push({ qty: Number(t.sell_qty), date: t.exit_date });
-            }
-        });
-
-        return Object.values(map).map(({ ticker, buys, sells }) => {
-            // Total sold qty across all sell legs
-            const totalSold = sells.reduce((s, x) => s + x.qty, 0);
-
-            // Apply FIFO: consume sold qty against earliest buys first
-            // What remains = open shares with their original buy prices
-            let remainingSold = totalSold;
-            const openLots = [];
-            // Sort buys chronologically
-            const sortedBuys = [...buys].sort((a, b) => new Date(a.date) - new Date(b.date));
-            for (const lot of sortedBuys) {
-                if (remainingSold <= 0) {
-                    openLots.push({ qty: lot.qty, price: lot.price });
-                } else if (remainingSold >= lot.qty) {
-                    remainingSold -= lot.qty; // entire lot sold
-                } else {
-                    // Partially sold lot  remaining qty is still open
-                    openLots.push({ qty: lot.qty - remainingSold, price: lot.price });
-                    remainingSold = 0;
-                }
-            }
-
-            const openQty = openLots.reduce((s, l) => s + l.qty, 0);
-            const openAmt = openLots.reduce((s, l) => s + l.qty * l.price, 0);
-            const avgBuyPrice = openQty > 0 ? openAmt / openQty : 0;
-
-            return { ticker, openQty, totalBuyAmt: openAmt, avgBuyPrice };
-        }).filter(p => p.openQty > 0);
-    }, [trades]);
-
     const { quotes, setQuotes } = useContext(QuoteContext);
-    const [rsScores, setRsScores] = useState({});
+    const [portfolioRows, setPortfolioRows] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [progress, setProgress] = useState({ done: 0, total: 0 });
     const [lastRefresh, setLastRefresh] = useState(null);
-    const [failed, setFailed] = useState([]);   // { ticker, reason }
-    const [sortCol, setSortCol] = useState("currentValue");
+    const [fetchError, setFetchError] = useState(null);
+    const [sortCol, setSortCol] = useState("curVal");
     const [sortDir, setSortDir] = useState("desc");
+    const [expandedTicker, setExpandedTicker] = useState(null);
 
-    // ---- Load cached quotes + RS on mount ----
+    // ---- Load cached table on mount for instant paint, then refresh from DB ----
     useEffect(() => {
         try {
-            const q = localStorage.getItem("tv_portfolio_quotes");
-            const r = localStorage.getItem("tv_portfolio_rs");
+            const cached = localStorage.getItem("tv_portfolio_table");
             const ts = localStorage.getItem("tv_portfolio_timestamp");
-
-            if (q && ts) {
-                const cacheDate = new Date(ts).toDateString();
-                const today = new Date().toDateString();
-                const isStale = cacheDate !== today;
-                const parsed = JSON.parse(q);
-                if (isStale) {
-                    // Cache is from a previous day: keep currentPrice for portfolio
-                    // value display but wipe prevClose so dayChg shows "" until
-                    // fresh prices are fetched (prevents yesterday's change leaking
-                    // into today's "Today's Change" card).
-                    Object.keys(parsed).forEach(k => { parsed[k].prevClose = null; parsed[k].directChange = null; });
-                }
-                setQuotes(parsed);
-            } else if (q) {
-                setQuotes(JSON.parse(q));
-            }
-            if (r) setRsScores(JSON.parse(r));
+            if (cached) setPortfolioRows(JSON.parse(cached));
             if (ts) setLastRefresh(new Date(ts));
         } catch (e) {
             console.error("Cache load error", e);
         }
+        fetchPortfolio();
     }, []);
 
-    const fetchAll = async () => {
-        if (!openPositions.length) return;
-        setLoading(true); setFailed([]); setProgress({ done: 0, total: openPositions.length });
-        const results = {}; const errs = [];
-        // Batches of 3
-        for (let i = 0; i < openPositions.length; i += 3) {
-            const batch = openPositions.slice(i, i + 3);
-            await Promise.all(batch.map(async p => {
-                // bhav_copy from Supabase only  instant EOD price lookup
-                const q = await fetchBhavQuote(p.ticker);
-                if (q) {
-                    results[p.ticker] = { ...q };
-                } else {
-                    errs.push({ ticker: p.ticker, reason: "" });
-                }
-                setProgress(prev => ({ ...prev, done: prev.done + 1 }));
-            }));
-            if (i + 3 < openPositions.length) await new Promise(r => setTimeout(r, 300));
-        }
-        setQuotes(results); setFailed(errs);
-        setLastRefresh(new Date());
-        // Compute unrealised P&L from the results we just fetched  `totalUnrealized`
-        // (from the component's render-time useMemo) still reflects the OLD quotes
-        // captured when this closure was created, since setQuotes() above hasn't
-        // triggered a re-render yet. Using it here would persist a one-refresh-stale value.
-        const freshUnrealized = openPositions.reduce((sum, p) => {
-            const q = results[p.ticker];
-            const curVal = (q?.currentPrice || p.avgBuyPrice) * p.openQty;
-            return sum + curVal - p.totalBuyAmt;
-        }, 0);
+    // Fetch the precomputed `portfolio` table directly  no client-side FIFO
+    // lot-matching against trades and no per-ticker bhav_copy calls. cur_price,
+    // cur_value, apprc_percent and alloc_percent are all pre-joined server-side.
+    const fetchPortfolio = async () => {
+        setLoading(true); setFetchError(null);
         try {
-            localStorage.setItem("tv_portfolio_quotes", JSON.stringify(results));
-            localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
-            localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: freshUnrealized, ts: Date.now() }));
-            window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized: freshUnrealized } }));
-        } catch { }
-        // Prices are done  stop the "Refreshing" spinner here. RS-6M still relies
-        // on Yahoo Finance (slow multi-proxy history calls) and is fetched quietly
-        // in the background below so it no longer blocks the price refresh.
-        setLoading(false);
+            const url = `${SUPABASE_URL}/rest/v1/portfolio?select=*&order=cur_value.desc`;
+            const r = await fetch(url, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                },
+                signal: AbortSignal.timeout(8000),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const data = await r.json();
+            setPortfolioRows(data);
+            setLastRefresh(new Date());
 
-        nifty500Cache = null;
-        const rsResults = {};
-        const successTickers = Object.entries(results);
-        for (let i = 0; i < successTickers.length; i += 3) {
-            const batch = successTickers.slice(i, i + 3);
-            await Promise.all(batch.map(async ([ticker, q]) => {
-                const rs = await fetchRS(q.usedTicker || ticker + ".NS");
-                if (rs !== null) rsResults[ticker] = rs;
-            }));
-            if (i + 3 < successTickers.length) await new Promise(r => setTimeout(r, 300));
+            // Feed QuoteContext + localStorage so the Dashboard "wallet" card and
+            // the Funds/XIRR tab (both keyed off ticker -> currentPrice) keep
+            // working without needing their own price fetch.
+            const quoteMap = {};
+            data.forEach(p => {
+                if (p.symbol) quoteMap[p.symbol] = { currentPrice: Number(p.cur_price), name: p.stock_name };
+            });
+            setQuotes(quoteMap);
+
+            const totalUnrealizedNow = data.reduce(
+                (s, p) => s + (Number(p.cur_value) - Number(p.buy_price) * Number(p.shares)), 0
+            );
+            try {
+                localStorage.setItem("tv_portfolio_table", JSON.stringify(data));
+                localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
+                localStorage.setItem("tv_portfolio_quotes", JSON.stringify(quoteMap));
+                localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealizedNow, ts: Date.now() }));
+                window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized: totalUnrealizedNow } }));
+            } catch { }
+        } catch (e) {
+            console.error("Portfolio fetch error", e);
+            setFetchError("Could not load the portfolio table. Showing last cached data.");
         }
-        setRsScores(rsResults);
-        try { localStorage.setItem("tv_portfolio_rs", JSON.stringify(rsResults)); } catch { }
+        setLoading(false);
     };
 
-
-    useEffect(() => {
-        if (openPositions.length) fetchAll();
-    }, [openPositions.length]);
-
-    const rows = useMemo(() => {
-        const totalPortVal = openPositions.reduce((sum, p) => {
-            const q = quotes[p.ticker];
-            return sum + (q?.currentPrice || p.avgBuyPrice) * p.openQty;
-        }, 0);
-        return openPositions.map(p => {
-            const q = quotes[p.ticker];
-            const cur = q?.currentPrice || null;
-            const prev = q?.prevClose || null;
-            // Prefer directChange from Yahoo (server-computed, handles pre/post market correctly)
-            // Fall back to cur - prev if not available
-            const dayChg = q?.directChange != null
-                ? q.directChange
-                : (cur && prev ? cur - prev : null);
-            const dayChgPct = dayChg != null && prev
-                ? (dayChg / prev) * 100
-                : null;
-            const curVal = (cur || p.avgBuyPrice) * p.openQty;
-            const invVal = p.avgBuyPrice * p.openQty;
-            const apprc = cur ? ((cur - p.avgBuyPrice) / p.avgBuyPrice) * 100 : null;
-            const unrealPnl = cur ? (cur - p.avgBuyPrice) * p.openQty : null;
-            const alloc = totalPortVal > 0 ? (curVal / totalPortVal) * 100 : 0;
-            return {
-                ...p, name: q?.name || p.ticker, currentPrice: cur, prevClose: prev,
-                dayChg, dayChgPct, curVal, invVal, apprc, unrealPnl, alloc,
-                rs: rsScores[p.ticker] ?? null,
-                loaded: !!q
-            };
-        });
-    }, [openPositions, quotes]);
+    const rows = useMemo(() => portfolioRows.map(p => {
+        const curPrice = p.cur_price != null ? Number(p.cur_price) : null;
+        const buyPrice = Number(p.buy_price);
+        const openQty = Number(p.shares);
+        const curVal = p.cur_value != null ? Number(p.cur_value) : (curPrice || buyPrice) * openQty;
+        const invVal = buyPrice * openQty;
+        // prev_close isn't part of the `portfolio` view's current column set;
+        // read it defensively so today's-P&L support activates automatically
+        // once/if the view exposes it, without breaking on its absence.
+        const prevClose = p.prev_close != null ? Number(p.prev_close) : null;
+        const dayPnl = (prevClose != null && curPrice != null) ? (curPrice - prevClose) * openQty : null;
+        const dayPnlPct = (prevClose != null && curPrice != null && prevClose !== 0)
+            ? ((curPrice - prevClose) / prevClose) * 100 : null;
+        // The true "as of" timestamp for this row's price: the `portfolio`
+        // table's own `updated_at` column, not the moment this browser tab
+        // happened to fetch the row.
+        const priceUpdatedAt = p.updated_at ? new Date(p.updated_at) : null;
+        return {
+            ticker: p.symbol,
+            name: p.stock_name || p.symbol,
+            currentPrice: curPrice,
+            avgBuyPrice: buyPrice,
+            openQty,
+            curVal,
+            invVal,
+            apprc: p.apprc_percent != null ? Number(p.apprc_percent) : null,
+            alloc: p.alloc_percent != null ? Number(p.alloc_percent) : 0,
+            unrealPnl: curVal - invVal,
+            prevClose,
+            dayPnl,
+            dayPnlPct,
+            priceUpdatedAt,
+            loaded: curPrice != null,
+        };
+    }), [portfolioRows]);
 
     const sorted = useMemo(() => [...rows].sort((a, b) => {
         const av = a[sortCol] ?? (sortDir === "asc" ? Infinity : -Infinity);
@@ -4674,14 +4602,23 @@ function Portfolio({ trades, T, embedded = false }) {
     const totalInvested = rows.reduce((s, r) => s + r.invVal, 0);
     const totalCurrent = rows.reduce((s, r) => s + r.curVal, 0);
     const totalUnrealized = totalCurrent - totalInvested;
-    const totalDayChange = rows.reduce((s, r) => s + (r.dayChg ? r.dayChg * r.openQty : 0), 0);
-
-    // Persist unrealised P&L so Funds/XIRR tab can use it without recomputing
-    useEffect(() => {
-        if (rows.some(r => r.loaded)) {
-            try { localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealized, ts: Date.now() })); } catch { }
-        }
-    }, [totalUnrealized]);
+    const hasDayData = rows.some(r => r.dayPnl != null);
+    const totalDayPnl = hasDayData ? rows.reduce((s, r) => s + (r.dayPnl || 0), 0) : null;
+    const totalDayPnlPct = hasDayData && totalCurrent - (totalDayPnl || 0) !== 0
+        ? (totalDayPnl / (totalCurrent - totalDayPnl)) * 100 : null;
+    // "Prices updated" should reflect actual data freshness (the oldest of
+    // each ticker's latest bhav_copy.created_at), not just when this tab
+    // last fetched from Supabase. Falls back to the client fetch time if
+    // the portfolio view doesn't expose updated_at yet.
+    const priceTimestamps = rows.map(r => r.priceUpdatedAt).filter(Boolean);
+    const pricesAsOf = priceTimestamps.length
+        ? new Date(Math.min(...priceTimestamps.map(d => d.getTime())))
+        : lastRefresh;
+    const fmtRefresh = ts => {
+        if (!ts) return null;
+        const d = ts instanceof Date ? ts : new Date(ts);
+        return `${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}, ${d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })}`;
+    };
 
     const toggleSort = col => {
         if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -4736,41 +4673,75 @@ function Portfolio({ trades, T, embedded = false }) {
                         }}>
                             Portfolio Snapshot
                         </div>
-                        <div style={{
-                            fontSize: 20,
-                            fontWeight: 800,
-                            letterSpacing: "-.04em",
-                            color: T.text,
-                        }}>
-                         
-                        </div>
+                        {fmtRefresh(pricesAsOf) && (
+                            <div style={{ fontSize: 11.5, color: T.muted, fontWeight: 600 }}>
+                                Prices updated {fmtRefresh(pricesAsOf)}
+                            </div>
+                        )}
                     </div>
-                    <button className="btn-add" onClick={fetchAll} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
-                        {loading ? " Refreshing" : " Refresh Prices"}
+                    <button className="btn-add" onClick={fetchPortfolio} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
+                        {loading ? " Refreshing" : " Refresh"}
                     </button>
                 </div>
 
-                {failed.length > 0 && (
-                    <div style={{ background: T.redGlow, border: `1px solid ${T.red}22`, borderRadius: 14, padding: "12px 16px", marginBottom: 16 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: T.redText, marginBottom: 8 }}>
-                            {failed.length} ticker{failed.length > 1 ? "s" : ""} could not be fetched:
+                {/* Summary strip */}
+                {rows.length > 0 && (
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: `repeat(${hasDayData ? 4 : 3}, 1fr)`,
+                        gap: 0,
+                        background: T.card,
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        marginBottom: 16,
+                    }}>
+                        <div style={{ padding: "14px 18px", borderRight: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Portfolio Value</div>
+                            <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: T.text }}>{inr(totalCurrent)}</div>
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                            {failed.map(f => (
-                                <div key={f.ticker} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 999, padding: "4px 10px", fontSize: 12 }}>
-                                    <span style={{ fontWeight: 700, color: T.redText, fontFamily: 'inherit' }}>{f.ticker}</span>
-                                    <span style={{ color: T.muted, marginLeft: 6 }}>{f.reason}</span>
+                        <div style={{ padding: "14px 18px", borderRight: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Invested</div>
+                            <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: T.text }}>{inr(totalInvested)}</div>
+                        </div>
+                        {hasDayData && (
+                            <div style={{ padding: "14px 18px", borderRight: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Today's P&amp;L</div>
+                                <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: pnlColor(totalDayPnl) }}>
+                                    {totalDayPnl >= 0 ? "\u25B2" : "\u25BC"} {totalDayPnl >= 0 ? "+" : ""}{inr(totalDayPnl)}
                                 </div>
-                            ))}
+                                {totalDayPnlPct != null && (
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: pnlColor(totalDayPnl), marginTop: 1 }}>
+                                        {totalDayPnlPct >= 0 ? "+" : ""}{totalDayPnlPct.toFixed(2)}%
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <div style={{ padding: "14px 18px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Overall P&amp;L</div>
+                            <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: pnlColor(totalUnrealized) }}>
+                                {totalUnrealized >= 0 ? "\u25B2" : "\u25BC"} {totalUnrealized >= 0 ? "+" : ""}{inr(totalUnrealized)}
+                            </div>
+                            {totalInvested > 0 && (
+                                <div style={{ fontSize: 11, fontWeight: 700, color: pnlColor(totalUnrealized), marginTop: 1 }}>
+                                    {totalUnrealized >= 0 ? "+" : ""}{((totalUnrealized / totalInvested) * 100).toFixed(2)}%
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
 
-                {openPositions.length === 0 ? (
+                {fetchError && (
+                    <div style={{ background: T.redGlow, border: `1px solid ${T.red}22`, borderRadius: 14, padding: "12px 16px", marginBottom: 16 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: T.redText }}>{fetchError}</div>
+                    </div>
+                )}
+
+                {rows.length === 0 ? (
                     <div className="empty">
                         <div className="empty-icon"></div>
                         <div className="empty-text">No open positions</div>
-                        <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>All trades are closed. Add open trades in the Trade Journal tab.</div>
+                        <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>Add rows to the portfolio table to see holdings here.</div>
                     </div>
                 ) : (
                     <div style={{
@@ -4785,7 +4756,7 @@ function Portfolio({ trades, T, embedded = false }) {
                             <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 920 }}>
                             <thead>
                                 <tr>
-                                    {["Symbol", "Stock Name", "Cur Price", "Buy Price", "Shares", "Cur Value", "Apprc %", "Alloc %"].map((label, idx) => (
+                                    {["Symbol", "Stock Name", "LTP", "Avg Buy", "Qty", "Mkt Val", "P&L", "Weight"].map((label, idx) => (
                                         <th
                                             key={label}
                                             style={{
@@ -4809,15 +4780,29 @@ function Portfolio({ trades, T, embedded = false }) {
                             <tbody>
                                 {sorted.map((r, i) => {
                                     const rowBg = i % 2 === 0 ? T.card : T.tableAlt;
+                                    const isExpanded = expandedTicker === r.ticker;
+                                    const tickerTrades = (trades || [])
+                                        .filter(t => (t.ticker || "").toUpperCase() === r.ticker.toUpperCase())
+                                        .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
                                     return (
-                                        <tr key={r.ticker} style={{ background: rowBg, transition: "transform .12s ease, background .12s ease" }}
+                                        <Fragment key={r.ticker}>
+                                        <tr style={{ background: isExpanded ? T.tableHover : rowBg, transition: "transform .12s ease, background .12s ease", cursor: "pointer" }}
+                                            onClick={() => setExpandedTicker(isExpanded ? null : r.ticker)}
                                             onMouseOver={e => {
                                                 e.currentTarget.style.transform = "translateY(-1px)";
                                                 e.currentTarget.style.background = T.tableHover;
                                             }}
-                                            onMouseOut={e => e.currentTarget.style.background = rowBg}>
+                                            onMouseOut={e => e.currentTarget.style.background = isExpanded ? T.tableHover : rowBg}>
                                             <td style={td({ textAlign: "left", padding: "14px 16px" })}>
                                                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                    <span style={{
+                                                        fontSize: 9,
+                                                        color: T.subtext,
+                                                        transform: isExpanded ? "rotate(90deg)" : "none",
+                                                        transition: "transform .12s ease",
+                                                        display: "inline-block",
+                                                        width: 8,
+                                                    }}>{"\u25B8"}</span>
                                                     <span style={{
                                                         width: 8,
                                                         height: 8,
@@ -4844,20 +4829,25 @@ function Portfolio({ trades, T, embedded = false }) {
                                                 {r.apprc == null ? (
                                                     <span style={{ color: T.muted, fontSize: 11 }}>--</span>
                                                 ) : (
-                                                    <span style={{
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        padding: "4px 10px",
-                                                        borderRadius: 999,
-                                                        background: r.apprc >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.10)",
-                                                        color: r.apprc >= 0 ? T.greenText : T.redText,
-                                                        fontSize: 11,
-                                                        fontWeight: 800,
-                                                        letterSpacing: ".01em",
-                                                    }}>
-                                                        {r.apprc >= 0 ? "+" : ""}{r.apprc.toFixed(2)}%
-                                                    </span>
+                                                    <div>
+                                                        <span style={{
+                                                            display: "inline-flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            padding: "4px 10px",
+                                                            borderRadius: 999,
+                                                            background: r.apprc >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.10)",
+                                                            color: r.apprc >= 0 ? T.greenText : T.redText,
+                                                            fontSize: 11,
+                                                            fontWeight: 800,
+                                                            letterSpacing: ".01em",
+                                                        }}>
+                                                            {r.apprc >= 0 ? "\u25B2" : "\u25BC"} {r.apprc >= 0 ? "+" : ""}{r.apprc.toFixed(2)}%
+                                                        </span>
+                                                        <div style={{ ...mono, fontSize: 10.5, fontWeight: 700, color: r.unrealPnl >= 0 ? T.greenText : T.redText, marginTop: 3 }}>
+                                                            {r.unrealPnl >= 0 ? "+" : ""}{inr(r.unrealPnl)}
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </td>
                                             <td style={td({ textAlign: "right", padding: "14px 16px" })}>
@@ -4869,6 +4859,40 @@ function Portfolio({ trades, T, embedded = false }) {
                                                 </div>
                                             </td>
                                         </tr>
+                                        {isExpanded && (
+                                            <tr style={{ background: T.surface }}>
+                                                <td colSpan={8} style={{ padding: "16px 24px 20px 42px", borderTop: `1px solid ${T.border}` }}>
+                                                    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: T.subtext, marginBottom: 10 }}>
+                                                        Trade History
+                                                    </div>
+                                                    {tickerTrades.length === 0 ? (
+                                                        <div style={{ fontSize: 12.5, color: T.muted }}>No matching entries in your trade log for this ticker.</div>
+                                                    ) : (
+                                                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                                                            {tickerTrades.map(t => (
+                                                                <div key={t.id} style={{ display: "flex", gap: 14, fontSize: 12.5, ...mono, color: T.text }}>
+                                                                    <span style={{ color: T.subtext, minWidth: 90 }}>{new Date(t.entry_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                                                    <span style={{ color: T.greenText, fontWeight: 700 }}>Buy</span>
+                                                                    <span>{Number(t.buy_qty).toLocaleString("en-IN")} @ {Number(t.buy_price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+                                                                    {t.exit_date && (
+                                                                        <span style={{ color: T.muted }}>
+                                                                            &mdash; closed {new Date(t.exit_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} @ {Number(t.sell_price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ display: "flex", gap: 24, fontSize: 12, flexWrap: "wrap" }}>
+                                                        <div><span style={{ color: T.subtext }}>Position: </span><span style={{ ...mono, fontWeight: 700 }}>{r.openQty.toLocaleString("en-IN")} shares</span></div>
+                                                        <div><span style={{ color: T.subtext }}>Invested: </span><span style={{ ...mono, fontWeight: 700 }}>{inr(r.invVal)}</span></div>
+                                                        <div><span style={{ color: T.subtext }}>Current: </span><span style={{ ...mono, fontWeight: 700 }}>{inr(r.curVal)}</span></div>
+                                                        <div><span style={{ color: T.subtext }}>Unrealized: </span><span style={{ ...mono, fontWeight: 700, color: r.unrealPnl >= 0 ? T.greenText : T.redText }}>{r.unrealPnl >= 0 ? "+" : ""}{inr(r.unrealPnl)}{r.apprc != null ? ` (${r.apprc >= 0 ? "+" : ""}${r.apprc.toFixed(2)}%)` : ""}</span></div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                        </Fragment>
                                     );
                                 })}
                             </tbody>
@@ -4887,11 +4911,10 @@ function Portfolio({ trades, T, embedded = false }) {
                 kicker="Journals / Portfolio"
                 title="Live holdings in one premium blotter"
                 metrics={[
-                    { label: "Portfolio value", value: inr(totalCurrent), tone: "positive", sub: `${openPositions.length} open holdings` },
+                    { label: "Portfolio value", value: inr(totalCurrent), tone: "positive", sub: `${rows.length} open holdings` },
                     { label: "Unrealized P&L", value: `${totalUnrealized >= 0 ? "+" : ""}${inr(totalUnrealized)}`, tone: totalUnrealized >= 0 ? "positive" : "negative", sub: totalInvested > 0 ? `${((totalUnrealized / totalInvested) * 100).toFixed(2)}% on invested capital` : "Awaiting positions" },
-                    { label: "Today's change", value: `${totalDayChange >= 0 ? "+" : ""}${inr(totalDayChange)}`, tone: totalDayChange >= 0 ? "positive" : "negative", sub: "Across live marked positions" },
                 ]}
-                actions={<button className="btn-add" onClick={fetchAll} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>{loading ? " Refreshing" : " Refresh Prices"}</button>}
+                actions={<button className="btn-add" onClick={fetchPortfolio} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>{loading ? " Refreshing" : " Refresh"}</button>}
 
             />
 
@@ -4900,7 +4923,7 @@ function Portfolio({ trades, T, embedded = false }) {
                 <div className="stat-card hero">
                     <div className="stat-label">Portfolio Value</div>
                     <div className="stat-value hero green" style={{ fontSize: 18 }}>{inr(totalCurrent)}</div>
-                    <div className="stat-sub">{openPositions.length} stocks held</div>
+                    <div className="stat-sub">{rows.length} stocks held</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-label">Invested Value</div>
@@ -4916,59 +4939,36 @@ function Portfolio({ trades, T, embedded = false }) {
                         {totalInvested > 0 ? ((totalUnrealized / totalInvested) * 100).toFixed(2) : 0}% overall
                     </div>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-label">Today's Change</div>
-                    <div className="stat-value" style={{ fontSize: 18, color: pnlColor(totalDayChange), ...mono }}>
-                        {totalDayChange >= 0 ? "+" : ""}{inr(totalDayChange)}
-                    </div>
-                    <div className="stat-sub">Across open positions</div>
-                </div>
             </div>
 
 
-            {/* Failed tickers  with actionable advice */}
-            {failed.length > 0 && (
+            {/* Fetch error banner */}
+            {fetchError && (
                 <div style={{ background: T.redGlow, border: `1px solid ${T.red}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: T.redText, marginBottom: 8 }}>
-                        {failed.length} ticker{failed.length > 1 ? "s" : ""} could not be fetched:
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {failed.map(f => (
-                            <div key={f.ticker} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 12 }}>
-                                <span style={{ fontWeight: 700, color: T.redText, fontFamily: 'inherit' }}>{f.ticker}</span>
-                                <span style={{ color: T.muted, marginLeft: 6 }}>{f.reason}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div style={{ marginTop: 10, fontSize: 12, color: T.subtext, lineHeight: 1.6 }}>
-                        
-                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: T.redText }}>{fetchError}</div>
                 </div>
             )}
 
-            {openPositions.length === 0 ? (
+            {rows.length === 0 ? (
                 <div className="empty">
                     <div className="empty-icon"></div>
                     <div className="empty-text">No open positions</div>
-                    <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>All trades are closed. Add open trades in the Trade Journal tab.</div>
+                    <div style={{ color: T.muted, fontSize: 13, marginTop: 6 }}>Add rows to the portfolio table to see holdings here.</div>
                 </div>
             ) : (
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", boxShadow: `0 2px 8px ${T.shadow}` }}>
                     <div style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-x" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
                         <thead>
                             <tr>
                                 <Th col="ticker" label="Symbol" left />
                                 <Th col="name" label="Stock Name" left />
                                 <Th col="currentPrice" label="Cur Price" />
                                 <Th col="avgBuyPrice" label="Buy Price" />
-                                <Th col="dayChg" label="Day Chg " />
-                                <Th col="dayChgPct" label="Day %" />
                                 <Th col="openQty" label="Shares" />
                                 <Th col="curVal" label="Cur Value" />
                                 <Th col="apprc" label="Apprc %" />
                                 <Th col="alloc" label="Alloc %" />
-                                <Th col="rs" label="RS-6M" />
                             </tr>
                         </thead>
                         <tbody>
@@ -4982,8 +4982,7 @@ function Portfolio({ trades, T, embedded = false }) {
                                         <td style={td({ textAlign: "left" })}>
                                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                                 <span style={{ fontWeight: 700, color: T.greenText, ...mono, fontSize: 12 }}>{r.ticker}</span>
-                                                {loading && !r.loaded && <span style={{ fontSize: 9, color: T.muted, background: T.pill, padding: "1px 5px", borderRadius: 4 }}></span>}
-                                                {!loading && !r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
+                                                {!r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
                                             </div>
                                         </td>
                                         {/* Name */}
@@ -4998,12 +4997,6 @@ function Portfolio({ trades, T, embedded = false }) {
                                         <td style={td({ textAlign: "right", ...mono, color: T.subtext })}>
                                             {r.avgBuyPrice.toFixed(2)}
                                         </td>
-                                        {/* Day Change  */}
-                                        <td style={td({ textAlign: "right", ...mono, color: pnlColor(r.dayChg) })}>
-                                            {r.dayChg != null ? `${r.dayChg >= 0 ? "+" : ""}${r.dayChg.toFixed(2)}` : <span style={{ color: T.muted }}></span>}
-                                        </td>
-                                        {/* Day Change % badge */}
-                                        <td style={td({ textAlign: "right" })}><Badge v={r.dayChgPct} /></td>
                                         {/* Shares */}
                                         <td style={td({ textAlign: "right", ...mono })}>{r.openQty.toLocaleString("en-IN")}</td>
                                         {/* Current Value */}
@@ -5020,26 +5013,6 @@ function Portfolio({ trades, T, embedded = false }) {
                                                     {r.alloc.toFixed(1)}%
                                                 </span>
                                             </div>
-                                        </td>
-                                        {/* RS-6M vs Nifty 500 */}
-                                        <td style={td({ textAlign: "right" })}>
-                                            {r.rs == null
-                                                ? <span style={{ color: T.muted, fontSize: 11 }}></span>
-                                                : (() => {
-                                                    const pct = (r.rs * 100).toFixed(1);
-                                                    const isPos = r.rs >= 0;
-                                                    return (
-                                                        <span style={{
-                                                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                                            padding: "2px 8px", borderRadius: 100, fontSize: 11, fontWeight: 700,
-                                                            background: isPos ? T.greenGlow : T.redGlow,
-                                                            color: isPos ? T.pos : T.neg
-                                                        }}>
-                                                            {isPos ? "+" : ""}{pct}%
-                                                        </span>
-                                                    );
-                                                })()
-                                            }
                                         </td>
                                     </tr>
                                 );
