@@ -2336,12 +2336,21 @@ function downloadTemplate() {
     URL.revokeObjectURL(url);
 }
 
-function Sparkline({ data, T }) {
+function Sparkline({ data, series, T }) {
     const [hover, setHover] = useState(null); // { x, y, value, index }
     const svgRef = useRef(null);
 
-    if (!data || data.length < 2) return <div className="spark-wrap"><div className="empty" style={{ padding: 16 }}>Not enough data</div></div>;
-    const cum = data.reduce((acc, v, i) => { acc.push((acc[i - 1] || 0) + v); return acc; }, []);
+    // `series` = pre-computed rows from the cumulative_pnl table: [{ date, value }, ...],
+    // already running-summed server-side and sorted by trade_date. When present, plot it
+    // directly. Otherwise fall back to the old behavior: cumulative-sum a raw per-trade
+    // pnl array client-side (used for demo mode / while the table hasn't loaded yet).
+    const usingServerSeries = Array.isArray(series) && series.length >= 2;
+    const cum = usingServerSeries
+        ? series.map(p => Number(p.value))
+        : (data || []).reduce((acc, v, i) => { acc.push((acc[i - 1] || 0) + v); return acc; }, []);
+    const dates = usingServerSeries ? series.map(p => p.date) : null;
+
+    if (cum.length < 2) return <div className="spark-wrap"><div className="empty" style={{ padding: 16 }}>Not enough data</div></div>;
     const min = Math.min(...cum), max = Math.max(...cum), range = max - min || 1;
     const W = 400, H = 110;
     const pts = cum.map((v, i) => [(i / (cum.length - 1)) * W, H - ((v - min) / range) * (H - 10) - 5]);
@@ -2360,7 +2369,7 @@ function Sparkline({ data, T }) {
         // Convert SVG coords back to screen coords
         const screenX = (pt[0] / W) * rect.width + rect.left;
         const screenY = (pt[1] / H) * rect.height + rect.top;
-        setHover({ screenX, screenY, svgX: pt[0], svgY: pt[1], value: cum[clampedIdx], index: clampedIdx });
+        setHover({ screenX, screenY, svgX: pt[0], svgY: pt[1], value: cum[clampedIdx], date: dates ? dates[clampedIdx] : null, index: clampedIdx });
     };
 
     const handleMouseLeave = () => setHover(null);
@@ -2409,12 +2418,15 @@ function Sparkline({ data, T }) {
                 const wrapRect = svg.parentElement.getBoundingClientRect();
                 const relX = (hover.svgX / W) * rect.width;
                 const relY = (hover.svgY / H) * rect.height;
-                const tipW = 110, tipH = 36;
+                const tipW = 124, tipH = 36;
                 let left = relX - tipW / 2;
                 if (left < 0) left = 0;
                 if (left + tipW > rect.width) left = rect.width - tipW;
                 let top = relY - tipH - 10;
                 if (top < 0) top = relY + 14;
+                const tipLabel = hover.date
+                    ? new Date(hover.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                    : "Cumulative P&L";
                 return (
                     <div style={{
                         position: "absolute",
@@ -2429,7 +2441,7 @@ function Sparkline({ data, T }) {
                         textAlign: "center",
                         zIndex: 10,
                     }}>
-                        <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 1 }}>Cumulative P&L</div>
+                        <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 1 }}>{tipLabel}</div>
                         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: tooltipColor }}>
                             {hover.value >= 0 ? "+" : ""}{Math.abs(hover.value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                         </div>
@@ -3492,29 +3504,56 @@ function StatCardHead({ T, icon, label, tone = "neutral" }) {
     );
 }
 
-function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
+function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
+    const uid = session?.user?.id || null;
 
     // Load cached quotes from localStorage on mount so Dashboard shows
     // last-known live prices without requiring the user to visit the holdings section first.
     useEffect(() => {
+        if (!uid) return;
         if (Object.keys(quotes).length === 0) {
             try {
-                const cached = localStorage.getItem("tv_portfolio_quotes");
+                const cached = localStorage.getItem(`tv_portfolio_quotes_${uid}`);
                 if (cached) setQuotes(JSON.parse(cached));
             } catch (e) { /* ignore */ }
         }
-    }, []);
+    }, [uid]);
 
     // Read cached unrealized P&L saved by the holdings section (fallback when quotes not loaded)
     const cachedUnrealizedDash = (() => {
+        if (!uid) return null;
         try {
-            const s = localStorage.getItem("tv_portfolio_unrealized");
+            const s = localStorage.getItem(`tv_portfolio_unrealized_${uid}`);
             return s ? JSON.parse(s)?.value ?? null : null;
         } catch { return null; }
     })();
 
     const stats = providedStats || calcStatsFromRows(tradeRows || buildTradeRows(trades));
+
+    // Cumulative P&L chart: pull the pre-aggregated running total straight from the
+    // cumulative_pnl table (one row per trade_date, unique per user_id) instead of
+    // re-summing stats.closed on the client. Falls back to the client-side calc
+    // (via Sparkline's `data` prop) for demo mode or until this loads.
+    const [cumSeries, setCumSeries] = useState(null);
+    useEffect(() => {
+        if (!uid || isDemo) { setCumSeries(null); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = await supabase.getValidToken();
+                const r = await fetch(
+                    `${SUPABASE_URL}/rest/v1/cumulative_pnl?select=trade_date,cumulative_pnl&user_id=eq.${uid}&order=trade_date.asc`,
+                    { headers: supabase._h(token) }
+                );
+                const rows = await r.json();
+                if (!cancelled && Array.isArray(rows)) {
+                    setCumSeries(rows.map(row => ({ date: row.trade_date, value: Number(row.cumulative_pnl) })));
+                }
+            } catch (e) { /* ignore — Sparkline falls back to client-side calc */ }
+        })();
+        return () => { cancelled = true; };
+    }, [uid, isDemo]);
 
     // Only count open positions (not fully closed trades)
     const openTrades = trades.filter(t => !t.exit_date);
@@ -3633,11 +3672,11 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T }) {
                 </div>
             </div>
             <div className="chart-grid">
-                <div className="chart-card"><div className="chart-title">Cumulative P&amp;L</div><Sparkline data={stats.closed.map(t => t.pnl)} T={T} /></div>
+                <div className="chart-card"><div className="chart-title">Cumulative P&amp;L</div><Sparkline series={cumSeries} data={stats.closed.map(t => t.pnl)} T={T} /></div>
                 <div className="chart-card"><div className="chart-title">Win / Loss Breakdown</div><div style={{ paddingTop: 12 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} /></div></div>
                 <div className="chart-card" style={{ gridColumn: "span 2" }}><div className="chart-title">P&amp;L by Ticker</div><BarChart trades={stats.closed} T={T} /></div>
             </div>
-            <Portfolio trades={trades} T={T} embedded />
+            <Portfolio trades={trades} T={T} session={session} embedded />
         </div>
     );
 }
@@ -4489,7 +4528,7 @@ async function triggerBseFinancials(ticker) {
 }
 
 
-function Portfolio({ trades, T, embedded = false }) {
+function Portfolio({ trades, T, session, embedded = false }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
     const [portfolioRows, setPortfolioRows] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -4500,30 +4539,41 @@ function Portfolio({ trades, T, embedded = false }) {
     const [expandedTicker, setExpandedTicker] = useState(null);
 
     // ---- Load cached table on mount for instant paint, then refresh from DB ----
+    // Cache keys are namespaced per user_id so a browser/device shared by more
+    // than one account (or a re-login as someone else) never paints one
+    // user's cached holdings into another user's view before the live fetch
+    // lands.
+    const uid = session?.user?.id || null;
     useEffect(() => {
+        if (!uid) { setPortfolioRows([]); return; }
         try {
-            const cached = localStorage.getItem("tv_portfolio_table");
-            const ts = localStorage.getItem("tv_portfolio_timestamp");
-            if (cached) setPortfolioRows(JSON.parse(cached));
-            if (ts) setLastRefresh(new Date(ts));
+            const cached = localStorage.getItem(`tv_portfolio_table_${uid}`);
+            const ts = localStorage.getItem(`tv_portfolio_timestamp_${uid}`);
+            setPortfolioRows(cached ? JSON.parse(cached) : []);
+            setLastRefresh(ts ? new Date(ts) : null);
         } catch (e) {
             console.error("Cache load error", e);
         }
         fetchPortfolio();
-    }, []);
+    }, [uid]);
 
     // Fetch the precomputed `portfolio` table directly  no client-side FIFO
     // lot-matching against trades and no per-ticker bhav_copy calls. cur_price,
     // cur_value, apprc_percent and alloc_percent are all pre-joined server-side.
+    // Scoped to the signed-in user: `portfolio` holds rows for every user, so
+    // both the query filter (user_id=eq.) and the auth header (the user's own
+    // access token, not just the anon key) are required  RLS should also
+    // enforce this server-side, but we never rely on that alone.
     const fetchPortfolio = async () => {
+        if (!session?.user?.id || !session?.access_token) {
+            setFetchError("Sign in to load your portfolio.");
+            return;
+        }
         setLoading(true); setFetchError(null);
         try {
-            const url = `${SUPABASE_URL}/rest/v1/portfolio?select=*&order=cur_value.desc`;
+            const url = `${SUPABASE_URL}/rest/v1/portfolio?select=*&user_id=eq.${session.user.id}&order=cur_value.desc`;
             const r = await fetch(url, {
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                },
+                headers: supabase._h(session.access_token),
                 signal: AbortSignal.timeout(8000),
             });
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -4544,10 +4594,10 @@ function Portfolio({ trades, T, embedded = false }) {
                 (s, p) => s + (Number(p.cur_value) - Number(p.buy_price) * Number(p.shares)), 0
             );
             try {
-                localStorage.setItem("tv_portfolio_table", JSON.stringify(data));
-                localStorage.setItem("tv_portfolio_timestamp", new Date().toISOString());
-                localStorage.setItem("tv_portfolio_quotes", JSON.stringify(quoteMap));
-                localStorage.setItem("tv_portfolio_unrealized", JSON.stringify({ value: totalUnrealizedNow, ts: Date.now() }));
+                localStorage.setItem(`tv_portfolio_table_${session.user.id}`, JSON.stringify(data));
+                localStorage.setItem(`tv_portfolio_timestamp_${session.user.id}`, new Date().toISOString());
+                localStorage.setItem(`tv_portfolio_quotes_${session.user.id}`, JSON.stringify(quoteMap));
+                localStorage.setItem(`tv_portfolio_unrealized_${session.user.id}`, JSON.stringify({ value: totalUnrealizedNow, ts: Date.now() }));
                 window.dispatchEvent(new CustomEvent("tv-portfolio-updated", { detail: { totalUnrealized: totalUnrealizedNow } }));
             } catch { }
         } catch (e) {
@@ -5136,8 +5186,9 @@ function FundModal({ fund, onClose, onSave, T }) {
     );
 }
 
-function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, onImportCSV, T }) {
+function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, onImportCSV, T, session }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
+    const uid = session?.user?.id || null;
     const [filterDP, setFilterDP] = useState("ALL");
     const [showModal, setShowModal] = useState(false);
     const [editFund, setEditFund] = useState(null);
@@ -5145,8 +5196,9 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [deleting, setDeleting] = useState(false);
     const [cachedUnrealized, setCachedUnrealized] = useState(() => {
+        if (!uid) return null;
         try {
-            const s = localStorage.getItem("tv_portfolio_unrealized");
+            const s = localStorage.getItem(`tv_portfolio_unrealized_${uid}`);
             return s ? JSON.parse(s) : null;
         } catch { return null; }
     });
@@ -5154,16 +5206,16 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
     // Keep cachedUnrealized in sync whenever Portfolio saves a fresh value
     useEffect(() => {
         const onStorage = (e) => {
-            if (e.key === "tv_portfolio_unrealized") {
+            if (uid && e.key === `tv_portfolio_unrealized_${uid}`) {
                 try { setCachedUnrealized(JSON.parse(e.newValue)); } catch { }
             }
         };
         const onPortfolioUpdate = (e) => {
             if (e?.detail?.totalUnrealized !== undefined) {
                 setCachedUnrealized({ value: e.detail.totalUnrealized, ts: Date.now() });
-            } else {
+            } else if (uid) {
                 try {
-                    const s = localStorage.getItem("tv_portfolio_unrealized");
+                    const s = localStorage.getItem(`tv_portfolio_unrealized_${uid}`);
                     if (s) setCachedUnrealized(JSON.parse(s));
                 } catch { }
             }
@@ -5174,9 +5226,7 @@ function Funds({ funds, onAdd, onEdit, onDelete, onBulkDelete, trades, onSave, o
             window.removeEventListener("storage", onStorage);
             window.removeEventListener("tv-portfolio-updated", onPortfolioUpdate);
         };
-    }, []);
-
-    //  Sorted fund entries 
+    }, [uid]);
     const sorted = useMemo(() =>
         [...funds].sort((a, b) => new Date(a.date) - new Date(b.date)),
         [funds]);
@@ -22224,11 +22274,11 @@ export default function App() {
                                             <QuoteContext.Provider value={{ quotes, setQuotes }}>
                                                 <main className="journal-main">
                                                     <div className="journal-main-inner">
-                                                        {page === "dashboard" && <Dashboard trades={trades} tradeRows={journalTradeRows} stats={journalStats} isDemo={isDemo} T={T} />}
+                                                        {page === "dashboard" && <Dashboard trades={trades} tradeRows={journalTradeRows} stats={journalStats} isDemo={isDemo} T={T} session={session} />}
                                                         {page === "trades" && <Trades trades={trades} tradeRows={journalTradeRows} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
                                                         {page === "analytics" && <Analytics trades={trades} tradeRows={journalTradeRows} stats={journalStats} T={T} />}
                                                         {page === "capital-gains" && <CapitalGains trades={trades} tradeRows={journalTradeRows} rows={journalCapitalGainsRows} T={T} />}
-                                                        {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} />}
+                                                        {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} session={session} />}
                                                         {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
                                                     </div>
                                                 </main>
