@@ -299,6 +299,43 @@ async function fetchWlIndicatorsSnapshot(ticker, token) {
     return promise;
 }
 
+// ─── Quarterly financials snapshot (company_quarterly_financials) — last
+// several quarters of revenue with QoQ/YoY growth for revenue and PAT
+// (net income). Fetched lazily per ticker when the detail panel opens,
+// cached the same way as the indicators snapshot above. Note: the table
+// only carries PAT *growth*, not an absolute PAT/net-income rupee value,
+// so the card shows PAT QoQ/YoY growth rather than a PAT amount column. ──
+const _wlQtrFinCache = new Map(); // ticker → rows[] | null
+const _wlQtrFinInFlight = new Map(); // ticker → Promise
+
+async function fetchWlQuarterlyFinancials(ticker, token) {
+    const cached = _wlQtrFinCache.get(ticker);
+    if (cached !== undefined) return cached;
+    if (_wlQtrFinInFlight.has(ticker)) return _wlQtrFinInFlight.get(ticker);
+
+    const promise = (async () => {
+        try {
+            const rows = await GET(
+                `company_quarterly_financials?ticker=eq.${encodeURIComponent(ticker)}`
+                + `&select=period,quarter,revenue,qoq_rev_growth,yoy_rev_growth,qoq_pat_growth,yoy_pat_growth`
+                + `&order=period.desc&limit=5`,
+                token
+            );
+            const data = Array.isArray(rows) ? rows : null;
+            _wlQtrFinCache.set(ticker, data);
+            return data;
+        } catch {
+            _wlQtrFinCache.set(ticker, null);
+            return null;
+        } finally {
+            _wlQtrFinInFlight.delete(ticker);
+        }
+    })();
+
+    _wlQtrFinInFlight.set(ticker, promise);
+    return promise;
+}
+
 // ─── Candlestick section (used in both desktop panel and mobile sheet) ────
 function WlCandleSection({ ticker, T, width }) {
     const [candles, setCandles] = useState(null);
@@ -1294,7 +1331,63 @@ function TrendDot({ above, T }) {
 // stock_analytics record already on hand; `ind` is the (optionally still
 // loading — pass null) latest indicators-table snapshot with the deeper
 // fields stock_analytics doesn't carry.
-function TechnicalsDetail({ row, ind, T, resultInfo }) {
+// Quarterly Financials card — a compact results-strip table: Quarter,
+// Revenue, Revenue QoQ/YoY growth, PAT ("Net Income") QoQ/YoY growth.
+// `rows` is the array from company_quarterly_financials (already sorted
+// period.desc), or null/undefined while loading / on no-data.
+function QuarterlyFinancialsCard({ rows, T }) {
+    if (rows === undefined) return null; // not requested yet (no ticker)
+    const th = { padding: "0 4px 5px", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", fontSize: 9, fontWeight: 700, color: T.subtext, opacity: 0.55, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "right", whiteSpace: "nowrap" };
+    const td = { padding: "6px 4px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, textAlign: "right", whiteSpace: "nowrap" };
+    const gc = v => (v == null || isNaN(+v)) ? T.subtext : (+v >= 0 ? (T.green ?? "#22c55e") : (T.neg ?? "#e11d48"));
+
+    return (
+        <TechCard title="Quarterly Financials" T={T}>
+            {rows === null && (
+                <div style={{ padding: "8px 0", fontSize: 11, color: T.subtext, opacity: 0.6 }}>Loading…</div>
+            )}
+            {Array.isArray(rows) && rows.length === 0 && (
+                <div style={{ padding: "8px 0", fontSize: 11, color: T.subtext, opacity: 0.6 }}>No data</div>
+            )}
+            {Array.isArray(rows) && rows.length > 0 && (
+                <div style={{ overflowX: "auto", margin: "0 -2px" }}>
+                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 }}>
+                        <thead>
+                            <tr>
+                                <th style={{ ...th, textAlign: "left" }}>Quarter</th>
+                                <th style={th}>Revenue</th>
+                                <th style={th} colSpan={2}>Rev Growth</th>
+                                <th style={th} colSpan={2}>PAT Growth</th>
+                            </tr>
+                            <tr>
+                                <th style={{ ...th, textAlign: "left", padding: "0 4px 6px" }} />
+                                <th style={{ ...th, padding: "0 4px 6px" }} />
+                                <th style={{ ...th, padding: "0 4px 6px" }}>QoQ</th>
+                                <th style={{ ...th, padding: "0 4px 6px" }}>YoY</th>
+                                <th style={{ ...th, padding: "0 4px 6px" }}>QoQ</th>
+                                <th style={{ ...th, padding: "0 4px 6px" }}>YoY</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((r, i) => (
+                                <tr key={r.period ?? i} style={{ borderTop: `1px solid ${T.border}` }}>
+                                    <td style={{ ...td, textAlign: "left", color: T.text, fontWeight: 600 }}>{r.quarter ?? "—"}</td>
+                                    <td style={{ ...td, color: T.text }}>{fmt.num(r.revenue, 0)}</td>
+                                    <td style={{ ...td, color: gc(r.qoq_rev_growth) }}>{fmt.pct(r.qoq_rev_growth)}</td>
+                                    <td style={{ ...td, color: gc(r.yoy_rev_growth) }}>{fmt.pct(r.yoy_rev_growth)}</td>
+                                    <td style={{ ...td, color: gc(r.qoq_pat_growth) }}>{fmt.pct(r.qoq_pat_growth)}</td>
+                                    <td style={{ ...td, color: gc(r.yoy_pat_growth), fontWeight: 600 }}>{fmt.pct(r.yoy_pat_growth)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </TechCard>
+    );
+}
+
+function TechnicalsDetail({ row, ind, T, resultInfo, qtrFin }) {
     const rc = v => retColor(v, T);
     const close = row.close;
 
@@ -1379,6 +1472,9 @@ function TechnicalsDetail({ row, ind, T, resultInfo }) {
                 <TechRow T={T} label="Market Cap" value={fmt.marketCap(marketCap)} />
                 <TechRow T={T} label="Cap Category" value={capCategory ? capCategory[0].toUpperCase() + capCategory.slice(1) : "—"} last />
             </TechCard>
+
+            {/* Quarterly Financials */}
+            <QuarterlyFinancialsCard rows={qtrFin} T={T} />
         </>
     );
 }
@@ -3184,6 +3280,21 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         return () => { cancelled = true; };
     }, [expandedTicker, token]);
 
+    // Quarterly financials (revenue + PAT growth) for the ticker currently
+    // open in the detail panel. Same lazy-fetch-and-cache pattern as the
+    // indicators snapshot above; undefined = not yet requested, null =
+    // requested but still loading / fetch failed with no cached data.
+    const [expandedQtrFin, setExpandedQtrFin] = useState(undefined);
+    useEffect(() => {
+        if (!expandedTicker) { setExpandedQtrFin(undefined); return; }
+        let cancelled = false;
+        setExpandedQtrFin(_wlQtrFinCache.get(expandedTicker) ?? null);
+        fetchWlQuarterlyFinancials(expandedTicker, token).then(data => {
+            if (!cancelled) setExpandedQtrFin(data);
+        });
+        return () => { cancelled = true; };
+    }, [expandedTicker, token]);
+
     const avgRS = useMemo(() => rows.length ? Math.round(rows.reduce((a, r) => a + (r.rs_rating ?? 0), 0) / rows.length) : null, [rows]);
     const leaders = useMemo(() => rows.filter(r => (r.rs_rating ?? 0) >= 90).length, [rows]);
     const stage2Count = useMemo(() => rows.filter(r => r.trend === "stage2").length, [rows]);
@@ -4367,6 +4478,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 <TechnicalsDetail
                                                     row={expandedRow}
                                                     ind={expandedIndicators}
+                                                    qtrFin={expandedQtrFin}
                                                     resultInfo={earningsBadgeInfo(earningsMap[expandedRow.ticker])}
                                                     T={T}
                                                 />
@@ -4459,6 +4571,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             <TechnicalsDetail
                                                 row={expandedRow}
                                                 ind={expandedIndicators}
+                                                qtrFin={expandedQtrFin}
                                                 resultInfo={earningsBadgeInfo(earningsMap[expandedRow.ticker])}
                                                 T={T}
                                             />

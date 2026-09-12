@@ -218,6 +218,48 @@ export async function fetchMansfieldRSFromDB(ticker) {
     return promise;
 }
 
+// ── Quarterly financials (from company_quarterly_financials) ───────────
+// Last 4 quarters of revenue plus QoQ/YoY growth for revenue and PAT (net
+// income) — powers the compact results-strip at the bottom of the popover.
+// Same cache/in-flight pattern as the fetchers above. Note: the table only
+// carries PAT *growth*, not an absolute PAT/net-income rupee value, so the
+// strip shows PAT QoQ/YoY growth rather than a PAT amount column.
+const _qtrFinCache = new Map();
+const _qtrFinInFlight = new Map();
+
+export async function fetchQuarterlyFinancialsFromDB(ticker) {
+    const cached = _qtrFinCache.get(ticker);
+    if (cached !== undefined && cached !== "loading") return cached; // null or array
+
+    if (_qtrFinInFlight.has(ticker)) return _qtrFinInFlight.get(ticker);
+
+    const promise = (async () => {
+        try {
+            const url = `${SUPABASE_URL}/rest/v1/company_quarterly_financials`
+                + `?ticker=eq.${encodeURIComponent(ticker)}`
+                + `&select=period,quarter,revenue,qoq_rev_growth,yoy_rev_growth,qoq_pat_growth,yoy_pat_growth`
+                + `&order=period.desc&limit=4`;
+            const r = await fetch(url, {
+                headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+                signal: AbortSignal.timeout(8000),
+            });
+            if (!r.ok) { _qtrFinCache.set(ticker, null); return null; }
+            const rows = await r.json();
+            const result = Array.isArray(rows) && rows.length ? rows : null;
+            _qtrFinCache.set(ticker, result);
+            return result;
+        } catch {
+            _qtrFinCache.set(ticker, null);
+            return null;
+        } finally {
+            _qtrFinInFlight.delete(ticker);
+        }
+    })();
+
+    _qtrFinInFlight.set(ticker, promise);
+    return promise;
+}
+
 // ── Global prefetch queue ───────────────────────────────────────────────
 // Every caller (TechLens/Screens tables, Market Movers, Volume Shockers, RS
 // Leaders, Trend Template) routes through ONE shared queue instead of each
@@ -525,6 +567,63 @@ export function MansfieldRSChart({ series, T, width = 258, height = 54 }) {
     );
 }
 
+// Compact "last 4 quarters" results strip — Quarter, Revenue, and QoQ/YoY
+// growth for both Revenue and PAT (net income). Sized to fit the 258px-wide
+// popover body, so labels/fonts are tighter than the full detail-panel
+// version of this table. `rows` is already period.desc-sorted, limit 4.
+function QuarterlyFinStrip({ rows, T }) {
+    if (!rows || rows.length === 0) return null;
+    const isDark = _resolveIsDark(T);
+    const posClr = isDark ? "#4ade80" : "#16a34a";
+    const negClr = isDark ? "#fb7185" : "#e11d48";
+    const mono = "'IBM Plex Mono', monospace";
+    const sans = "'IBM Plex Sans', system-ui, sans-serif";
+
+    const gc = v => (v == null || isNaN(+v)) ? T.muted : (+v >= 0 ? posClr : negClr);
+    const pct = v => (v == null || isNaN(+v)) ? "—" : `${+v >= 0 ? "+" : ""}${(+v).toFixed(1)}%`;
+    // "Q1 FY27" → "Q1'27" so it fits the narrow first column.
+    const shortQtr = q => (q || "—").replace(/\s*FY/i, "'");
+
+    const th = { fontSize: 6.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "right", padding: "0 0 2px", opacity: 0.65, fontFamily: sans, whiteSpace: "nowrap" };
+    const td = { fontSize: 8, fontFamily: mono, textAlign: "right", padding: "2.5px 0", whiteSpace: "nowrap" };
+
+    return (
+        <div style={{ padding: "7px 10px 8px", borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 7, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", opacity: 0.55, marginBottom: 3, fontFamily: sans }}>
+                Last 4 Quarters
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                    <tr>
+                        <th style={{ ...th, textAlign: "left" }} rowSpan={2}>Qtr</th>
+                        <th style={th} rowSpan={2}>Rev</th>
+                        <th style={th} colSpan={2}>Rev Gr.</th>
+                        <th style={th} colSpan={2}>PAT Gr.</th>
+                    </tr>
+                    <tr>
+                        <th style={{ ...th, padding: "1px 0 2px" }}>QoQ</th>
+                        <th style={{ ...th, padding: "1px 0 2px" }}>YoY</th>
+                        <th style={{ ...th, padding: "1px 0 2px" }}>QoQ</th>
+                        <th style={{ ...th, padding: "1px 0 2px" }}>YoY</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((r, i) => (
+                        <tr key={r.period ?? i} style={{ borderTop: i === 0 ? `1px solid ${T.border}` : "none" }}>
+                            <td style={{ ...td, textAlign: "left", color: T.text, fontWeight: 600 }}>{shortQtr(r.quarter)}</td>
+                            <td style={{ ...td, color: T.text }}>{r.revenue != null && !isNaN(+r.revenue) ? Math.round(+r.revenue).toLocaleString("en-IN") : "—"}</td>
+                            <td style={{ ...td, color: gc(r.qoq_rev_growth) }}>{pct(r.qoq_rev_growth)}</td>
+                            <td style={{ ...td, color: gc(r.yoy_rev_growth) }}>{pct(r.yoy_rev_growth)}</td>
+                            <td style={{ ...td, color: gc(r.qoq_pat_growth) }}>{pct(r.qoq_pat_growth)}</td>
+                            <td style={{ ...td, color: gc(r.yoy_pat_growth) }}>{pct(r.yoy_pat_growth)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 // Hover popover card — renders via portal, shows chart + key metrics.
 // `row` only needs a `ticker`; any of ret_3m/ret_6m/ret_12m/rs_rating/
 // rel_volume/pct_from_52w_high/close/ltp it has will be shown, everything
@@ -534,6 +633,7 @@ export function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, n
     const [candles, setCandles] = useState(null);
     const [loading, setLoading] = useState(true);
     const [mansfieldSeries, setMansfieldSeries] = useState(null);
+    const [qtrFin, setQtrFin] = useState(null);
     const isDark = _resolveIsDark(T);
     const mono = "'IBM Plex Mono', monospace";
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
@@ -577,9 +677,24 @@ export function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, n
         return () => { cancelled = true; };
     }, [ticker]);
 
+    // Last 4 quarters of revenue/PAT growth — also fetched independently,
+    // same reasoning as the Mansfield RS trend above.
+    useEffect(() => {
+        let cancelled = false;
+        setQtrFin(null);
+        const cached = _qtrFinCache.get(ticker);
+        if (Array.isArray(cached)) { setQtrFin(cached); return; }
+        fetchQuarterlyFinancialsFromDB(ticker).then(d => {
+            if (!cancelled) setQtrFin(Array.isArray(d) ? d : null);
+        }).catch(() => {
+            if (!cancelled) setQtrFin(null);
+        });
+        return () => { cancelled = true; };
+    }, [ticker]);
+
     // Position popover to the right of the anchor cell, vertically centred.
     // Fully clamped so it never escapes the viewport on any edge.
-    const popW = 272, popH = 174 + (mansfieldSeries && mansfieldSeries.length >= 2 ? 70 : 0);
+    const popW = 272, popH = 174 + (mansfieldSeries && mansfieldSeries.length >= 2 ? 70 : 0) + (qtrFin && qtrFin.length > 0 ? 98 : 0);
     const GAP = 10;   // gap between anchor and popover
     const EDGE = 8;    // min distance from viewport edge
 
@@ -722,6 +837,9 @@ export function ChartPreviewPopover({ ticker, row, T, accentColor, anchorRect, n
                     <MansfieldRSChart series={mansfieldSeries} T={T} width={258} height={54} />
                 </div>
             )}
+
+            {/* ── Last 4 quarters — revenue + PAT growth ── */}
+            <QuarterlyFinStrip rows={qtrFin} T={T} />
         </div>,
         document.body
     );
