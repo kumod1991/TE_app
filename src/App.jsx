@@ -4684,52 +4684,54 @@ function Portfolio({ trades, T, embedded = false }) {
                     </button>
                 </div>
 
-                {/* Summary strip */}
-                {rows.length > 0 && (
-                    <div style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${hasDayData ? 4 : 3}, 1fr)`,
-                        gap: 0,
-                        background: T.card,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 14,
-                        overflow: "hidden",
-                        marginBottom: 16,
-                    }}>
-                        <div style={{ padding: "14px 18px", borderRight: `1px solid ${T.border}` }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Portfolio Value</div>
-                            <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: T.text }}>{inr(totalCurrent)}</div>
-                        </div>
-                        <div style={{ padding: "14px 18px", borderRight: `1px solid ${T.border}` }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Invested</div>
-                            <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: T.text }}>{inr(totalInvested)}</div>
-                        </div>
-                        {hasDayData && (
-                            <div style={{ padding: "14px 18px", borderRight: `1px solid ${T.border}` }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Today's P&amp;L</div>
-                                <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: pnlColor(totalDayPnl) }}>
-                                    {totalDayPnl >= 0 ? "\u25B2" : "\u25BC"} {totalDayPnl >= 0 ? "+" : ""}{inr(totalDayPnl)}
-                                </div>
-                                {totalDayPnlPct != null && (
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: pnlColor(totalDayPnl), marginTop: 1 }}>
-                                        {totalDayPnlPct >= 0 ? "+" : ""}{totalDayPnlPct.toFixed(2)}%
+                {/* Summary strip — horizontally scrollable so cards don't get
+                    squeezed on narrow/mobile viewports, matching the table's
+                    own overflow-x pattern below. */}
+                {rows.length > 0 && (() => {
+                    const cards = [
+                        { label: "Portfolio Value", value: inr(totalCurrent), color: T.text },
+                        { label: "Invested", value: inr(totalInvested), color: T.text },
+                        ...(hasDayData ? [{
+                            label: "Today's P&L",
+                            value: `${totalDayPnl >= 0 ? "\u25B2" : "\u25BC"} ${totalDayPnl >= 0 ? "+" : ""}${inr(totalDayPnl)}`,
+                            color: pnlColor(totalDayPnl),
+                            sub: totalDayPnlPct != null ? `${totalDayPnlPct >= 0 ? "+" : ""}${totalDayPnlPct.toFixed(2)}%` : null,
+                        }] : []),
+                        {
+                            label: "Overall P&L",
+                            value: `${totalUnrealized >= 0 ? "\u25B2" : "\u25BC"} ${totalUnrealized >= 0 ? "+" : ""}${inr(totalUnrealized)}`,
+                            color: pnlColor(totalUnrealized),
+                            sub: totalInvested > 0 ? `${totalUnrealized >= 0 ? "+" : ""}${((totalUnrealized / totalInvested) * 100).toFixed(2)}%` : null,
+                        },
+                    ];
+                    return (
+                        <div style={{
+                            background: T.card,
+                            border: `1px solid ${T.border}`,
+                            borderRadius: 14,
+                            overflow: "hidden",
+                            marginBottom: 16,
+                        }}>
+                            <div style={{ display: "flex", overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-x" }}>
+                                {cards.map((c, idx) => (
+                                    <div key={c.label} style={{
+                                        padding: "14px 18px",
+                                        borderRight: idx < cards.length - 1 ? `1px solid ${T.border}` : "none",
+                                        flex: "1 0 170px",
+                                        minWidth: 170,
+                                        whiteSpace: "nowrap",
+                                    }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>{c.label}</div>
+                                        <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: c.color }}>{c.value}</div>
+                                        {c.sub && (
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: c.color, marginTop: 1 }}>{c.sub}</div>
+                                        )}
                                     </div>
-                                )}
+                                ))}
                             </div>
-                        )}
-                        <div style={{ padding: "14px 18px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: T.subtext, marginBottom: 5 }}>Overall P&amp;L</div>
-                            <div style={{ ...mono, fontSize: 16, fontWeight: 800, color: pnlColor(totalUnrealized) }}>
-                                {totalUnrealized >= 0 ? "\u25B2" : "\u25BC"} {totalUnrealized >= 0 ? "+" : ""}{inr(totalUnrealized)}
-                            </div>
-                            {totalInvested > 0 && (
-                                <div style={{ fontSize: 11, fontWeight: 700, color: pnlColor(totalUnrealized), marginTop: 1 }}>
-                                    {totalUnrealized >= 0 ? "+" : ""}{((totalUnrealized / totalInvested) * 100).toFixed(2)}%
-                                </div>
-                            )}
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {fetchError && (
                     <div style={{ background: T.redGlow, border: `1px solid ${T.red}22`, borderRadius: 14, padding: "12px 16px", marginBottom: 16 }}>
