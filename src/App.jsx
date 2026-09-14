@@ -11095,6 +11095,21 @@ const SCREENS_TABLE_FETCHERS = {
     // (recent 10D range < prior 10D range) on contracting volume, rolled up
     // server-side into high_tight_flag_score. Same dedicated-table fetch/cache pattern.
     leadershipHighTightFlag: _makeScreensTableFetcher("leadership_high_tight_flag", "te_scr_leadershiphightightflag_v1", "select=*&order=high_tight_flag_score.desc.nullslast&limit=1000"),
+    // fresh_breakout_weekly: weekly-chart analog of fresh_breakout  close breaks
+    // above a prior weekly breakout_level (pct_from_breakout, week_high/low,
+    // weekly_rel_volume vs avg_volume_prior_10w already computed server-side),
+    // same dedicated-table fetch/cache pattern as the other Breakouts screens.
+    freshBreakoutWeekly: _makeScreensTableFetcher("fresh_breakout_weekly", "te_scr_freshbreakoutweekly_v1", "select=*&order=pct_from_breakout.desc.nullslast&limit=1000"),
+    // multiyear_high_breakout: close breaking out above its 3-year high
+    // (high_3y, pct_from_high_3y already computed server-side, same Stage 2 /
+    // RS shape as the other dedicated screens tables above).
+    multiyearBreakout: _makeScreensTableFetcher("multiyear_high_breakout", "te_scr_multiyearbreakout_v1", "select=*&order=pct_from_high_3y.desc.nullslast&limit=1000"),
+    // multiyear_breakout_pullback: broke out above a multi-year high, then
+    // pulled back from the post-breakout high (pullback_from_high_pct,
+    // breakout_strength_pct, days_since_breakout already computed server-
+    // side), ordered shallowest-pullback-first (closest to the post-breakout
+    // high), same dedicated-table fetch/cache pattern as the screens above.
+    multiyearPullback: _makeScreensTableFetcher("multiyear_breakout_pullback", "te_scr_multiyearpullback_v1", "select=*&order=pullback_from_high_pct.desc.nullslast&limit=1000"),
 };
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -16100,6 +16115,11 @@ const ALL_COLUMNS = [
     { key: "drawdown_from_flag_high_pct", label: "Drawdown From High %", defaultOn: false },
     { key: "consolidation_range_pct", label: "Consolidation Range %", defaultOn: false },
     { key: "range_prior_10d_pct", label: "Prior 10D Range %", defaultOn: false },
+    { key: "breakout_date", label: "Breakout Date", defaultOn: false },
+    { key: "post_breakout_high", label: "Post-BO High", defaultOn: false },
+    { key: "pullback_from_high_pct", label: "Pullback From High %", defaultOn: false },
+    { key: "breakout_strength_pct", label: "Breakout Strength %", defaultOn: false },
+    { key: "days_since_breakout", label: "Days Since Breakout", defaultOn: false },
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
@@ -16341,6 +16361,11 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "drawdown_from_flag_high_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "consolidation_range_pct") return `${Number(v).toFixed(2)}%`;
         if (key === "range_prior_10d_pct") return `${Number(v).toFixed(2)}%`;
+        if (key === "breakout_date") return String(v).slice(0, 10);
+        if (key === "post_breakout_high") return fmtINR(v);
+        if (key === "pullback_from_high_pct") return `${Number(v).toFixed(2)}%`;
+        if (key === "breakout_strength_pct") return `+${Number(v).toFixed(2)}%`;
+        if (key === "days_since_breakout") return `${Math.round(Number(v))}d`;
         return String(v);
     };
 
@@ -16361,6 +16386,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pct_to_breakout") return Math.abs(Number(v)) <= 3 ? posClr : T.text;
         if (key === "volume_contraction_pct") return Number(v) < 0 ? posClr : T.text;
         if (key === "distance_from_pivot_pct") return Math.abs(Number(v)) <= 2 ? posClr : T.text;
+        if (key === "pullback_from_high_pct") return Number(v) >= -5 ? posClr : T.text;
         return T.text;
     };
 
@@ -16463,6 +16489,11 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         { key: "drawdown_from_flag_high_pct", label: "Drawdown From High %" },
         { key: "consolidation_range_pct", label: "Consolidation Range %" },
         { key: "range_prior_10d_pct", label: "Prior 10D Range %" },
+        { key: "breakout_date", label: "Breakout Date" },
+        { key: "post_breakout_high", label: "Post-BO High" },
+        { key: "pullback_from_high_pct", label: "Pullback From High %" },
+        { key: "breakout_strength_pct", label: "Breakout Strength %" },
+        { key: "days_since_breakout", label: "Days Since Breakout" },
     ].filter(c => visibleCols[c.key] && c.key !== scoreKey);
 
     // Shared button style  no duplicate keys
@@ -18369,6 +18400,67 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [freshBreakoutRawRows, filterByUniverse]);
 
+    //  Fresh Breakout (Weekly) scan  dedicated fetch from the fresh_breakout_weekly
+    // table  weekly-chart analog of Fresh Breakout above (close breaks above a
+    // prior weekly breakout_level, week_range_pct/weekly_rel_volume already
+    // computed server-side), same fetch  normalize  filterByUniverse pattern.
+    const [freshBreakoutWeeklyRawRows, freshBreakoutWeeklyLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.freshBreakoutWeekly);
+
+    const dFreshBreakoutWeekly = useMemo(() => {
+        const mapped = (freshBreakoutWeeklyRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pct_from_breakout: r.pct_from_breakout != null ? Number(r.pct_from_breakout) : null,
+            rel_volume: r.weekly_rel_volume != null ? Number(r.weekly_rel_volume) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+        })).sort((a, b) => (b.pct_from_breakout ?? 0) - (a.pct_from_breakout ?? 0));
+        return filterByUniverse(mapped);
+    }, [freshBreakoutWeeklyRawRows, filterByUniverse]);
+
+    //  Multiyear High Breakout scan  dedicated fetch from the multiyear_high_breakout
+    // table  close breaking out above its 3-year high (high_3y, pct_from_high_3y
+    // already computed server-side), same fetch  normalize  filterByUniverse
+    // pattern as the other dedicated Breakouts screens tables above.
+    const [multiyearBreakoutRawRows, multiyearBreakoutLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.multiyearBreakout);
+
+    const dMultiyearBreakout = useMemo(() => {
+        const mapped = (multiyearBreakoutRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            pct_from_high_3y: r.pct_from_high_3y != null ? Number(r.pct_from_high_3y) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+        })).sort((a, b) => (b.pct_from_high_3y ?? 0) - (a.pct_from_high_3y ?? 0));
+        return filterByUniverse(mapped);
+    }, [multiyearBreakoutRawRows, filterByUniverse]);
+
+    //  Multiyear Breakout + Pullback scan  dedicated fetch from the
+    // multiyear_breakout_pullback table  stock broke out above a multi-year
+    // high (breakout_date/breakout_level/breakout_strength_pct) and has since
+    // pulled back from its post-breakout high (post_breakout_high,
+    // pullback_from_high_pct, days_since_breakout), all computed server-side.
+    // Own loading flag (not folded into pbLoading), same as Fresh Breakout /
+    // Multiyear Breakout above  independent dedicated-table fetch. pct_from_high
+    // in this table already reflects distance from the post-breakout high, so
+    // it's normalized straight onto pct_from_52w_high for shared column reuse.
+    const [multiyearPullbackRawRows, multiyearPullbackLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.multiyearPullback);
+
+    const dMultiyearPullback = useMemo(() => {
+        const mapped = (multiyearPullbackRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            breakout_level: r.breakout_level != null ? Number(r.breakout_level) : null,
+            post_breakout_high: r.post_breakout_high != null ? Number(r.post_breakout_high) : null,
+            pullback_from_high_pct: r.pullback_from_high_pct != null ? Number(r.pullback_from_high_pct) : null,
+            breakout_strength_pct: r.breakout_strength_pct != null ? Number(r.breakout_strength_pct) : null,
+            days_since_breakout: r.days_since_breakout != null ? Number(r.days_since_breakout) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+        })).sort((a, b) => (b.pullback_from_high_pct ?? -999) - (a.pullback_from_high_pct ?? -999));
+        return filterByUniverse(mapped);
+    }, [multiyearPullbackRawRows, filterByUniverse]);
+
     //  Minervini Trend Template scan  dedicated fetch from minervini_screen table 
     // The table is refreshed daily by the sync pipeline and already carries the
     // full 8-criteria Trend Template pass/fail flags (c1_above_150_200 ...
@@ -18539,9 +18631,9 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     }, [dWeinsteinBase]);
 
     const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
-    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length;
+    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
-        dPbWeekly.length + dPbVolDryup.length;
+        dPbWeekly.length + dPbVolDryup.length + dMultiyearPullback.length;
     const minerviniCount = dMinervini.length;
     const legendScreensCount = dMinervini.length + dWeinsteinTier1.length + dWeinsteinTier2.length + dTrendTemplate7of8.length;
     // Tight Bases  Strict Tight Base, Volatility Contraction, Tight Near
@@ -18910,7 +19002,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
                                 desc="Stocks breaking above key resistance with volume confirmation"
-                                count={(volBreakoutLoading || breakoutLoading || pivotLoading || freshBreakoutLoading) ? "..." : breakoutsCount}>
+                                count={(volBreakoutLoading || breakoutLoading || pivotLoading || freshBreakoutLoading || freshBreakoutWeeklyLoading || multiyearBreakoutLoading) ? "..." : breakoutsCount}>
                                 <ScreenRow
                                     rowKey="bo-vol"
                                     title="Volume Breakout"
@@ -18980,11 +19072,33 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     tfLabel="Fresh Breakout"
                                     loadingOverride={freshBreakoutLoading}
                                 />
+                                <ScreenRow
+                                    rowKey="bo-fresh-weekly"
+                                    title="Fresh Breakout (Weekly)"
+                                    subtitle="Weekly close breaks above prior weekly breakout level on elevated weekly rel volume"
+                                    rows={dFreshBreakoutWeekly}
+                                    scoreKey="pct_from_breakout"
+                                    scoreLabel="% Above Breakout"
+                                    formatScore={v => `+${Number(v).toFixed(2)}%`}
+                                    tfLabel="Fresh Breakout (Weekly)"
+                                    loadingOverride={freshBreakoutWeeklyLoading}
+                                />
+                                <ScreenRow
+                                    rowKey="bo-multiyear"
+                                    title="Multiyear High Breakout"
+                                    subtitle="Close breaking out above its 3-year high"
+                                    rows={dMultiyearBreakout}
+                                    scoreKey="pct_from_high_3y"
+                                    scoreLabel="Above 3Y High"
+                                    formatScore={v => `+${Number(v).toFixed(2)}%`}
+                                    tfLabel="Multiyear High Breakout"
+                                    loadingOverride={multiyearBreakoutLoading}
+                                />
                             </CategorySection>
 
                             <CategorySection name="Pullbacks" color={isDark ? "#fbbf24" : "#b45309"}
                                 desc="Healthy retracements to key moving averages in uptrends"
-                                count={pbLoading ? "..." : pullbacksCount}>
+                                count={(pbLoading || multiyearPullbackLoading) ? "..." : pullbacksCount}>
                                 <ScreenRow
                                     rowKey="pb-50dma"
                                     title="Pullback to 50 DMA"
@@ -19076,6 +19190,21 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     tfLabel="Volume Dry-up Pullback"
                                     loadingOverride={pbLoading}
                                     detailExtra={{ pullbackMode: true, pullbackCols: ["pct_from_sma50", "vol_ratio", "volume", "volume_20ma", "sma50"] }}
+                                />
+                                <ScreenRow
+                                    rowKey="pb-multiyear"
+                                    title="Multiyear High + Pullback"
+                                    subtitle="Broke out above a multi-year high, then pulled back from the post-breakout high - early pullback entries in the strongest long-term trends"
+                                    rows={dMultiyearPullback}
+                                    scoreKey="pullback_from_high_pct"
+                                    scoreLabel="Pullback From High"
+                                    formatScore={v => `${Number(v).toFixed(2)}%`}
+                                    tfLabel="Multiyear High + Pullback"
+                                    loadingOverride={multiyearPullbackLoading}
+                                    detailExtra={{
+                                        pullbackMode: true,
+                                        pullbackCols: ["breakout_date", "breakout_level", "post_breakout_high", "pullback_from_high_pct", "breakout_strength_pct", "days_since_breakout", "rs_rating"]
+                                    }}
                                 />
                             </CategorySection>
 
