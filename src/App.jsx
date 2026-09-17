@@ -222,10 +222,17 @@ const supabase = {
             const q = new URLSearchParams(search.replace("?", ""));
             const access_token = p.get("access_token") || q.get("access_token");
             if (!access_token) return null;
+            const refresh_token = p.get("refresh_token") || q.get("refresh_token");
+            const expires_in = p.get("expires_in") || q.get("expires_in");
             const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${access_token}` } });
             const user = await r.json();
             window.history.replaceState(null, "", window.location.pathname);
-            return { access_token, user };
+            return {
+                access_token,
+                refresh_token: refresh_token || null,
+                expires_at: Math.floor(Date.now() / 1000) + (Number(expires_in) || 3600),
+                user,
+            };
         },
     },
     async db(table, token) {
@@ -21471,6 +21478,7 @@ export default function App() {
         supabase.auth.getSessionFromHash().then(sess => {
             if (sess?.access_token && sess.user?.id) {
                 supabase._session = sess;
+                savePersistedSession(sess);
                 setSession(sess);
                 loadTrades(sess); loadFunds(sess); loadDividends(sess);
                 setChecking(false);
