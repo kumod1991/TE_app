@@ -11050,6 +11050,11 @@ const SCREENS_TABLE_FETCHERS = {
     high52wBreakout: _makeScreensTableFetcher("high_52w_breakout", "te_scr_high52wbreakout_v1", "select=*&order=rel_vol.desc.nullslast&limit=1000"),
     pivotBreakout: _makeScreensTableFetcher("pivot_breakout", "te_scr_pivotbreakout_v1", "select=*&order=pct_from_pivot.desc.nullslast&limit=2000"),
     rsRatingLeaders: _makeScreensTableFetcher("rs_rating_leaders", "te_scr_rsratingleaders_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
+    // adx_di_screen: rows already filtered server-side (Mkt Cap > 500 Cr, Stage 2
+    // trend, RS Rating > 75 or NULL, ADX > 20, DI+ > DI-, DI+ - DI- >= 5, ADX and
+    // DI+ rising over 5 sessions, Close >= 85% of 52W High, Rel Vol > 1), same
+    // fetch/cache pattern as the other dedicated screens tables above.
+    adxDi: _makeScreensTableFetcher("adx_di_screen", "te_scr_adxdi_v1", "select=*&order=adx_change_5d.desc.nullslast,di_plus_change_5d.desc.nullslast,di_spread.desc.nullslast&limit=1000"),
     // rs_improving: RS Rating today > RS Rating 1 week ago > RS Rating 2 weeks ago
     // (rows already filtered server-side against that criteria), ordered by the
     // 2-week RS change so the strongest improvers surface first.
@@ -16099,6 +16104,13 @@ const ALL_COLUMNS = [
     { key: "breakout_level", label: "Breakout Level", defaultOn: false },
     { key: "market_cap_cr", label: "Mkt Cap (Cr)", defaultOn: false },
     { key: "pct_to_breakout", label: "% To Breakout", defaultOn: false },
+    { key: "adx", label: "ADX(14)", defaultOn: false },
+    { key: "di_plus", label: "DI+", defaultOn: false },
+    { key: "di_minus", label: "DI-", defaultOn: false },
+    { key: "di_spread", label: "DI Spread", defaultOn: false },
+    { key: "adx_change_5d", label: "ADX Chg (5D)", defaultOn: false },
+    { key: "di_plus_change_5d", label: "DI+ Chg (5D)", defaultOn: false },
+    { key: "trend", label: "Trend Stage", defaultOn: false },
     { key: "vcp_score", label: "VCP Score", defaultOn: false },
     { key: "range_20d_pct", label: "20D Range %", defaultOn: false },
     { key: "range_recent_10d_pct", label: "Recent 10D Range %", defaultOn: false },
@@ -16139,6 +16151,11 @@ const MINERVINI_DEFAULT_COLS = ["close", "pct_from_52w_high", "pct_from_52w_low"
 // swap in the fields that table actually has: stage, RS trend, breakout level.
 const WEINSTEIN_TIER1_DEFAULT_COLS = ["close", "stage_label", "mansfield_rs", "mansfield_rs_slope", "rs_rating", "sma150", "breakout_level", "market_cap_cr"];
 const WEINSTEIN_TIER2_DEFAULT_COLS = ["close", "breakout_level", "pct_to_breakout", "rs_rating", "mansfield_rs_slope", "stage_label", "market_cap_cr"];
+
+// adx_di_screen carries ADX/DI momentum fields instead of the usual
+// ret_3m/6m/12m return history, so the default-on columns swap in the
+// fields that screen actually has data for.
+const ADX_DI_DEFAULT_COLS = ["close", "adx", "di_plus", "di_minus", "di_spread", "adx_change_5d", "rs_rating", "rel_volume", "market_cap_cr"];
 
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
@@ -16182,6 +16199,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     const minerviniMode = !!detail.minerviniMode;
     const weinsteinTier1Mode = !!detail.weinsteinTier1Mode;
     const weinsteinTier2Mode = !!detail.weinsteinTier2Mode;
+    const adxDiMode = !!detail.adxDiMode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -16287,6 +16305,9 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
             a[c.key] = WEINSTEIN_TIER1_DEFAULT_COLS.includes(c.key);
         } else if (weinsteinTier2Mode) {
             a[c.key] = WEINSTEIN_TIER2_DEFAULT_COLS.includes(c.key);
+            // ADX/DI scan: swap in the columns adx_di_screen actually has data for
+        } else if (adxDiMode) {
+            a[c.key] = ADX_DI_DEFAULT_COLS.includes(c.key);
         } else {
             a[c.key] = c.defaultOn;
         }
@@ -16373,6 +16394,9 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pullback_from_high_pct") return `${Number(v).toFixed(2)}%`;
         if (key === "breakout_strength_pct") return `+${Number(v).toFixed(2)}%`;
         if (key === "days_since_breakout") return `${Math.round(Number(v))}d`;
+        if (["adx", "di_plus", "di_minus", "di_spread"].includes(key)) return Number(v).toFixed(2);
+        if (["adx_change_5d", "di_plus_change_5d"].includes(key)) return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
+        if (key === "trend") return String(v);
         return String(v);
     };
 
@@ -16394,6 +16418,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "volume_contraction_pct") return Number(v) < 0 ? posClr : T.text;
         if (key === "distance_from_pivot_pct") return Math.abs(Number(v)) <= 2 ? posClr : T.text;
         if (key === "pullback_from_high_pct") return Number(v) >= -5 ? posClr : T.text;
+        if (["adx_change_5d", "di_plus_change_5d", "di_spread"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         return T.text;
     };
 
@@ -18021,6 +18046,30 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [stage2EarlyRawRows, filterByUniverse]);
 
+    //  ADX/DI Momentum scan  dedicated fetch from the adx_di_screen table (rows
+    // already filtered server-side: Mkt Cap > 500 Cr, Stage 2 trend, RS Rating >
+    // 75 or NULL, ADX(14) > 20 and rising over 5 sessions, DI+ > DI- with a
+    // spread >= 5 and DI+ rising over 5 sessions, Close >= 85% of 52W High,
+    // Rel Vol > 1), same fetch/cache pattern as the other dedicated screens
+    // tables above.
+    const [adxDiRawRows, adxDiLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.adxDi);
+    const dAdxDi = useMemo(() => {
+        const mapped = (adxDiRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            adx: r.adx != null ? Number(r.adx) : null,
+            di_plus: r.di_plus != null ? Number(r.di_plus) : null,
+            di_minus: r.di_minus != null ? Number(r.di_minus) : null,
+            di_spread: r.di_spread != null ? Number(r.di_spread) : null,
+            adx_change_5d: r.adx_change_5d != null ? Number(r.adx_change_5d) : null,
+            di_plus_change_5d: r.di_plus_change_5d != null ? Number(r.di_plus_change_5d) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.di_spread ?? -Infinity) - (a.di_spread ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [adxDiRawRows, filterByUniverse]);
+
     //  52W High Breakout scan  dedicated fetch from the high_52w_breakout table 
     // The high_52w_breakout table is refreshed daily by the sync pipeline and
     // already contains only stocks matching the screen criteria (within 7% of
@@ -18637,7 +18686,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             .sort((a, b) => Math.abs(a.pct_to_breakout) - Math.abs(b.pct_to_breakout));
     }, [dWeinsteinBase]);
 
-    const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
+    const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length + dAdxDi.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length + dMultiyearPullback.length;
@@ -18984,7 +19033,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         <div className="scr-sections">
                             <CategorySection name="Market Leaders" color={ACCENT}
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
-                                count={(rsRatingLoading || rsImprovingLoading || powerTrendLoading || stage2EarlyLoading) ? "" : totalCount}>
+                                count={(rsRatingLoading || rsImprovingLoading || powerTrendLoading || stage2EarlyLoading || adxDiLoading) ? "" : totalCount}>
                                 <ScreenRow rowKey="ml-rsrating" title="RS Rating Leaders"
                                     subtitle="Stocks with RS Rating above 90"
                                     rows={dRsRating} scoreKey="rs_rating" scoreLabel="RS Rating"
@@ -19005,6 +19054,12 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     rows={dStage2Early} scoreKey="rs_rating" scoreLabel="RS Rating"
                                     formatScore={v => Math.round(v).toString()} tfLabel="Stage 2 Early"
                                     loadingOverride={stage2EarlyLoading} />
+                                <ScreenRow rowKey="ml-adxdi" title="ADX/DI Momentum"
+                                    subtitle="ADX(14) > 20 and rising, DI+ > DI- by 5+ and rising, Stage 2 trend, RS Rating > 75 or NULL, within 15% of 52W high, Rel Vol > 1, Mkt Cap > 500 Cr"
+                                    rows={dAdxDi} scoreKey="di_spread" scoreLabel="DI Spread"
+                                    formatScore={v => `+${Number(v).toFixed(2)}`} tfLabel="ADX/DI Momentum"
+                                    loadingOverride={adxDiLoading}
+                                    detailExtra={{ adxDiMode: true }} />
                             </CategorySection>
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
