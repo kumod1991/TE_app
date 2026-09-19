@@ -11055,6 +11055,11 @@ const SCREENS_TABLE_FETCHERS = {
     // DI+ rising over 5 sessions, Close >= 85% of 52W High, Rel Vol > 1), same
     // fetch/cache pattern as the other dedicated screens tables above.
     adxDi: _makeScreensTableFetcher("adx_di_screen", "te_scr_adxdi_v1", "select=*&order=adx_change_5d.desc.nullslast,di_plus_change_5d.desc.nullslast,di_spread.desc.nullslast&limit=1000"),
+    // rsi_momentum_screen: rows already filtered server-side (Mkt Cap > 500 Cr,
+    // Stage 2 trend, RS Rating > 75 or NULL, 55 <= RSI(14) < 75, RSI rising vs
+    // 5 sessions ago, Close >= 85% of 52W High, Rel Vol > 1), same fetch/cache
+    // pattern as the other dedicated screens tables above.
+    rsiMomentum: _makeScreensTableFetcher("rsi_momentum_screen", "te_scr_rsimomentum_v1", "select=*&order=rsi_change_5d.desc.nullslast,rsi.desc.nullslast&limit=1000"),
     // rs_improving: RS Rating today > RS Rating 1 week ago > RS Rating 2 weeks ago
     // (rows already filtered server-side against that criteria), ordered by the
     // 2-week RS change so the strongest improvers surface first.
@@ -16076,6 +16081,25 @@ const fmtINR = (v) =>
 const fmtPct = (v) =>
     v == null ? null : `${v >= 0 ? "+" : ""}${Number(v).toFixed(1)}%`;
 
+// Shared CSV export for TechLens/Screens tables (ScreenDetailView,
+// PatternFilterModule). Exports the full filtered/sorted row set, not just
+// the current page. RFC4180-style escaping; UTF-8 BOM so Excel renders
+// tickers/company names correctly.
+function _csvEscapeCell(val) {
+    const s = val == null ? "" : String(val);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function _downloadCsv(filename, headers, rows) {
+    const lines = [headers.map(_csvEscapeCell).join(",")];
+    for (const row of rows) lines.push(row.map(_csvEscapeCell).join(","));
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 /* 
    SCREEN DETAIL VIEW  full-screen overlay for a single screen
  */
@@ -16111,6 +16135,10 @@ const ALL_COLUMNS = [
     { key: "adx_change_5d", label: "ADX Chg (5D)", defaultOn: false },
     { key: "di_plus_change_5d", label: "DI+ Chg (5D)", defaultOn: false },
     { key: "trend", label: "Trend Stage", defaultOn: false },
+    { key: "rsi", label: "RSI(14)", defaultOn: false },
+    { key: "rsi_5d_ago", label: "RSI 5D Ago", defaultOn: false },
+    { key: "rsi_change_5d", label: "RSI Chg (5D)", defaultOn: false },
+    { key: "high_52w", label: "52W High", defaultOn: false },
     { key: "vcp_score", label: "VCP Score", defaultOn: false },
     { key: "range_20d_pct", label: "20D Range %", defaultOn: false },
     { key: "range_recent_10d_pct", label: "Recent 10D Range %", defaultOn: false },
@@ -16157,6 +16185,11 @@ const WEINSTEIN_TIER2_DEFAULT_COLS = ["close", "breakout_level", "pct_to_breakou
 // fields that screen actually has data for.
 const ADX_DI_DEFAULT_COLS = ["close", "adx", "di_plus", "di_minus", "di_spread", "adx_change_5d", "rs_rating", "rel_volume", "market_cap_cr"];
 
+// rsi_momentum_screen carries RSI momentum fields instead of the usual
+// ADX/DI or return-history columns, so the default-on columns swap in the
+// fields that screen actually has data for.
+const RSI_MOMENTUM_DEFAULT_COLS = ["close", "rsi", "rsi_5d_ago", "rsi_change_5d", "rs_rating", "rel_volume", "market_cap_cr"];
+
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
     { key: "pct_from_52w_low", label: "From 52W Low %", defaultOp: ">", num: true },
@@ -16200,6 +16233,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     const weinsteinTier1Mode = !!detail.weinsteinTier1Mode;
     const weinsteinTier2Mode = !!detail.weinsteinTier2Mode;
     const adxDiMode = !!detail.adxDiMode;
+    const rsiMomentumMode = !!detail.rsiMomentumMode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -16308,6 +16342,9 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
             // ADX/DI scan: swap in the columns adx_di_screen actually has data for
         } else if (adxDiMode) {
             a[c.key] = ADX_DI_DEFAULT_COLS.includes(c.key);
+            // RSI Momentum scan: swap in the columns rsi_momentum_screen actually has data for
+        } else if (rsiMomentumMode) {
+            a[c.key] = RSI_MOMENTUM_DEFAULT_COLS.includes(c.key);
         } else {
             a[c.key] = c.defaultOn;
         }
@@ -16397,6 +16434,9 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (["adx", "di_plus", "di_minus", "di_spread"].includes(key)) return Number(v).toFixed(2);
         if (["adx_change_5d", "di_plus_change_5d"].includes(key)) return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
         if (key === "trend") return String(v);
+        if (["rsi", "rsi_5d_ago"].includes(key)) return Number(v).toFixed(2);
+        if (key === "rsi_change_5d") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
+        if (key === "high_52w") return fmtINR(v);
         return String(v);
     };
 
@@ -16419,6 +16459,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "distance_from_pivot_pct") return Math.abs(Number(v)) <= 2 ? posClr : T.text;
         if (key === "pullback_from_high_pct") return Number(v) >= -5 ? posClr : T.text;
         if (["adx_change_5d", "di_plus_change_5d", "di_spread"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
+        if (key === "rsi_change_5d") return Number(v) >= 0 ? posClr : negClr;
         return T.text;
     };
 
@@ -16526,7 +16567,45 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         { key: "pullback_from_high_pct", label: "Pullback From High %" },
         { key: "breakout_strength_pct", label: "Breakout Strength %" },
         { key: "days_since_breakout", label: "Days Since Breakout" },
+        { key: "adx", label: "ADX(14)" },
+        { key: "di_plus", label: "DI+" },
+        { key: "di_minus", label: "DI-" },
+        { key: "di_spread", label: "DI Spread" },
+        { key: "adx_change_5d", label: "ADX Chg (5D)" },
+        { key: "di_plus_change_5d", label: "DI+ Chg (5D)" },
+        { key: "trend", label: "Trend Stage" },
+        { key: "rsi", label: "RSI(14)" },
+        { key: "rsi_5d_ago", label: "RSI 5D Ago" },
+        { key: "rsi_change_5d", label: "RSI Chg (5D)" },
+        { key: "high_52w", label: "52W High" },
     ].filter(c => visibleCols[c.key] && c.key !== scoreKey);
+
+    // Export CSV  full filteredRows set (every page, current filters/sort),
+    // mirroring the columns actually visible in the table: #, Ticker, Company,
+    // Price (if shown), the score column, then the visible dynColDefs.
+    const handleExportCsv = () => {
+        const headers = [
+            "#", "Ticker", "Company",
+            ...(visibleCols.close ? ["Price"] : []),
+            ...(scoreKey ? [scoreLabel || "Score"] : []),
+            ...dynColDefs.map(c => c.label),
+        ];
+        const rows = filteredRows.map((row, i) => {
+            const scoreStr = scoreKey
+                ? (formatVal ? formatVal(Number(row[scoreKey] ?? 0), row) : Number(row[scoreKey] ?? 0).toFixed(2))
+                : null;
+            return [
+                i + 1,
+                row.ticker,
+                row.stock_name || row.name || "",
+                ...(visibleCols.close ? [row.close != null ? fmtINR(row.close) : ""] : []),
+                ...(scoreKey ? [scoreStr] : []),
+                ...dynColDefs.map(c => fmtCell(row, c.key) ?? ""),
+            ];
+        });
+        const safeName = (title || "screen").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
+        _downloadCsv(`${safeName}.csv`, headers, rows);
+    };
 
     // Shared button style  no duplicate keys
     const chipBtn = {
@@ -16746,6 +16825,18 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                                     {filteredRows.length.toLocaleString("en-IN")}
                                 </strong>{" stocks"}
                             </span>
+
+                            <div style={{ width: 1, height: 14, background: T.border }} />
+
+                            <button onClick={handleExportCsv} style={chipBtn}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${accentOrFallback}55`; e.currentTarget.style.color = accentOrFallback; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.subtext; }}>
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                                    strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M8 1v9M8 10l-3-3M8 10l3-3" /><path d="M2 12v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" />
+                                </svg>
+                                Export CSV
+                            </button>
 
                             <div style={{ width: 1, height: 14, background: T.border }} />
 
@@ -17464,6 +17555,15 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, nif
         return String(v);
     };
 
+    // Export CSV  full sortedRows set (current pattern tab, latest week,
+    // current filters/sort), same fixed column set the table renders.
+    const handleExportCsv = () => {
+        const headers = columns.map(c => c.label);
+        const rows = sortedRows.map(row => columns.map(c => fmtCell(row, c.key) ?? ""));
+        const safeName = (activeMeta?.label || activeTab || "pattern").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
+        _downloadCsv(`${safeName}.csv`, headers, rows);
+    };
+
     const cellColor = (key, v) => {
         if (v == null || v === "") return T.muted;
         if (["ret_3m", "ret_6m", "ret_12m"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
@@ -17719,6 +17819,25 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, nif
                                 Clear all
                             </button>
                         )}
+
+                        <div style={{ flex: 1 }} />
+
+                        <button onClick={handleExportCsv}
+                            style={{
+                                display: "inline-flex", alignItems: "center", gap: 6,
+                                height: 30, padding: "0 12px", background: T.card,
+                                border: `1px solid ${D.panelBorder}`, borderRadius: 6,
+                                color: T.subtext, cursor: "pointer", fontSize: 12,
+                                fontFamily: sans, transition: "border-color .12s, color .12s"
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${ACCENT}66`; e.currentTarget.style.color = T.text; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = D.panelBorder; e.currentTarget.style.color = T.subtext; }}>
+                            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M8 1v9M8 10l-3-3M8 10l3-3" /><path d="M2 12v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" />
+                            </svg>
+                            Export CSV
+                        </button>
                     </div>
 
                     <div className="pfv-table-shell">
@@ -18069,6 +18188,30 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         })).sort((a, b) => (b.di_spread ?? -Infinity) - (a.di_spread ?? -Infinity));
         return filterByUniverse(mapped);
     }, [adxDiRawRows, filterByUniverse]);
+
+    //  RSI Momentum scan  dedicated fetch from the rsi_momentum_screen table
+    // (rows already filtered server-side: Mkt Cap > 500 Cr, Stage 2 trend, RS
+    // Rating > 75 or NULL, RSI(14) between 55 and 75, RSI rising vs 5 sessions
+    // ago, Close >= 85% of 52W High, Rel Vol > 1), same fetch/cache pattern as
+    // the other dedicated screens tables above.
+    const [rsiMomentumRawRows, rsiMomentumLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.rsiMomentum);
+    const dRsiMomentum = useMemo(() => {
+        const mapped = (rsiMomentumRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            rsi: r.rsi != null ? Number(r.rsi) : null,
+            rsi_5d_ago: r.rsi_5d_ago != null ? Number(r.rsi_5d_ago) : null,
+            rsi_change_5d: r.rsi_change_5d != null ? Number(r.rsi_change_5d) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            sma50: r.sma50 != null ? Number(r.sma50) : null,
+            sma150: r.sma150 != null ? Number(r.sma150) : null,
+            sma200: r.sma200 != null ? Number(r.sma200) : null,
+            high_52w: r.high_52w != null ? Number(r.high_52w) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.rsi_change_5d ?? -Infinity) - (a.rsi_change_5d ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [rsiMomentumRawRows, filterByUniverse]);
 
     //  52W High Breakout scan  dedicated fetch from the high_52w_breakout table 
     // The high_52w_breakout table is refreshed daily by the sync pipeline and
@@ -18600,7 +18743,12 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             ret_12m: r.ret_12m != null ? Number(r.ret_12m) : null,
             rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
             market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
-        })).sort((a, b) => (b.criteria_met ?? -Infinity) - (a.criteria_met ?? -Infinity) || (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity));
+        }))
+            // trend_template_7of8 stores rows meeting >= 7 of the 8 criteria,
+            // but the 8/8 passers are already covered by the "All 8 Criteria"
+            // scan above, so this card/detail should show only the 7/8 rows.
+            .filter(r => r.criteria_met === 7)
+            .sort((a, b) => (b.criteria_met ?? -Infinity) - (a.criteria_met ?? -Infinity) || (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity));
         return filterByUniverse(mapped);
     }, [tt7of8RawRows, filterByUniverse]);
 
@@ -18686,7 +18834,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             .sort((a, b) => Math.abs(a.pct_to_breakout) - Math.abs(b.pct_to_breakout));
     }, [dWeinsteinBase]);
 
-    const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length + dAdxDi.length;
+    const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length + dAdxDi.length + dRsiMomentum.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length + dMultiyearPullback.length;
@@ -19033,7 +19181,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         <div className="scr-sections">
                             <CategorySection name="Market Leaders" color={ACCENT}
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
-                                count={(rsRatingLoading || rsImprovingLoading || powerTrendLoading || stage2EarlyLoading || adxDiLoading) ? "" : totalCount}>
+                                count={(rsRatingLoading || rsImprovingLoading || powerTrendLoading || stage2EarlyLoading || adxDiLoading || rsiMomentumLoading) ? "" : totalCount}>
                                 <ScreenRow rowKey="ml-rsrating" title="RS Rating Leaders"
                                     subtitle="Stocks with RS Rating above 90"
                                     rows={dRsRating} scoreKey="rs_rating" scoreLabel="RS Rating"
@@ -19060,6 +19208,12 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     formatScore={v => `+${Number(v).toFixed(2)}`} tfLabel="ADX/DI Momentum"
                                     loadingOverride={adxDiLoading}
                                     detailExtra={{ adxDiMode: true }} />
+                                <ScreenRow rowKey="ml-rsimomentum" title="RSI Momentum"
+                                    subtitle="RSI(14) 55–75 and rising vs 5 sessions ago, Stage 2 trend, RS Rating > 75 or NULL, within 15% of 52W high, Rel Vol > 1, Mkt Cap > 500 Cr"
+                                    rows={dRsiMomentum} scoreKey="rsi_change_5d" scoreLabel="RSI Chg (5D)"
+                                    formatScore={v => `+${Number(v).toFixed(2)}`} tfLabel="RSI Momentum"
+                                    loadingOverride={rsiMomentumLoading}
+                                    detailExtra={{ rsiMomentumMode: true }} />
                             </CategorySection>
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
@@ -19364,7 +19518,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 <ScreenRow
                                     rowKey="tt-7of8"
                                     title="Trend Template — 7 of 8"
-                                    subtitle="Meets at least 7 of the 8 Trend Template criteria (price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA rising ~1mo, 50 SMA above 150/200 and price above 50 SMA, price 25%+ above 52W low, within 25% of 52W high, RS Rating >= 70)"
+                                    subtitle="Meets exactly 7 of the 8 Trend Template criteria (price > 150/200 SMA, 150 SMA > 200 SMA, 200 SMA rising ~1mo, 50 SMA above 150/200 and price above 50 SMA, price 25%+ above 52W low, within 25% of 52W high, RS Rating >= 70)"
                                     rows={dTrendTemplate7of8}
                                     scoreKey="criteria_met"
                                     scoreLabel="Criteria Met"
