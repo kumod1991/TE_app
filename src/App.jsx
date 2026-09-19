@@ -11060,6 +11060,9 @@ const SCREENS_TABLE_FETCHERS = {
     // 5 sessions ago, Close >= 85% of 52W High, Rel Vol > 1), same fetch/cache
     // pattern as the other dedicated screens tables above.
     rsiMomentum: _makeScreensTableFetcher("rsi_momentum_screen", "te_scr_rsimomentum_v1", "select=*&order=rsi_change_5d.desc.nullslast,rsi.desc.nullslast&limit=1000"),
+    // volume_momentum_screen: OBV/CMF volume-momentum scan, same fetch/cache
+    // pattern as the other dedicated screens tables above.
+    volumeMomentum: _makeScreensTableFetcher("volume_momentum_screen", "te_scr_volumemomentum_v1", "select=*&order=cmf_change_5d.desc.nullslast,obv_strength_20d.desc.nullslast,rel_vol.desc.nullslast&limit=1000"),
     // rs_improving: RS Rating today > RS Rating 1 week ago > RS Rating 2 weeks ago
     // (rows already filtered server-side against that criteria), ordered by the
     // 2-week RS change so the strongest improvers surface first.
@@ -16139,6 +16142,12 @@ const ALL_COLUMNS = [
     { key: "rsi_5d_ago", label: "RSI 5D Ago", defaultOn: false },
     { key: "rsi_change_5d", label: "RSI Chg (5D)", defaultOn: false },
     { key: "high_52w", label: "52W High", defaultOn: false },
+    { key: "obv_20d_change", label: "OBV 20D Chg", defaultOn: false },
+    { key: "obv_5d_change", label: "OBV 5D Chg", defaultOn: false },
+    { key: "obv_strength_20d", label: "OBV Strength (20D)", defaultOn: false },
+    { key: "cmf_21", label: "CMF(21)", defaultOn: false },
+    { key: "cmf_21_5d_ago", label: "CMF 5D Ago", defaultOn: false },
+    { key: "cmf_change_5d", label: "CMF Chg (5D)", defaultOn: false },
     { key: "vcp_score", label: "VCP Score", defaultOn: false },
     { key: "range_20d_pct", label: "20D Range %", defaultOn: false },
     { key: "range_recent_10d_pct", label: "Recent 10D Range %", defaultOn: false },
@@ -16190,6 +16199,11 @@ const ADX_DI_DEFAULT_COLS = ["close", "adx", "di_plus", "di_minus", "di_spread",
 // fields that screen actually has data for.
 const RSI_MOMENTUM_DEFAULT_COLS = ["close", "rsi", "rsi_5d_ago", "rsi_change_5d", "rs_rating", "rel_volume", "market_cap_cr"];
 
+// volume_momentum_screen carries OBV/CMF volume-momentum fields instead of
+// the usual price-momentum columns, so the default-on columns swap in the
+// fields that screen actually has data for.
+const VOLUME_MOMENTUM_DEFAULT_COLS = ["close", "obv_strength_20d", "obv_5d_change", "cmf_21", "cmf_change_5d", "rs_rating", "rel_volume", "market_cap_cr"];
+
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
     { key: "pct_from_52w_low", label: "From 52W Low %", defaultOp: ">", num: true },
@@ -16234,6 +16248,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     const weinsteinTier2Mode = !!detail.weinsteinTier2Mode;
     const adxDiMode = !!detail.adxDiMode;
     const rsiMomentumMode = !!detail.rsiMomentumMode;
+    const volumeMomentumMode = !!detail.volumeMomentumMode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -16345,6 +16360,9 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
             // RSI Momentum scan: swap in the columns rsi_momentum_screen actually has data for
         } else if (rsiMomentumMode) {
             a[c.key] = RSI_MOMENTUM_DEFAULT_COLS.includes(c.key);
+            // Volume Momentum scan: swap in the columns volume_momentum_screen actually has data for
+        } else if (volumeMomentumMode) {
+            a[c.key] = VOLUME_MOMENTUM_DEFAULT_COLS.includes(c.key);
         } else {
             a[c.key] = c.defaultOn;
         }
@@ -16437,6 +16455,8 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (["rsi", "rsi_5d_ago"].includes(key)) return Number(v).toFixed(2);
         if (key === "rsi_change_5d") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
         if (key === "high_52w") return fmtINR(v);
+        if (["obv_20d_change", "obv_5d_change", "obv_strength_20d", "cmf_21", "cmf_21_5d_ago"].includes(key)) return Number(v).toFixed(4);
+        if (key === "cmf_change_5d") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(4)}`;
         return String(v);
     };
 
@@ -16460,6 +16480,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pullback_from_high_pct") return Number(v) >= -5 ? posClr : T.text;
         if (["adx_change_5d", "di_plus_change_5d", "di_spread"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         if (key === "rsi_change_5d") return Number(v) >= 0 ? posClr : negClr;
+        if (["obv_20d_change", "obv_5d_change", "obv_strength_20d", "cmf_change_5d"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         return T.text;
     };
 
@@ -16578,6 +16599,12 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         { key: "rsi_5d_ago", label: "RSI 5D Ago" },
         { key: "rsi_change_5d", label: "RSI Chg (5D)" },
         { key: "high_52w", label: "52W High" },
+        { key: "obv_20d_change", label: "OBV 20D Chg" },
+        { key: "obv_5d_change", label: "OBV 5D Chg" },
+        { key: "obv_strength_20d", label: "OBV Strength (20D)" },
+        { key: "cmf_21", label: "CMF(21)" },
+        { key: "cmf_21_5d_ago", label: "CMF 5D Ago" },
+        { key: "cmf_change_5d", label: "CMF Chg (5D)" },
     ].filter(c => visibleCols[c.key] && c.key !== scoreKey);
 
     // Export CSV  full filteredRows set (every page, current filters/sort),
@@ -18213,6 +18240,28 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [rsiMomentumRawRows, filterByUniverse]);
 
+    //  Volume Momentum scan  dedicated fetch from the volume_momentum_screen
+    // table (OBV 20D/5D change, OBV strength over 20D, CMF(21) and its 5D
+    // change, Rel Vol, RS Rating, Mkt Cap), same fetch/cache pattern as the
+    // other dedicated screens tables above.
+    const [volumeMomentumRawRows, volumeMomentumLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.volumeMomentum);
+    const dVolumeMomentum = useMemo(() => {
+        const mapped = (volumeMomentumRawRows || []).map(r => ({
+            ...r,
+            close: r.close != null ? Number(r.close) : null,
+            obv_20d_change: r.obv_20d_change != null ? Number(r.obv_20d_change) : null,
+            obv_5d_change: r.obv_5d_change != null ? Number(r.obv_5d_change) : null,
+            obv_strength_20d: r.obv_strength_20d != null ? Number(r.obv_strength_20d) : null,
+            cmf_21: r.cmf_21 != null ? Number(r.cmf_21) : null,
+            cmf_21_5d_ago: r.cmf_21_5d_ago != null ? Number(r.cmf_21_5d_ago) : null,
+            cmf_change_5d: r.cmf_change_5d != null ? Number(r.cmf_change_5d) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
+            rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
+        })).sort((a, b) => (b.cmf_change_5d ?? -Infinity) - (a.cmf_change_5d ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [volumeMomentumRawRows, filterByUniverse]);
+
     //  52W High Breakout scan  dedicated fetch from the high_52w_breakout table 
     // The high_52w_breakout table is refreshed daily by the sync pipeline and
     // already contains only stocks matching the screen criteria (within 7% of
@@ -18835,6 +18884,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     }, [dWeinsteinBase]);
 
     const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length + dAdxDi.length + dRsiMomentum.length;
+    const marketLeadersCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
+    const momentumScreensCount = dAdxDi.length + dRsiMomentum.length + dVolumeMomentum.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length + dMultiyearPullback.length;
@@ -19181,7 +19232,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         <div className="scr-sections">
                             <CategorySection name="Market Leaders" color={ACCENT}
                                 desc="Top momentum stocks near 52W highs with strong relative strength"
-                                count={(rsRatingLoading || rsImprovingLoading || powerTrendLoading || stage2EarlyLoading || adxDiLoading || rsiMomentumLoading) ? "" : totalCount}>
+                                count={(rsRatingLoading || rsImprovingLoading || powerTrendLoading || stage2EarlyLoading) ? "" : marketLeadersCount}>
                                 <ScreenRow rowKey="ml-rsrating" title="RS Rating Leaders"
                                     subtitle="Stocks with RS Rating above 90"
                                     rows={dRsRating} scoreKey="rs_rating" scoreLabel="RS Rating"
@@ -19202,6 +19253,11 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     rows={dStage2Early} scoreKey="rs_rating" scoreLabel="RS Rating"
                                     formatScore={v => Math.round(v).toString()} tfLabel="Stage 2 Early"
                                     loadingOverride={stage2EarlyLoading} />
+                            </CategorySection>
+
+                            <CategorySection name="Momentum Screens" color={isDark ? "#f472b6" : "#db2777"}
+                                desc="ADX/DI and RSI-based momentum scans on trending Stage 2 stocks"
+                                count={(adxDiLoading || rsiMomentumLoading || volumeMomentumLoading) ? "" : momentumScreensCount}>
                                 <ScreenRow rowKey="ml-adxdi" title="ADX/DI Momentum"
                                     subtitle="ADX(14) > 20 and rising, DI+ > DI- by 5+ and rising, Stage 2 trend, RS Rating > 75 or NULL, within 15% of 52W high, Rel Vol > 1, Mkt Cap > 500 Cr"
                                     rows={dAdxDi} scoreKey="di_spread" scoreLabel="DI Spread"
@@ -19214,6 +19270,12 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     formatScore={v => `+${Number(v).toFixed(2)}`} tfLabel="RSI Momentum"
                                     loadingOverride={rsiMomentumLoading}
                                     detailExtra={{ rsiMomentumMode: true }} />
+                                <ScreenRow rowKey="mom-volumemomentum" title="Volume Momentum"
+                                    subtitle="OBV/CMF volume-momentum scan: OBV strength over 20 sessions, OBV rising over 5D, CMF(21) trending up, ranked by Rel Vol, RS Rating and Mkt Cap"
+                                    rows={dVolumeMomentum} scoreKey="cmf_change_5d" scoreLabel="CMF Chg (5D)"
+                                    formatScore={v => `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(4)}`} tfLabel="Volume Momentum"
+                                    loadingOverride={volumeMomentumLoading}
+                                    detailExtra={{ volumeMomentumMode: true }} />
                             </CategorySection>
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
