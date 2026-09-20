@@ -36,7 +36,7 @@ function olog(...args) { if (OWNERSHIP_DEBUG) console.info("[Ownership]", ...arg
 
 // This used to be a fixed floor of 500 rows, sized for the old RPC path
 // which pulled from the full raw shareholding universe. Now that data comes
-// straight from ownership_metrics (see fetchOwnershipMetricsTable), the real
+// straight from company_shareholding_scans_mv (see fetchOwnershipMetricsTable), the real
 // row count can legitimately be smaller — and a fixed 500-row floor meant
 // cacheRead/cacheWrite silently rejected every fetch below that number,
 // so the cache could never populate and *every* page open paid the full
@@ -252,34 +252,55 @@ async function fetchAllPages(path) {
 }
 
 // ─── SHAREHOLDING FETCH WITH FALLBACK ─────────────────────────────────────────
-// BUG FIX: The `name` column may not exist on company_shareholding in some
-// environments, causing HTTP 500. We try with name first, then fall back to
-// ticker+quarterly only. Names are then enriched from company_financials.
+// Source is company_shareholding_raw_mv — long format (one row per
+// ticker per period) rather than the old company_shareholding table's nested
+// `quarterly` jsonb column. Grouped by ticker here into the same
+// { ticker, name, quarterly: [...] } shape processStock() expects, so the
+// rest of the legacy pipeline (buildRawData/buildProcessedAsync) is unchanged.
+// BUG FIX: The `name` column may not exist in some environments, causing
+// HTTP 500 — we try with name first, then fall back to ticker-only (name is
+// then enriched from company_financials, same as before).
 async function fetchShareholding() {
   const variants = [
-    "company_shareholding?select=ticker,name,quarterly",
-    "company_shareholding?select=ticker,quarterly",
+    "company_shareholding_raw_mv?select=ticker,name,period_date,period_label,promoter_pct,fii_pct,dii_pct,public_pct&order=ticker.asc,period_date.asc",
+    "company_shareholding_raw_mv?select=ticker,period_date,period_label,promoter_pct,fii_pct,dii_pct,public_pct&order=ticker.asc,period_date.asc",
   ];
 
   let lastError = null;
   for (const path of variants) {
     try {
-      return await fetchAllPages(path);
+      const rows = await fetchAllPages(path);
+      const byTicker = new Map();
+      for (const r of rows) {
+        const t = String(r.ticker || "").trim();
+        if (!t) continue;
+        if (!byTicker.has(t)) byTicker.set(t, { ticker: t, name: r.name || t, quarterly: [] });
+        byTicker.get(t).quarterly.push({
+          date: r.period_date,
+          promoters: r.promoter_pct,
+          fiis: r.fii_pct,
+          diis: r.dii_pct,
+          public: r.public_pct,
+        });
+      }
+      return [...byTicker.values()];
     } catch (err) {
       lastError = err;
       console.warn(`[Ownership] fetchShareholding: ${path} failed (${err?.message}), trying next variant`);
     }
   }
 
-  throw lastError || new Error("Failed to fetch company_shareholding");
+  throw lastError || new Error("Failed to fetch company_shareholding_raw_mv");
 }
 
-// The ownership_metrics table is precomputed in Postgres — every column the
-// UI needs (latest %, deltas, trends, score, signal) is already sitting
-// there, so reading it directly is a single paginated SELECT with zero
-// client-side computation. This replaces the old RPC call, which was doing
-// (or re-doing) that computation server-side on every request.
-const OWNERSHIP_METRICS_TABLE = "ownership_metrics";
+// company_shareholding_scans_mv is precomputed in Postgres — every column the
+// UI needs (latest %, deltas, trends, score, signal, plus the last4/
+// all_quarterly history arrays) is already sitting there, so reading it
+// directly is a single paginated SELECT with zero client-side computation.
+// Column names (own_promoter/own_fii/.../delta_*/  *_trend/combined_flow)
+// line up with what normalizeOwnershipRow already reads, so no normalization
+// changes were needed to switch sources.
+const OWNERSHIP_METRICS_TABLE = "company_shareholding_scans_mv";
 
 // Small, fast slice used only to paint something real on a genuinely cold
 // start (empty cache, nothing pre-warmed). Kept low enough that Postgres can
@@ -360,26 +381,32 @@ function setCachedQuarterlyDetail(ticker, data) {
 // ─── ON-DEMAND PER-STOCK DETAIL (drilldown modal only) ───────────────────────
 // The bulk universe fetch intentionally excludes full quarterly history (see
 // normalizeOwnershipRow / processStock) to keep the list light. When a user
-// opens a single stock's drilldown, fetch just that one row's history here —
-// a single-row query, so it's fast regardless of how big the universe is.
+// opens a single stock's drilldown, fetch just that ticker's rows here —
+// company_shareholding_raw_mv is long format (one row per period), scoped by
+// ticker, so it's fast regardless of how big the universe is.
 async function fetchStockQuarterlyDetail(ticker) {
   if (!ticker) return [];
   const cached = getCachedQuarterlyDetail(ticker);
   if (cached) return cached;
 
   const res = await fetchWithTimeout(
-    `${SUPABASE_URL}/rest/v1/company_shareholding?select=quarterly&ticker=eq.${encodeURIComponent(ticker)}&limit=1`,
+    `${SUPABASE_URL}/rest/v1/company_shareholding_raw_mv?select=period_date,period_label,promoter_pct,fii_pct,dii_pct,public_pct&ticker=eq.${encodeURIComponent(ticker)}&order=period_date.asc`,
     { headers: sbH() },
     10000
   );
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching detail for ${ticker}`);
   const rows = await res.json();
-  const row = Array.isArray(rows) ? rows[0] : null;
-  if (!row) return [];
-  let q = [];
-  try { q = typeof row.quarterly === "string" ? JSON.parse(row.quarterly) : row.quarterly || []; }
-  catch { q = []; }
-  q = [...q].sort((a, b) => dateKey(a.date).localeCompare(dateKey(b.date)));
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const q = rows
+    .map(r => ({
+      period: r.period_date,
+      period_label: r.period_label,
+      promoter: r.promoter_pct,
+      fii: r.fii_pct,
+      dii: r.dii_pct,
+      public_retail: r.public_pct,
+    }))
+    .sort((a, b) => dateKey(a.period).localeCompare(dateKey(b.period)));
   const result = q.map(normalizeOwnershipSeriesEntry).filter(Boolean);
   if (result.length) setCachedQuarterlyDetail(ticker, result);
   return result;
@@ -403,7 +430,7 @@ async function fetchOwnershipUniverse() {
     const rows = await fetchOwnershipMetricsTable();
     if (Array.isArray(rows) && rows.length > 0) return rows;
   } catch (err) {
-    console.warn("[Ownership] ownership_metrics fetch failed, falling back to legacy computation:", err?.message || err);
+    console.warn("[Ownership] company_shareholding_scans_mv fetch failed, falling back to legacy computation:", err?.message || err);
   }
   return fetchLegacyOwnershipProcessed();
 }
@@ -429,7 +456,7 @@ async function fetchCompanyFinancialsMapping() {
 }
 
 // ─── NAME CACHE (ticker → company name; localStorage, 30-day TTL) ───────────
-// Company names essentially never change, but ownership_metrics' `name`
+// Company names essentially never change, but company_shareholding_scans_mv's `name`
 // column is frequently just the ticker echoed back (see looksLikeMissingName
 // below), which means *every* row needs a bhav_copy lookup on a cold fetch.
 // Caching resolved names for a month means that lookup only ever happens
@@ -547,12 +574,12 @@ function normalizeOwnershipRow(row) {
   // looked at for the single stock a user opens in the drilldown. The modal
   // fetches its own full history on demand instead (see DrilldownModal).
   const { allQuarterly: _dropAQ, all_quarterly: _dropAQSnake, ...rowRest } = row;
-  // ownership_metrics uses "_latest" column names (promoter_latest, fii_latest,
+  // Some sources use "_latest" column names (promoter_latest, fii_latest,
   // dii_latest, public_latest) — checked after the older aliases above so any
   // other source shape (RPC/legacy) still takes precedence where present.
   const fiiTrend = safeNum(row.fiiTrend ?? row.fii_trend);
   const diiTrend = safeNum(row.diiTrend ?? row.dii_trend);
-  // ownership_metrics has no combined_flow column — derive it from the two
+  // Some sources have no combined_flow column — derive it from the two
   // trend columns it does have, rather than silently defaulting to 0.
   const hasCombinedCol = row.combinedFlow != null || row.combined_flow != null;
   return {
@@ -816,24 +843,10 @@ function DrilldownModal({ stock, T, onClose }) {
   }, [stock.ticker]);
 
   const qs = (detailQuarterly && detailQuarterly.length ? detailQuarterly : (stock.last4 || [])).filter(Boolean);
-  const W = 520, H = 160;
-  const series = [
-    { key: "fiis",      label: "FII",      color: "#3b82f6" },
-    { key: "diis",      label: "DII",      color: "#8b5cf6" },
-    { key: "promoters", label: "Promoter", color: "#059669" },
-    { key: "public",    label: "Public",   color: "#d97706" },
-  ];
-  const allVals = qs.flatMap(q => series.map(s => safeNum(q[s.key])));
-  const mn = Math.min(...allVals), mx = Math.max(...allVals), r = mx - mn || 1;
-  const gY = v => H - ((safeNum(v) - mn) / r) * (H - 20) - 10;
-  const gX = i => (i / (qs.length - 1 || 1)) * (W - 40) + 20;
   const cfg = SIG[stock.signal] || SIG["Noise"];
   const pCfg = PHASE_CFG[stock.phase] || PHASE_CFG["Consolidation"];
   const quarterLabel = (q) => q?.period_label || q?.fy_label || q?.period || q?.date || "";
-  const quarterKey = (q) => String(q?.period || q?.date || q?.period_label || "");
-  const inflectIdx = stock.inflect ? qs.findIndex(q => quarterKey(q) === quarterKey({ period: stock.inflect })) : -1;
   const latestQuarterLabel = quarterLabel(qs[qs.length - 1]);
-  const firstQuarterLabel = quarterLabel(qs[0]);
 
   const [isMobileModal, setIsMobileModal] = useState(
     typeof window !== "undefined" ? window.innerWidth <= 768 : false
@@ -943,147 +956,23 @@ function DrilldownModal({ stock, T, onClose }) {
         {/* Scrollable body */}
         <div style={{ flex: 1, overflow: "auto", padding: isMobileModal ? "14px 16px 24px" : "20px 28px 28px" }}>
 
-          {/* Flow Summary */}
-          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12, background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.12)" : "0 10px 28px rgba(15,23,42,0.05)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: cfg.color, letterSpacing: ".1em", textTransform: "uppercase" }}>
-                Summary · {latestQuarterLabel || stock.latestDate}
-              </span>
-              {stock.anomalies.length > 0 && (
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  {stock.anomalies.map(a => (
-                    <span key={a} style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: "rgba(220,38,38,0.07)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.18)", letterSpacing: ".02em" }}>⚠ {a}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div style={{ fontSize: 13, color: T.text, lineHeight: 1.65, marginBottom: 12 }}>{stock.insight}</div>
-            {stock.inflect && (
-              <div style={{ fontSize: 11.5, color: T.subtext, marginBottom: 12 }}>
-                Trend shift noted in: <strong style={{ color: T.text, ...mono }}>{stock.inflect}</strong>
-              </div>
-            )}
-            <div style={{ display: "grid", gridTemplateColumns: isMobileModal ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 0, borderRadius: 12, overflow: "hidden", border: `1px solid ${borderStyle}` }}>
-              {[
-                { label: "Score",    val: fmt(stock.score),              color: stock.score > 3 ? "#059669" : stock.score < -3 ? "#dc2626" : T.text },
-                { label: "Confidence", val: stock.conviction,            color: stock.conviction === "High" ? "#059669" : T.subtext },
-                { label: "Net Flow (4Q)", val: fmt(stock.combinedFlow) + "%", color: stock.combinedFlow > 0 ? "#059669" : "#dc2626" },
-                { label: "How Fresh", val: stock.timing,                  color: stock.timing === "Recent" ? "#10b981" : T.subtext },
-                { label: "Led By", val: stock.dominance,              color: stock.dominance === "Balanced" ? "#8b5cf6" : "#3b82f6" },
-                { label: "Speeding Up?", val: fmt(stock.accel.fii) + "%", color: stock.accel.fii > 0 ? "#059669" : "#dc2626" },
-              ].map((c, idx, arr) => (
-                <div key={c.label} style={{
-                  padding: "11px 12px",
-                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.7)",
-                  borderRight: idx < arr.length - 1 ? `1px solid ${borderStyle}` : "none",
-                  borderBottom: isMobileModal && idx < 3 ? `1px solid ${borderStyle}` : "none",
-                }}>
-                  <div style={{ fontSize: 8.5, color: T.muted, letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 4 }}>{c.label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: c.color, ...mono }}>{c.val}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Story */}
-          {stock.story && (
-            <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, padding: "14px 16px", marginBottom: 12, background: panelBg }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase", marginBottom: 8 }}>Ownership Story</div>
-              <div style={{ fontSize: 13, color: T.text, lineHeight: 1.7 }}>{stock.story}</div>
-            </div>
-          )}
-
-          {/* Position + Flow */}
-          <div style={{ display: "grid", gridTemplateColumns: isMobileModal ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 12 }}>
-            {[
-              { title: "Who Owns What (Today)", items: [
-                { label: "Promoter", val: stock.ownPromoter.toFixed(1) + "%", color: "#059669" },
-                { label: "Foreign (FII)",      val: stock.ownFii.toFixed(1) + "%",      color: "#3b82f6" },
-                { label: "Domestic (DII)",      val: stock.ownDii.toFixed(1) + "%",      color: "#8b5cf6" },
-                { label: "Public",   val: stock.ownPublic.toFixed(1) + "%",   color: T.subtext },
-              ]},
-              { title: "What Changed (Last 4 Quarters)", items: [
-                { label: "Foreign 4Q",    val: fmt(stock.fiiTrend) + "%",      color: stock.fiiTrend  > 0 ? "#059669" : "#dc2626" },
-                { label: "Domestic 4Q",    val: fmt(stock.diiTrend) + "%",      color: stock.diiTrend  > 0 ? "#059669" : "#dc2626" },
-                { label: "Foreign, Latest Qtr",   val: fmt(stock.deltaFii) + "%",      color: stock.deltaFii  > 0 ? "#059669" : "#dc2626" },
-                { label: "Promoter 4Q", val: fmt(stock.promoterTrend) + "%", color: stock.promoterTrend > 0 ? "#059669" : "#dc2626" },
-              ]},
-            ].map(panel => (
-              <div key={panel.title} style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, overflow: "hidden", background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.10)" : "0 10px 28px rgba(15,23,42,0.04)" }}>
-                <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.78)", fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>{panel.title}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
-                  {panel.items.map((c, idx, arr) => (
-                    <div key={c.label} style={{ padding: "12px 10px 10px", borderRight: idx < arr.length - 1 ? `1px solid ${borderStyle}` : "none", background: isDark ? "transparent" : "rgba(255,255,255,0.62)" }}>
-                      <div style={{ fontSize: 8.5, color: T.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: ".05em" }}>{c.label}</div>
-                      <div style={{ fontSize: isMobileModal ? 14 : 17, fontWeight: 700, color: c.color, ...mono }}>{c.val}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Chart */}
-          <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, overflow: "hidden", marginBottom: 12, background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.10)" : "0 10px 28px rgba(15,23,42,0.04)" }}>
-            <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.78)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>
-                Ownership Trend Over Time
-              </div>
-              <div style={{ fontSize: 11, color: T.subtext, ...mono }}>
-                {firstQuarterLabel && latestQuarterLabel ? `${firstQuarterLabel} → ${latestQuarterLabel}` : latestQuarterLabel || firstQuarterLabel || ""}
-              </div>
-            </div>
-            <div style={{ padding: "14px 12px 10px", background: isDark ? "transparent" : "rgba(255,255,255,0.7)" }}>
-              <svg width="100%" viewBox={`0 0 ${W} ${H + 22}`} style={{ display: "block" }}>
-                {[0, 0.33, 0.66, 1].map(f => {
-                  const y = gY(mn + f * r);
-                  return <line key={f} x1={20} x2={W - 20} y1={y} y2={y} stroke={T.border} strokeWidth="0.5" strokeDasharray="3,3" />;
-                })}
-                {series.map(s => (
-                  <polyline key={s.key}
-                    points={qs.map((q, i) => `${gX(i)},${gY(q[s.key])}`).join(" ")}
-                    fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                ))}
-                {inflectIdx > 0 && (
-                  <g>
-                    <line x1={gX(inflectIdx)} x2={gX(inflectIdx)} y1={8} y2={H - 5} stroke="#d97706" strokeWidth="1" strokeDasharray="4,3" />
-                    <text x={gX(inflectIdx)} y={7} textAnchor="middle" fontSize="8" fill="#d97706">FII↑</text>
-                  </g>
-                )}
-                {qs.map((q, i) => i % Math.max(1, Math.floor(qs.length / 5)) === 0 && (
-                  <text key={i} x={gX(i)} y={H + 18} textAnchor="middle" fontSize="8" fill={T.muted}>
-                    {quarterLabel(q)}
-                  </text>
-                ))}
-              </svg>
-              <div style={{ display: "flex", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
-                {series.map(s => (
-                  <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 16, height: 2, background: s.color, borderRadius: 1 }} />
-                    <span style={{ fontSize: 11, color: T.subtext }}>{s.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {/* Quarterly table */}
           <div style={{ border: `1px solid ${borderStyle}`, borderRadius: 16, overflow: "hidden", background: panelBg, boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.10)" : "0 10px 28px rgba(15,23,42,0.04)" }}>
             <div style={{ padding: "10px 14px 9px", borderBottom: `1px solid ${borderStyle}`, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.78)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: ".09em", textTransform: "uppercase" }}>Quarterly Breakdown</div>
               <div style={{ fontSize: 11, color: T.subtext, ...mono }}>Latest first</div>
             </div>
-            <div style={{ overflowX: "auto" }}>
+            <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: isMobileModal ? "60vh" : 420 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
                 <thead>
                   <tr>
                     {["Quarter","Promoter","FII","DII","Public"].map(h => (
-                      <th key={h} style={{ padding: "8px 14px", textAlign: h === "Quarter" ? "left" : "right", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".07em", color: T.muted, background: panelBg, borderBottom: `1px solid ${borderStyle}`, whiteSpace: "nowrap" }}>{h}</th>
+                      <th key={h} style={{ padding: "8px 14px", textAlign: h === "Quarter" ? "left" : "right", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".07em", color: T.muted, background: panelBg, borderBottom: `1px solid ${borderStyle}`, whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 1 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {[...qs].reverse().slice(0, 8).map((q, i) => (
+                  {[...qs].reverse().map((q, i) => (
                     <tr key={i} style={{ background: i % 2 === 0 ? "transparent" : (isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.45)") }}>
                       <td style={{ padding: "10px 14px", fontSize: 12, borderTop: `1px solid ${borderStyle}`, color: T.text }}>
                         <div style={{ fontWeight: 700, ...mono }}>{quarterLabel(q)}</div>

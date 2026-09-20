@@ -1114,20 +1114,13 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
       fiiRoll: +d.fii_net_20d || 0, diiRoll: +d.dii_net_20d || 0,
     }));
 
-    const participation = (fii1 === 0 && dii1 === 0) ? 0.5 : Math.abs(fii1) / (Math.abs(fii1) + Math.abs(dii1));
-    let absorption = "Mixed";
-    if      (fii1 < 0 && dii1 > Math.abs(fii1))              absorption = "DII Absorbing FII";
-    else if (fii1 > 0 && dii1 < 0 && Math.abs(dii1) > fii1) absorption = "FII Absorbing DII";
-    else if (fii1 > 0 && dii1 > 0)                           absorption = "Both Buying";
-    else if (fii1 < 0 && dii1 < 0)                           absorption = "Both Selling";
-
     const sellStreak = (() => {
       let s = 0;
       for (let i = cashData.length - 1; i >= 0; i--) { if (+cashData[i].fii_net < 0) s++; else break; }
       return s;
     })();
 
-    return { latest, fii1, dii1, fii5, dii5, fii20, dii20, daily, rolling, participation, absorption, sellStreak, totalInst1: fii1 + dii1 };
+    return { latest, fii1, dii1, fii5, dii5, fii20, dii20, daily, rolling, sellStreak };
   }, [cashData]);
 
   // ── DERIV MEMO ─────────────────────────────────────────────────────────────
@@ -1142,16 +1135,11 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
     }));
     const latest = rows[rows.length - 1] || {}, prev = rows[rows.length - 2] || {};
     const lsRatio = latest.fiiFutShort ? (latest.fiiFutLong / latest.fiiFutShort).toFixed(2) : "—";
-    const lsTrend = rows.map(r => ({
-      date: r.fullDate, fullDate: r.fullDate, label: r.label,
-      lsRatio: r.fiiFutShort ? +(r.fiiFutLong / r.fiiFutShort).toFixed(2) : 1,
-      fiiNet: r.fiiNet, diiNet: r.diiNet,
-    }));
     let buildUp = "Neutral";
     if      (latest.fiiFutLong  > prev.fiiFutLong  && latest.fiiFutShort <= prev.fiiFutShort) buildUp = "Long Build-up";
     else if (latest.fiiFutShort > prev.fiiFutShort && latest.fiiFutLong  <= prev.fiiFutLong)  buildUp = "Short Build-up";
     else if (latest.fiiFutLong  < prev.fiiFutLong  && latest.fiiFutShort <  prev.fiiFutShort) buildUp = "Unwinding";
-    return { rows, latest, lsRatio, buildUp, lsTrend };
+    return { rows, latest, lsRatio, buildUp };
   }, [derivData]);
 
   const overviewTabData = useMemo(() => {
@@ -1205,14 +1193,12 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
 
   const derivativesTabData = useMemo(() => {
     const rows = derivMemo.rows || [];
-    const lsTrend = derivMemo.lsTrend || [];
     const derivSpanYears = dataYearSpan(rows);
     const filteredRows = filterByRange(rows, derivRange);
-    const filteredLsTrend = filterByRange(lsTrend, derivRange);
     const derivSelectedRangeYears = RANGE_YEARS[derivRange] || null;
     const derivRangeExceedsData = derivSelectedRangeYears != null && derivSelectedRangeYears > derivSpanYears;
-    return { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData };
-  }, [derivMemo.rows, derivMemo.lsTrend, derivRange]);
+    return { derivSpanYears, filteredRows, derivRangeExceedsData };
+  }, [derivMemo.rows, derivRange]);
 
   // ── SWIPE ──────────────────────────────────────────────────────────────────
   // card/sh memoized so hoisted tab components get stable style object refs
@@ -1319,7 +1305,7 @@ const FiiDiiModuleInner = ({ T: themeProp, isVisible = true }) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const OverviewTab = memo(function OverviewTab({ cashMemo, overviewTabData, isMobile, T, card, sh, flowView, setFlowView, overviewRange, setOverviewRange }) {
-  const { fii1, dii1, fii5, dii5, fii20, dii20, participation, absorption, latest, totalInst1 } = cashMemo;
+  const { fii1, dii1, fii5, dii5, fii20, dii20, latest } = cashMemo;
   const { isRolling, spanYears, chartData, chartSeries, rangeExceedsData } = overviewTabData;
 
   return (
@@ -1335,12 +1321,6 @@ const OverviewTab = memo(function OverviewTab({ cashMemo, overviewTabData, isMob
           { label: "DII 20D", value: fmtCrShort(dii20), color: getColor(dii20) },
         ]} />
       </div>
-
-      <StatCardGroup isMobile={isMobile} T={T} cols={3} cards={[
-        { label: "Total Inst. 1D",    value: fmtCrShort(totalInst1), color: getColor(totalInst1) },
-        { label: "FII Participation", value: `${(participation * 100).toFixed(0)}%`, color: BLUE, sub: "of institutional volume" },
-        { label: "Absorption",        value: absorption, color: absorption.includes("Both Sell") ? RED : absorption.includes("Both Buy") ? GREEN : BLUE },
-      ]} />
 
       <div style={card}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
@@ -1444,7 +1424,7 @@ const CashFlowTab = memo(function CashFlowTab({ cashMemo, cashFlowAggRows, cashF
 const DerivativesTab = memo(function DerivativesTab({ derivMemo, derivativesTabData, isMobile, T, card, sh, noData, derivRange, setDerivRange }) {
   if (!derivMemo.rows?.length) return noData("No F&O data available. Check fii_dii_fo_mv table format.");
   const { latest, lsRatio, buildUp } = derivMemo;
-  const { derivSpanYears, filteredRows, filteredLsTrend, derivRangeExceedsData } = derivativesTabData;
+  const { derivSpanYears, filteredRows, derivRangeExceedsData } = derivativesTabData;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1470,12 +1450,6 @@ const DerivativesTab = memo(function DerivativesTab({ derivMemo, derivativesTabD
             <span>Data available from 8 Apr 2022 — showing all {filteredRows.length} sessions ({derivSpanYears.toFixed(1)} years).</span>
           </div>
         )}
-      </div>
-
-      <div style={card}>
-        <h3 style={{ ...sh, marginBottom: 4 }}>FII Long/Short Ratio Trend</h3>
-        <div style={{ fontSize: 12, color: T.subtext, marginBottom: 12 }}>Index futures only · Ratio &gt; 1 = net long (bullish), &lt; 1 = net short (bearish)</div>
-        <SvgLineChart data={filteredLsTrend} series={[{ key:"lsRatio", color:PURPLE, name:"FII L/S Ratio" }]} height={isMobile?180:240} fill={true} T={T} />
       </div>
     </div>
   );
