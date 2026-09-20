@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo } from "react";
 import { createPortal } from "react-dom";
-//import ForumModule from "./ForumModule"
+import ForumModule from "./ForumModule";
 import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule";
 import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule";
@@ -8,14 +8,8 @@ import AnnouncementsModule from "./AnnouncementsModule";
 import StockDashboard, { warmStockDashboardCaches, buildDashboardTheme, withAlpha } from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 import { fetchWeeklyOHLCFromDB, MiniCandleChart, ChartPreviewPopover, prefetchWeeklyCharts } from "./ChartPreviewPopover";
-
-
-
-// ===== GLOBAL QUOTE CONTEXT =====
-export const QuoteContext = createContext({
-    quotes: {},
-    setQuotes: () => { },
-});
+import { QuoteContext } from "./QuoteContext";
+export { QuoteContext };
 
 
 
@@ -68,6 +62,7 @@ const APP_ROUTE_MAP = {
     financial: "/fundamentals",
     technical: "/technicals",
     tradevault: "/journal",
+    forum: "/forum",
     disclaimer: "/legal",
 };
 const SITE_NAME = "TradeEdge";
@@ -92,6 +87,10 @@ const ROUTE_SEO = {
     tradevault: {
         title: "Trade Journal, Portfolio and XIRR Tracker",
         description: "Record trades, track funds, review dividends, estimate capital gains, and analyze portfolio performance in one journal.",
+    },
+    forum: {
+        title: "Investor Community Forum",
+        description: "Discuss theses, share conviction calls, and debate Indian stocks with the TradeEdge investor community.",
     },
     disclaimer: {
         title: "Legal, Privacy and Contact",
@@ -2828,6 +2827,7 @@ function parseAppRoute(pathname = "/") {
             page: JOURNAL_ROUTE_SEGMENTS.has(sub) ? sub : DEFAULT_APP_STATE.page,
         };
     }
+    if (section === "forum") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "forum" };
     if (section === "legal") {
         return {
             kind: "app",
@@ -10673,6 +10673,9 @@ const _LS_SCREENER_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 h stale-but-usable wi
 //  Nifty 500 constituent tickers cache 
 let _nifty500Cache = null; // Set<string> of tickers, null = not loaded yet
 
+//  F&O (derivatives-eligible) symbols cache 
+let _foCache = null; // Set<string> of NSE symbols, null = not loaded yet
+
 //  Breadth module caches  survive tab navigation 
 //  localStorage persistence helpers 
 const _LS_BREADTH_KEY = "te_breadth_cache_v5";
@@ -11196,6 +11199,29 @@ async function _loadNifty500() {
         return new Set(); // don't cache — allow retry
     }
     return _nifty500Cache;
+}
+
+// F&O universe = symbols with active derivatives contracts, read from the
+// v_fo_stocks view (symbol, company_name). Same failure semantics as
+// _loadNifty500: an empty/failed fetch is NOT cached so the next navigation
+// retries, and callers fall back to the full universe rather than a blank page.
+async function _loadFO() {
+    if (_foCache !== null) return _foCache;
+    try {
+        const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/v_fo_stocks?select=symbol&order=symbol.asc&limit=1000`, { headers });
+        const rows = await res.json();
+        if (!Array.isArray(rows) || rows.length === 0) {
+            console.warn("[F&O] fetch returned non-array or empty:", rows);
+            return new Set(); // don't cache — allow retry
+        }
+        _foCache = new Set(rows.map(r => r.symbol).filter(Boolean));
+        console.log(`[F&O] loaded ${_foCache.size} symbols`);
+    } catch (e) {
+        console.warn("[F&O] fetch failed:", e);
+        return new Set(); // don't cache — allow retry
+    }
+    return _foCache;
 }
 
 // Preload screener data in background right after login  so it's ready when user navigates to screener
@@ -17407,7 +17433,7 @@ const PATTERN_FILTER_TABS = [
     { id: "HAMMER", label: "Hammer", desc: "Small body near the top of the range with a long lower wick — sellers pushed price down, buyers pushed it back up." },
 ];
 
-function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, nifty500Set, nifty500Loading }) {
+function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, universeSet, universeLoading }) {
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -17468,7 +17494,7 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, nif
     // pattern doesn't silently hide results on the next
     useEffect(() => { setExchangeFilter("ALL"); setFilters([]); }, [activeTab]);
 
-    const isLoading = (loadingTab === activeTab && !rowsByTab[activeTab]) || (universe === "nifty500" && nifty500Loading);
+    const isLoading = (loadingTab === activeTab && !rowsByTab[activeTab]) || (universe !== "all" && universeLoading);
     const error = errorsByTab[activeTab];
     const rawRows = rowsByTab[activeTab] || [];
     const activeMeta = PATTERN_FILTER_TABS.find(t => t.id === activeTab);
@@ -17494,14 +17520,14 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, nif
         return applyUniverse(rows.filter(r => r.week_end === maxWk)).length;
     };
 
-    // Mirrors ScreensModule's filterByUniverse so the All/Nifty 500 toggle
-    // stays in sync between the preview cards and this full-screen view
+    // Mirrors ScreensModule's filterByUniverse so the All / Nifty 500 / F&O
+    // toggle stays in sync between the preview cards and this full-screen view
     const applyUniverse = useCallback(rows => {
-        if (universe !== "nifty500") return rows;
-        if (nifty500Loading || !nifty500Set) return [];
-        if (nifty500Set.size === 0) return rows;
-        return rows.filter(r => nifty500Set.has(r.ticker));
-    }, [universe, nifty500Set, nifty500Loading]);
+        if (universe === "all") return rows;
+        if (universeLoading || !universeSet) return [];
+        if (universeSet.size === 0) return rows;
+        return rows.filter(r => universeSet.has(r.ticker));
+    }, [universe, universeSet, universeLoading]);
 
     // Quick exchange filter + numeric add-filter chips applied on top of the
     // latest-week rows, before sorting
@@ -18024,6 +18050,8 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const [universe, setUniverse] = useState("all");
     const [nifty500Set, setNifty500Set] = useState(() => _nifty500Cache || null);
     const [nifty500Loading, setNifty500Loading] = useState(() => _nifty500Cache === null);
+    const [foSet, setFoSet] = useState(() => _foCache || null);
+    const [foLoading, setFoLoading] = useState(false);
     const [screenDetail, setScreenDetail] = useState(null);
     const [patternFilterOpen, setPatternFilterOpen] = useState(false);
     const [patternFilterInitialTab, setPatternFilterInitialTab] = useState(PATTERN_FILTER_TABS[0].id);
@@ -18061,6 +18089,22 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         _loadNifty500().then(s => { setNifty500Set(s); setNifty500Loading(false); });
     }, []);
 
+    // F&O list is fetched lazily — only when the user actually selects that
+    // universe — so the common All / Nifty 500 path costs no extra request.
+    useEffect(() => {
+        if (universe !== "fo") return;
+        if (_foCache !== null && _foCache.size > 0) { setFoSet(_foCache); setFoLoading(false); return; }
+        let cancelled = false;
+        setFoLoading(true);
+        _loadFO().then(s => { if (cancelled) return; setFoSet(s); setFoLoading(false); });
+        return () => { cancelled = true; };
+    }, [universe]);
+
+    // Single source of truth for "which ticker set is active" — every screen,
+    // count badge and the Pattern Filter view reads these two values.
+    const universeSet = universe === "nifty500" ? nifty500Set : universe === "fo" ? foSet : null;
+    const universeLoading = universe === "nifty500" ? nifty500Loading : universe === "fo" ? foLoading : false;
+
     const filterByUniverse = useCallback(rows => {
         // Every screen on this page (Market Leaders, Breakouts, Pullbacks,
         // Trend Template, Chart Patterns) routes through here, so this is
@@ -18068,16 +18112,16 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         // bonds/NCDs, liquid/mutual-fund units) that occasionally leak into
         // the underlying tables/views by ticker or company name.
         const clean = (rows || []).filter(r => !_isExcludedInstrument(r));
-        if (universe !== "nifty500") return clean;
-        // Still loading nifty500 constituents — return empty so UI shows loading state
-        if (nifty500Loading || !nifty500Set) return [];
+        if (universe === "all") return clean;
+        // Still loading the constituent list — return empty so UI shows loading state
+        if (universeLoading || !universeSet) return [];
         // Fetch succeeded but returned empty set (table missing/empty) — fall back to all rows
-        if (nifty500Set.size === 0) return clean;
-        return clean.filter(r => nifty500Set.has(r.ticker));
-    }, [universe, nifty500Set, nifty500Loading]);
+        if (universeSet.size === 0) return clean;
+        return clean.filter(r => universeSet.has(r.ticker));
+    }, [universe, universeSet, universeLoading]);
 
     // Latest-week-only rows per pattern, filtered by the active universe
-    // (All / Nifty 500), sorted by 3M return (desc) for preview
+    // (All / Nifty 500 / F&O), sorted by 3M return (desc) for preview
     const patternPreviewRows = useMemo(() => {
         const out = {};
         for (const tab of PATTERN_FILTER_TABS) {
@@ -18956,7 +19000,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             <PatternFilterModule T={T} initialTab={patternFilterInitialTab}
                 onBack={() => setPatternFilterOpen(false)}
                 industryMap={industryMap}
-                universe={universe} nifty500Set={nifty500Set} nifty500Loading={nifty500Loading} />
+                universe={universe} universeSet={universeSet} universeLoading={universeLoading} />
         );
     }
 
@@ -19191,7 +19235,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         display: "flex", alignItems: "center", gap: 2, padding: "4px",
                         border: `1px solid ${D.panelBorder}`, borderRadius: 12, background: D.pillBg
                     }}>
-                        {[{ v: "all", l: "All" }, { v: "nifty500", l: "Nifty 500" }].map(opt => (
+                        {[{ v: "all", l: "All" }, { v: "nifty500", l: "Nifty 500" }, { v: "fo", l: "F&O" }].map(opt => (
                             <button key={opt.v} onClick={() => setUniverse(opt.v)}
                                 style={{
                                     height: 28, padding: "0 14px", border: "none", borderRadius: 9,
@@ -19212,7 +19256,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 fontSize: 12, color: T.subtext, fontFamily: mono,
                                 fontVariantNumeric: "tabular-nums"
                             }}>
-                                {(universe === "nifty500" && nifty500Loading) ? (
+                                {(universe !== "all" && universeLoading) ? (
                                     <span style={{ color: T.muted, fontStyle: "italic" }}>loading…</span>
                                 ) : (
                                     <><strong style={{ color: T.text, fontWeight: 600 }}>
@@ -22159,6 +22203,10 @@ export default function App() {
                 { id: "dividends", label: "Dividends", description: "Audit dividend receipts and income history." },
             ]
         },
+        {
+            id: "forum", label: "Community", section: "Community",
+            icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>,
+        },
     ];
 
     const emailDisplay = isDemo ? "demo@tradeedge.app" : (session?.user?.email || session?.email || "Guest");
@@ -22805,6 +22853,26 @@ export default function App() {
                                 {/* TECHNICALS */}
                                 {productTab === "technical" && (
                                     <TechnicalAnalyticsModule T={T} subPage={technicalSubPage} onTechnoFundaScan={handleTechnoFundaScan} />
+                                )}
+
+                                {/* COMMUNITY FORUM */}
+                                {productTab === "forum" && (
+                                    <ModuleErrorBoundary
+                                        T={T}
+                                        moduleName="Community"
+                                        resetKey={`forum-${theme}`}
+                                        onRecover={() => { setProductTab(SAFE_PRODUCT_TAB); setPage("dashboard"); }}
+                                    >
+                                        <QuoteContext.Provider value={{ quotes, setQuotes }}>
+                                            <ForumModule
+                                                T={T}
+                                                session={session}
+                                                getToken={() => supabase.getValidToken()}
+                                                onTickerClick={(symbol) => navigateToTicker(symbol)}
+                                                onLoginRequired={() => setShowLoginModal(true)}
+                                            />
+                                        </QuoteContext.Provider>
+                                    </ModuleErrorBoundary>
                                 )}
 
                             </>

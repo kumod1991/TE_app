@@ -2,9 +2,9 @@
 ===============================================================
   ForumModule.jsx — TradeEdge Investor Community (v3)
   Visual redesign pass: premium financial-terminal aesthetic
-  (Apple × Linear × Notion × Bloomberg × Stripe). Conviction
-  system, sidebars, sentiment, structured thesis format, author
-  credibility, gamification — all business logic and data flow
+  (Apple × Linear × Notion × Bloomberg × Stripe). Sidebars,
+  sentiment, structured thesis format, author credibility,
+  gamification — all business logic and data flow otherwise
   unchanged. All sub-components inline. Supabase realtime enabled.
 ===============================================================
 */
@@ -16,10 +16,16 @@ import { createClient } from "@supabase/supabase-js";
 import { QuoteContext } from "./QuoteContext";
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase env vars missing");
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://munqjcjvzgqyxzlmuyjj.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q";
+// ForumModule.jsx
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+    },
+});
 
 // ─── Contexts ────────────────────────────────────────────────────────────────
 const TokenContext = createContext(() => Promise.resolve(null));
@@ -29,34 +35,33 @@ const useToken = () => useContext(TokenContext);
 const PAGE_SIZE = 20;
 const REPLY_PAGE_SIZE = 30;
 
-const CONVICTION_META = {
-  low:    { label: "Low Conviction",    color: "#64748b", score: 30 },
-  medium: { label: "Medium Conviction", color: "#d97706", score: 65 },
-  high:   { label: "High Conviction",   color: "#059669", score: 92 },
-};
-
+// Restrained, single-family palette — every hue is a muted, deep tone (no
+// pastel/candy saturation) so the feed reads as one coherent instrument
+// rather than a sticker sheet. Bull/bear stay on the green/rose axis used
+// everywhere else in the app (T.green / T.red); every other category sits
+// on a shared slate-navy axis so multiple tags on one card don't compete.
 const THESIS_TYPES = ["Bullish", "Bearish", "Neutral", "Technical", "Macro", "Risk"];
 
 const LEVEL_META = {
-  Beginner:    { color: "#64748b", badge: "⚪" },
-  Contributor: { color: "#3b82f6", badge: "🔵" },
-  Analyst:     { color: "#8b5cf6", badge: "🟣" },
-  Researcher:  { color: "#f59e0b", badge: "🟡" },
-  Veteran:     { color: "#ef4444", badge: "🔴" },
-  "Top 1%":    { color: "#10b981", badge: "🟢" },
+  Beginner:    { color: "#64748b" },
+  Contributor: { color: "#3255a4" },
+  Analyst:     { color: "#5b4b9e" },
+  Researcher:  { color: "#a16207" },
+  Veteran:     { color: "#9f1d3c" },
+  "Top 1%":    { color: "#0f7a52" },
 };
 
 const TAG_META = {
-  Bullish:     { color: "#10b981", bg: "rgba(16,185,129,0.10)" },
-  Bearish:     { color: "#f43f5e", bg: "rgba(244,63,94,0.08)" },
-  Neutral:     { color: "#64748b", bg: "rgba(148,163,184,0.08)" },
-  Technical:   { color: "#3b82f6", bg: "rgba(96,165,250,0.08)" },
-  Macro:       { color: "#8b5cf6", bg: "rgba(167,139,250,0.08)" },
-  Risk:        { color: "#d97706", bg: "rgba(251,191,36,0.08)" },
-  Fundamental: { color: "#059669", bg: "rgba(52,211,153,0.08)" },
-  News:        { color: "#ea580c", bg: "rgba(251,146,60,0.08)" },
-  Question:    { color: "#64748b", bg: "rgba(148,163,184,0.08)" },
-  Idea:        { color: "#2563eb", bg: "rgba(96,165,250,0.08)" },
+  Bullish:     { color: "#0f7a52", bg: "rgba(15,122,82,0.08)" },
+  Bearish:     { color: "#b3123a", bg: "rgba(179,18,58,0.07)" },
+  Neutral:     { color: "#5b6472", bg: "rgba(91,100,114,0.08)" },
+  Technical:   { color: "#33507a", bg: "rgba(51,80,122,0.08)" },
+  Macro:       { color: "#5b4b9e", bg: "rgba(91,75,158,0.08)" },
+  Risk:        { color: "#a16207", bg: "rgba(161,98,7,0.08)" },
+  Fundamental: { color: "#0f7a52", bg: "rgba(15,122,82,0.08)" },
+  News:        { color: "#5b6472", bg: "rgba(91,100,114,0.08)" },
+  Question:    { color: "#5b6472", bg: "rgba(91,100,114,0.08)" },
+  Idea:        { color: "#33507a", bg: "rgba(51,80,122,0.08)" },
 };
 
 // Maps each thesis type to a glyph key in <Icon/> — gives the category rail
@@ -338,32 +343,22 @@ function TickerBadge({ ticker, size = "sm", onTickerClick, T }) {
     <span
       onClick={onTickerClick && ticker ? (e) => { e.stopPropagation(); onTickerClick(ticker); } : undefined}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 5,
-        background: T.accentFill, border: `1px solid ${withAlpha(T.accent, 0.22)}`,
-        borderRadius: R.xs, padding: isLg ? "6px 13px" : "3px 8px",
+        display: "inline-flex", alignItems: "center", gap: isLg ? 8 : 6,
+        background: T.text, border: `1px solid ${T.text}`,
+        borderRadius: 5, padding: isLg ? "6px 14px" : "3px 9px",
         cursor: onTickerClick ? "pointer" : "default", flexShrink: 0,
-        transition: `transform ${MOTION.fast}, background ${MOTION.fast}, box-shadow ${MOTION.fast}`,
+        transition: `transform ${MOTION.fast}, opacity ${MOTION.fast}`,
       }}
-      onMouseEnter={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "translateY(-1px)", background: withAlpha(T.accent, 0.16), boxShadow: `0 3px 10px ${withAlpha(T.accent, 0.18)}` })}
-      onMouseLeave={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "translateY(0)", background: T.accentFill, boxShadow: "none" })}
+      onMouseEnter={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "translateY(-1px)", opacity: 0.85 })}
+      onMouseLeave={e => onTickerClick && Object.assign(e.currentTarget.style, { transform: "translateY(0)", opacity: 1 })}
     >
-      <span style={{ fontSize: isLg ? 13 : 11, fontWeight: 800, color: T.accent, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{ticker}</span>
-      {pct != null && <span style={{ fontSize: isLg ? 12 : 10, color: isPos ? T.green : T.red, fontWeight: 700 }}>{isPos ? "+" : ""}{pct.toFixed(2)}%</span>}
+      <span style={{ fontSize: isLg ? 13 : 11, fontWeight: 700, color: T.bg, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.03em" }}>{ticker}</span>
+      {pct != null && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: isLg ? 12 : 10, color: isPos ? "#4ade80" : "#fb7185", fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace" }}>
+          {isPos ? "▲" : "▼"}{Math.abs(pct).toFixed(2)}%
+        </span>
+      )}
     </span>
-  );
-}
-
-function ConvictionBadge({ conviction, T, compact = false }) {
-  const meta = CONVICTION_META[conviction] || CONVICTION_META.low;
-  const abbrev = { low: "LOW", medium: "MED", high: "HIGH" }[conviction] || "LOW";
-  return (
-    <div title={meta.label} style={{ display: "flex", alignItems: "center", gap: 6, background: T.mutedFill, borderRadius: R.xs, padding: compact ? "3px 7px" : "4px 9px 4px 8px", border: `1px solid ${T.border}` }}>
-      <span style={{ fontSize: 9, fontWeight: 800, color: meta.color, letterSpacing: "0.06em" }}>{abbrev}</span>
-      <div style={{ width: 26, height: 4, borderRadius: 2, background: withAlpha(T.text, 0.1), overflow: "hidden" }}>
-        <div style={{ width: `${meta.score}%`, height: "100%", background: meta.color, borderRadius: 2, transition: `width ${MOTION.slow}` }} />
-      </div>
-      <span style={{ fontSize: 9, fontWeight: 800, color: T.subtext, fontFamily: "'IBM Plex Mono', monospace" }}>{meta.score}</span>
-    </div>
   );
 }
 
@@ -379,11 +374,10 @@ function LevelBadge({ level, T }) {
 function ThesisTypeBadge({ type, T, compact = false }) {
   const meta = TAG_META[type];
   const color = meta ? meta.color : T.accent;
-  const bg = meta ? meta.bg : withAlpha(T.accent, 0.08);
   const iconName = THESIS_ICON[type];
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color, background: bg, padding: compact ? "3px 7px" : "3px 8px", borderRadius: R.xs, letterSpacing: "0.05em", border: `1px solid ${withAlpha(color, 0.24)}` }}>
-      {iconName && <Icon name={iconName} size={10} color={color} strokeWidth={2} />}
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, color, padding: compact ? "3px 8px" : "4px 10px", borderRadius: R.xs, letterSpacing: "0.07em", textTransform: "uppercase", border: `1px solid ${T.border}` }}>
+      {iconName && <Icon name={iconName} size={10} color={color} strokeWidth={2.2} />}
       {type}
     </span>
   );
@@ -465,14 +459,16 @@ function StatPill({ icon, value, label, T }) {
 
 function SkeletonCard({ T }) {
   return (
-    <div style={{ padding: "16px 20px", background: T.surface, borderRadius: 10, marginBottom: 10, border: `1px solid ${T.border}` }}>
-      <div style={{ display: "flex", gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", background: T.mutedFill }} />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ height: 10, width: "25%", background: T.mutedFill, borderRadius: 4 }} />
-          <div style={{ height: 18, width: "75%", background: T.mutedFill, borderRadius: 4 }} />
-          <div style={{ height: 13, width: "55%", background: T.mutedFill, borderRadius: 4 }} />
-        </div>
+    <div className="te-fade-in" style={{ padding: "18px 22px", background: T.surface, borderRadius: 14, marginBottom: 12, border: `1px solid ${T.border}` }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <div style={{ width: 64, height: 20, borderRadius: 5, background: T.mutedFill }} />
+        <div style={{ width: 80, height: 20, borderRadius: 5, background: T.mutedFill }} />
+      </div>
+      <div style={{ height: 16, width: "70%", background: T.mutedFill, borderRadius: 4, marginBottom: 10 }} />
+      <div style={{ height: 12, width: "92%", background: T.mutedFill, borderRadius: 4, marginBottom: 14 }} />
+      <div style={{ display: "flex", gap: 12, alignItems: "center", paddingTop: 12, borderTop: `1px solid ${T.borderSubtle}` }}>
+        <div style={{ width: 22, height: 22, borderRadius: "50%", background: T.mutedFill }} />
+        <div style={{ height: 10, width: 90, background: T.mutedFill, borderRadius: 4 }} />
       </div>
     </div>
   );
@@ -483,7 +479,7 @@ function ToastContainer({ toasts, T }) {
   return (
     <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none" }}>
       {toasts.map(t => (
-        <div key={t.id} style={{ background: t.type === "error" ? T.red : T.green, color: "#fff", padding: "10px 22px", borderRadius: 10, fontSize: 13, fontWeight: 700, boxShadow: "0 8px 28px rgba(0,0,0,.22)", animation: "slideInBottom 0.25s ease" }}>
+        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, background: T.text, color: T.bg, padding: "11px 20px 11px 16px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 10px 30px rgba(0,0,0,.28)", borderLeft: `3px solid ${t.type === "error" ? T.red : T.green}`, animation: "slideInBottom 0.25s ease" }}>
           {t.message}
         </div>
       ))}
@@ -530,7 +526,7 @@ function MediaUploader({ onFilesAdded, maxFiles = 8, userId, token, T, isMobile 
         onClick={() => inputRef.current?.click()}
         style={{ border: `1.5px dashed ${dragging ? T.accent : withAlpha(T.text, 0.12)}`, borderRadius: 12, padding: "20px", textAlign: "center", cursor: "pointer", background: dragging ? withAlpha(T.accent, 0.06) : T.mutedFill, transition: "all .15s" }}
       >
-        <div style={{ fontSize: 20, marginBottom: 4 }}>📎</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}><Icon name="paperclip" size={18} color={T.muted} strokeWidth={1.6} /></div>
         <div style={{ fontSize: 13, color: T.subtext, fontWeight: 600 }}>{dragging ? "Drop to upload" : "Attach files · Drag or paste"}</div>
       </div>
       <input ref={inputRef} type="file" multiple hidden onChange={(e) => processFiles(e.target.files)} />
@@ -538,7 +534,7 @@ function MediaUploader({ onFilesAdded, maxFiles = 8, userId, token, T, isMobile 
         <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
           {queue.map(item => (
             <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: T.surface, border: `1px solid ${item.status === "error" ? T.red : withAlpha(T.text, 0.08)}`, borderRadius: 10 }}>
-              {item.type === "image" && item.localUrl ? <img src={item.localUrl} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0, opacity: item.status === "uploading" ? 0.6 : 1 }} /> : <span style={{ fontSize: 16 }}>{item.type === "image" ? "🖼" : item.type === "video" ? "🎬" : "📄"}</span>}
+              {item.type === "image" && item.localUrl ? <img src={item.localUrl} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, flexShrink: 0, opacity: item.status === "uploading" ? 0.6 : 1 }} /> : <Icon name={item.type === "image" ? "image" : item.type === "video" ? "video" : "doc"} size={16} color={T.muted} strokeWidth={1.6} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: item.status === "error" ? T.red : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</div>
                 {item.status === "uploading" && <div style={{ width: "100%", height: 3, background: T.mutedFill, borderRadius: 2, marginTop: 4 }}><div style={{ width: `${item.progress}%`, height: "100%", background: T.accent, borderRadius: 2, transition: "width .2s" }} /></div>}
@@ -571,7 +567,7 @@ function MediaPreview({ items, T }) {
       {docs.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
           {docs.map((m, i) => (
-            <a key={i} href={m.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: T.mutedFill, borderRadius: 8, border: `1px solid ${withAlpha(T.text, 0.08)}`, textDecoration: "none", color: T.subtext, fontSize: 12, fontWeight: 600 }}>📄 {m.name || "Document"}</a>
+            <a key={i} href={m.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: T.mutedFill, borderRadius: 8, border: `1px solid ${T.border}`, textDecoration: "none", color: T.subtext, fontSize: 12, fontWeight: 600 }}><Icon name="doc" size={12} color={T.muted} strokeWidth={1.8} /> {m.name || "Document"}</a>
           ))}
         </div>
       )}
@@ -598,49 +594,48 @@ function MarkdownToolbar({ textareaRef, value, onChange, T }) {
 // ─── Left Sidebar ─────────────────────────────────────────────────────────────
 function LeftSidebar({ session, filter, onFilterChange, onNewThread, onLoginRequired, T }) {
   const navItems = [
-    { id: "all", icon: "🔭", label: "Discovery" },
-    { id: "trending", icon: "🔥", label: "Trending" },
-    { id: "new", icon: "⚡", label: "Latest" },
-    ...(session ? [{ id: "mine", icon: "📁", label: "My Posts" }] : []),
-    ...(session ? [{ id: "saved", icon: "🔖", label: "Saved" }] : []),
+    { id: "all", icon: "search", label: "Discovery" },
+    { id: "trending", icon: "flame", label: "Trending" },
+    { id: "new", icon: "bolt", label: "Latest" },
+    ...(session ? [{ id: "mine", icon: "folder", label: "My Posts" }] : []),
+    ...(session ? [{ id: "saved", icon: "bookmark", label: "Saved" }] : []),
   ];
   return (
-    <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 0, paddingRight: 8 }}>
+    <div style={{ width: 224, flexShrink: 0, display: "flex", flexDirection: "column", gap: 0, paddingRight: 8 }}>
       {/* New Post Button */}
       <button
         onClick={session ? onNewThread : onLoginRequired}
-        style={{ width: "100%", padding: "12px 16px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer", marginBottom: 20, boxShadow: `0 4px 16px ${withAlpha(T.accent, 0.3)}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.15s" }}
-        onMouseEnter={e => e.currentTarget.style.boxShadow = `0 6px 24px ${withAlpha(T.accent, 0.4)}`}
-        onMouseLeave={e => e.currentTarget.style.boxShadow = `0 4px 16px ${withAlpha(T.accent, 0.3)}`}
+        style={{ width: "100%", padding: "11px 16px", background: T.text, color: T.bg, border: "none", borderRadius: 9, fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 22, letterSpacing: "0.01em", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: `opacity ${MOTION.fast}` }}
+        onMouseEnter={e => e.currentTarget.style.opacity = 0.85}
+        onMouseLeave={e => e.currentTarget.style.opacity = 1}
       >
-        <span style={{ fontSize: 16 }}>✍️</span> New Thesis
+        <Icon name="edit" size={13} color={T.bg} strokeWidth={2} /> New Thesis
       </button>
 
       {/* Nav */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, marginBottom: 26 }}>
         {navItems.map(item => (
           <button
             key={item.id}
             onClick={() => onFilterChange(item.id)}
             style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-              border: "none", background: filter === item.id ? withAlpha(T.accent, 0.1) : "transparent",
-              color: filter === item.id ? T.accent : T.subtext, borderRadius: 8,
+              display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
+              border: "none", background: filter === item.id ? T.mutedFill : "transparent",
+              color: filter === item.id ? T.text : T.subtext, borderRadius: 7,
               fontSize: 13, fontWeight: filter === item.id ? 700 : 500, cursor: "pointer",
-              textAlign: "left", transition: "all 0.1s",
-              borderLeft: filter === item.id ? `3px solid ${T.accent}` : "3px solid transparent",
+              textAlign: "left", transition: `background ${MOTION.fast}, color ${MOTION.fast}`,
             }}
           >
-            <span>{item.icon}</span> {item.label}
+            <Icon name={item.icon} size={13} color={filter === item.id ? T.text : T.muted} strokeWidth={1.8} /> {item.label}
           </button>
         ))}
       </div>
 
       {/* Divider */}
-      <div style={{ height: 1, background: withAlpha(T.text, 0.06), marginBottom: 20 }} />
+      <div style={{ height: 1, background: T.borderSubtle, marginBottom: 20 }} />
 
       {/* Watchlist stocks */}
-      <div style={{ fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10, paddingLeft: 14 }}>Popular Tickers</div>
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: T.muted, letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: 10, paddingLeft: 12 }}>Popular Tickers</div>
       <WatchlistSidebarTickers T={T} />
     </div>
   );
@@ -700,24 +695,25 @@ function RightSidebar({ threads, T, onTickerClick }) {
         {sentimentMap.length === 0 ? (
           <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "12px 0" }}>No data yet</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {sentimentMap.map(({ ticker, bull, bear, count }) => {
               const total = bull + bear;
               const bullPct = total > 0 ? Math.round((bull / total) * 100) : 50;
               return (
-                <div key={ticker} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <div key={ticker} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <button onClick={() => onTickerClick?.(ticker)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: T.accent, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.04em" }}>{ticker}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.02em" }}>{ticker}</span>
                     </button>
                     <span style={{ fontSize: 10, color: T.muted }}>{count} posts</span>
                   </div>
-                  <div style={{ display: "flex", height: 4, borderRadius: 3, overflow: "hidden", background: withAlpha(T.red, 0.2) }}>
-                    <div style={{ width: `${bullPct}%`, background: T.green, borderRadius: 3, transition: "width 0.3s" }} />
+                  <div style={{ display: "flex", height: 3, borderRadius: 2, overflow: "hidden", background: T.mutedFill }}>
+                    <div style={{ width: `${bullPct}%`, background: T.green, transition: "width 0.3s" }} />
+                    <div style={{ width: `${100 - bullPct}%`, background: T.red, transition: "width 0.3s" }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: T.green, fontWeight: 700 }}><Icon name="trendUp" size={9} color={T.green} strokeWidth={2.2} /> {bullPct}%</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: T.red, fontWeight: 700 }}>{100 - bullPct}% <Icon name="trendDown" size={9} color={T.red} strokeWidth={2.2} /></span>
+                    <span style={{ fontSize: 10, color: T.green, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace" }}>{bullPct}%</span>
+                    <span style={{ fontSize: 10, color: T.red, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace" }}>{100 - bullPct}%</span>
                   </div>
                 </div>
               );
@@ -738,7 +734,7 @@ function RightSidebar({ threads, T, onTickerClick }) {
                 <Avatar name={author.name} size={24} T={T} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{author.name}</div>
-                  <div style={{ fontSize: 10, color: T.muted }}>▲ {author.votes} · {author.posts} posts</div>
+                  <div style={{ fontSize: 10, color: T.muted, fontFamily: "'IBM Plex Mono', monospace" }}>+{author.votes} · {author.posts} posts</div>
                 </div>
               </div>
             ))}
@@ -748,13 +744,14 @@ function RightSidebar({ threads, T, onTickerClick }) {
 
       {/* Most Bullish */}
       <SidePanel title="Most Bullish" T={T}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {threads.filter(t => t.thesis_type === "Bullish" && t.ticker).slice(0, 4).map(t => (
             <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <button onClick={() => onTickerClick?.(t.ticker)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: T.green, fontFamily: "'IBM Plex Mono', monospace" }}>{t.ticker}</span>
+              <button onClick={() => onTickerClick?.(t.ticker)} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <Icon name="trendUp" size={10} color={T.green} strokeWidth={2.2} />
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono', monospace" }}>{t.ticker}</span>
               </button>
-              <span style={{ fontSize: 10, color: T.muted }}>▲ {t.upvotes || 0}</span>
+              <span style={{ fontSize: 10, color: T.muted, fontFamily: "'IBM Plex Mono', monospace" }}>+{t.upvotes || 0}</span>
             </div>
           ))}
           {threads.filter(t => t.thesis_type === "Bullish" && t.ticker).length === 0 && <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "8px 0" }}>—</div>}
@@ -766,9 +763,9 @@ function RightSidebar({ threads, T, onTickerClick }) {
 
 function SidePanel({ title, children, T }) {
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
-      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.borderSubtle}`, fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>{title}</div>
-      <div style={{ padding: "12px 14px" }}>{children}</div>
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", boxShadow: elevate(T, 1) }}>
+      <div style={{ padding: "11px 15px", borderBottom: `1px solid ${T.borderSubtle}`, fontSize: 9.5, fontWeight: 700, color: T.muted, letterSpacing: "0.09em", textTransform: "uppercase" }}>{title}</div>
+      <div style={{ padding: "13px 15px" }}>{children}</div>
     </div>
   );
 }
@@ -779,7 +776,6 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
   const myVote = userVotes?.[thread.id] ?? 0;
   const images = (thread.media_urls || []).filter(m => m.type === "image");
   const bodyPreview = stripMarkdown(thread.body).slice(0, isMobile ? 100 : 160) + (thread.body?.length > (isMobile ? 100 : 160) ? "…" : "");
-  const convBucket = thread.conviction_score >= 80 ? "high" : thread.conviction_score >= 50 ? "medium" : "low";
   const railColor = (TAG_META[thread.thesis_type] || {}).color || T.border;
   const metrics = [
     thread.target_price ? { icon: "target", label: "Target", value: `₹${Number(thread.target_price).toLocaleString("en-IN")}` } : null,
@@ -793,31 +789,31 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        cursor: "pointer", background: T.surface, display: "flex",
+        cursor: "pointer", background: T.surface, display: "flex", flexDirection: "column",
         border: `1px solid ${hov ? T.borderStrong : T.border}`,
-        borderRadius: isMobile ? 10 : 11, marginBottom: 10,
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        boxShadow: hov ? `0 2px 10px ${T.shadow}` : "none",
+        borderRadius: isMobile ? 12 : 14, marginBottom: 12,
+        transition: `border-color ${MOTION.base}, box-shadow ${MOTION.base}, transform ${MOTION.base}`,
+        boxShadow: hov ? elevate(T, 2) : elevate(T, 1),
+        transform: hov ? "translateY(-1px)" : "translateY(0)",
         overflow: "hidden",
         fontFamily: "'IBM Plex Sans', sans-serif",
       }}
     >
-      {/* Persistent category rail — always-on color coding so the feed scans like a ledger, not a hover gimmick */}
-      <div style={{ width: 3, flexShrink: 0, background: railColor }} />
+      {/* Thin top hairline in the thesis color — a quiet signal, not a highlighter stripe */}
+      <div style={{ height: 2, flexShrink: 0, background: withAlpha(railColor, 0.55) }} />
 
-      <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "13px 14px" : "16px 20px" }}>
+      <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "14px 16px" : "18px 22px" }}>
         {/* Top row: instrument + classification strip */}
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
           {thread.ticker && <TickerBadge ticker={thread.ticker} T={T} onTickerClick={onTickerClick} />}
           {thread.thesis_type && <ThesisTypeBadge type={thread.thesis_type} T={T} />}
-          {(thread.conviction_score != null) && <ConvictionBadge conviction={convBucket} T={T} compact />}
           {(thread.tags || []).slice(0, 2).map(tag => {
             const tm = TAG_META[tag] || {};
-            return <span key={tag} style={{ fontSize: 9, fontWeight: 700, color: tm.color || T.subtext, background: tm.bg || T.mutedFill, borderRadius: 4, padding: "2px 7px", border: `1px solid ${T.border}` }}>{tag}</span>;
+            return <span key={tag} style={{ fontSize: 9, fontWeight: 700, color: T.muted, borderRadius: 4, padding: "3px 8px", border: `1px solid ${T.border}`, letterSpacing: "0.03em" }}>{tag}</span>;
           })}
           {thread.is_pinned && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginLeft: "auto", fontSize: 9, fontWeight: 800, color: T.amber, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              <Icon name="pin" size={10} color={T.amber} /> Pinned
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: "auto", fontSize: 9, fontWeight: 800, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              <Icon name="pin" size={10} color={T.muted} /> Pinned
             </span>
           )}
         </div>
@@ -826,42 +822,42 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Title */}
-            <div style={{ fontSize: isMobile ? 14.5 : 16, fontWeight: 800, color: T.text, marginBottom: 6, lineHeight: 1.3, letterSpacing: "-0.01em" }}>{thread.title}</div>
+            <div style={{ fontSize: isMobile ? 15 : 16.5, fontWeight: 700, color: T.text, marginBottom: 7, lineHeight: 1.35, letterSpacing: "-0.015em" }}>{thread.title}</div>
 
             {/* Structured preview: Bull vs Bear, framed as a two-column research panel */}
             {thread.bull_case ? (
-              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden", marginBottom: metrics.length ? 8 : 2 }}>
-                <div style={{ flex: 1, minWidth: 0, padding: "8px 10px", background: T.posFill }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: T.green, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>
+              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", marginBottom: metrics.length ? 10 : 3 }}>
+                <div style={{ flex: 1, minWidth: 0, padding: "10px 13px", borderLeft: `2px solid ${T.green}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: T.green, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 4 }}>
                     <Icon name="trendUp" size={10} color={T.green} strokeWidth={2.2} /> Bull case
                   </div>
-                  <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bull_case).slice(0, 90)}…</div>
+                  <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.55 }}>{stripMarkdown(thread.bull_case).slice(0, 90)}…</div>
                 </div>
                 {thread.bear_case && (
                   <>
                     <div style={{ width: isMobile ? "100%" : 1, height: isMobile ? 1 : "auto", background: T.border }} />
-                    <div style={{ flex: 1, minWidth: 0, padding: "8px 10px", background: T.negFill }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: T.red, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>
+                    <div style={{ flex: 1, minWidth: 0, padding: "10px 13px", borderLeft: isMobile ? "none" : `2px solid ${T.red}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: T.red, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 4 }}>
                         <Icon name="trendDown" size={10} color={T.red} strokeWidth={2.2} /> Bear case
                       </div>
-                      <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.5 }}>{stripMarkdown(thread.bear_case).slice(0, 90)}…</div>
+                      <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.55 }}>{stripMarkdown(thread.bear_case).slice(0, 90)}…</div>
                     </div>
                   </>
                 )}
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55, marginBottom: metrics.length ? 8 : 2 }}>{bodyPreview}</div>
+              <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.6, marginBottom: metrics.length ? 10 : 3 }}>{bodyPreview}</div>
             )}
 
             {/* Metric strip — Target / CAGR / Horizon as a quote-box, not loose chips */}
             {metrics.length > 0 && (
-              <div style={{ display: "flex", border: `1px solid ${T.border}`, borderRadius: 8, background: T.mutedFill, overflow: "hidden", width: "fit-content", maxWidth: "100%" }}>
+              <div style={{ display: "flex", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", width: "fit-content", maxWidth: "100%" }}>
                 {metrics.map((m, i) => (
-                  <div key={m.label} style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 14px", borderLeft: i > 0 ? `1px solid ${T.border}` : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  <div key={m.label} style={{ display: "flex", flexDirection: "column", gap: 2, padding: "7px 15px", borderLeft: i > 0 ? `1px solid ${T.border}` : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
                       <Icon name={m.icon} size={10} color={T.muted} /> {m.label}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: m.color || T.text, fontFamily: "'IBM Plex Mono', monospace" }}>{m.value}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: m.color || T.text, fontFamily: "'IBM Plex Mono', monospace" }}>{m.value}</div>
                   </div>
                 ))}
               </div>
@@ -874,10 +870,10 @@ const ThreadCard = memo(function ThreadCard({ thread, onClick, session, userVote
         </div>
 
         {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 13, paddingTop: 11, borderTop: `1px solid ${T.borderSubtle}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 15, paddingTop: 13, borderTop: `1px solid ${T.borderSubtle}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
             <Avatar name={thread.author_display_name} size={22} T={T} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.author_display_name || "Anon"}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.author_display_name || "Anon"}</span>
             <span style={{ fontSize: 11, color: T.muted, flexShrink: 0 }}>· {timeAgo(thread.created_at)}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -1126,7 +1122,7 @@ const ReplyCard = memo(function ReplyCard({ reply, threadId, depth = 0, session,
                     onClick={() => { setEditing(true); setEditBody(reply.body); }}
                     style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px", background: T.mutedFill, border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 7, cursor: "pointer", color: T.subtext, fontSize: 12, fontWeight: 600 }}
                   >
-                    ✏️ Edit
+                    <Icon name="edit" size={11} color={T.subtext} strokeWidth={1.8} /> Edit
                   </button>
                   <button
                     onClick={() => setConfirmDelete(true)}
@@ -1283,9 +1279,9 @@ function TickerAutocomplete({ value, onChange, inputStyle, T }) {
 
 function ThreadComposer({ session, T, onClose, onPosted }) {
   const { isMobile } = useViewport(); const getToken = useToken();
-  const [step, setStep] = useState(1); // 1=basics, 2=thesis, 3=conviction
+  const [step, setStep] = useState(1); // 1=basics, 2=thesis
   const [title, setTitle] = useState(""); const [ticker, setTicker] = useState(""); const [body, setBody] = useState("");
-  const [thesisType, setThesisType] = useState("Bullish"); const [conviction, setConviction] = useState("medium");
+  const [thesisType, setThesisType] = useState("Bullish");
   const [tags, setTags] = useState([]);
   const [bullCase, setBullCase] = useState(""); const [bearCase, setBearCase] = useState("");
   const [risks, setRisks] = useState(""); const [targetPrice, setTargetPrice] = useState(""); const [timeHorizon, setTimeHorizon] = useState(""); const [expectedCagr, setExpectedCagr] = useState("");
@@ -1297,13 +1293,12 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
     if (!title.trim() || !body.trim()) { setError("Title and analysis are required."); return; }
     setSubmitting(true); setError("");
     try {
-      const convScore = CONVICTION_META[conviction]?.score || 50;
       const payload = {
         author_id: session.user.id,
         author_display_name: session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "Anonymous",
         ticker: ticker.toUpperCase().trim() || null, title: title.trim(), body: body.trim(),
         tags, media_urls: mediaItems.filter(m => m.url),
-        thesis_type: thesisType, conviction_score: convScore,
+        thesis_type: thesisType,
         bull_case: bullCase.trim() || null, bear_case: bearCase.trim() || null,
         risks: risks.trim() || null,
         target_price: targetPrice ? parseFloat(targetPrice) : null,
@@ -1335,7 +1330,7 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
 
         {/* Step tabs */}
         <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${withAlpha(T.text, 0.08)}`, padding: "0 24px" }}>
-          {[{ n: 1, label: "Basics" }, { n: 2, label: "Thesis" }, { n: 3, label: "Conviction" }].map(s => (
+          {[{ n: 1, label: "Basics" }, { n: 2, label: "Thesis" }].map(s => (
             <button key={s.n} onClick={() => setStep(s.n)} style={{ padding: "10px 20px", borderTop: "none", borderLeft: "none", borderRight: "none", background: "transparent", color: step === s.n ? T.accent : T.muted, fontSize: 13, fontWeight: step === s.n ? 800 : 500, cursor: "pointer", borderBottom: step === s.n ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1 }}>
               {s.n}. {s.label}
             </button>
@@ -1421,25 +1416,6 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* Conviction selector */}
-              <div>
-                <label style={labelStyle}>Conviction Level</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 8 }}>
-                  {Object.entries(CONVICTION_META).map(([key, meta]) => (
-                    <button key={key} onClick={() => setConviction(key)} type="button" style={{ padding: "14px 12px", borderRadius: 12, border: `2px solid ${conviction === key ? meta.color : withAlpha(T.text, 0.1)}`, background: conviction === key ? withAlpha(meta.color, 0.1) : T.surface, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, transition: "all 0.15s" }}>
-                      <div style={{ width: 12, height: 12, borderRadius: "50%", background: meta.color }} />
-                      <span style={{ fontSize: 11, fontWeight: 800, color: conviction === key ? meta.color : T.subtext, letterSpacing: "0.04em", textTransform: "uppercase" }}>{meta.label}</span>
-                      <span style={{ fontSize: 18, fontWeight: 900, color: meta.color, fontFamily: "'IBM Plex Mono', monospace" }}>{meta.score}</span>
-                      <span style={{ fontSize: 9, color: T.muted }}>/ 100</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Price targets */}
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 14 }}>
@@ -1464,7 +1440,6 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                     {ticker && <TickerBadge ticker={ticker} T={T} />}
                     <ThesisTypeBadge type={thesisType} T={T} />
-                    <ConvictionBadge conviction={conviction} T={T} />
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 6 }}>{title || "Your headline…"}</div>
                   <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.55 }}>{stripMarkdown(body).slice(0, 120) || "Your analysis preview…"}</div>
@@ -1480,9 +1455,9 @@ function ThreadComposer({ session, T, onClose, onPosted }) {
             {step > 1 && <button onClick={() => setStep(s => s - 1)} type="button" style={{ padding: "10px 20px", background: "none", border: `1px solid ${withAlpha(T.text, 0.12)}`, borderRadius: 10, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>← Back</button>}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {step < 3
+            {step < 2
               ? <button onClick={() => setStep(s => s + 1)} type="button" style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Continue →</button>
-              : <button onClick={submit} disabled={submitting} type="button" style={{ padding: "12px 32px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: `0 6px 20px ${withAlpha(T.accent, 0.3)}`, opacity: submitting ? 0.6 : 1 }}>{submitting ? "Publishing…" : "🚀 Publish Thesis"}</button>
+              : <button onClick={submit} disabled={submitting} type="button" style={{ padding: "12px 32px", background: T.text, color: T.bg, border: "none", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>{submitting ? "Publishing…" : "Publish Thesis"}</button>
             }
           </div>
         </div>
@@ -1505,7 +1480,6 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
   const [confirmDeleteThread, setConfirmDeleteThread] = useState(false);
   const [deletingThread, setDeletingThread] = useState(false);
   const isAuthor = session?.user?.id && thread.author_id === session.user.id;
-  const convMeta = CONVICTION_META[thread.conviction_score >= 80 ? "high" : thread.conviction_score >= 50 ? "medium" : "low"] || CONVICTION_META.low;
 
   const displayedReplies = useMemo(() => {
     let sorted = [...replies];
@@ -1603,70 +1577,105 @@ function ThreadView({ thread: initialThread, session, onBack, onLoginRequired, o
     <div style={{ flex: 1, overflowY: "auto", background: T.bg, fontFamily: "'IBM Plex Sans', sans-serif" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "16px 16px 140px" : "32px 32px 80px" }}>
         {/* Back + Actions */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>← Back</button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <button
+            onClick={onBack}
+            style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 4px", background: "transparent", border: "none", borderRadius: 6, color: T.subtext, cursor: "pointer", fontSize: 12.5, fontWeight: 600, letterSpacing: "0.01em", transition: `color ${MOTION.fast}` }}
+            onMouseEnter={e => { e.currentTarget.style.color = T.text; }}
+            onMouseLeave={e => { e.currentTarget.style.color = T.subtext; }}
+          >
+            <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}><Icon name="chevronRight" size={11} strokeWidth={2.2} /></span>
+            Back to Research
+          </button>
           {isAuthor && (
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setShowEditComposer(true)} style={{ padding: "8px 14px", background: T.mutedFill, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Edit</button>
+              <button
+                onClick={() => setShowEditComposer(true)}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "transparent", border: `1px solid ${withAlpha(T.text, 0.14)}`, borderRadius: 7, color: T.subtext, cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em", transition: `border-color ${MOTION.fast}, color ${MOTION.fast}` }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = withAlpha(T.text, 0.28); e.currentTarget.style.color = T.text; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = withAlpha(T.text, 0.14); e.currentTarget.style.color = T.subtext; }}
+              >
+                <Icon name="edit" size={11} strokeWidth={2} /> Edit
+              </button>
               {confirmDeleteThread
                 ? <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <button onClick={handleDeleteThread} disabled={deletingThread} style={{ padding: "8px 14px", background: T.red, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 800 }}>{deletingThread ? "…" : "Delete"}</button>
-                    <button onClick={() => setConfirmDeleteThread(false)} style={{ padding: "8px 12px", background: "none", border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 8, color: T.subtext, cursor: "pointer", fontSize: 13 }}>Cancel</button>
+                    <button onClick={handleDeleteThread} disabled={deletingThread} style={{ padding: "7px 14px", background: T.red, color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em" }}>{deletingThread ? "…" : "Confirm Delete"}</button>
+                    <button onClick={() => setConfirmDeleteThread(false)} style={{ padding: "7px 12px", background: "transparent", border: `1px solid ${withAlpha(T.text, 0.12)}`, borderRadius: 7, color: T.subtext, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Cancel</button>
                   </div>
-                : <button onClick={() => setConfirmDeleteThread(true)} style={{ padding: "8px 14px", background: withAlpha(T.red, 0.1), border: `1px solid ${withAlpha(T.red, 0.2)}`, borderRadius: 8, color: T.red, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Delete</button>
+                : <button
+                    onClick={() => setConfirmDeleteThread(true)}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "transparent", border: `1px solid ${withAlpha(T.red, 0.2)}`, borderRadius: 7, color: T.red, cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em", transition: `background ${MOTION.fast}` }}
+                    onMouseEnter={e => { e.currentTarget.style.background = withAlpha(T.red, 0.07); }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <Icon name="trash" size={11} strokeWidth={2} /> Delete
+                  </button>
               }
             </div>
           )}
         </div>
 
         {/* OP Card */}
-        <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 18, marginBottom: 20, overflow: "hidden", position: "relative" }}>
+        <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 16, marginBottom: 20, overflow: "hidden", position: "relative", boxShadow: elevate(T, 2) }}>
           {/* Top accent bar */}
-          <div style={{ height: 3, background: `linear-gradient(90deg, ${T.accent}, ${withAlpha(T.accent, 0.3)})` }} />
+          <div style={{ height: 2, background: T.accent }} />
 
-          <div style={{ padding: isMobile ? "20px 18px" : "28px 32px" }}>
+          <div style={{ padding: isMobile ? "22px 20px" : "36px 40px" }}>
             {/* Tags row */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20, alignItems: "center" }}>
               {thread.ticker && <TickerBadge ticker={thread.ticker} T={T} onTickerClick={onTickerClick} size="lg" />}
               {thread.thesis_type && <ThesisTypeBadge type={thread.thesis_type} T={T} />}
-              {thread.conviction_score != null && <ConvictionBadge conviction={thread.conviction_score >= 80 ? "high" : thread.conviction_score >= 50 ? "medium" : "low"} T={T} />}
               {(thread.tags || []).map(tag => {
                 const tm = TAG_META[tag] || {};
-                return <span key={tag} style={{ fontSize: 10, fontWeight: 700, color: tm.color || T.subtext, background: tm.bg || T.mutedFill, borderRadius: 5, padding: "2px 8px" }}>{tag}</span>;
+                const c = tm.color || T.subtext;
+                return (
+                  <span key={tag} style={{ fontSize: 9.5, fontWeight: 700, color: c, background: "transparent", border: `1px solid ${withAlpha(c, 0.28)}`, borderRadius: R.xs, padding: "3px 9px", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    {tag}
+                  </span>
+                );
               })}
             </div>
 
             {/* Title */}
-            <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 900, color: T.text, margin: "0 0 16px", lineHeight: 1.25, letterSpacing: "-0.025em" }}>{thread.title}</h1>
+            <h1 style={{ fontSize: isMobile ? 22 : 29, fontWeight: 700, color: T.text, margin: "0 0 20px", lineHeight: 1.32, letterSpacing: "-0.012em", fontFamily: "Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif" }}>{thread.title}</h1>
 
             {/* Author row */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${withAlpha(T.text, 0.06)}` }}>
-              <Avatar name={thread.author_display_name} size={36} T={T} />
+            <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 24, paddingBottom: 20, borderBottom: `1px solid ${withAlpha(T.text, 0.07)}` }}>
+              <Avatar name={thread.author_display_name} size={34} T={T} />
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{thread.author_display_name || "Anonymous"}</div>
-                <div style={{ fontSize: 11, color: T.muted }}>{timeAgo(thread.created_at)}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, letterSpacing: "-0.005em" }}>{thread.author_display_name || "Anonymous"}</div>
+                <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{timeAgo(thread.created_at)}</div>
               </div>
             </div>
 
             {/* Structured Thesis Sections */}
             {(thread.bull_case || thread.bear_case || thread.risks) && (
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (thread.bull_case && thread.bear_case ? "1fr 1fr" : "1fr"), gap: 12, marginBottom: 20 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (thread.bull_case && thread.bear_case ? "1fr 1fr" : "1fr"), gap: 14, marginBottom: 24 }}>
                 {thread.bull_case && (
-                  <div style={{ background: withAlpha(T.green, 0.06), border: `1px solid ${withAlpha(T.green, 0.15)}`, borderRadius: 12, padding: "14px 16px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: T.green, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>🟢 Bull Case</div>
-                    <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.bull_case) }} />
+                  <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderLeft: `3px solid ${T.green}`, borderRadius: 10, padding: "18px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+                      <Icon name="trendUp" size={12} color={T.green} strokeWidth={2.4} />
+                      <span style={{ fontSize: 10.5, fontWeight: 800, color: T.green, letterSpacing: "0.1em", textTransform: "uppercase" }}>Bull Case</span>
+                    </div>
+                    <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.74 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.bull_case) }} />
                   </div>
                 )}
                 {thread.bear_case && (
-                  <div style={{ background: withAlpha(T.red, 0.05), border: `1px solid ${withAlpha(T.red, 0.15)}`, borderRadius: 12, padding: "14px 16px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: T.red, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>🔴 Bear Case</div>
-                    <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.bear_case) }} />
+                  <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderLeft: `3px solid ${T.red}`, borderRadius: 10, padding: "18px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+                      <Icon name="trendDown" size={12} color={T.red} strokeWidth={2.4} />
+                      <span style={{ fontSize: 10.5, fontWeight: 800, color: T.red, letterSpacing: "0.1em", textTransform: "uppercase" }}>Bear Case</span>
+                    </div>
+                    <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.74 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.bear_case) }} />
                   </div>
                 )}
                 {thread.risks && (
-                  <div style={{ background: withAlpha(T.amber, 0.06), border: `1px solid ${withAlpha(T.amber, 0.15)}`, borderRadius: 12, padding: "14px 16px", gridColumn: isMobile ? "1" : "1 / -1" }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: T.amber, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>⚠️ Key Risks</div>
-                    <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.risks) }} />
+                  <div style={{ background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderLeft: `3px solid ${T.amber}`, borderRadius: 10, padding: "18px 20px", gridColumn: isMobile ? "1" : "1 / -1" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+                      <Icon name="alert" size={12} color={T.amber} strokeWidth={2.4} />
+                      <span style={{ fontSize: 10.5, fontWeight: 800, color: T.amber, letterSpacing: "0.1em", textTransform: "uppercase" }}>Key Risks</span>
+                    </div>
+                    <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.74 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(thread.risks) }} />
                   </div>
                 )}
               </div>
@@ -1780,8 +1789,6 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
   const [targetPrice, setTargetPrice] = useState(thread.target_price != null ? String(thread.target_price) : "");
   const [timeHorizon, setTimeHorizon] = useState(thread.time_horizon || "");
   const [expectedCagr, setExpectedCagr] = useState(thread.expected_cagr != null ? String(thread.expected_cagr) : "");
-  const convictionKey = thread.conviction_score >= 80 ? "high" : thread.conviction_score >= 50 ? "medium" : "low";
-  const [conviction, setConviction] = useState(convictionKey);
   const [previewMode, setPreviewMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1791,12 +1798,10 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
     if (!title.trim() || !body.trim()) { setError("Title and analysis are required."); return; }
     setSubmitting(true); setError("");
     try {
-      const convScore = CONVICTION_META[conviction]?.score || 50;
       const payload = {
         ticker: ticker.toUpperCase().trim() || null,
         title: title.trim(), body: body.trim(),
         thesis_type: thesisType, tags,
-        conviction_score: convScore,
         bull_case: bullCase.trim() || null, bear_case: bearCase.trim() || null,
         risks: risks.trim() || null,
         target_price: targetPrice ? parseFloat(targetPrice) : null,
@@ -1827,7 +1832,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
 
         {/* Step tabs — identical to ThreadComposer */}
         <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${withAlpha(T.text, 0.08)}`, padding: "0 24px" }}>
-          {[{ n: 1, label: "Basics" }, { n: 2, label: "Thesis" }, { n: 3, label: "Conviction" }].map(s => (
+          {[{ n: 1, label: "Basics" }, { n: 2, label: "Thesis" }].map(s => (
             <button key={s.n} onClick={() => setStep(s.n)} style={{ padding: "10px 20px", borderTop: "none", borderLeft: "none", borderRight: "none", background: "transparent", color: step === s.n ? T.accent : T.muted, fontSize: 13, fontWeight: step === s.n ? 800 : 500, cursor: "pointer", borderBottom: step === s.n ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1 }}>
               {s.n}. {s.label}
             </button>
@@ -1910,23 +1915,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
 
-          {step === 3 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div>
-                <label style={labelStyle}>Conviction Level</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 8 }}>
-                  {Object.entries(CONVICTION_META).map(([key, meta]) => (
-                    <button key={key} onClick={() => setConviction(key)} type="button" style={{ padding: "14px 12px", borderRadius: 12, border: `2px solid ${conviction === key ? meta.color : withAlpha(T.text, 0.1)}`, background: conviction === key ? withAlpha(meta.color, 0.1) : T.surface, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, transition: "all 0.15s" }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color }} />
-                      <span style={{ fontSize: 11, fontWeight: 800, color: conviction === key ? meta.color : T.subtext }}>{meta.label}</span>
-                      <span style={{ fontSize: 20, fontWeight: 900, color: meta.color, fontFamily: "'IBM Plex Mono', monospace" }}>{meta.score}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 14 }}>
                 <div>
                   <label style={labelStyle}>Target Price (₹)</label>
@@ -1951,7 +1940,7 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
             {step > 1 && <button onClick={() => setStep(s => s - 1)} type="button" style={{ padding: "10px 20px", background: T.mutedFill, border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 10, color: T.subtext, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>← Back</button>}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {step < 3
+            {step < 2
               ? <button onClick={() => setStep(s => s + 1)} type="button" style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Continue →</button>
               : <button onClick={submit} disabled={submitting} style={{ padding: "10px 28px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>{submitting ? "Saving…" : "Save Changes"}</button>
             }
@@ -1965,11 +1954,20 @@ function EditThreadComposer({ thread, session, T, onClose, onSaved }) {
 // ─── Forum Feed ───────────────────────────────────────────────────────────────
 function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTickerClick, T, addToast }) {
   const { isMobile, isTablet } = useViewport(); const getToken = useToken();
+  // Supabase hands back a fresh `session` object on every token refresh / tab
+  // focus even when nothing changed. Depending on the object identity made
+  // loadThreads unstable, so the load effect re-fired and the feed blinked.
+  const userId = session?.user?.id || null;
   const [threads, setThreads] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(null);
   const [filter, setFilter] = useState("all"); const [sort, setSort] = useState("latest");
   const [search, setSearch] = useState(""); const [searchDebounced, setSearchDebounced] = useState("");
   const [page, setPage] = useState(1); const [userVotes, setUserVotes] = useState({});
   const searchTimer = useRef();
+  // Mirror of `threads` so callbacks can read the latest list without listing
+  // `threads` as a dependency (which would rebuild them on every fetch and
+  // re-render every memoised ThreadCard).
+  const threadsRef = useRef(threads);
+  useEffect(() => { threadsRef.current = threads; }, [threads]);
 
   useEffect(() => { clearTimeout(searchTimer.current); searchTimer.current = setTimeout(() => setSearchDebounced(search), 300); return () => clearTimeout(searchTimer.current); }, [search]);
 
@@ -1981,7 +1979,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
   }, [session, filter]);
 
   const loadThreads = useCallback(async (backgroundRefresh = false) => {
-    const cacheKey = `${FORUM_CACHE_KEY}_${sort}_${filter}_${session?.user?.id || "anon"}`;
+    const cacheKey = `${FORUM_CACHE_KEY}_${sort}_${filter}_${userId || "anon"}`;
     const canUseCache = filter !== "saved";
     // On first load: show cache immediately, skip spinner
     if (!backgroundRefresh && canUseCache) {
@@ -2000,8 +1998,8 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
       const token = await getToken();
       const orderMap = { latest: "created_at.desc", top: "upvotes.desc", discussed: "reply_count.desc" };
       let threads = [];
-      if (filter === "saved" && session) {
-        const bookmarks = await fetchUserBookmarks(session.user.id, token);
+      if (filter === "saved" && userId) {
+        const bookmarks = await fetchUserBookmarks(userId, token);
         const bookmarkedIds = bookmarks.map(b => b.thread_id).filter(Boolean);
         if (bookmarkedIds.length > 0) {
           const data = await sbFetch(`forum_threads?select=*&id=in.(${bookmarkedIds.join(",")})`, {}, token);
@@ -2017,13 +2015,13 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
         }
       } else {
         let qs = `forum_threads?select=*&order=is_pinned.desc,${orderMap[sort] || "created_at.desc"}`;
-        if (filter === "mine" && session) qs += `&author_id=eq.${session.user.id}`;
+        if (filter === "mine" && userId) qs += `&author_id=eq.${userId}`;
         if (filter === "trending") qs += `&upvotes=gt.0`;
         const data = await sbFetch(qs, {}, token);
         threads = Array.isArray(data) ? data : [];
       }
-      const bookmarkRows = session && threads.length ? await fetchUserBookmarks(session.user.id, token, threads.map(t => t.id)) : [];
-      const enrichedThreads = session ? applySavedFlags(threads, bookmarkRows) : threads;
+      const bookmarkRows = userId && threads.length ? await fetchUserBookmarks(userId, token, threads.map(t => t.id)) : [];
+      const enrichedThreads = userId ? applySavedFlags(threads, bookmarkRows) : threads;
       // Only update if data actually changed (avoids needless re-renders)
       setThreads(prev => {
         const prevIds = prev.map(t => `${t.id}:${t.upvotes}:${t.reply_count}:${t.is_saved ? 1 : 0}`).join();
@@ -2031,9 +2029,16 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
         return prevIds === nextIds ? prev : enrichedThreads;
       });
       if (filter !== "saved") writeForumCache(cacheKey, enrichedThreads);
-      if (session && enrichedThreads.length) {
-        const votes = await sbFetch(`forum_votes?user_id=eq.${session.user.id}&target_type=eq.thread&target_id=in.(${enrichedThreads.map(t => t.id).join(",")})`, {}, token).catch(() => []);
-        const vmap = {}; votes.forEach(v => vmap[v.target_id] = v.vote); setUserVotes(vmap);
+      if (userId && enrichedThreads.length) {
+        const votes = await sbFetch(`forum_votes?user_id=eq.${userId}&target_type=eq.thread&target_id=in.(${enrichedThreads.map(t => t.id).join(",")})`, {}, token).catch(() => []);
+        const vmap = {}; votes.forEach(v => vmap[v.target_id] = v.vote);
+        // Swap only on a real change — a fresh object here would re-render every
+        // memoised ThreadCard and produce the same visible blink.
+        setUserVotes(prev => {
+          const pk = Object.keys(prev), nk = Object.keys(vmap);
+          if (pk.length === nk.length && nk.every(k => prev[k] === vmap[k])) return prev;
+          return vmap;
+        });
       }
     } catch (err) {
         const isJwtExpired = err.message?.includes("JWT expired") || err.message?.includes("PGRST303");
@@ -2045,7 +2050,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
     } finally {
       if (!backgroundRefresh) setLoading(false);
     }
-  }, [sort, filter, session, getToken]);
+  }, [sort, filter, userId, getToken]);
 
   useEffect(() => { loadThreads(); }, [loadThreads]);
 
@@ -2090,10 +2095,10 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
 
   const handleToggleBookmark = useCallback(async (tid) => {
     if (!session) return;
-    const current = threads.find(t => t.id === tid);
+    const current = threadsRef.current.find(t => t.id === tid);
     const prevSaved = !!current?.is_saved;
     const nextSaved = !prevSaved;
-    const cacheKey = `${FORUM_CACHE_KEY}_${sort}_${filter}_${session?.user?.id || "anon"}`;
+    const cacheKey = `${FORUM_CACHE_KEY}_${sort}_${filter}_${userId || "anon"}`;
     let nextThreads = null;
     setThreads(ts => {
       if (filter === "saved" && !nextSaved) return ts.filter(t => t.id !== tid);
@@ -2126,7 +2131,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
       });
       addToast("Could not update saved posts.", "error");
     }
-  }, [session, threads, filter, sort, getToken, addToast]);
+  }, [session, userId, filter, sort, getToken, addToast]);
 
   const displayed = useMemo(() => {
     let list = [...threads];
@@ -2145,31 +2150,32 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
     <div style={{ flex: 1, overflowY: "auto", background: T.bg, fontFamily: "'IBM Plex Sans', sans-serif" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px 16px 100px" : "32px 32px 80px" }}>
         {/* Page header */}
-        <div style={{ marginBottom: isMobile ? 20 : 28 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, color: T.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Community Research</div>
-          <h1 style={{ fontSize: isMobile ? 24 : 28, fontWeight: 900, color: T.text, margin: 0, letterSpacing: "-0.03em" }}>Investment theses, screened by conviction</h1>
-          <p style={{ fontSize: 13, color: T.muted, marginTop: 5 }}>High-conviction theses · Professional research · Signal over noise</p>
+        <div style={{ marginBottom: isMobile ? 22 : 30, paddingBottom: isMobile ? 18 : 24, borderBottom: `1px solid ${T.borderSubtle}` }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Community Research</div>
+          <h1 style={{ fontSize: isMobile ? 23 : 27, fontWeight: 700, color: T.text, margin: 0, letterSpacing: "-0.02em", lineHeight: 1.25 }}>Investment theses from the community</h1>
+          <p style={{ fontSize: 13, color: T.muted, marginTop: 7, letterSpacing: "0.01em" }}>Structured research · Peer review · Signal over noise</p>
         </div>
 
         {/* Sticky filter bar */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 20, background: `${withAlpha(T.bg, 0.92)}`, backdropFilter: "blur(20px)", padding: "10px 0", borderBottom: `1px solid ${withAlpha(T.text, 0.07)}` }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "center", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 20, background: `${withAlpha(T.bg, 0.94)}`, backdropFilter: "blur(20px)", padding: "12px 0", borderBottom: `1px solid ${T.borderSubtle}` }}>
           {/* Search */}
           <div style={{ position: "relative", flex: isMobile ? "1 1 100%" : "0 0 260px" }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, opacity: 0.4 }}>🔍</span>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tickers, theses, tags…" style={{ width: "100%", padding: "9px 14px 9px 36px", borderRadius: 10, background: T.surface, border: `1px solid ${withAlpha(T.text, 0.08)}`, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", display: "flex" }}><Icon name="search" size={13} color={T.muted} strokeWidth={1.8} /></span>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tickers, theses, tags…" style={{ width: "100%", padding: "9px 14px 9px 36px", borderRadius: 9, background: T.surface, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
           </div>
 
           {/* Sort/filter tabs */}
           <div style={{ display: "flex", background: T.mutedFill, borderRadius: 9, padding: 2, overflowX: "auto", flexShrink: 0 }}>
-            {[{ id: "all", label: "All" }, { id: "trending", label: "🔥 Hot" }, { id: "new", label: "⚡ New" }, ...(session ? [{ id: "mine", label: "My Posts" }] : [])].map(f => (
-              <button key={f.id} onClick={() => { setFilter(f.id); setPage(1); }} style={{ padding: "7px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", background: filter === f.id ? T.surface : "transparent", color: filter === f.id ? T.text : T.subtext, transition: "background 0.15s, color 0.15s, box-shadow 0.15s", whiteSpace: "nowrap", boxShadow: filter === f.id ? `0 2px 8px ${T.shadow}` : "none" }}>
+            {[{ id: "all", label: "All", icon: null }, { id: "trending", label: "Hot", icon: "flame" }, { id: "new", label: "New", icon: "bolt" }, ...(session ? [{ id: "mine", label: "My Posts", icon: null }] : [])].map(f => (
+              <button key={f.id} onClick={() => { setFilter(f.id); setPage(1); }} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", background: filter === f.id ? T.surface : "transparent", color: filter === f.id ? T.text : T.subtext, transition: `background ${MOTION.fast}, color ${MOTION.fast}, box-shadow ${MOTION.fast}`, whiteSpace: "nowrap", boxShadow: filter === f.id ? elevate(T, 1) : "none" }}>
+                {f.icon && <Icon name={f.icon} size={11} color={filter === f.id ? T.text : T.subtext} strokeWidth={1.8} />}
                 {f.label}
               </button>
             ))}
           </div>
 
           {/* Sort select */}
-          <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); }} style={{ background: T.surface, color: T.text, border: `1px solid ${withAlpha(T.text, 0.08)}`, borderRadius: 9, padding: "7px 12px", fontSize: 12, fontWeight: 600, outline: "none", cursor: "pointer" }}>
+          <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); }} style={{ background: T.surface, color: T.text, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 12px", fontSize: 12, fontWeight: 600, outline: "none", cursor: "pointer" }}>
             <option value="latest">Latest</option>
             <option value="top">Top Voted</option>
             <option value="discussed">Most Discussed</option>
@@ -2177,7 +2183,7 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
 
           {/* Mobile new thesis */}
           {isMobile && (
-            <button onClick={session ? onNewThread : onLoginRequired} style={{ marginLeft: "auto", padding: "8px 16px", background: T.accent, color: "#fff", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>+ Thesis</button>
+            <button onClick={session ? onNewThread : onLoginRequired} style={{ marginLeft: "auto", padding: "8px 16px", background: T.text, color: T.bg, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+ Thesis</button>
           )}
         </div>
 
@@ -2201,14 +2207,16 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
                 ))}
                 {hasMore && (
                   <div style={{ textAlign: "center", marginTop: 28, paddingBottom: 48 }}>
-                    <button onClick={() => setPage(p => p + 1)} style={{ padding: "12px 40px", background: T.surface, border: `1px solid ${withAlpha(T.text, 0.1)}`, borderRadius: 12, color: T.text, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Load More</button>
+                    <button onClick={() => setPage(p => p + 1)} style={{ padding: "11px 36px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Load More</button>
                   </div>
                 )}
                 {displayed.length === 0 && (
                   <div style={{ textAlign: "center", padding: "80px 24px" }}>
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>🕯️</div>
+                    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: "50%", border: `1px solid ${T.border}`, marginBottom: 16 }}>
+                      <Icon name="doc" size={17} color={T.muted} strokeWidth={1.6} />
+                    </div>
                     <div style={{ fontSize: 15, color: T.muted }}>{filter === "saved" && session ? "No saved posts yet." : "No discussions found."}</div>
-                    {session && <button onClick={onNewThread} style={{ marginTop: 16, padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Start a Discussion</button>}
+                    {session && <button onClick={onNewThread} style={{ marginTop: 16, padding: "10px 24px", background: T.text, color: T.bg, border: "none", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Start a Discussion</button>}
                   </div>
                 )}
               </>
@@ -2224,9 +2232,9 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
       {isMobile && (
         <button
           onClick={session ? onNewThread : onLoginRequired}
-          style={{ position: "fixed", bottom: 24, right: 20, width: 56, height: 56, borderRadius: "50%", background: T.accent, color: "#fff", fontSize: 24, border: "none", boxShadow: `0 8px 28px ${withAlpha(T.accent, 0.45)}`, zIndex: 100, cursor: "pointer" }}
+          style={{ position: "fixed", bottom: 24, right: 20, width: 54, height: 54, borderRadius: "50%", background: T.text, color: T.bg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: elevate(T, 3), zIndex: 100, cursor: "pointer" }}
         >
-          ✍️
+          <Icon name="edit" size={19} color={T.bg} strokeWidth={2} />
         </button>
       )}
     </div>
@@ -2235,12 +2243,18 @@ function ForumFeed({ session, onViewThread, onNewThread, onLoginRequired, onTick
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function ForumModule({ T, session, getToken: getTokenProp, onTickerClick, onLoginRequired: onLoginRequiredProp }) {
+  // Keep the prop in a ref so `getToken` never changes identity. A parent that
+  // passes an inline arrow (very common) would otherwise hand us a new function
+  // on every one of its renders — including pure hover re-renders on the nav —
+  // which cascades into a full feed refetch and a visible blink.
+  const getTokenPropRef = useRef(getTokenProp);
+  useEffect(() => { getTokenPropRef.current = getTokenProp; }, [getTokenProp]);
   const getToken = useCallback(async () => {
-    if (getTokenProp) return getTokenProp();
+    if (getTokenPropRef.current) return getTokenPropRef.current();
     // Always fetch a live session so Supabase can auto-refresh an expired JWT
     const { data } = await supabase.auth.getSession();
     return data?.session?.access_token ?? null;
-  }, [getTokenProp]);
+  }, []);
   const [view, setView] = useState("feed");
   const [activeThread, setActiveThread] = useState(null);
   const [showComposer, setShowComposer] = useState(false);
@@ -2251,7 +2265,7 @@ export default function ForumModule({ T, session, getToken: getTokenProp, onTick
   }, [onLoginRequiredProp, addToast]);
 
   const handleViewThread = useCallback((t) => { setActiveThread(t); setView("thread"); window.scrollTo(0, 0); }, []);
-  const handlePosted = useCallback((t) => { if (t) { setActiveThread(t); setView("thread"); addToast("Published! 🚀"); } }, [addToast]);
+  const handlePosted = useCallback((t) => { if (t) { setActiveThread(t); setView("thread"); addToast("Thesis published"); } }, [addToast]);
 
   return (
     <TokenContext.Provider value={getToken}>
