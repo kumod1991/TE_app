@@ -1081,7 +1081,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
     ];
     const lenses = [
         { type: "screens", title: "Breadth", meta: `Market Participation`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
-        { type: "momentum", title: "Momentum", meta: `Identify leaders`, action: "RS Screens", onClick: () => onNavigate?.("technical", "screens") },
+        { type: "momentum", title: "TechLens", meta: `Identify leaders`, action: "Technical Screens", onClick: () => onNavigate?.("technical", "screens") },
         { type: "flow", title: "Institutions", meta: "FII / DII", action: "Flow Desk", onClick: () => onNavigate?.("financial", "fiidii") },
         { type: "ownership", title: "Ownership", meta: "Promoter / funds", action: "Scans", onClick: () => onNavigate?.("financial", "ownership") },
         { type: "watchlist", title: "Watchlist", meta: "Saved setups", action: "Open", onClick: () => onNavigate?.("watchlist") },

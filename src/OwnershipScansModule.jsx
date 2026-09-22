@@ -596,6 +596,12 @@ function normalizeOwnershipRow(row) {
     diiTrend,
     promoterTrend: safeNum(row.promoterTrend ?? row.promoter_trend),
     publicTrend: safeNum(row.publicTrend ?? row.public_trend),
+    // Derived, not a source column: since promoter+FII+DII+public always sums
+    // to ~100%, a falling public stake is mathematically the same signal as a
+    // rising combined promoter+FII+DII stake — this just expresses it as a
+    // positive "rising" number so it slots into the same rising/falling
+    // card + table logic as every other metric.
+    nonPublicTrend: -safeNum(row.publicTrend ?? row.public_trend),
     combinedFlow: hasCombinedCol ? safeNum(row.combinedFlow ?? row.combined_flow) : fiiTrend + diiTrend,
     score: safeNum(row.score),
     accel: row.accel && typeof row.accel === "object"
@@ -783,6 +789,7 @@ function processStock(row, sectorMap) {
     ownPromoter, ownFii, ownDii, ownPublic,
     deltaFii: dFii, deltaDii: dDii, deltaPromoter: dProm, deltaPublic: dPub,
     fiiTrend: tFii, diiTrend: tDii, promoterTrend: tProm, publicTrend: tPub,
+    nonPublicTrend: -tPub,
     combinedFlow: tFii + tDii,
     score, signal, conviction, phase, inflect, insight,
     timing, accel, dominance, anomalies, story, sector,
@@ -1110,6 +1117,37 @@ const METRICS = {
     icon: (c) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="8" cy="9" r="3.2" /><circle cx="15.5" cy="9" r="3.2" /><path d="M2.5 20c0-3.3 2.5-5.8 5.5-5.8s5.5 2.5 5.5 5.8" /><path d="M11 20c0-3.3 2-5.8 4.5-5.8S20 16.7 20 20" />
+      </svg>
+    ),
+  },
+  promoter: {
+    id: "promoter",
+    key: "promoterTrend",
+    cardTitle: "Promoter buying",
+    cardSub: "Company insiders & founders",
+    tableTitle: "Change in promoter holding",
+    colHeader: "Promoter change",
+    description: "Stocks ranked by how much company promoters/insiders have changed their own stake over the last 4 quarters.",
+    color: "#f59e0b",
+    icon: (c) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2l8 5v13H4V7l8-5z" /><path d="M9 21v-6h6v6" /><path d="M9 11h.01" /><path d="M15 11h.01" /><path d="M12 6.5V2" />
+      </svg>
+    ),
+  },
+  nonPublic: {
+    id: "nonPublic",
+    key: "nonPublicTrend",
+    cardTitle: "Public reducing",
+    cardSub: "Promoter + FII + DII stake rising",
+    tableTitle: "Public stake falling the most",
+    colHeader: "Non-public change",
+    description: "Stocks ranked by how much the combined promoter + FII + DII stake has grown (equivalently, retail/public stake has shrunk) over the last 4 quarters.",
+    color: "#ef4444",
+    icon: (c) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="7" r="3.2" /><path d="M2.5 20c0-3.6 2.9-6.3 6.5-6.3S15.5 16.4 15.5 20" />
+        <path d="M18 8l3 3m0 0l-3 3m3-3H14" />
       </svg>
     ),
   },

@@ -11123,6 +11123,33 @@ const SCREENS_TABLE_FETCHERS = {
     // weekly_rel_volume vs avg_volume_prior_10w already computed server-side),
     // same dedicated-table fetch/cache pattern as the other Breakouts screens.
     freshBreakoutWeekly: _makeScreensTableFetcher("fresh_breakout_weekly", "te_scr_freshbreakoutweekly_v1", "select=*&order=pct_from_breakout.desc.nullslast&limit=1000"),
+    // fresh_gap_breakout: gap-up analog of fresh_breakout_weekly  weekly close
+    // gaps above a prior weekly breakout_level (breakout_gap_pct, gap_above_base_pct,
+    // current_vs_breakout_pct and current_volume_ratio_10w already computed
+    // server-side), same dedicated-table fetch/cache pattern as the other
+    // Breakouts screens tables above.
+    freshGapBreakoutWeekly: _makeScreensTableFetcher("fresh_gap_breakout", "te_scr_freshgapbreakoutweekly_v1", "select=*&order=current_vs_breakout_pct.desc.nullslast&limit=1000"),
+    // post_gap_tight_base: weekly-chart screen for names that gapped above a
+    // prior weekly breakout_level (as in fresh_gap_breakout) and have since
+    // been holding/tightening above that level for several weeks
+    // (weeks_holding_above_breakout, base_range_8w_pct/12w_pct, current
+    // 4W/8W range already computed server-side), same dedicated-table
+    // fetch/cache pattern as the other Gap Screens tables above.
+    postGapTightBaseWeekly: _makeScreensTableFetcher("post_gap_tight_base", "te_scr_postgaptightbaseweekly_v1", "select=*&order=breakout_score.desc.nullslast&limit=1000"),
+    // post_gap_consolidation: weekly-chart screen for names that gapped above
+    // a prior weekly breakout_level (as in fresh_gap_breakout) and have since
+    // been consolidating above that level  the looser, base-forming analog
+    // of post_gap_tight_base above (weeks_since_breakout, base_high_8w/
+    // base_low_8w already computed server-side), same dedicated-table
+    // fetch/cache pattern as the other Gap Screens tables above.
+    postGapConsolidationWeekly: _makeScreensTableFetcher("post_gap_consolidation", "te_scr_postgapconsolidationweekly_v1", "select=*&order=breakout_score.desc.nullslast&limit=1000"),
+    // post_gap_extended: weekly-chart screen for names that gapped above a
+    // prior weekly breakout_level and have since run further from that level
+    // than the tight-base/consolidation cousins above (current_vs_breakout_pct
+    // stretched well beyond breakout, weeks_since_breakout already computed
+    // server-side), same dedicated-table fetch/cache pattern as the other Gap
+    // Screens tables above.
+    postGapExtendedWeekly: _makeScreensTableFetcher("post_gap_extended", "te_scr_postgapextendedweekly_v1", "select=*&order=breakout_score.desc.nullslast&limit=1000"),
     // multiyear_high_breakout: close breaking out above its 3-year high
     // (high_3y, pct_from_high_3y already computed server-side, same Stage 2 /
     // RS shape as the other dedicated screens tables above).
@@ -16155,6 +16182,7 @@ const ALL_COLUMNS = [
     { key: "mansfield_rs_slope", label: "Mansfield RS Slope", defaultOn: false },
     { key: "sma150_slope_pct", label: "150 SMA Slope %", defaultOn: false },
     { key: "breakout_level", label: "Breakout Level", defaultOn: false },
+    { key: "breakout_gap_pct", label: "Breakout Gap %", defaultOn: false },
     { key: "market_cap_cr", label: "Mkt Cap (Cr)", defaultOn: false },
     { key: "pct_to_breakout", label: "% To Breakout", defaultOn: false },
     { key: "adx", label: "ADX(14)", defaultOn: false },
@@ -18709,6 +18737,85 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [freshBreakoutWeeklyRawRows, filterByUniverse]);
 
+    //  Fresh Gap Breakout (Weekly) scan  dedicated fetch from the fresh_gap_breakout
+    // table  gap-up analog of Fresh Breakout (Weekly) above (weekly close gaps
+    // above a prior weekly breakout_level; breakout_gap_pct, current_vs_breakout_pct
+    // and current_volume_ratio_10w already computed server-side), same fetch 
+    // normalize  filterByUniverse pattern.
+    const [freshGapBreakoutWeeklyRawRows, freshGapBreakoutWeeklyLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.freshGapBreakoutWeekly);
+
+    const dFreshGapBreakoutWeekly = useMemo(() => {
+        const mapped = (freshGapBreakoutWeeklyRawRows || []).map(r => ({
+            ...r,
+            close: r.current_price != null ? Number(r.current_price) : null,
+            pct_from_breakout: r.current_vs_breakout_pct != null ? Number(r.current_vs_breakout_pct) : null,
+            breakout_gap_pct: r.breakout_gap_pct != null ? Number(r.breakout_gap_pct) : null,
+            rel_volume: r.current_volume_ratio_10w != null ? Number(r.current_volume_ratio_10w) : null,
+        })).sort((a, b) => (b.pct_from_breakout ?? 0) - (a.pct_from_breakout ?? 0));
+        return filterByUniverse(mapped);
+    }, [freshGapBreakoutWeeklyRawRows, filterByUniverse]);
+
+    //  Post Breakout Tight Base (Weekly) scan  dedicated fetch from the
+    // post_gap_tight_base table  names that gapped above a prior weekly
+    // breakout level (as in Fresh Gap Breakout Weekly above) and have since
+    // held/tightened above it for several weeks (weeks_holding_above_breakout,
+    // base_range_8w_pct, current_4w_range_pct already computed server-side),
+    // same fetch  normalize  filterByUniverse pattern.
+    const [postGapTightBaseWeeklyRawRows, postGapTightBaseWeeklyLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.postGapTightBaseWeekly);
+
+    const dPostGapTightBaseWeekly = useMemo(() => {
+        const mapped = (postGapTightBaseWeeklyRawRows || []).map(r => ({
+            ...r,
+            close: r.current_price != null ? Number(r.current_price) : null,
+            pct_from_breakout: r.current_vs_breakout_pct != null ? Number(r.current_vs_breakout_pct) : null,
+            breakout_gap_pct: r.breakout_gap_pct != null ? Number(r.breakout_gap_pct) : null,
+            rel_volume: r.current_volume_ratio_10w != null ? Number(r.current_volume_ratio_10w) : null,
+            base_range_8w_pct: r.base_range_8w_pct != null ? Number(r.base_range_8w_pct) : null,
+            weeks_since_breakout: r.weeks_since_breakout != null ? Number(r.weeks_since_breakout) : null,
+        })).sort((a, b) => (b.pct_from_breakout ?? 0) - (a.pct_from_breakout ?? 0));
+        return filterByUniverse(mapped);
+    }, [postGapTightBaseWeeklyRawRows, filterByUniverse]);
+
+    //  Post Breakout Consolidation (Weekly) scan  dedicated fetch from the
+    // post_gap_consolidation table  names that gapped above a prior weekly
+    // breakout level and have since been consolidating above it (the looser,
+    // base-forming analog of Post Breakout Tight Base Weekly above), same
+    // fetch  normalize  filterByUniverse pattern.
+    const [postGapConsolidationWeeklyRawRows, postGapConsolidationWeeklyLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.postGapConsolidationWeekly);
+
+    const dPostGapConsolidationWeekly = useMemo(() => {
+        const mapped = (postGapConsolidationWeeklyRawRows || []).map(r => ({
+            ...r,
+            close: r.current_price != null ? Number(r.current_price) : null,
+            pct_from_breakout: r.current_vs_breakout_pct != null ? Number(r.current_vs_breakout_pct) : null,
+            breakout_gap_pct: r.breakout_gap_pct != null ? Number(r.breakout_gap_pct) : null,
+            rel_volume: r.current_volume_ratio_10w != null ? Number(r.current_volume_ratio_10w) : null,
+            base_range_8w_pct: r.base_range_8w_pct != null ? Number(r.base_range_8w_pct) : null,
+            weeks_since_breakout: r.weeks_since_breakout != null ? Number(r.weeks_since_breakout) : null,
+        })).sort((a, b) => (b.pct_from_breakout ?? 0) - (a.pct_from_breakout ?? 0));
+        return filterByUniverse(mapped);
+    }, [postGapConsolidationWeeklyRawRows, filterByUniverse]);
+
+    //  Post Breakout Extended (Weekly) scan  dedicated fetch from the
+    // post_gap_extended table  names that gapped above a prior weekly
+    // breakout level and have since run further from it than the tight-base
+    // /consolidation cousins above, same fetch  normalize  filterByUniverse
+    // pattern.
+    const [postGapExtendedWeeklyRawRows, postGapExtendedWeeklyLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.postGapExtendedWeekly);
+
+    const dPostGapExtendedWeekly = useMemo(() => {
+        const mapped = (postGapExtendedWeeklyRawRows || []).map(r => ({
+            ...r,
+            close: r.current_price != null ? Number(r.current_price) : null,
+            pct_from_breakout: r.current_vs_breakout_pct != null ? Number(r.current_vs_breakout_pct) : null,
+            breakout_gap_pct: r.breakout_gap_pct != null ? Number(r.breakout_gap_pct) : null,
+            rel_volume: r.current_volume_ratio_10w != null ? Number(r.current_volume_ratio_10w) : null,
+            base_range_8w_pct: r.base_range_8w_pct != null ? Number(r.base_range_8w_pct) : null,
+            weeks_since_breakout: r.weeks_since_breakout != null ? Number(r.weeks_since_breakout) : null,
+        })).sort((a, b) => (b.pct_from_breakout ?? 0) - (a.pct_from_breakout ?? 0));
+        return filterByUniverse(mapped);
+    }, [postGapExtendedWeeklyRawRows, filterByUniverse]);
+
     //  Multiyear High Breakout scan  dedicated fetch from the multiyear_high_breakout
     // table  close breaking out above its 3-year high (high_3y, pct_from_high_3y
     // already computed server-side), same fetch  normalize  filterByUniverse
@@ -18931,6 +19038,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const marketLeadersCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
     const momentumScreensCount = dAdxDi.length + dRsiMomentum.length + dVolumeMomentum.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length;
+    const gapScreensCount = dFreshGapBreakoutWeekly.length + dPostGapTightBaseWeekly.length + dPostGapConsolidationWeekly.length + dPostGapExtendedWeekly.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length + dMultiyearPullback.length;
     const minerviniCount = dMinervini.length;
@@ -19415,6 +19523,55 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     formatScore={v => `+${Number(v).toFixed(2)}%`}
                                     tfLabel="Multiyear High Breakout"
                                     loadingOverride={multiyearBreakoutLoading}
+                                />
+                            </CategorySection>
+
+                            <CategorySection name="Gap Screens" color={isDark ? "#38bdf8" : "#0284c7"}
+                                desc="Stocks gapping above a prior breakout level on elevated volume"
+                                count={(freshGapBreakoutWeeklyLoading || postGapTightBaseWeeklyLoading || postGapConsolidationWeeklyLoading || postGapExtendedWeeklyLoading) ? "..." : gapScreensCount}>
+                                <ScreenRow
+                                    rowKey="gap-fresh-weekly"
+                                    title="Fresh Gap Breakout (Weekly)"
+                                    subtitle="Weekly close gaps above a prior weekly breakout level with elevated weekly rel volume"
+                                    rows={dFreshGapBreakoutWeekly}
+                                    scoreKey="pct_from_breakout"
+                                    scoreLabel="% Above Breakout"
+                                    formatScore={v => `+${Number(v).toFixed(2)}%`}
+                                    tfLabel="Fresh Gap Breakout (Weekly)"
+                                    loadingOverride={freshGapBreakoutWeeklyLoading}
+                                />
+                                <ScreenRow
+                                    rowKey="gap-post-tight-base-weekly"
+                                    title="Post Breakout Tight Base (Weekly)"
+                                    subtitle="Gapped above a prior weekly breakout level and has held/tightened above it for several weeks"
+                                    rows={dPostGapTightBaseWeekly}
+                                    scoreKey="pct_from_breakout"
+                                    scoreLabel="% Above Breakout"
+                                    formatScore={v => `+${Number(v).toFixed(2)}%`}
+                                    tfLabel="Post Breakout Tight Base (Weekly)"
+                                    loadingOverride={postGapTightBaseWeeklyLoading}
+                                />
+                                <ScreenRow
+                                    rowKey="gap-post-consolidation-weekly"
+                                    title="Post Breakout Consolidation (Weekly)"
+                                    subtitle="Gapped above a prior weekly breakout level and has been consolidating above it in the weeks since"
+                                    rows={dPostGapConsolidationWeekly}
+                                    scoreKey="pct_from_breakout"
+                                    scoreLabel="% Above Breakout"
+                                    formatScore={v => `+${Number(v).toFixed(2)}%`}
+                                    tfLabel="Post Breakout Consolidation (Weekly)"
+                                    loadingOverride={postGapConsolidationWeeklyLoading}
+                                />
+                                <ScreenRow
+                                    rowKey="gap-post-extended-weekly"
+                                    title="Post Breakout Extended (Weekly)"
+                                    subtitle="Gapped above a prior weekly breakout level and has since run well beyond it"
+                                    rows={dPostGapExtendedWeekly}
+                                    scoreKey="pct_from_breakout"
+                                    scoreLabel="% Above Breakout"
+                                    formatScore={v => `+${Number(v).toFixed(2)}%`}
+                                    tfLabel="Post Breakout Extended (Weekly)"
+                                    loadingOverride={postGapExtendedWeeklyLoading}
                                 />
                             </CategorySection>
 
