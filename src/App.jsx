@@ -3511,12 +3511,39 @@ function StatCardHead({ T, icon, label, tone = "neutral" }) {
     );
 }
 
+// Sum a `portfolio` table row set straight into the totals the Live Posture
+// card needs. cur_value / cur_price are pre-joined server-side (see Portfolio's
+// fetchPortfolio), so this is pure arithmetic  no per-ticker matching against
+// trades required.
+function summarizePortfolioRows(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    let totalValue = 0, unrealizedPnl = 0, quotedCount = 0;
+    rows.forEach(p => {
+        const curPrice = p.cur_price != null ? Number(p.cur_price) : null;
+        const buyPrice = Number(p.buy_price);
+        const shares = Number(p.shares);
+        const curVal = p.cur_value != null ? Number(p.cur_value) : (curPrice != null ? curPrice * shares : null);
+        if (curVal == null) return;
+        totalValue += curVal;
+        unrealizedPnl += curVal - buyPrice * shares;
+        if (curPrice != null) quotedCount++;
+    });
+    return { totalValue, unrealizedPnl, quotedCount, tickerCount: rows.length };
+}
+
 function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session }) {
     const { quotes, setQuotes } = useContext(QuoteContext);
     const uid = session?.user?.id || null;
 
-    // Load cached quotes from localStorage on mount so Dashboard shows
-    // last-known live prices without requiring the user to visit the holdings section first.
+    // Live Posture / Portfolio Value card: source directly from the `portfolio`
+    // table instead of waiting on QuoteContext to be hydrated by a visit to the
+    // Holdings tab. Two steps  instant paint from the same per-user cache
+    // Holdings writes, then a background fetch straight against the table so the
+    // numbers are current even on a cold session.
+    const [portfolioTotals, setPortfolioTotals] = useState(null);
+
+    // Load cached quotes from localStorage on mount so other consumers of
+    // QuoteContext (e.g. the Funds/XIRR tab) keep working without their own fetch.
     useEffect(() => {
         if (!uid) return;
         if (Object.keys(quotes).length === 0) {
@@ -3526,6 +3553,49 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
             } catch (e) { /* ignore */ }
         }
     }, [uid]);
+
+    // Instant paint: reuse the full-row cache Holdings already writes on every
+    // fetch, so a fresh page load shows real numbers immediately instead of "Pending".
+    useEffect(() => {
+        if (!uid) { setPortfolioTotals(null); return; }
+        try {
+            const cached = localStorage.getItem(`tv_portfolio_table_${uid}`);
+            if (cached) {
+                const summary = summarizePortfolioRows(JSON.parse(cached));
+                if (summary) setPortfolioTotals(summary);
+            }
+        } catch (e) { /* ignore */ }
+    }, [uid]);
+
+    // Background refresh: query the `portfolio` table directly (same query
+    // Holdings runs) rather than waiting for the Holdings tab to be opened.
+    useEffect(() => {
+        if (!uid || !session?.access_token || isDemo) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const url = `${SUPABASE_URL}/rest/v1/portfolio?select=symbol,stock_name,cur_price,cur_value,buy_price,shares&user_id=eq.${uid}`;
+                const r = await fetch(url, {
+                    headers: supabase._h(session.access_token),
+                    signal: AbortSignal.timeout(8000),
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                if (cancelled || !Array.isArray(data)) return;
+                const summary = summarizePortfolioRows(data);
+                if (summary) setPortfolioTotals(summary);
+
+                // Keep QuoteContext + its cache in sync for other tabs that key off it.
+                const quoteMap = {};
+                data.forEach(p => {
+                    if (p.symbol) quoteMap[p.symbol] = { currentPrice: Number(p.cur_price), name: p.stock_name };
+                });
+                setQuotes(prev => ({ ...prev, ...quoteMap }));
+                try { localStorage.setItem(`tv_portfolio_quotes_${uid}`, JSON.stringify(quoteMap)); } catch { /* ignore */ }
+            } catch (e) { /* ignore  falls back to the cached/trade-matched values below */ }
+        })();
+        return () => { cancelled = true; };
+    }, [uid, isDemo, session?.access_token]);
 
     // Read cached unrealized P&L saved by the holdings section (fallback when quotes not loaded)
     const cachedUnrealizedDash = (() => {
@@ -3565,31 +3635,15 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
     // Only count open positions (not fully closed trades)
     const openTrades = trades.filter(t => !t.exit_date);
 
-    // Check how many open tickers have a live quote
-    const openTickers = [...new Set(openTrades.map(t => t.ticker))];
-    const quotedCount = openTickers.filter(tk => quotes[tk]?.currentPrice).length;
-    const hasLiveData = quotedCount > 0;
+    // Live Posture numbers now come straight from the `portfolio` table summary
+    // (see the fetch effects above) instead of matching quotes against trades.
+    const hasLiveData = portfolioTotals !== null && portfolioTotals.tickerCount > 0;
+    const totalPortfolioValue = hasLiveData ? portfolioTotals.totalValue : null;
+    const quotedCount = portfolioTotals?.quotedCount ?? 0;
+    const tickerCount = portfolioTotals?.tickerCount ?? 0;
+    const computedUnrealized = hasLiveData ? portfolioTotals.unrealizedPnl : null;
 
-    // Current value: use live price when available, skip tickers with no quote
-    // so we never silently substitute buy_price as "live"
-    const totalPortfolioValue = hasLiveData
-        ? openTrades.reduce((sum, t) => {
-            const live = quotes[t.ticker]?.currentPrice;
-            if (!live) return sum; // skip if no live price for this ticker
-            return sum + t.buy_qty * live;
-        }, 0)
-        : null; // null = no live data available yet
-
-    // Unrealized P&L: compute from live/cached quotes, fallback to the holdings section's saved value
-    const computedUnrealized = hasLiveData
-        ? openTrades.reduce((sum, t) => {
-            const live = quotes[t.ticker]?.currentPrice;
-            if (!live) return sum;
-            return sum + (live - t.buy_price) * t.buy_qty;
-        }, 0)
-        : null;
-
-    // Use computed (from quotes) if available, else use value saved by the holdings section
+    // Use computed (from the portfolio table) if available, else use value saved by the holdings section
     const unrealizedPnl = computedUnrealized !== null ? computedUnrealized : cachedUnrealizedDash;
 
     const combinedPnl = unrealizedPnl !== null
@@ -3600,7 +3654,7 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
     const dashboardHeroMetrics = [
         { label: "Combined P&L", value: fmtPnl(combinedPnl), tone: combinedPnl >= 0 ? "positive" : "negative", sub: `${stats.closed.length} closed trades` },
         { label: "Win rate", value: `${stats.winRate.toFixed(2)}%`, sub: `${stats.wins.length} wins / ${stats.losses.length} losses` },
-        { label: "Open exposure", value: `${openTrades.length}`, sub: hasLiveData ? `${quotedCount}/${openTickers.length} tickers live` : "Refresh holdings section for live prices" },
+        { label: "Open exposure", value: `${openTrades.length}`, sub: hasLiveData ? `${quotedCount}/${tickerCount} tickers live` : "Refresh holdings section for live prices" },
     ];
     // Mobile carousel gets two extra breakdown cards (Realized / Unrealized) that desktop doesn't show as chips.
     const dashboardMobileMetrics = [
@@ -3624,7 +3678,7 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
                 asideValue={totalPortfolioValue !== null ? inr(totalPortfolioValue) : "Pending"}
                 asideTone={combinedPnl >= 0 ? "positive" : "negative"}
                 asideBody={totalPortfolioValue !== null
-                    ? `${quotedCount}/${openTickers.length} open tickers are feeding the current valuation.`
+                    ? `${quotedCount}/${tickerCount} open tickers are feeding the current valuation.`
                     : "Refresh the holdings section below to hydrate live prices and unrealized performance."}
             />
             {isDemo && <div className="demo-banner" style={{ display: "inline-flex", margin: "0 0 14px" }}> Demo Mode  Sign up to save your real trades.</div>}
@@ -3665,7 +3719,7 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
                     </div>
                     <div className="stat-sub">
                         {totalPortfolioValue !== null
-                            ? `Live prices  ${quotedCount}/${openTickers.length} tickers`
+                            ? `Live prices  ${quotedCount}/${tickerCount} tickers`
                             : "Refresh holdings section below to load live prices"}
                     </div>
                 </div>
@@ -21424,14 +21478,14 @@ const LEGAL_COLUMNS = [
         id: "privacy",
         icon: "lock",
         title: "Privacy Policy",
-        intro: "We value your privacy and are committed to protecting your personal information and disclosing data usage practices transparently.",
+        intro: "We value your privacy and are committed to protecting your personal information.",
         items: [
-            { icon: "user", title: "Information We Collect", body: "We collect basic information you provide (such as account email) and technical log data related to usage." },
-            { icon: "database", title: "How We Use Information", body: "Your data is used to provide services, save portfolio and journal entries, and keep the platform secure." },
-            { icon: "globe", title: "Google AdSense & Cookies", body: "Third-party vendors, including Google, use cookies to serve ads based on your prior visits. You can opt out of personalized ads at google.com/settings/ads." },
-            { icon: "shield-check", title: "Data Protection & Rights", body: "We implement industry-standard security measures. You can access, export, or delete your account data at any time." },
+            { icon: "user", title: "Information We Collect", body: "We collect basic information you provide to us and data related to your usage of the platform." },
+            { icon: "database", title: "How We Use Information", body: "Your data is used to provide and improve our services, personalize your experience and communicate important updates." },
+            { icon: "shield-check", title: "Data Protection", body: "We implement industry-standard security measures to protect your data from unauthorized access." },
+            { icon: "user-plus", title: "Your Rights", body: "You can access, update or delete your data at any time by contacting us." },
         ],
-        highlight: { icon: "lock", body: "Google AdSense cookies enable tailored ads. We do not sell your personal user data to third parties." },
+        highlight: { icon: "lock", body: "We do not sell or rent your personal information to third parties." },
     },
     {
         id: "terms",
