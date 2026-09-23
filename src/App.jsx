@@ -11051,7 +11051,7 @@ const SCREENS_TABLE_FETCHERS = {
     pbVolDryup: _makeScreensTableFetcher("volume_dryup_pullback", "te_scr_pbvoldryup_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
     volumeBreakout: _makeScreensTableFetcher("volume_breakout", "te_scr_volumebreakout_v1", "select=*&order=rel_vol.desc.nullslast&limit=1000"),
     high52wBreakout: _makeScreensTableFetcher("high_52w_breakout", "te_scr_high52wbreakout_v1", "select=*&order=rel_vol.desc.nullslast&limit=1000"),
-    pivotBreakout: _makeScreensTableFetcher("pivot_breakout", "te_scr_pivotbreakout_v1", "select=*&order=pct_from_pivot.desc.nullslast&limit=2000"),
+    pivotBreakout: _makeScreensTableFetcher("pivot_breakout", "te_scr_pivotbreakout_v1", "select=*&order=breakout_pct.desc.nullslast&limit=2000"),
     rsRatingLeaders: _makeScreensTableFetcher("rs_rating_leaders", "te_scr_rsratingleaders_v1", "select=*&order=rs_rating.desc.nullslast&limit=1000"),
     // adx_di_screen: rows already filtered server-side (Mkt Cap > 500 Cr, Stage 2
     // trend, RS Rating > 75 or NULL, ADX > 20, DI+ > DI-, DI+ - DI- >= 5, ADX and
@@ -16339,9 +16339,10 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
             .filter(r => r.pivot_type === localPivotTF)
             .map(row => ({
                 ...row,
-                close: row.close != null ? Number(row.close) : null,
-                pivot_high: row.pivot_high != null ? Number(row.pivot_high) : null,
-                pct_above_pivot: row.pct_from_pivot != null ? Number(row.pct_from_pivot) : null,
+                close: row.price != null ? Number(row.price) : null,
+                pivot_high: row.pivot != null ? Number(row.pivot) : null,
+                pct_above_pivot: row.breakout_pct != null ? Number(row.breakout_pct) : null,
+                rel_volume: row.weekly_rel_vol != null ? Number(row.weekly_rel_vol) : null,
             }))
             .sort((a, b) => (a.pct_above_pivot ?? 0) - (b.pct_above_pivot ?? 0));
     }, [pivotMode, detail.allPivotRows, localPivotTF]);
@@ -18436,10 +18437,10 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             .filter(row => row.pivot_type === pivotTF)
             .map(row => ({
                 ...row,
-                close: row.close != null ? Number(row.close) : null,
-                pivot_high: row.pivot_high != null ? Number(row.pivot_high) : null,
-                pct_above_pivot: row.pct_from_pivot != null ? Number(row.pct_from_pivot) : null,
-                rel_volume: row.rel_vol != null ? Number(row.rel_vol) : null,
+                close: row.price != null ? Number(row.price) : null,
+                pivot_high: row.pivot != null ? Number(row.pivot) : null,
+                pct_above_pivot: row.breakout_pct != null ? Number(row.breakout_pct) : null,
+                rel_volume: row.weekly_rel_vol != null ? Number(row.weekly_rel_vol) : null,
             }))
             // Tightest breakout (closest to pivot = smallest % above) first
             .sort((a, b) => (a.pct_above_pivot ?? 0) - (b.pct_above_pivot ?? 0));
