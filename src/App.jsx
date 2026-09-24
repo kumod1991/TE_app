@@ -3883,7 +3883,7 @@ function Analytics({ trades, tradeRows, stats: providedStats, T }) {
                         <div className="bar-row" key={month}><div className="bar-label">{month}</div><div className="bar-track"><div className="bar-fill" style={{ width: `${(Math.abs(pnl) / maxM) * 100}%`, background: pnl >= 0 ? T.green : T.red }}><span className="bar-fill-val">{pnl >= 0 ? "+" : ""}{Math.round(pnl).toLocaleString()}</span></div></div></div>
                     ))}</div>
                 </div>
-             
+
             </div>
         </div>
     );
@@ -4867,148 +4867,148 @@ function Portfolio({ trades, T, session, embedded = false }) {
                     }}>
                         <div style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-x" }}>
                             <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 920 }}>
-                            <thead>
-                                <tr>
-                                    {["Symbol", "Stock Name", "LTP", "Avg Buy", "Qty", "Mkt Val", "P&L", "Weight"].map((label, idx) => (
-                                        <th
-                                            key={label}
-                                            style={{
-                                                padding: "13px 16px",
-                                                fontSize: 10,
-                                                letterSpacing: ".12em",
-                                                textTransform: "uppercase",
-                                                color: T.subtext,
-                                                fontWeight: 800,
-                                                textAlign: idx < 2 ? "left" : "right",
-                                                background: T.tableHead,
-                                                borderBottom: `1px solid ${T.border}`,
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
-                                            {label}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {sorted.map((r, i) => {
-                                    const rowBg = i % 2 === 0 ? T.card : T.tableAlt;
-                                    const isExpanded = expandedTicker === r.ticker;
-                                    const tickerTrades = (trades || [])
-                                        .filter(t => (t.ticker || "").toUpperCase() === r.ticker.toUpperCase())
-                                        .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
-                                    return (
-                                        <Fragment key={r.ticker}>
-                                        <tr style={{ background: isExpanded ? T.tableHover : rowBg, transition: "transform .12s ease, background .12s ease", cursor: "pointer" }}
-                                            onClick={() => setExpandedTicker(isExpanded ? null : r.ticker)}
-                                            onMouseOver={e => {
-                                                e.currentTarget.style.transform = "translateY(-1px)";
-                                                e.currentTarget.style.background = T.tableHover;
-                                            }}
-                                            onMouseOut={e => e.currentTarget.style.background = isExpanded ? T.tableHover : rowBg}>
-                                            <td style={td({ textAlign: "left", padding: "14px 16px" })}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                    <span style={{
-                                                        fontSize: 9,
-                                                        color: T.subtext,
-                                                        transform: isExpanded ? "rotate(90deg)" : "none",
-                                                        transition: "transform .12s ease",
-                                                        display: "inline-block",
-                                                        width: 8,
-                                                    }}>{"\u25B8"}</span>
-                                                    <span style={{
-                                                        width: 8,
-                                                        height: 8,
-                                                        borderRadius: 999,
-                                                        background: T.green,
-                                                        boxShadow: `0 0 0 4px ${T.greenGlow}`,
-                                                        flexShrink: 0,
-                                                    }} />
-                                                    <span style={{ fontWeight: 800, color: T.greenText, ...mono, fontSize: 12.5, letterSpacing: ".02em" }}>{r.ticker}</span>
-                                                </div>
-                                            </td>
-                                            <td style={td({ textAlign: "left", padding: "14px 16px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5, color: T.text, fontWeight: 600 })}>{r.name}</td>
-                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, fontWeight: 800, color: r.currentPrice != null ? T.text : T.muted })}>
-                                                {r.currentPrice != null ? r.currentPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "--"}
-                                            </td>
-                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, color: T.subtext })}>
-                                                {r.avgBuyPrice != null ? r.avgBuyPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "--"}
-                                            </td>
-                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono })}>
-                                                {r.openQty != null ? r.openQty.toLocaleString("en-IN") : "--"}
-                                            </td>
-                                            <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, fontWeight: 800 })}>{r.curVal != null ? inr(r.curVal) : "--"}</td>
-                                            <td style={td({ textAlign: "right", padding: "14px 16px" })}>
-                                                {r.apprc == null ? (
-                                                    <span style={{ color: T.muted, fontSize: 11 }}>--</span>
-                                                ) : (
-                                                    <div>
-                                                        <span style={{
-                                                            display: "inline-flex",
-                                                            alignItems: "center",
-                                                            justifyContent: "center",
-                                                            padding: "4px 10px",
-                                                            borderRadius: 999,
-                                                            background: r.apprc >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.10)",
-                                                            color: r.apprc >= 0 ? T.greenText : T.redText,
-                                                            fontSize: 11,
-                                                            fontWeight: 800,
-                                                            letterSpacing: ".01em",
-                                                        }}>
-                                                            {r.apprc >= 0 ? "\u25B2" : "\u25BC"} {r.apprc >= 0 ? "+" : ""}{r.apprc.toFixed(2)}%
-                                                        </span>
-                                                        <div style={{ ...mono, fontSize: 10.5, fontWeight: 700, color: r.unrealPnl >= 0 ? T.greenText : T.redText, marginTop: 3 }}>
-                                                            {r.unrealPnl >= 0 ? "+" : ""}{inr(r.unrealPnl)}
+                                <thead>
+                                    <tr>
+                                        {["Symbol", "Stock Name", "LTP", "Avg Buy", "Qty", "Mkt Val", "P&L", "Weight"].map((label, idx) => (
+                                            <th
+                                                key={label}
+                                                style={{
+                                                    padding: "13px 16px",
+                                                    fontSize: 10,
+                                                    letterSpacing: ".12em",
+                                                    textTransform: "uppercase",
+                                                    color: T.subtext,
+                                                    fontWeight: 800,
+                                                    textAlign: idx < 2 ? "left" : "right",
+                                                    background: T.tableHead,
+                                                    borderBottom: `1px solid ${T.border}`,
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {label}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sorted.map((r, i) => {
+                                        const rowBg = i % 2 === 0 ? T.card : T.tableAlt;
+                                        const isExpanded = expandedTicker === r.ticker;
+                                        const tickerTrades = (trades || [])
+                                            .filter(t => (t.ticker || "").toUpperCase() === r.ticker.toUpperCase())
+                                            .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
+                                        return (
+                                            <Fragment key={r.ticker}>
+                                                <tr style={{ background: isExpanded ? T.tableHover : rowBg, transition: "transform .12s ease, background .12s ease", cursor: "pointer" }}
+                                                    onClick={() => setExpandedTicker(isExpanded ? null : r.ticker)}
+                                                    onMouseOver={e => {
+                                                        e.currentTarget.style.transform = "translateY(-1px)";
+                                                        e.currentTarget.style.background = T.tableHover;
+                                                    }}
+                                                    onMouseOut={e => e.currentTarget.style.background = isExpanded ? T.tableHover : rowBg}>
+                                                    <td style={td({ textAlign: "left", padding: "14px 16px" })}>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                            <span style={{
+                                                                fontSize: 9,
+                                                                color: T.subtext,
+                                                                transform: isExpanded ? "rotate(90deg)" : "none",
+                                                                transition: "transform .12s ease",
+                                                                display: "inline-block",
+                                                                width: 8,
+                                                            }}>{"\u25B8"}</span>
+                                                            <span style={{
+                                                                width: 8,
+                                                                height: 8,
+                                                                borderRadius: 999,
+                                                                background: T.green,
+                                                                boxShadow: `0 0 0 4px ${T.greenGlow}`,
+                                                                flexShrink: 0,
+                                                            }} />
+                                                            <span style={{ fontWeight: 800, color: T.greenText, ...mono, fontSize: 12.5, letterSpacing: ".02em" }}>{r.ticker}</span>
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td style={td({ textAlign: "right", padding: "14px 16px" })}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                                                    <div style={{ width: 46, height: 5, background: "rgba(148,163,184,0.25)", borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
-                                                        <div style={{ width: `${Math.min(Math.max(r.alloc ?? 0, 0), 100)}%`, height: "100%", background: "linear-gradient(90deg,#059669,#10b981)", borderRadius: 999 }} />
-                                                    </div>
-                                                    <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 38, textAlign: "right" }}>{r.alloc != null ? `${r.alloc.toFixed(1)}%` : "--"}</span>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {isExpanded && (
-                                            <tr style={{ background: T.surface }}>
-                                                <td colSpan={8} style={{ padding: "16px 24px 20px 42px", borderTop: `1px solid ${T.border}` }}>
-                                                    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: T.subtext, marginBottom: 10 }}>
-                                                        Trade History
-                                                    </div>
-                                                    {tickerTrades.length === 0 ? (
-                                                        <div style={{ fontSize: 12.5, color: T.muted }}>No matching entries in your trade log for this ticker.</div>
-                                                    ) : (
-                                                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                                                            {tickerTrades.map(t => (
-                                                                <div key={t.id} style={{ display: "flex", gap: 14, fontSize: 12.5, ...mono, color: T.text }}>
-                                                                    <span style={{ color: T.subtext, minWidth: 90 }}>{new Date(t.entry_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                                                                    <span style={{ color: T.greenText, fontWeight: 700 }}>Buy</span>
-                                                                    <span>{Number(t.buy_qty).toLocaleString("en-IN")} @ {Number(t.buy_price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-                                                                    {t.exit_date && (
-                                                                        <span style={{ color: T.muted }}>
-                                                                            &mdash; closed {new Date(t.exit_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} @ {Number(t.sell_price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                                                                        </span>
-                                                                    )}
+                                                    </td>
+                                                    <td style={td({ textAlign: "left", padding: "14px 16px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5, color: T.text, fontWeight: 600 })}>{r.name}</td>
+                                                    <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, fontWeight: 800, color: r.currentPrice != null ? T.text : T.muted })}>
+                                                        {r.currentPrice != null ? r.currentPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "--"}
+                                                    </td>
+                                                    <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, color: T.subtext })}>
+                                                        {r.avgBuyPrice != null ? r.avgBuyPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "--"}
+                                                    </td>
+                                                    <td style={td({ textAlign: "right", padding: "14px 16px", ...mono })}>
+                                                        {r.openQty != null ? r.openQty.toLocaleString("en-IN") : "--"}
+                                                    </td>
+                                                    <td style={td({ textAlign: "right", padding: "14px 16px", ...mono, fontWeight: 800 })}>{r.curVal != null ? inr(r.curVal) : "--"}</td>
+                                                    <td style={td({ textAlign: "right", padding: "14px 16px" })}>
+                                                        {r.apprc == null ? (
+                                                            <span style={{ color: T.muted, fontSize: 11 }}>--</span>
+                                                        ) : (
+                                                            <div>
+                                                                <span style={{
+                                                                    display: "inline-flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "center",
+                                                                    padding: "4px 10px",
+                                                                    borderRadius: 999,
+                                                                    background: r.apprc >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.10)",
+                                                                    color: r.apprc >= 0 ? T.greenText : T.redText,
+                                                                    fontSize: 11,
+                                                                    fontWeight: 800,
+                                                                    letterSpacing: ".01em",
+                                                                }}>
+                                                                    {r.apprc >= 0 ? "\u25B2" : "\u25BC"} {r.apprc >= 0 ? "+" : ""}{r.apprc.toFixed(2)}%
+                                                                </span>
+                                                                <div style={{ ...mono, fontSize: 10.5, fontWeight: 700, color: r.unrealPnl >= 0 ? T.greenText : T.redText, marginTop: 3 }}>
+                                                                    {r.unrealPnl >= 0 ? "+" : ""}{inr(r.unrealPnl)}
                                                                 </div>
-                                                            ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={td({ textAlign: "right", padding: "14px 16px" })}>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                                                            <div style={{ width: 46, height: 5, background: "rgba(148,163,184,0.25)", borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+                                                                <div style={{ width: `${Math.min(Math.max(r.alloc ?? 0, 0), 100)}%`, height: "100%", background: "linear-gradient(90deg,#059669,#10b981)", borderRadius: 999 }} />
+                                                            </div>
+                                                            <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 38, textAlign: "right" }}>{r.alloc != null ? `${r.alloc.toFixed(1)}%` : "--"}</span>
                                                         </div>
-                                                    )}
-                                                    <div style={{ display: "flex", gap: 24, fontSize: 12, flexWrap: "wrap" }}>
-                                                        <div><span style={{ color: T.subtext }}>Position: </span><span style={{ ...mono, fontWeight: 700 }}>{r.openQty.toLocaleString("en-IN")} shares</span></div>
-                                                        <div><span style={{ color: T.subtext }}>Invested: </span><span style={{ ...mono, fontWeight: 700 }}>{inr(r.invVal)}</span></div>
-                                                        <div><span style={{ color: T.subtext }}>Current: </span><span style={{ ...mono, fontWeight: 700 }}>{inr(r.curVal)}</span></div>
-                                                        <div><span style={{ color: T.subtext }}>Unrealized: </span><span style={{ ...mono, fontWeight: 700, color: r.unrealPnl >= 0 ? T.greenText : T.redText }}>{r.unrealPnl >= 0 ? "+" : ""}{inr(r.unrealPnl)}{r.apprc != null ? ` (${r.apprc >= 0 ? "+" : ""}${r.apprc.toFixed(2)}%)` : ""}</span></div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                        </Fragment>
-                                    );
-                                })}
-                            </tbody>
+                                                    </td>
+                                                </tr>
+                                                {isExpanded && (
+                                                    <tr style={{ background: T.surface }}>
+                                                        <td colSpan={8} style={{ padding: "16px 24px 20px 42px", borderTop: `1px solid ${T.border}` }}>
+                                                            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: T.subtext, marginBottom: 10 }}>
+                                                                Trade History
+                                                            </div>
+                                                            {tickerTrades.length === 0 ? (
+                                                                <div style={{ fontSize: 12.5, color: T.muted }}>No matching entries in your trade log for this ticker.</div>
+                                                            ) : (
+                                                                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                                                                    {tickerTrades.map(t => (
+                                                                        <div key={t.id} style={{ display: "flex", gap: 14, fontSize: 12.5, ...mono, color: T.text }}>
+                                                                            <span style={{ color: T.subtext, minWidth: 90 }}>{new Date(t.entry_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                                                            <span style={{ color: T.greenText, fontWeight: 700 }}>Buy</span>
+                                                                            <span>{Number(t.buy_qty).toLocaleString("en-IN")} @ {Number(t.buy_price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+                                                                            {t.exit_date && (
+                                                                                <span style={{ color: T.muted }}>
+                                                                                    &mdash; closed {new Date(t.exit_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} @ {Number(t.sell_price).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            <div style={{ display: "flex", gap: 24, fontSize: 12, flexWrap: "wrap" }}>
+                                                                <div><span style={{ color: T.subtext }}>Position: </span><span style={{ ...mono, fontWeight: 700 }}>{r.openQty.toLocaleString("en-IN")} shares</span></div>
+                                                                <div><span style={{ color: T.subtext }}>Invested: </span><span style={{ ...mono, fontWeight: 700 }}>{inr(r.invVal)}</span></div>
+                                                                <div><span style={{ color: T.subtext }}>Current: </span><span style={{ ...mono, fontWeight: 700 }}>{inr(r.curVal)}</span></div>
+                                                                <div><span style={{ color: T.subtext }}>Unrealized: </span><span style={{ ...mono, fontWeight: 700, color: r.unrealPnl >= 0 ? T.greenText : T.redText }}>{r.unrealPnl >= 0 ? "+" : ""}{inr(r.unrealPnl)}{r.apprc != null ? ` (${r.apprc >= 0 ? "+" : ""}${r.apprc.toFixed(2)}%)` : ""}</span></div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </Fragment>
+                                        );
+                                    })}
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -5071,67 +5071,67 @@ function Portfolio({ trades, T, session, embedded = false }) {
             ) : (
                 <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", boxShadow: `0 2px 8px ${T.shadow}` }}>
                     <div style={{ overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch", touchAction: "pan-x" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
-                        <thead>
-                            <tr>
-                                <Th col="ticker" label="Symbol" left />
-                                <Th col="name" label="Stock Name" left />
-                                <Th col="currentPrice" label="Cur Price" />
-                                <Th col="avgBuyPrice" label="Buy Price" />
-                                <Th col="openQty" label="Shares" />
-                                <Th col="curVal" label="Cur Value" />
-                                <Th col="apprc" label="Apprc %" />
-                                <Th col="alloc" label="Alloc %" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sorted.map((r, i) => {
-                                const rowBg = i % 2 === 0 ? T.card : T.surface;
-                                return (
-                                    <tr key={r.ticker} style={{ background: rowBg, transition: "background .1s" }}
-                                        onMouseOver={e => e.currentTarget.style.background = T.hover}
-                                        onMouseOut={e => e.currentTarget.style.background = rowBg}>
-                                        {/* Symbol */}
-                                        <td style={td({ textAlign: "left" })}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <span style={{ fontWeight: 700, color: T.greenText, ...mono, fontSize: 12 }}>{r.ticker}</span>
-                                                {!r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
-                                            </div>
-                                        </td>
-                                        {/* Name */}
-                                        <td style={td({ textAlign: "left", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, color: T.subtext })}>
-                                            {r.name}
-                                        </td>
-                                        {/* Current Price */}
-                                        <td style={td({ textAlign: "right", ...mono, fontWeight: 700, color: r.currentPrice ? T.text : T.muted })}>
-                                            {r.currentPrice ? `${r.currentPrice.toFixed(2)}` : ""}
-                                        </td>
-                                        {/* Avg Buy Price */}
-                                        <td style={td({ textAlign: "right", ...mono, color: T.subtext })}>
-                                            {r.avgBuyPrice.toFixed(2)}
-                                        </td>
-                                        {/* Shares */}
-                                        <td style={td({ textAlign: "right", ...mono })}>{r.openQty.toLocaleString("en-IN")}</td>
-                                        {/* Current Value */}
-                                        <td style={td({ textAlign: "right", ...mono, fontWeight: 700 })}>{inr(r.curVal)}</td>
-                                        {/* Appreciation % badge */}
-                                        <td style={td({ textAlign: "right" })}><Badge v={r.apprc} /></td>
-                                        {/* Allocation mini bar */}
-                                        <td style={td({ textAlign: "right" })}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                                                <div style={{ width: 44, height: 4, background: T.border, borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
-                                                    <div style={{ width: `${Math.min(r.alloc, 100)}%`, height: "100%", background: T.green, borderRadius: 2 }} />
+                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
+                            <thead>
+                                <tr>
+                                    <Th col="ticker" label="Symbol" left />
+                                    <Th col="name" label="Stock Name" left />
+                                    <Th col="currentPrice" label="Cur Price" />
+                                    <Th col="avgBuyPrice" label="Buy Price" />
+                                    <Th col="openQty" label="Shares" />
+                                    <Th col="curVal" label="Cur Value" />
+                                    <Th col="apprc" label="Apprc %" />
+                                    <Th col="alloc" label="Alloc %" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sorted.map((r, i) => {
+                                    const rowBg = i % 2 === 0 ? T.card : T.surface;
+                                    return (
+                                        <tr key={r.ticker} style={{ background: rowBg, transition: "background .1s" }}
+                                            onMouseOver={e => e.currentTarget.style.background = T.hover}
+                                            onMouseOut={e => e.currentTarget.style.background = rowBg}>
+                                            {/* Symbol */}
+                                            <td style={td({ textAlign: "left" })}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                    <span style={{ fontWeight: 700, color: T.greenText, ...mono, fontSize: 12 }}>{r.ticker}</span>
+                                                    {!r.loaded && <span style={{ fontSize: 9, color: T.redText, background: T.redGlow, padding: "1px 5px", borderRadius: 4 }}>!</span>}
                                                 </div>
-                                                <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 34, textAlign: "right" }}>
-                                                    {r.alloc.toFixed(1)}%
-                                                </span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                            </td>
+                                            {/* Name */}
+                                            <td style={td({ textAlign: "left", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, color: T.subtext })}>
+                                                {r.name}
+                                            </td>
+                                            {/* Current Price */}
+                                            <td style={td({ textAlign: "right", ...mono, fontWeight: 700, color: r.currentPrice ? T.text : T.muted })}>
+                                                {r.currentPrice ? `${r.currentPrice.toFixed(2)}` : ""}
+                                            </td>
+                                            {/* Avg Buy Price */}
+                                            <td style={td({ textAlign: "right", ...mono, color: T.subtext })}>
+                                                {r.avgBuyPrice.toFixed(2)}
+                                            </td>
+                                            {/* Shares */}
+                                            <td style={td({ textAlign: "right", ...mono })}>{r.openQty.toLocaleString("en-IN")}</td>
+                                            {/* Current Value */}
+                                            <td style={td({ textAlign: "right", ...mono, fontWeight: 700 })}>{inr(r.curVal)}</td>
+                                            {/* Appreciation % badge */}
+                                            <td style={td({ textAlign: "right" })}><Badge v={r.apprc} /></td>
+                                            {/* Allocation mini bar */}
+                                            <td style={td({ textAlign: "right" })}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                                                    <div style={{ width: 44, height: 4, background: T.border, borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
+                                                        <div style={{ width: `${Math.min(r.alloc, 100)}%`, height: "100%", background: T.green, borderRadius: 2 }} />
+                                                    </div>
+                                                    <span style={{ ...mono, fontSize: 11, color: T.subtext, minWidth: 34, textAlign: "right" }}>
+                                                        {r.alloc.toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
@@ -7925,7 +7925,7 @@ function P2PTab({ currentData, sidebarRatiosRef, T }) {
                         </div>
                     </div>
                     <div style={{ padding: "8px 20px 14px", fontSize: 11, color: T.muted }}>
-                        
+
                     </div>
                 </div>
             )}
@@ -11208,12 +11208,19 @@ const SCREENS_TABLE_FETCHERS = {
     // (high_3y, pct_from_high_3y already computed server-side, same Stage 2 /
     // RS shape as the other dedicated screens tables above).
     multiyearBreakout: _makeScreensTableFetcher("multiyear_high_breakout", "te_scr_multiyearbreakout_v1", "select=*&order=pct_from_high_3y.desc.nullslast&limit=1000"),
-    // multiyear_breakout_pullback: broke out above a multi-year high, then
-    // pulled back from the post-breakout high (pullback_from_high_pct,
-    // breakout_strength_pct, days_since_breakout already computed server-
-    // side), ordered shallowest-pullback-first (closest to the post-breakout
-    // high), same dedicated-table fetch/cache pattern as the screens above.
-    multiyearPullback: _makeScreensTableFetcher("multiyear_breakout_pullback", "te_scr_multiyearpullback_v1", "select=*&order=pullback_from_high_pct.desc.nullslast&limit=1000"),
+    // multiyear_breakout_pullback: broke out above a multi-year high
+    // (historical_high/breakout_date/breakout_price) and has since pulled
+    // back from that breakout (pullback_from_breakout, pct_to_high,
+    // high_age_years already computed server-side), ordered shallowest-
+    // pullback-first, same dedicated-table fetch/cache pattern as the
+    // screens above.
+    multiyearPullback: _makeScreensTableFetcher("multiyear_breakout_pullback", "te_scr_multiyearpullback_v1", "select=*&order=pullback_from_breakout.desc.nullslast&limit=1000"),
+    // multiyear_high_soon: stocks still below a multi-year historical high
+    // (historical_high/high_date/high_age_years) and approaching it
+    // (pct_to_high, negative = % below the high, already computed server-side),
+    // ordered closest-to-high-first, same dedicated-table fetch/cache pattern
+    // as the other Breakouts screens tables above.
+    multiyearHighSoon: _makeScreensTableFetcher("multiyear_high_soon", "te_scr_multiyearhighsoon_v1", "select=*&order=pct_to_high.desc.nullslast&limit=1000"),
 };
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -12081,12 +12088,12 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                                         </button>
                                         {librayScreens.length > 1 && (
                                             <button onClick={e => { e.stopPropagation(); deleteScreen(sc.id); }}
-                                            style={{
-                                                display: "flex", alignItems: "center", justifyContent: "center",
-                                                width: 22, height: 22, marginTop: -1,
-                                                background: "none", border: "none", color: DS.textMuted,
-                                                cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
-                                                transition: "opacity .12s, background .12s"
+                                                style={{
+                                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                                    width: 22, height: 22, marginTop: -1,
+                                                    background: "none", border: "none", color: DS.textMuted,
+                                                    cursor: "pointer", opacity: .38, padding: 0, borderRadius: 5,
+                                                    transition: "opacity .12s, background .12s"
                                                 }}
                                                 onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"; }}
                                                 onMouseLeave={e => { e.currentTarget.style.opacity = "0.38"; e.currentTarget.style.background = "transparent"; }}
@@ -12164,816 +12171,816 @@ function ScreenerModule({ T, session = null, tickerFilter = null, technoFundaLab
                 gap: 14
             }}>
 
-            {/*  ROW 1: Screen tabs + toolbar  */}
-            <div style={{
-                flexShrink: 0, background: DS.card,
-                border: `1px solid ${DS.border}`,
-                borderRadius: 24,
-                boxShadow: DS.isDark ? "0 16px 44px rgba(2,6,23,0.24)" : "0 12px 30px rgba(15,23,42,0.06)",
-                padding: isScreenerMobile ? "12px 14px" : "10px 14px", display: isScreenerMobile ? "none" : "flex", alignItems: "stretch",
-                flexDirection: "row",
-                gap: 0,
-                minHeight: 54, overflow: "hidden"
-            }}>
-
-                {/* Tabs */}
-                <div style={{ display: "flex", alignItems: "stretch", flex: 1, overflow: isScreenerMobile ? "auto hidden" : "hidden", paddingBottom: isScreenerMobile ? 2 : 0 }}>
-                    {!tickerFilter && (
-                        <button onClick={() => setViewMode("library")}
-                            style={{
-                                display: "flex", alignItems: "center", gap: 6, alignSelf: "center",
-                                marginRight: 10, padding: "5px 10px 5px 6px", border: "none",
-                                background: "transparent", color: DS.textMuted, cursor: "pointer",
-                                fontSize: 12.5, fontWeight: 500, fontFamily: DS.sans,
-                                borderRadius: 7, transition: "color .12s, background .12s", flexShrink: 0
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L5 8l5 5" /></svg>
-                            My Screens
-                        </button>
-                    )}
-                    {screens.map(sc => {
-                        const isTechno = sc.id === TECHNO_ID;
-                        const isActive = activeScreenId === sc.id;
-                        return (
-                            <div key={sc.id} style={{ display: "flex", alignItems: "stretch", flexShrink: 0 }}>
-                                {editingName && isActive && !isTechno ? (
-                                    <input autoFocus value={nameInput}
-                                        onChange={e => setNameInput(e.target.value)}
-                                        onBlur={() => { if (nameInput.trim()) renameScreen(sc.id, nameInput); setEditingName(false); }}
-                                        onKeyDown={e => { if (e.key === "Enter" && nameInput.trim()) { renameScreen(sc.id, nameInput); setEditingName(false); } }}
-                                        style={{
-                                            alignSelf: "center", fontSize: 13, fontWeight: 600,
-                                            padding: "4px 9px", border: `1px solid ${DS.accent}`,
-                                            borderRadius: 7, background: DS.accentDim,
-                                            color: DS.accent, fontFamily: DS.sans, outline: "none", width: 130
-                                        }} />
-                                ) : (
-                                    <button onClick={() => setActiveScreenId(sc.id)}
-                                        onDoubleClick={() => { if (!isTechno) { setNameInput(sc.name); setEditingName(true); } }}
-                                        style={{
-                                            display: "flex", alignItems: "center", gap: isTechno ? 6 : 0,
-                                            padding: isScreenerMobile ? "0 14px" : "0 15px", border: "none",
-                                            borderBottom: isScreenerMobile ? "none" : `2px solid ${isActive ? (isTechno ? "#818cf8" : DS.accent) : "transparent"}`,
-                                            marginBottom: isScreenerMobile ? 0 : -1,
-                                            background: isScreenerMobile
-                                                ? (isActive ? (isTechno ? "rgba(129,140,248,0.12)" : DS.accentDim) : DS.bg)
-                                                : "transparent",
-                                            color: isActive ? (isTechno ? "#818cf8" : DS.text) : DS.textSub,
-                                            fontWeight: isActive ? 600 : 400,
-                                            fontSize: 13, cursor: "pointer", fontFamily: DS.sans,
-                                            transition: "color .12s", whiteSpace: "nowrap",
-                                            borderRadius: isScreenerMobile ? 999 : 0,
-                                            height: isScreenerMobile ? 34 : "auto",
-                                            boxShadow: isScreenerMobile && isActive ? `inset 0 0 0 1px ${isTechno ? "rgba(129,140,248,0.28)" : `${DS.accent}33`}` : "none",
-                                        }}
-                                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = DS.text; }}
-                                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = DS.textSub; }}>
-                                        {isTechno && <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="6" cy="6" r="4" /><line x1="9.5" y1="9.5" x2="14" y2="14" /></svg>}
-                                        {sc.name}
-                                    </button>
-                                )}
-                                {screens.length > 1 && !isTechno && (
-                                    <button onClick={() => deleteScreen(sc.id)}
-                                        style={{
-                                            alignSelf: "center", background: "none", border: "none",
-                                            color: DS.textMuted, cursor: "pointer", fontSize: 15,
-                                            padding: isScreenerMobile ? "0 6px 0 2px" : "0 3px 0 0", opacity: .4, transition: "opacity .12s"
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-                                        onMouseLeave={e => e.currentTarget.style.opacity = "0.4"}>x</button>
-                                )}
-                            </div>
-                        );
-                    })}
-                    <button onClick={addScreen}
-                        style={{
-                            alignSelf: "center", marginLeft: 8,
-                            display: "flex", alignItems: "center", gap: 5,
-                            height: isScreenerMobile ? 34 : 26, padding: isScreenerMobile ? "0 12px" : "0 10px",
-                            border: `1px dashed ${DS.border}`, borderRadius: isScreenerMobile ? 999 : 7,
-                            background: isScreenerMobile ? DS.bg : "transparent", color: DS.textMuted,
-                            fontSize: 12, fontFamily: DS.sans, cursor: "pointer",
-                            transition: "border-color .12s, color .12s"
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent; e.currentTarget.style.color = DS.accent; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; }}>
-                        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
-                        Screen
-                    </button>
-                </div>
-
-                {/* Right controls */}
+                {/*  ROW 1: Screen tabs + toolbar  */}
                 <div style={{
-                    display: "flex", alignItems: isScreenerMobile ? "stretch" : "center", gap: 8, flexShrink: 0,
-                    paddingLeft: isScreenerMobile ? 0 : 14, borderLeft: isScreenerMobile ? "none" : `1px solid ${DS.border}`,
-                    flexWrap: isScreenerMobile ? "wrap" : "nowrap"
+                    flexShrink: 0, background: DS.card,
+                    border: `1px solid ${DS.border}`,
+                    borderRadius: 24,
+                    boxShadow: DS.isDark ? "0 16px 44px rgba(2,6,23,0.24)" : "0 12px 30px rgba(15,23,42,0.06)",
+                    padding: isScreenerMobile ? "12px 14px" : "10px 14px", display: isScreenerMobile ? "none" : "flex", alignItems: "stretch",
+                    flexDirection: "row",
+                    gap: 0,
+                    minHeight: 54, overflow: "hidden"
                 }}>
 
-                    {!loading && allRows.length > 0 && (
-                        <span style={{
-                            fontFamily: DS.mono, fontSize: 12,
-                            color: DS.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+                    {/* Tabs */}
+                    <div style={{ display: "flex", alignItems: "stretch", flex: 1, overflow: isScreenerMobile ? "auto hidden" : "hidden", paddingBottom: isScreenerMobile ? 2 : 0 }}>
+                        {!tickerFilter && (
+                            <button onClick={() => setViewMode("library")}
+                                style={{
+                                    display: "flex", alignItems: "center", gap: 6, alignSelf: "center",
+                                    marginRight: 10, padding: "5px 10px 5px 6px", border: "none",
+                                    background: "transparent", color: DS.textMuted, cursor: "pointer",
+                                    fontSize: 12.5, fontWeight: 500, fontFamily: DS.sans,
+                                    borderRadius: 7, transition: "color .12s, background .12s", flexShrink: 0
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = "transparent"; }}>
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L5 8l5 5" /></svg>
+                                My Screens
+                            </button>
+                        )}
+                        {screens.map(sc => {
+                            const isTechno = sc.id === TECHNO_ID;
+                            const isActive = activeScreenId === sc.id;
+                            return (
+                                <div key={sc.id} style={{ display: "flex", alignItems: "stretch", flexShrink: 0 }}>
+                                    {editingName && isActive && !isTechno ? (
+                                        <input autoFocus value={nameInput}
+                                            onChange={e => setNameInput(e.target.value)}
+                                            onBlur={() => { if (nameInput.trim()) renameScreen(sc.id, nameInput); setEditingName(false); }}
+                                            onKeyDown={e => { if (e.key === "Enter" && nameInput.trim()) { renameScreen(sc.id, nameInput); setEditingName(false); } }}
+                                            style={{
+                                                alignSelf: "center", fontSize: 13, fontWeight: 600,
+                                                padding: "4px 9px", border: `1px solid ${DS.accent}`,
+                                                borderRadius: 7, background: DS.accentDim,
+                                                color: DS.accent, fontFamily: DS.sans, outline: "none", width: 130
+                                            }} />
+                                    ) : (
+                                        <button onClick={() => setActiveScreenId(sc.id)}
+                                            onDoubleClick={() => { if (!isTechno) { setNameInput(sc.name); setEditingName(true); } }}
+                                            style={{
+                                                display: "flex", alignItems: "center", gap: isTechno ? 6 : 0,
+                                                padding: isScreenerMobile ? "0 14px" : "0 15px", border: "none",
+                                                borderBottom: isScreenerMobile ? "none" : `2px solid ${isActive ? (isTechno ? "#818cf8" : DS.accent) : "transparent"}`,
+                                                marginBottom: isScreenerMobile ? 0 : -1,
+                                                background: isScreenerMobile
+                                                    ? (isActive ? (isTechno ? "rgba(129,140,248,0.12)" : DS.accentDim) : DS.bg)
+                                                    : "transparent",
+                                                color: isActive ? (isTechno ? "#818cf8" : DS.text) : DS.textSub,
+                                                fontWeight: isActive ? 600 : 400,
+                                                fontSize: 13, cursor: "pointer", fontFamily: DS.sans,
+                                                transition: "color .12s", whiteSpace: "nowrap",
+                                                borderRadius: isScreenerMobile ? 999 : 0,
+                                                height: isScreenerMobile ? 34 : "auto",
+                                                boxShadow: isScreenerMobile && isActive ? `inset 0 0 0 1px ${isTechno ? "rgba(129,140,248,0.28)" : `${DS.accent}33`}` : "none",
+                                            }}
+                                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = DS.text; }}
+                                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = DS.textSub; }}>
+                                            {isTechno && <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="6" cy="6" r="4" /><line x1="9.5" y1="9.5" x2="14" y2="14" /></svg>}
+                                            {sc.name}
+                                        </button>
+                                    )}
+                                    {screens.length > 1 && !isTechno && (
+                                        <button onClick={() => deleteScreen(sc.id)}
+                                            style={{
+                                                alignSelf: "center", background: "none", border: "none",
+                                                color: DS.textMuted, cursor: "pointer", fontSize: 15,
+                                                padding: isScreenerMobile ? "0 6px 0 2px" : "0 3px 0 0", opacity: .4, transition: "opacity .12s"
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                                            onMouseLeave={e => e.currentTarget.style.opacity = "0.4"}>x</button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        <button onClick={addScreen}
+                            style={{
+                                alignSelf: "center", marginLeft: 8,
+                                display: "flex", alignItems: "center", gap: 5,
+                                height: isScreenerMobile ? 34 : 26, padding: isScreenerMobile ? "0 12px" : "0 10px",
+                                border: `1px dashed ${DS.border}`, borderRadius: isScreenerMobile ? 999 : 7,
+                                background: isScreenerMobile ? DS.bg : "transparent", color: DS.textMuted,
+                                fontSize: 12, fontFamily: DS.sans, cursor: "pointer",
+                                transition: "border-color .12s, color .12s"
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent; e.currentTarget.style.color = DS.accent; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; }}>
+                            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
+                            Screen
+                        </button>
+                    </div>
+
+                    {/* Right controls */}
+                    <div style={{
+                        display: "flex", alignItems: isScreenerMobile ? "stretch" : "center", gap: 8, flexShrink: 0,
+                        paddingLeft: isScreenerMobile ? 0 : 14, borderLeft: isScreenerMobile ? "none" : `1px solid ${DS.border}`,
+                        flexWrap: isScreenerMobile ? "wrap" : "nowrap"
+                    }}>
+
+                        {!loading && allRows.length > 0 && (
+                            <span style={{
+                                fontFamily: DS.mono, fontSize: 12,
+                                color: DS.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+                                width: isScreenerMobile ? "100%" : "auto"
+                            }}>
+                                <strong style={{ color: DS.text, fontWeight: 600 }}>
+                                    {filtered.length.toLocaleString("en-IN")}
+                                </strong>{" results"}
+                            </span>
+                        )}
+
+                        {!isScreenerMobile && <div style={{ width: 1, height: 16, background: DS.border }} />}
+
+                        {/* Density toggle */}
+                        <div style={{ display: "flex", gap: 1, order: isScreenerMobile ? 2 : 0 }}>
+                            {[["compact", ""], ["comfortable", ""]].map(([d, icon]) => (
+                                <button key={d} onClick={() => setDensity(d)} title={d}
+                                    style={{
+                                        width: 26, height: 26, border: "none", borderRadius: 6,
+                                        background: density === d ? DS.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" : "transparent",
+                                        color: density === d ? DS.accent : DS.textMuted,
+                                        cursor: "pointer", fontSize: 13,
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        transition: "all .12s"
+                                    }}>
+                                    {icon}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Universe */}
+                        <div style={{
+                            display: "flex", gap: 2, background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
+                            borderRadius: 8, padding: 3, border: `1px solid ${DS.border}`, order: isScreenerMobile ? 1 : 0,
                             width: isScreenerMobile ? "100%" : "auto"
                         }}>
-                            <strong style={{ color: DS.text, fontWeight: 600 }}>
-                                {filtered.length.toLocaleString("en-IN")}
-                            </strong>{" results"}
-                        </span>
-                    )}
-
-                    {!isScreenerMobile && <div style={{ width: 1, height: 16, background: DS.border }} />}
-
-                    {/* Density toggle */}
-                    <div style={{ display: "flex", gap: 1, order: isScreenerMobile ? 2 : 0 }}>
-                        {[["compact", ""], ["comfortable", ""]].map(([d, icon]) => (
-                            <button key={d} onClick={() => setDensity(d)} title={d}
-                                style={{
-                                    width: 26, height: 26, border: "none", borderRadius: 6,
-                                    background: density === d ? DS.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" : "transparent",
-                                    color: density === d ? DS.accent : DS.textMuted,
-                                    cursor: "pointer", fontSize: 13,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    transition: "all .12s"
-                                }}>
-                                {icon}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Universe */}
-                    <div style={{
-                        display: "flex", gap: 2, background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-                        borderRadius: 8, padding: 3, border: `1px solid ${DS.border}`, order: isScreenerMobile ? 1 : 0,
-                        width: isScreenerMobile ? "100%" : "auto"
-                    }}>
-                        {[{ v: "all", l: "All" }, { v: "nifty500", l: "N500" }].map(opt => (
-                            <button key={opt.v} onClick={() => setUniverse(opt.v)}
-                                style={{
-                                    height: 22, padding: "0 10px", border: "none", borderRadius: 6,
-                                    background: universe === opt.v ? DS.accent : "transparent",
-                                    color: universe === opt.v ? "#fff" : DS.textSub,
-                                    fontWeight: universe === opt.v ? 600 : 400,
-                                    fontSize: 12, fontFamily: DS.sans, cursor: "pointer",
-                                    transition: ".12s", flex: isScreenerMobile ? 1 : "0 0 auto"
-                                }}>
-                                {opt.l}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Columns */}
-                    <button onClick={() => setShowColPicker(v => !v)}
-                        style={isScreenerMobile ? { ...mobileGhostBtn(showColPicker), flex: "1 1 0" } : ghostBtn(showColPicker)}
-                        onMouseEnter={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
-                        onMouseLeave={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; } }}>
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                            <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" /><line x1="1" y1="12" x2="15" y2="12" />
-                            <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" /><line x1="7" y1="10" x2="7" y2="14" />
-                        </svg>
-                        Columns
-                    </button>
-
-                    {/* Refresh */}
-                    <button onClick={() => loadRatios(true)} disabled={loading}
-                        style={isScreenerMobile
-                            ? { ...mobileGhostBtn(false), flex: "1 1 0", opacity: loading ? .5 : 1, cursor: loading ? "not-allowed" : "pointer" }
-                            : { ...ghostBtn(false), opacity: loading ? .5 : 1, cursor: loading ? "not-allowed" : "pointer" }}
-                        onMouseEnter={e => { if (!loading) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
-                            style={{ animation: loading ? "finspin .8s linear infinite" : "none" }}>
-                            <path d="M13.5 8A5.5 5.5 0 1 1 10.5 3.2" /><path d="M10 1l2.5 2.2L10 5.4" />
-                        </svg>
-                        {loading ? "Loading" : lastRefresh || "Refresh"}
-                    </button>
-                </div>
-            </div>
-
-            {/*  TECHNOFUNDA BANNER  */}
-            {tickerFilter && tickerFilter.size > 0 && (
-                <div style={{
-                    flexShrink: 0,
-                    background: DS.isDark ? "rgba(99,102,241,0.07)" : "rgba(99,102,241,0.05)",
-                    borderBottom: `1px solid rgba(99,102,241,0.18)`,
-                    padding: "10px 16px", display: isScreenerMobile ? "none" : "flex", alignItems: "center", gap: 10,
-                    flexWrap: "nowrap"
-                }}>
-                    {/* Back button */}
-                    {onBack && (
-                        <button onClick={onBack}
-                            style={{
-                                display: "inline-flex", alignItems: "center", gap: 6,
-                                height: 30, padding: "0 12px",
-                                border: `1px solid ${DS.border}`, borderRadius: 7,
-                                background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-                                color: DS.textSub, cursor: "pointer", fontSize: 12,
-                                fontFamily: DS.sans, fontWeight: 500,
-                                transition: "all .13s", flexShrink: 0
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.5)"; e.currentTarget.style.color = DS.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 3L5 8l5 5" />
-                            </svg>
-                            Back
-                        </button>
-                    )}
-                    {/* Divider */}
-                    {onBack && <div style={{ width: 1, height: 16, background: DS.border, flexShrink: 0 }} />}
-                    {/* Label */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <span style={{
-                            fontSize: 10, fontWeight: 700, color: "#6366f1",
-                            letterSpacing: ".06em", textTransform: "uppercase",
-                            flexShrink: 0
-                        }}>TechnoFunda</span>
-                        {technoFundaLabel && (
-                            <span style={{
-                                fontSize: 12, color: DS.textSub, fontWeight: 500,
-                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
-                            }}>
-                                {technoFundaLabel}
-                            </span>
-                        )}
-                        <span style={{ fontSize: 12, color: DS.textMuted, flexShrink: 0 }}>
-                            <strong style={{ color: DS.text, fontWeight: 600 }}>{tickerFilter.size}</strong> stocks
-                        </span>
-                    </div>
-                    {/* Clear  only shown when no back button (edge case) */}
-                    {!onBack && (
-                        <button onClick={onClearTickerFilter}
-                            style={{ marginLeft: isScreenerMobile ? 0 : "auto", ...ghostBtn(false), padding: "4px 10px", fontSize: 12 }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                            x Clear
-                        </button>
-                    )}
-                </div>
-            )}
-
-            {/*  FILTER BAR  */}
-            <div style={{
-                flexShrink: 0, border: `1px solid ${DS.border}`,
-                padding: "14px 16px", display: "flex", alignItems: "center",
-                gap: 10, flexWrap: "wrap", minHeight: 60, background: DS.card,
-                borderRadius: 22, boxShadow: DS.isDark ? "0 12px 34px rgba(2,6,23,0.20)" : "0 10px 26px rgba(15,23,42,0.05)"
-            }}>
-
-                {isScreenerMobile && (
-                    <div style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        padding: "2px 0 6px",
-                    }}>
-                        <div style={{ minWidth: 0 }}>
-                            {!tickerFilter && (
-                                <button onClick={() => setViewMode("library")}
+                            {[{ v: "all", l: "All" }, { v: "nifty500", l: "N500" }].map(opt => (
+                                <button key={opt.v} onClick={() => setUniverse(opt.v)}
                                     style={{
-                                        display: "flex", alignItems: "center", gap: 5, marginBottom: 4,
-                                        padding: 0, border: "none", background: "transparent",
-                                        color: DS.textMuted, cursor: "pointer", fontSize: 11.5,
-                                        fontWeight: 600, fontFamily: DS.sans
+                                        height: 22, padding: "0 10px", border: "none", borderRadius: 6,
+                                        background: universe === opt.v ? DS.accent : "transparent",
+                                        color: universe === opt.v ? "#fff" : DS.textSub,
+                                        fontWeight: universe === opt.v ? 600 : 400,
+                                        fontSize: 12, fontFamily: DS.sans, cursor: "pointer",
+                                        transition: ".12s", flex: isScreenerMobile ? 1 : "0 0 auto"
                                     }}>
-                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L5 8l5 5" /></svg>
-                                    My Screens
+                                    {opt.l}
                                 </button>
-                            )}
-                            <div style={{ fontSize: 11, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".08em" }}>
-                                Filters
-                            </div>
-                            <div style={{ marginTop: 3, fontSize: 13, color: DS.textSub, lineHeight: 1.35 }}>
-                                {filters.length > 0
-                                    ? `${filters.length} active rule${filters.length > 1 ? "s" : ""} on ${activeScreen?.name || "screen"}`
-                                    : "No active rules"}
-                            </div>
+                            ))}
                         </div>
-                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                            <button
-                                onClick={() => setShowColPicker(v => !v)}
-                                style={{ ...mobileGhostBtn(showColPicker), padding: "8px 12px", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}
-                            >
-                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                                    <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" /><line x1="1" y1="12" x2="15" y2="12" />
-                                    <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" /><line x1="7" y1="10" x2="7" y2="14" />
-                                </svg>
-                                Columns
-                            </button>
-                            <button
-                                onClick={() => setMobileFiltersExpanded(v => !v)}
-                                style={{ ...mobileGhostBtn(mobileFiltersExpanded), padding: "8px 12px", flexShrink: 0 }}
-                            >
-                                {mobileFiltersExpanded ? "Hide filters" : "Show filters"}
-                            </button>
-                        </div>
-                    </div>
-                )}
 
-                {(!isScreenerMobile || mobileFiltersExpanded) && (
-                    <>
-
-                        {filters.map((f, idx) => (
-                            <FilterPill key={f.id || idx} filter={f} idx={idx}
-                                onUpdate={updateFilter} onRemove={removeFilter} DS={DS} />
-                        ))}
-
-                        <button onClick={addFilter}
-                            style={{ ...(isScreenerMobile ? mobileGhostBtn(false) : ghostBtn(false)), borderStyle: "dashed", color: DS.textMuted }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; }}>
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
-                            Add Filter
+                        {/* Columns */}
+                        <button onClick={() => setShowColPicker(v => !v)}
+                            style={isScreenerMobile ? { ...mobileGhostBtn(showColPicker), flex: "1 1 0" } : ghostBtn(showColPicker)}
+                            onMouseEnter={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
+                            onMouseLeave={e => { if (!showColPicker) { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; } }}>
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                                <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" /><line x1="1" y1="12" x2="15" y2="12" />
+                                <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" /><line x1="7" y1="10" x2="7" y2="14" />
+                            </svg>
+                            Columns
                         </button>
 
-                        {filters.length > 0 && (
-                            <button onClick={clearFilters}
+                        {/* Refresh */}
+                        <button onClick={() => loadRatios(true)} disabled={loading}
+                            style={isScreenerMobile
+                                ? { ...mobileGhostBtn(false), flex: "1 1 0", opacity: loading ? .5 : 1, cursor: loading ? "not-allowed" : "pointer" }
+                                : { ...ghostBtn(false), opacity: loading ? .5 : 1, cursor: loading ? "not-allowed" : "pointer" }}
+                            onMouseEnter={e => { if (!loading) { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; } }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+                                style={{ animation: loading ? "finspin .8s linear infinite" : "none" }}>
+                                <path d="M13.5 8A5.5 5.5 0 1 1 10.5 3.2" /><path d="M10 1l2.5 2.2L10 5.4" />
+                            </svg>
+                            {loading ? "Loading" : lastRefresh || "Refresh"}
+                        </button>
+                    </div>
+                </div>
+
+                {/*  TECHNOFUNDA BANNER  */}
+                {tickerFilter && tickerFilter.size > 0 && (
+                    <div style={{
+                        flexShrink: 0,
+                        background: DS.isDark ? "rgba(99,102,241,0.07)" : "rgba(99,102,241,0.05)",
+                        borderBottom: `1px solid rgba(99,102,241,0.18)`,
+                        padding: "10px 16px", display: isScreenerMobile ? "none" : "flex", alignItems: "center", gap: 10,
+                        flexWrap: "nowrap"
+                    }}>
+                        {/* Back button */}
+                        {onBack && (
+                            <button onClick={onBack}
                                 style={{
-                                    background: "none", border: "none", cursor: "pointer",
-                                    color: DS.textMuted, fontSize: 13, fontFamily: DS.sans, padding: "0 4px",
-                                    transition: "color .12s"
+                                    display: "inline-flex", alignItems: "center", gap: 6,
+                                    height: 30, padding: "0 12px",
+                                    border: `1px solid ${DS.border}`, borderRadius: 7,
+                                    background: DS.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                                    color: DS.textSub, cursor: "pointer", fontSize: 12,
+                                    fontFamily: DS.sans, fontWeight: 500,
+                                    transition: "all .13s", flexShrink: 0
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.color = DS.text}
-                                onMouseLeave={e => e.currentTarget.style.color = DS.textMuted}>
-                                Clear all
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.5)"; e.currentTarget.style.color = DS.text; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M10 3L5 8l5 5" />
+                                </svg>
+                                Back
                             </button>
                         )}
-
-                        <button onClick={applyResults}
-                            style={{
-                                width: isScreenerMobile ? "100%" : "auto",
-                                marginTop: isScreenerMobile ? 4 : 0,
-                                marginLeft: isScreenerMobile ? 0 : "auto",
-                                padding: isScreenerMobile ? "11px 16px" : "6px 16px",
-                                background: isApplied ? DS.accentDim : DS.accent,
-                                border: `1px solid ${DS.accent}`, borderRadius: isScreenerMobile ? 9 : 7,
-                                color: isApplied ? DS.accent : "#fff",
-                                fontSize: isScreenerMobile ? 13.5 : 12.5, fontWeight: 650, fontFamily: DS.sans, cursor: "pointer",
-                                display: "flex", alignItems: "center", justifyContent: "center", gap: 7, flexShrink: 0
-                            }}>
-                            {isApplied ? (
-                                <>
-                                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8l3.5 3.5L13 5" /></svg>
-                                    Filters Applied
-                                </>
-                            ) : (
-                                `Apply Filter${filters.length === 1 ? "" : "s"}${filters.length > 0 ? ` (${filters.length})` : ""}`
-                            )}
-                        </button>
-                    </>
-                )}
-            </div>
-
-            {/*  TABLE AREA  */}
-            <div style={{
-                flex: 1, overflow: "hidden", background: DS.card,
-                minHeight: 0, display: "flex", flexDirection: "column",
-                border: `1px solid ${DS.border}`, borderRadius: 24,
-                boxShadow: DS.isDark ? "0 16px 44px rgba(2,6,23,0.20)" : "0 12px 30px rgba(15,23,42,0.06)"
-            }}>
-
-                {/* Not yet applied  results stay hidden until "Apply Filter" is clicked */}
-                {!isApplied && (
-                    <div style={{
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                        justifyContent: "center", height: "100%", gap: 10, color: DS.textSub, padding: "0 24px"
-                    }}>
-                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: .2 }}>
-                            <path d="M4 5h16M7 12h10M10 19h4" />
-                        </svg>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub, textAlign: "center" }}>
-                            {filters.length > 0 ? "Filters not applied yet" : "No filters yet"}
-                        </div>
-                        <div style={{ fontSize: 13, color: DS.textMuted, textAlign: "center", maxWidth: 320 }}>
-                            {filters.length > 0
-                                ? "Click \"Apply Filter\" above to run this screen."
-                                : "Add a filter rule, then click \"Apply Filter\" to see matching stocks."}
-                        </div>
-                        <button onClick={applyResults} style={{ marginTop: 4, ...ghostBtn(false) }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                            {filters.length > 0 ? `Apply Filter${filters.length === 1 ? "" : "s"}` : "Show all stocks"}
-                        </button>
-                    </div>
-                )}
-
-                {/* Loading */}
-                {isApplied && loading && allRows.length === 0 && (
-                    <div style={{
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                        justifyContent: "center", height: "100%", gap: 12, color: DS.textSub
-                    }}>
-                        <div style={{
-                            width: 20, height: 20, border: `2px solid ${DS.border}`,
-                            borderTopColor: DS.accent, borderRadius: "50%",
-                            animation: "finspin .7s linear infinite"
-                        }} />
-                        <span style={{ fontSize: 13 }}>Loading</span>
-                    </div>
-                )}
-
-                {/* Error */}
-                {isApplied && loadErr && (
-                    <div style={{ padding: "40px 24px", textAlign: "center" }}>
-                        <div style={{
-                            display: "inline-block", background: DS.isDark ? "rgba(244,63,94,0.07)" : "rgba(220,38,38,0.05)",
-                            border: `1px solid ${DS.neg}33`, borderRadius: 10,
-                            padding: "16px 24px", maxWidth: 480
-                        }}>
-                            <div style={{ color: DS.neg, fontSize: 13, fontWeight: 600, marginBottom: 8 }}> {loadErr}</div>
-                            <button onClick={() => loadRatios(true)}
-                                style={{
-                                    padding: "7px 16px", border: `1px solid ${DS.accent}`,
-                                    borderRadius: 8, background: DS.accentDim,
-                                    color: DS.accent, fontSize: 13, cursor: "pointer",
-                                    fontFamily: DS.sans
+                        {/* Divider */}
+                        {onBack && <div style={{ width: 1, height: 16, background: DS.border, flexShrink: 0 }} />}
+                        {/* Label */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                            <span style={{
+                                fontSize: 10, fontWeight: 700, color: "#6366f1",
+                                letterSpacing: ".06em", textTransform: "uppercase",
+                                flexShrink: 0
+                            }}>TechnoFunda</span>
+                            {technoFundaLabel && (
+                                <span style={{
+                                    fontSize: 12, color: DS.textSub, fontWeight: 500,
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                                 }}>
-                                Retry
-                            </button>
+                                    {technoFundaLabel}
+                                </span>
+                            )}
+                            <span style={{ fontSize: 12, color: DS.textMuted, flexShrink: 0 }}>
+                                <strong style={{ color: DS.text, fontWeight: 600 }}>{tickerFilter.size}</strong> stocks
+                            </span>
                         </div>
-                    </div>
-                )}
-
-                {/* Empty */}
-                {isApplied && !loading && !loadErr && filtered.length === 0 && (
-                    <div style={{
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                        justifyContent: "center", height: "100%", gap: 8, color: DS.textSub
-                    }}>
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: .2 }}>
-                            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-                        </svg>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub }}>No results</div>
-                        <div style={{ fontSize: 13, color: DS.textMuted }}>Adjust your filters to find matching stocks</div>
-                        {filters.length > 0 && (
-                            <button onClick={clearFilters} style={{ marginTop: 6, ...ghostBtn(false) }}
+                        {/* Clear  only shown when no back button (edge case) */}
+                        {!onBack && (
+                            <button onClick={onClearTickerFilter}
+                                style={{ marginLeft: isScreenerMobile ? 0 : "auto", ...ghostBtn(false), padding: "4px 10px", fontSize: 12 }}
                                 onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
                                 onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
-                                Clear filters
+                                x Clear
                             </button>
                         )}
                     </div>
                 )}
 
-                {/*  TABLE  matches portfolio table-wrap + thead th + td styles  */}
-                {isApplied && !loading && !loadErr && filtered.length > 0 && (
-                    isScreenerMobile ? (
+                {/*  FILTER BAR  */}
+                <div style={{
+                    flexShrink: 0, border: `1px solid ${DS.border}`,
+                    padding: "14px 16px", display: "flex", alignItems: "center",
+                    gap: 10, flexWrap: "wrap", minHeight: 60, background: DS.card,
+                    borderRadius: 22, boxShadow: DS.isDark ? "0 12px 34px rgba(2,6,23,0.20)" : "0 10px 26px rgba(15,23,42,0.05)"
+                }}>
+
+                    {isScreenerMobile && (
                         <div style={{
-                            flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch",
-                            scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            padding: "2px 0 6px",
                         }}>
-                            <table style={{
-                                width: "max-content", minWidth: "100%",
-                                borderCollapse: "collapse", fontFamily: DS.sans
-                            }}>
-                                <thead>
-                                    <tr style={{
-                                        position: "sticky", top: 0, zIndex: 10,
-                                        background: DS.tableHead,
-                                        borderBottom: `1px solid ${DS.border}`
-                                    }}>
-
-                                        {/* # */}
-                                        <th style={{
-                                            padding: "9px 0 9px 16px", textAlign: "left",
-                                        fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: DS.textMuted,
-                                            position: "sticky", left: 0, zIndex: 11,
-                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            width: 40, whiteSpace: "nowrap",
-                                        }}>#</th>
-
-                                        {/* Company */}
-                                        <th style={{
-                                            padding: "9px 16px 9px 10px", textAlign: "left",
-                                            fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: DS.textMuted,
-                                            position: "sticky", left: 40, zIndex: 11,
-                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            minWidth: 140, whiteSpace: "nowrap",
-                                        }}>Company</th>
-
-                                        {/* Metrics */}
-                                        {mobileCardCols.map(col => {
-                                            const isSort = sortCol === col.key;
-                                            return (
-                                                <th key={col.key} onClick={() => handleSort(col.key)}
-                                                    style={{
-                                                        padding: "10px 14px", textAlign: "right",
-                                                        fontSize: 10.5, fontWeight: 700,
-                                                        textTransform: "uppercase", letterSpacing: ".07em",
-                                                        color: isSort ? DS.accent : DS.textMuted,
-                                                        background: isSort ? DS.accentDim : DS.tableHead,
-                                                        borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
-                                                        whiteSpace: "nowrap", cursor: "pointer", userSelect: "none",
-                                                    }}>
-                                                    {col.label}
-                                                    {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "" : ""}</span>}
-                                                </th>
-                                            );
-                                        })}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pageRows.map((row, ri) => {
-                                        const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
-                                        const ticker = row.ticker || row.symbol || "";
-                                        const displayTicker = row.displayTicker || ticker;
-                                        return (
-                                            <tr key={ri} style={{ borderTop: `1px solid ${DS.border}` }}>
-
-                                                {/* # */}
-                                                <td data-sticky="1" style={{
-                                                    padding: "10px 0 10px 16px",
-                                                    fontSize: 13.5, color: DS.textMuted,
-                                                    fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                    position: "sticky", left: 0,
-                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                    borderRight: `1px solid ${DS.border}`,
-                                                    width: 40, textAlign: "left",
-                                                }}>{rowNum}</td>
-
-                                                {/* Company */}
-                                                <td data-sticky="1" style={{
-                                                    padding: "10px 16px 10px 10px",
-                                                    position: "sticky", left: 40,
-                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                    borderRight: `1px solid ${DS.border}`,
-                                                    minWidth: 140,
-                                                }}>
-                                                    <div style={{
-                                                        fontSize: 13.5, fontWeight: 600,
-                                                        color: DS.text, whiteSpace: "nowrap",
-                                                        overflow: "hidden", textOverflow: "ellipsis",
-                                                        fontFamily: DS.mono, letterSpacing: ".02em",
-                                                        maxWidth: 180
-                                                    }}>
-                                                        {displayTicker}
-                                                    </div>
-                                                </td>
-
-                                                {/* Metric cells */}
-                                                {mobileCardCols.map(col => {
-                                                    const raw = row[col.key];
-                                                    const formatted = col.fmt(raw);
-                                                    const color = cellColor(col, raw);
-                                                    return (
-                                                        <td key={col.key} style={{
-                                                            padding: "10px 14px",
-                                                            textAlign: "right", fontSize: 13.5,
-                                                            fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                            color: formatted === "" ? DS.textMuted : color,
-                                                            whiteSpace: "nowrap",
-                                                        }}>
-                                                            {formatted || "-"}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    ) : (
-                        <div style={{
-                            flex: 1, overflow: "auto",
-                            scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
-                        }}>
-                            <table style={{
-                                width: "max-content", minWidth: "100%",
-                                borderCollapse: "collapse", fontFamily: DS.sans
-                            }}>
-                                <thead>
-                                    <tr style={{
-                                        position: "sticky", top: 0, zIndex: 10,
-                                        background: DS.tableHead,
-                                        borderBottom: `1px solid ${DS.border}`
-                                    }}>
-
-                                        {/* # */}
-                                        <th style={{
-                                            padding: "9px 0 9px 16px", textAlign: "left",
-                                        fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: DS.textMuted,
-                                            position: "sticky", left: 0, zIndex: 11,
-                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            width: 40, whiteSpace: "nowrap",
-                                        }}>#</th>
-
-                                        {/* Company */}
-                                        <th style={{
-                                            padding: "9px 16px 9px 10px", textAlign: "left",
-                                            fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
-                                            letterSpacing: ".07em", color: DS.textMuted,
-                                            position: "sticky", left: 40, zIndex: 11,
-                                            background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
-                                            minWidth: 200, whiteSpace: "nowrap",
-                                        }}>Company</th>
-
-                                        {/* Metrics */}
-                                        {activeCols.map(col => {
-                                            const isSort = sortCol === col.key;
-                                            return (
-                                                <th key={col.key} onClick={() => handleSort(col.key)}
-                                                    style={{
-                                                        padding: "10px 14px", textAlign: "right",
-                                                        fontSize: 10.5, fontWeight: 700,
-                                                        textTransform: "uppercase", letterSpacing: ".07em",
-                                                        color: isSort ? DS.accent : DS.textMuted,
-                                                        background: isSort ? DS.accentDim : DS.tableHead,
-                                                        borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
-                                                        whiteSpace: "nowrap", cursor: "pointer",
-                                                        userSelect: "none", transition: "background .1s, color .1s",
-                                                    }}
-                                                    onMouseEnter={e => { if (!isSort) { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.hover; } }}
-                                                    onMouseLeave={e => { if (!isSort) { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = DS.tableHead; } }}>
-                                                    {col.label}
-                                                    {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "" : ""}</span>}
-                                                </th>
-                                            );
-                                        })}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pageRows.map((row, ri) => {
-                                        const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
-                                        const ticker = row.ticker || row.symbol || "";
-                                        const name = row.name || "";
-                                        const displayTicker = row.displayTicker || ticker;
-                                        // Muted deterministic badge color
-                                        const hue = displayTicker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
-                                        const badgeBg = DS.isDark ? `hsl(${hue},18%,18%)` : `hsl(${hue},28%,90%)`;
-                                        const badgeColor = DS.isDark ? `hsl(${hue},40%,60%)` : `hsl(${hue},35%,32%)`;
-
-                                        return (
-                                            <tr key={ri}
-                                                style={{
-                                                    borderTop: `1px solid ${DS.border}`,
-                                                    transition: "background .07s", cursor: "default"
-                                                }}
-                                                onMouseEnter={e => {
-                                                    e.currentTarget.style.background = DS.hover;
-                                                    e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.hover);
-                                                }}
-                                                onMouseLeave={e => {
-                                                    e.currentTarget.style.background = "";
-                                                    e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.isDark ? DS.bg : DS.card);
-                                                }}>
-
-                                                {/* # */}
-                                                <td data-sticky="1" style={{
-                                                    padding: compactRow ? "6px 0 6px 16px" : "10px 0 10px 16px",
-                                                    fontSize: 13.5, color: DS.textMuted,
-                                                    fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                    position: "sticky", left: 0,
-                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                    borderRight: `1px solid ${DS.border}`,
-                                                    width: 40, textAlign: "left",
-                                                }}>{rowNum}</td>
-
-                                                {/* Company */}
-                                                <td data-sticky="1" style={{
-                                                    padding: compactRow ? "6px 13px 6px 10px" : "10px 13px 10px 10px",
-                                                    position: "sticky", left: 40,
-                                                    background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
-                                                    borderRight: `1px solid ${DS.border}`,
-                                                    minWidth: 140,
-                                                }}>
-                                                    <div style={{
-                                                        fontSize: 13.5, fontWeight: 600,
-                                                        color: DS.text, whiteSpace: "nowrap",
-                                                        overflow: "hidden", textOverflow: "ellipsis",
-                                                        fontFamily: DS.mono, letterSpacing: ".02em",
-                                                        maxWidth: 180
-                                                    }}>
-                                                        {displayTicker}
-                                                    </div>
-                                                </td>
-
-                                                {/* Metric cells */}
-                                                {activeCols.map(col => {
-                                                    const raw = row[col.key];
-                                                    const formatted = col.fmt(raw);
-                                                    const color = cellColor(col, raw);
-                                                    return (
-                                                        <td key={col.key} style={{
-                                                            padding: compactRow ? "6px 13px" : "10px 14px",
-                                                            textAlign: "right", fontSize: 13.5,
-                                                            fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                                                            color: formatted === "" ? DS.textMuted : color,
-                                                            whiteSpace: "nowrap", position: "relative",
-                                                        }}>
-                                                            {formatted}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )
-                )}
-
-                {/*  PAGINATION  */}
-                {isApplied && !loading && !loadErr && filtered.length > 0 && (
-                    <div style={{
-                        flexShrink: 0, padding: isScreenerMobile ? "8px 14px" : "9px 16px",
-                        borderTop: `1px solid ${DS.border}`, background: DS.card,
-                        display: "flex", alignItems: "center",
-                        justifyContent: "space-between", gap: 8,
-                        flexDirection: "row",
-                        fontFamily: DS.sans
-                    }}>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
-                                style={{ ...ghostBtn(false), padding: isScreenerMobile ? "5px 14px" : "6px 12px", opacity: safePage === 1 ? .4 : 1, cursor: safePage === 1 ? "not-allowed" : "pointer" }}>
-                                Prev
-                            </button>
-                            {!isScreenerMobile && (() => {
-                                const pages = []; let s = Math.max(1, safePage - 3); let e = Math.min(totalPages, s + 6); s = Math.max(1, e - 6);
-                                for (let p = s; p <= e; p++) pages.push(p);
-                                return pages.map(page => (
-                                    <button key={page} onClick={() => setCurrentPage(page)}
+                            <div style={{ minWidth: 0 }}>
+                                {!tickerFilter && (
+                                    <button onClick={() => setViewMode("library")}
                                         style={{
-                                            ...ghostBtn(page === safePage),
-                                            padding: "6px 10px", minWidth: 34
+                                            display: "flex", alignItems: "center", gap: 5, marginBottom: 4,
+                                            padding: 0, border: "none", background: "transparent",
+                                            color: DS.textMuted, cursor: "pointer", fontSize: 11.5,
+                                            fontWeight: 600, fontFamily: DS.sans
                                         }}>
-                                        {page}
+                                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L5 8l5 5" /></svg>
+                                        My Screens
                                     </button>
-                                ));
-                            })()}
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
-                                style={{ ...ghostBtn(false), padding: isScreenerMobile ? "5px 14px" : "6px 12px", opacity: safePage === totalPages ? .4 : 1, cursor: safePage === totalPages ? "not-allowed" : "pointer" }}>
-                                Next
+                                )}
+                                <div style={{ fontSize: 11, fontWeight: 700, color: DS.textMuted, textTransform: "uppercase", letterSpacing: ".08em" }}>
+                                    Filters
+                                </div>
+                                <div style={{ marginTop: 3, fontSize: 13, color: DS.textSub, lineHeight: 1.35 }}>
+                                    {filters.length > 0
+                                        ? `${filters.length} active rule${filters.length > 1 ? "s" : ""} on ${activeScreen?.name || "screen"}`
+                                        : "No active rules"}
+                                </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                                <button
+                                    onClick={() => setShowColPicker(v => !v)}
+                                    style={{ ...mobileGhostBtn(showColPicker), padding: "8px 12px", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                                        <line x1="1" y1="4" x2="15" y2="4" /><line x1="1" y1="8" x2="15" y2="8" /><line x1="1" y1="12" x2="15" y2="12" />
+                                        <line x1="4" y1="2" x2="4" y2="6" /><line x1="10" y1="6" x2="10" y2="10" /><line x1="7" y1="10" x2="7" y2="14" />
+                                    </svg>
+                                    Columns
+                                </button>
+                                <button
+                                    onClick={() => setMobileFiltersExpanded(v => !v)}
+                                    style={{ ...mobileGhostBtn(mobileFiltersExpanded), padding: "8px 12px", flexShrink: 0 }}
+                                >
+                                    {mobileFiltersExpanded ? "Hide filters" : "Show filters"}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {(!isScreenerMobile || mobileFiltersExpanded) && (
+                        <>
+
+                            {filters.map((f, idx) => (
+                                <FilterPill key={f.id || idx} filter={f} idx={idx}
+                                    onUpdate={updateFilter} onRemove={removeFilter} DS={DS} />
+                            ))}
+
+                            <button onClick={addFilter}
+                                style={{ ...(isScreenerMobile ? mobileGhostBtn(false) : ghostBtn(false)), borderStyle: "dashed", color: DS.textMuted }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textMuted; }}>
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
+                                Add Filter
+                            </button>
+
+                            {filters.length > 0 && (
+                                <button onClick={clearFilters}
+                                    style={{
+                                        background: "none", border: "none", cursor: "pointer",
+                                        color: DS.textMuted, fontSize: 13, fontFamily: DS.sans, padding: "0 4px",
+                                        transition: "color .12s"
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.color = DS.text}
+                                    onMouseLeave={e => e.currentTarget.style.color = DS.textMuted}>
+                                    Clear all
+                                </button>
+                            )}
+
+                            <button onClick={applyResults}
+                                style={{
+                                    width: isScreenerMobile ? "100%" : "auto",
+                                    marginTop: isScreenerMobile ? 4 : 0,
+                                    marginLeft: isScreenerMobile ? 0 : "auto",
+                                    padding: isScreenerMobile ? "11px 16px" : "6px 16px",
+                                    background: isApplied ? DS.accentDim : DS.accent,
+                                    border: `1px solid ${DS.accent}`, borderRadius: isScreenerMobile ? 9 : 7,
+                                    color: isApplied ? DS.accent : "#fff",
+                                    fontSize: isScreenerMobile ? 13.5 : 12.5, fontWeight: 650, fontFamily: DS.sans, cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "center", gap: 7, flexShrink: 0
+                                }}>
+                                {isApplied ? (
+                                    <>
+                                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8l3.5 3.5L13 5" /></svg>
+                                        Filters Applied
+                                    </>
+                                ) : (
+                                    `Apply Filter${filters.length === 1 ? "" : "s"}${filters.length > 0 ? ` (${filters.length})` : ""}`
+                                )}
+                            </button>
+                        </>
+                    )}
+                </div>
+
+                {/*  TABLE AREA  */}
+                <div style={{
+                    flex: 1, overflow: "hidden", background: DS.card,
+                    minHeight: 0, display: "flex", flexDirection: "column",
+                    border: `1px solid ${DS.border}`, borderRadius: 24,
+                    boxShadow: DS.isDark ? "0 16px 44px rgba(2,6,23,0.20)" : "0 12px 30px rgba(15,23,42,0.06)"
+                }}>
+
+                    {/* Not yet applied  results stay hidden until "Apply Filter" is clicked */}
+                    {!isApplied && (
+                        <div style={{
+                            display: "flex", flexDirection: "column", alignItems: "center",
+                            justifyContent: "center", height: "100%", gap: 10, color: DS.textSub, padding: "0 24px"
+                        }}>
+                            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: .2 }}>
+                                <path d="M4 5h16M7 12h10M10 19h4" />
+                            </svg>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub, textAlign: "center" }}>
+                                {filters.length > 0 ? "Filters not applied yet" : "No filters yet"}
+                            </div>
+                            <div style={{ fontSize: 13, color: DS.textMuted, textAlign: "center", maxWidth: 320 }}>
+                                {filters.length > 0
+                                    ? "Click \"Apply Filter\" above to run this screen."
+                                    : "Add a filter rule, then click \"Apply Filter\" to see matching stocks."}
+                            </div>
+                            <button onClick={applyResults} style={{ marginTop: 4, ...ghostBtn(false) }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                                {filters.length > 0 ? `Apply Filter${filters.length === 1 ? "" : "s"}` : "Show all stocks"}
                             </button>
                         </div>
+                    )}
 
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            {!isScreenerMobile && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ fontSize: 12, color: DS.textMuted }}>Per page</span>
-                                {[10, 25, 50].map(n => (
-                                    <button key={n} onClick={() => { setRowsPerPage(n); setCurrentPage(1); }}
-                                        style={{ ...ghostBtn(n === rowsPerPage), padding: "5px 9px" }}>
-                                        {n}
-                                    </button>
-                                ))}
-                            </div>}
-                            <span style={{
-                                fontSize: 12, color: DS.textMuted, fontFamily: DS.mono,
-                                fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap"
+                    {/* Loading */}
+                    {isApplied && loading && allRows.length === 0 && (
+                        <div style={{
+                            display: "flex", flexDirection: "column", alignItems: "center",
+                            justifyContent: "center", height: "100%", gap: 12, color: DS.textSub
+                        }}>
+                            <div style={{
+                                width: 20, height: 20, border: `2px solid ${DS.border}`,
+                                borderTopColor: DS.accent, borderRadius: "50%",
+                                animation: "finspin .7s linear infinite"
+                            }} />
+                            <span style={{ fontSize: 13 }}>Loading</span>
+                        </div>
+                    )}
+
+                    {/* Error */}
+                    {isApplied && loadErr && (
+                        <div style={{ padding: "40px 24px", textAlign: "center" }}>
+                            <div style={{
+                                display: "inline-block", background: DS.isDark ? "rgba(244,63,94,0.07)" : "rgba(220,38,38,0.05)",
+                                border: `1px solid ${DS.neg}33`, borderRadius: 10,
+                                padding: "16px 24px", maxWidth: 480
                             }}>
-                                {isScreenerMobile ? mobileResultsLabel : `${(safePage - 1) * rowsPerPage + 1}-${Math.min(safePage * rowsPerPage, filtered.length)}`}
-                                {" / "}<strong style={{ color: DS.textSub }}>{filtered.length.toLocaleString("en-IN")}</strong>
+                                <div style={{ color: DS.neg, fontSize: 13, fontWeight: 600, marginBottom: 8 }}> {loadErr}</div>
+                                <button onClick={() => loadRatios(true)}
+                                    style={{
+                                        padding: "7px 16px", border: `1px solid ${DS.accent}`,
+                                        borderRadius: 8, background: DS.accentDim,
+                                        color: DS.accent, fontSize: 13, cursor: "pointer",
+                                        fontFamily: DS.sans
+                                    }}>
+                                    Retry
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Empty */}
+                    {isApplied && !loading && !loadErr && filtered.length === 0 && (
+                        <div style={{
+                            display: "flex", flexDirection: "column", alignItems: "center",
+                            justifyContent: "center", height: "100%", gap: 8, color: DS.textSub
+                        }}>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: .2 }}>
+                                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+                            </svg>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: DS.textSub }}>No results</div>
+                            <div style={{ fontSize: 13, color: DS.textMuted }}>Adjust your filters to find matching stocks</div>
+                            {filters.length > 0 && (
+                                <button onClick={clearFilters} style={{ marginTop: 6, ...ghostBtn(false) }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = DS.accent + "55"; e.currentTarget.style.color = DS.text; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.color = DS.textSub; }}>
+                                    Clear filters
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/*  TABLE  matches portfolio table-wrap + thead th + td styles  */}
+                    {isApplied && !loading && !loadErr && filtered.length > 0 && (
+                        isScreenerMobile ? (
+                            <div style={{
+                                flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch",
+                                scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
+                            }}>
+                                <table style={{
+                                    width: "max-content", minWidth: "100%",
+                                    borderCollapse: "collapse", fontFamily: DS.sans
+                                }}>
+                                    <thead>
+                                        <tr style={{
+                                            position: "sticky", top: 0, zIndex: 10,
+                                            background: DS.tableHead,
+                                            borderBottom: `1px solid ${DS.border}`
+                                        }}>
+
+                                            {/* # */}
+                                            <th style={{
+                                                padding: "9px 0 9px 16px", textAlign: "left",
+                                                fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
+                                                letterSpacing: ".07em", color: DS.textMuted,
+                                                position: "sticky", left: 0, zIndex: 11,
+                                                background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                                width: 40, whiteSpace: "nowrap",
+                                            }}>#</th>
+
+                                            {/* Company */}
+                                            <th style={{
+                                                padding: "9px 16px 9px 10px", textAlign: "left",
+                                                fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
+                                                letterSpacing: ".07em", color: DS.textMuted,
+                                                position: "sticky", left: 40, zIndex: 11,
+                                                background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                                minWidth: 140, whiteSpace: "nowrap",
+                                            }}>Company</th>
+
+                                            {/* Metrics */}
+                                            {mobileCardCols.map(col => {
+                                                const isSort = sortCol === col.key;
+                                                return (
+                                                    <th key={col.key} onClick={() => handleSort(col.key)}
+                                                        style={{
+                                                            padding: "10px 14px", textAlign: "right",
+                                                            fontSize: 10.5, fontWeight: 700,
+                                                            textTransform: "uppercase", letterSpacing: ".07em",
+                                                            color: isSort ? DS.accent : DS.textMuted,
+                                                            background: isSort ? DS.accentDim : DS.tableHead,
+                                                            borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
+                                                            whiteSpace: "nowrap", cursor: "pointer", userSelect: "none",
+                                                        }}>
+                                                        {col.label}
+                                                        {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "" : ""}</span>}
+                                                    </th>
+                                                );
+                                            })}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pageRows.map((row, ri) => {
+                                            const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
+                                            const ticker = row.ticker || row.symbol || "";
+                                            const displayTicker = row.displayTicker || ticker;
+                                            return (
+                                                <tr key={ri} style={{ borderTop: `1px solid ${DS.border}` }}>
+
+                                                    {/* # */}
+                                                    <td data-sticky="1" style={{
+                                                        padding: "10px 0 10px 16px",
+                                                        fontSize: 13.5, color: DS.textMuted,
+                                                        fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                        position: "sticky", left: 0,
+                                                        background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                        borderRight: `1px solid ${DS.border}`,
+                                                        width: 40, textAlign: "left",
+                                                    }}>{rowNum}</td>
+
+                                                    {/* Company */}
+                                                    <td data-sticky="1" style={{
+                                                        padding: "10px 16px 10px 10px",
+                                                        position: "sticky", left: 40,
+                                                        background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                        borderRight: `1px solid ${DS.border}`,
+                                                        minWidth: 140,
+                                                    }}>
+                                                        <div style={{
+                                                            fontSize: 13.5, fontWeight: 600,
+                                                            color: DS.text, whiteSpace: "nowrap",
+                                                            overflow: "hidden", textOverflow: "ellipsis",
+                                                            fontFamily: DS.mono, letterSpacing: ".02em",
+                                                            maxWidth: 180
+                                                        }}>
+                                                            {displayTicker}
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Metric cells */}
+                                                    {mobileCardCols.map(col => {
+                                                        const raw = row[col.key];
+                                                        const formatted = col.fmt(raw);
+                                                        const color = cellColor(col, raw);
+                                                        return (
+                                                            <td key={col.key} style={{
+                                                                padding: "10px 14px",
+                                                                textAlign: "right", fontSize: 13.5,
+                                                                fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                                color: formatted === "" ? DS.textMuted : color,
+                                                                whiteSpace: "nowrap",
+                                                            }}>
+                                                                {formatted || "-"}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div style={{
+                                flex: 1, overflow: "auto",
+                                scrollbarWidth: "thin", scrollbarColor: `${DS.border} transparent`
+                            }}>
+                                <table style={{
+                                    width: "max-content", minWidth: "100%",
+                                    borderCollapse: "collapse", fontFamily: DS.sans
+                                }}>
+                                    <thead>
+                                        <tr style={{
+                                            position: "sticky", top: 0, zIndex: 10,
+                                            background: DS.tableHead,
+                                            borderBottom: `1px solid ${DS.border}`
+                                        }}>
+
+                                            {/* # */}
+                                            <th style={{
+                                                padding: "9px 0 9px 16px", textAlign: "left",
+                                                fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
+                                                letterSpacing: ".07em", color: DS.textMuted,
+                                                position: "sticky", left: 0, zIndex: 11,
+                                                background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                                width: 40, whiteSpace: "nowrap",
+                                            }}>#</th>
+
+                                            {/* Company */}
+                                            <th style={{
+                                                padding: "9px 16px 9px 10px", textAlign: "left",
+                                                fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
+                                                letterSpacing: ".07em", color: DS.textMuted,
+                                                position: "sticky", left: 40, zIndex: 11,
+                                                background: DS.tableHead, borderRight: `1px solid ${DS.border}`,
+                                                minWidth: 200, whiteSpace: "nowrap",
+                                            }}>Company</th>
+
+                                            {/* Metrics */}
+                                            {activeCols.map(col => {
+                                                const isSort = sortCol === col.key;
+                                                return (
+                                                    <th key={col.key} onClick={() => handleSort(col.key)}
+                                                        style={{
+                                                            padding: "10px 14px", textAlign: "right",
+                                                            fontSize: 10.5, fontWeight: 700,
+                                                            textTransform: "uppercase", letterSpacing: ".07em",
+                                                            color: isSort ? DS.accent : DS.textMuted,
+                                                            background: isSort ? DS.accentDim : DS.tableHead,
+                                                            borderBottom: isSort ? `2px solid ${DS.accent}` : "none",
+                                                            whiteSpace: "nowrap", cursor: "pointer",
+                                                            userSelect: "none", transition: "background .1s, color .1s",
+                                                        }}
+                                                        onMouseEnter={e => { if (!isSort) { e.currentTarget.style.color = DS.text; e.currentTarget.style.background = DS.hover; } }}
+                                                        onMouseLeave={e => { if (!isSort) { e.currentTarget.style.color = DS.textMuted; e.currentTarget.style.background = DS.tableHead; } }}>
+                                                        {col.label}
+                                                        {isSort && <span style={{ marginLeft: 3, fontSize: 9 }}>{sortAsc ? "" : ""}</span>}
+                                                    </th>
+                                                );
+                                            })}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pageRows.map((row, ri) => {
+                                            const rowNum = (safePage - 1) * rowsPerPage + ri + 1;
+                                            const ticker = row.ticker || row.symbol || "";
+                                            const name = row.name || "";
+                                            const displayTicker = row.displayTicker || ticker;
+                                            // Muted deterministic badge color
+                                            const hue = displayTicker.split("").reduce((h, c) => h + c.charCodeAt(0) * 37, 0) % 360;
+                                            const badgeBg = DS.isDark ? `hsl(${hue},18%,18%)` : `hsl(${hue},28%,90%)`;
+                                            const badgeColor = DS.isDark ? `hsl(${hue},40%,60%)` : `hsl(${hue},35%,32%)`;
+
+                                            return (
+                                                <tr key={ri}
+                                                    style={{
+                                                        borderTop: `1px solid ${DS.border}`,
+                                                        transition: "background .07s", cursor: "default"
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        e.currentTarget.style.background = DS.hover;
+                                                        e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.hover);
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        e.currentTarget.style.background = "";
+                                                        e.currentTarget.querySelectorAll("[data-sticky]").forEach(td => td.style.background = DS.isDark ? DS.bg : DS.card);
+                                                    }}>
+
+                                                    {/* # */}
+                                                    <td data-sticky="1" style={{
+                                                        padding: compactRow ? "6px 0 6px 16px" : "10px 0 10px 16px",
+                                                        fontSize: 13.5, color: DS.textMuted,
+                                                        fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                        position: "sticky", left: 0,
+                                                        background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                        borderRight: `1px solid ${DS.border}`,
+                                                        width: 40, textAlign: "left",
+                                                    }}>{rowNum}</td>
+
+                                                    {/* Company */}
+                                                    <td data-sticky="1" style={{
+                                                        padding: compactRow ? "6px 13px 6px 10px" : "10px 13px 10px 10px",
+                                                        position: "sticky", left: 40,
+                                                        background: DS.isDark ? DS.bg : DS.card, zIndex: 2,
+                                                        borderRight: `1px solid ${DS.border}`,
+                                                        minWidth: 140,
+                                                    }}>
+                                                        <div style={{
+                                                            fontSize: 13.5, fontWeight: 600,
+                                                            color: DS.text, whiteSpace: "nowrap",
+                                                            overflow: "hidden", textOverflow: "ellipsis",
+                                                            fontFamily: DS.mono, letterSpacing: ".02em",
+                                                            maxWidth: 180
+                                                        }}>
+                                                            {displayTicker}
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Metric cells */}
+                                                    {activeCols.map(col => {
+                                                        const raw = row[col.key];
+                                                        const formatted = col.fmt(raw);
+                                                        const color = cellColor(col, raw);
+                                                        return (
+                                                            <td key={col.key} style={{
+                                                                padding: compactRow ? "6px 13px" : "10px 14px",
+                                                                textAlign: "right", fontSize: 13.5,
+                                                                fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                                                color: formatted === "" ? DS.textMuted : color,
+                                                                whiteSpace: "nowrap", position: "relative",
+                                                            }}>
+                                                                {formatted}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
+                    )}
+
+                    {/*  PAGINATION  */}
+                    {isApplied && !loading && !loadErr && filtered.length > 0 && (
+                        <div style={{
+                            flexShrink: 0, padding: isScreenerMobile ? "8px 14px" : "9px 16px",
+                            borderTop: `1px solid ${DS.border}`, background: DS.card,
+                            display: "flex", alignItems: "center",
+                            justifyContent: "space-between", gap: 8,
+                            flexDirection: "row",
+                            fontFamily: DS.sans
+                        }}>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
+                                    style={{ ...ghostBtn(false), padding: isScreenerMobile ? "5px 14px" : "6px 12px", opacity: safePage === 1 ? .4 : 1, cursor: safePage === 1 ? "not-allowed" : "pointer" }}>
+                                    Prev
+                                </button>
+                                {!isScreenerMobile && (() => {
+                                    const pages = []; let s = Math.max(1, safePage - 3); let e = Math.min(totalPages, s + 6); s = Math.max(1, e - 6);
+                                    for (let p = s; p <= e; p++) pages.push(p);
+                                    return pages.map(page => (
+                                        <button key={page} onClick={() => setCurrentPage(page)}
+                                            style={{
+                                                ...ghostBtn(page === safePage),
+                                                padding: "6px 10px", minWidth: 34
+                                            }}>
+                                            {page}
+                                        </button>
+                                    ));
+                                })()}
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
+                                    style={{ ...ghostBtn(false), padding: isScreenerMobile ? "5px 14px" : "6px 12px", opacity: safePage === totalPages ? .4 : 1, cursor: safePage === totalPages ? "not-allowed" : "pointer" }}>
+                                    Next
+                                </button>
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                {!isScreenerMobile && <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                    <span style={{ fontSize: 12, color: DS.textMuted }}>Per page</span>
+                                    {[10, 25, 50].map(n => (
+                                        <button key={n} onClick={() => { setRowsPerPage(n); setCurrentPage(1); }}
+                                            style={{ ...ghostBtn(n === rowsPerPage), padding: "5px 9px" }}>
+                                            {n}
+                                        </button>
+                                    ))}
+                                </div>}
+                                <span style={{
+                                    fontSize: 12, color: DS.textMuted, fontFamily: DS.mono,
+                                    fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap"
+                                }}>
+                                    {isScreenerMobile ? mobileResultsLabel : `${(safePage - 1) * rowsPerPage + 1}-${Math.min(safePage * rowsPerPage, filtered.length)}`}
+                                    {" / "}<strong style={{ color: DS.textSub }}>{filtered.length.toLocaleString("en-IN")}</strong>
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/*  FOOTER  */}
+                    {allRows.length > 0 && !isScreenerMobile && (
+                        <div style={{
+                            padding: isScreenerMobile ? "10px 14px 14px" : "5px 16px", borderTop: `1px solid ${DS.border}`,
+                            fontSize: 11, color: DS.textMuted, flexShrink: 0, background: DS.card,
+                            display: "flex", justifyContent: "space-between",
+                            alignItems: isScreenerMobile ? "flex-start" : "center", gap: 12, fontFamily: DS.sans,
+                            flexDirection: isScreenerMobile ? "column" : "row"
+                        }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                {!tickerFilter && <span>Double-click a screen tab to rename it</span>}
+                                <span style={{
+                                    padding: "1px 7px", borderRadius: 4,
+                                    background: "rgba(245,158,11,0.07)",
+                                    border: "1px solid rgba(245,158,11,0.18)",
+                                    color: "#d97706", whiteSpace: "nowrap"
+                                }}>
+                                    Screen results do not constitute investment recommendations
+                                </span>
+                            </span>
+                            <span style={{
+                                fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
+                                flexShrink: 0, whiteSpace: "nowrap"
+                            }}>
+                                <strong style={{ color: DS.textSub }}>{filtered.length}</strong>
+                                <span style={{ opacity: .5 }}> / {allRows.length} stocks</span>
                             </span>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
-                {/*  FOOTER  */}
-                {allRows.length > 0 && !isScreenerMobile && (
-                    <div style={{
-                        padding: isScreenerMobile ? "10px 14px 14px" : "5px 16px", borderTop: `1px solid ${DS.border}`,
-                        fontSize: 11, color: DS.textMuted, flexShrink: 0, background: DS.card,
-                        display: "flex", justifyContent: "space-between",
-                        alignItems: isScreenerMobile ? "flex-start" : "center", gap: 12, fontFamily: DS.sans,
-                        flexDirection: isScreenerMobile ? "column" : "row"
-                    }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                            {!tickerFilter && <span>Double-click a screen tab to rename it</span>}
-                            <span style={{
-                                padding: "1px 7px", borderRadius: 4,
-                                background: "rgba(245,158,11,0.07)",
-                                border: "1px solid rgba(245,158,11,0.18)",
-                                color: "#d97706", whiteSpace: "nowrap"
-                            }}>
-                                Screen results do not constitute investment recommendations
-                            </span>
-                        </span>
-                        <span style={{
-                            fontFamily: DS.mono, fontVariantNumeric: "tabular-nums",
-                            flexShrink: 0, whiteSpace: "nowrap"
-                        }}>
-                            <strong style={{ color: DS.textSub }}>{filtered.length}</strong>
-                            <span style={{ opacity: .5 }}> / {allRows.length} stocks</span>
-                        </span>
-                    </div>
+                {/* Column picker */}
+                {showColPicker && createPortal(
+                    <ColPickerPanel visibleCols={visibleCols} onSave={saveVisCols}
+                        onClose={() => setShowColPicker(false)}
+                        colSearch={colSearch} setColSearch={setColSearch} DS={DS} />,
+                    document.body
                 )}
-            </div>
-
-            {/* Column picker */}
-            {showColPicker && createPortal(
-                <ColPickerPanel visibleCols={visibleCols} onSave={saveVisCols}
-                    onClose={() => setShowColPicker(false)}
-                    colSearch={colSearch} setColSearch={setColSearch} DS={DS} />,
-                document.body
-            )}
             </div>
         </div>
     );
@@ -16280,10 +16287,11 @@ const ALL_COLUMNS = [
     { key: "consolidation_range_pct", label: "Consolidation Range %", defaultOn: false },
     { key: "range_prior_10d_pct", label: "Prior 10D Range %", defaultOn: false },
     { key: "breakout_date", label: "Breakout Date", defaultOn: false },
-    { key: "post_breakout_high", label: "Post-BO High", defaultOn: false },
-    { key: "pullback_from_high_pct", label: "Pullback From High %", defaultOn: false },
-    { key: "breakout_strength_pct", label: "Breakout Strength %", defaultOn: false },
-    { key: "days_since_breakout", label: "Days Since Breakout", defaultOn: false },
+    { key: "historical_high", label: "Historical High", defaultOn: false },
+    { key: "pullback_from_breakout", label: "Pullback From Breakout %", defaultOn: false },
+    { key: "pct_to_high", label: "% To High", defaultOn: false },
+    { key: "high_age_years", label: "High Age (Yrs)", defaultOn: false },
+    { key: "high_date", label: "High Date", defaultOn: false },
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
@@ -16553,11 +16561,11 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "drawdown_from_flag_high_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "consolidation_range_pct") return `${Number(v).toFixed(2)}%`;
         if (key === "range_prior_10d_pct") return `${Number(v).toFixed(2)}%`;
-        if (key === "breakout_date") return String(v).slice(0, 10);
-        if (key === "post_breakout_high") return fmtINR(v);
-        if (key === "pullback_from_high_pct") return `${Number(v).toFixed(2)}%`;
-        if (key === "breakout_strength_pct") return `+${Number(v).toFixed(2)}%`;
-        if (key === "days_since_breakout") return `${Math.round(Number(v))}d`;
+        if (key === "breakout_date" || key === "high_date") return String(v).slice(0, 10);
+        if (key === "historical_high") return fmtINR(v);
+        if (key === "pullback_from_breakout") return `${Number(v).toFixed(2)}%`;
+        if (key === "pct_to_high") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "high_age_years") return `${Number(v).toFixed(2)}y`;
         if (["adx", "di_plus", "di_minus", "di_spread"].includes(key)) return Number(v).toFixed(2);
         if (["adx_change_5d", "di_plus_change_5d"].includes(key)) return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
         if (key === "trend") return String(v);
@@ -16586,7 +16594,8 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pct_to_breakout") return Math.abs(Number(v)) <= 3 ? posClr : T.text;
         if (key === "volume_contraction_pct") return Number(v) < 0 ? posClr : T.text;
         if (key === "distance_from_pivot_pct") return Math.abs(Number(v)) <= 2 ? posClr : T.text;
-        if (key === "pullback_from_high_pct") return Number(v) >= -5 ? posClr : T.text;
+        if (key === "pullback_from_breakout") return Number(v) >= -5 ? posClr : T.text;
+        if (key === "pct_to_high") return Number(v) >= -3 ? posClr : T.text;
         if (["adx_change_5d", "di_plus_change_5d", "di_spread"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         if (key === "rsi_change_5d") return Number(v) >= 0 ? posClr : negClr;
         if (["obv_20d_change", "obv_5d_change", "obv_strength_20d", "cmf_change_5d"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
@@ -16693,10 +16702,11 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         { key: "consolidation_range_pct", label: "Consolidation Range %" },
         { key: "range_prior_10d_pct", label: "Prior 10D Range %" },
         { key: "breakout_date", label: "Breakout Date" },
-        { key: "post_breakout_high", label: "Post-BO High" },
-        { key: "pullback_from_high_pct", label: "Pullback From High %" },
-        { key: "breakout_strength_pct", label: "Breakout Strength %" },
-        { key: "days_since_breakout", label: "Days Since Breakout" },
+        { key: "historical_high", label: "Historical High" },
+        { key: "pullback_from_breakout", label: "Pullback From Breakout %" },
+        { key: "pct_to_high", label: "% To High" },
+        { key: "high_age_years", label: "High Age (Yrs)" },
+        { key: "high_date", label: "High Date" },
         { key: "adx", label: "ADX(14)" },
         { key: "di_plus", label: "DI+" },
         { key: "di_minus", label: "DI-" },
@@ -17977,129 +17987,129 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, uni
                     </div>
 
                     <div className="pfv-table-shell">
-                    <div className="pfv-table-wrap" ref={tableRef}>
-                        {isLoading ? (
-                            <div style={{ padding: 40, textAlign: "center", color: T.subtext, fontSize: 13 }}>
-                                Loading {activeMeta?.label} scan
-                            </div>
-                        ) : error ? (
-                            <div style={{ padding: 40, textAlign: "center", color: negClr, fontSize: 13 }}>
-                                {error}
-                            </div>
-                        ) : sortedRows.length === 0 ? (
-                            <div style={{ padding: 40, textAlign: "center", color: T.subtext, fontSize: 13 }}>
-                                {filters.length > 0 || exchangeFilter !== "ALL"
-                                    ? "No stocks match the current filters."
-                                    : "No stocks currently match this pattern."}
-                            </div>
-                        ) : (
-                            <table className="pfv-table">
-                                <thead>
-                                    <tr>
-                                        {columns.map(c => (
-                                            <th key={c.key} onClick={() => handleSort(c.key)}
-                                                style={{
-                                                    textAlign: c.align,
-                                                    background: sortKey === c.key ? (isDark ? `${ACCENT}0d` : `${ACCENT}07`) : D.tableHeadBg
-                                                }}>
-                                                {c.label}<SortArrow k={c.key} />
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pagedRows.map((row, i) => (
-                                        <tr key={row.id || `${row.ticker}-${i}`}
-                                            style={{ cursor: "pointer" }}
-                                            onMouseEnter={e => {
-                                                if (window.matchMedia("(hover: none)").matches) return;
-                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                setHoveredRow({ ticker: row.ticker, row, anchorRect: rect });
-                                            }}
-                                            onMouseLeave={() => {
-                                                if (window.matchMedia("(hover: none)").matches) return;
-                                                setHoveredRow(null);
-                                            }}
-                                            onClick={e => {
-                                                // Touch devices: tap to toggle preview
-                                                if (!window.matchMedia("(hover: none)").matches) return;
-                                                if (hoveredRow?.ticker === row.ticker) { setHoveredRow(null); return; }
-                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                setHoveredRow({ ticker: row.ticker, row, anchorRect: rect });
-                                            }}>
+                        <div className="pfv-table-wrap" ref={tableRef}>
+                            {isLoading ? (
+                                <div style={{ padding: 40, textAlign: "center", color: T.subtext, fontSize: 13 }}>
+                                    Loading {activeMeta?.label} scan
+                                </div>
+                            ) : error ? (
+                                <div style={{ padding: 40, textAlign: "center", color: negClr, fontSize: 13 }}>
+                                    {error}
+                                </div>
+                            ) : sortedRows.length === 0 ? (
+                                <div style={{ padding: 40, textAlign: "center", color: T.subtext, fontSize: 13 }}>
+                                    {filters.length > 0 || exchangeFilter !== "ALL"
+                                        ? "No stocks match the current filters."
+                                        : "No stocks currently match this pattern."}
+                                </div>
+                            ) : (
+                                <table className="pfv-table">
+                                    <thead>
+                                        <tr>
                                             {columns.map(c => (
-                                                <td key={c.key} style={{
-                                                    textAlign: c.align,
-                                                    fontFamily: ["ticker", "week_end", "close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? mono : sans,
-                                                    fontWeight: ["ticker", "close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? 600 : (c.key === "name" ? 600 : 400),
-                                                    fontVariantNumeric: ["close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? "tabular-nums" : undefined,
-                                                    color: cellColor(c.key, row[c.key])
-                                                }}>
-                                                    {fmtCell(row, c.key) ?? <span style={{ color: T.muted }}>{"\u2013"}</span>}
-                                                </td>
+                                                <th key={c.key} onClick={() => handleSort(c.key)}
+                                                    style={{
+                                                        textAlign: c.align,
+                                                        background: sortKey === c.key ? (isDark ? `${ACCENT}0d` : `${ACCENT}07`) : D.tableHeadBg
+                                                    }}>
+                                                    {c.label}<SortArrow k={c.key} />
+                                                </th>
                                             ))}
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-
-                    {sortedRows.length > 0 && (
-                        <div className="pfv-pagination" style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "12px 20px", borderTop: `1px solid ${T.border}`, flexWrap: "wrap", gap: 10
-                        }}>
-                            <span style={{ fontSize: 11, color: T.subtext, fontFamily: mono }}>
-                                Loaded directly from pattern_filters — week ending {sortedRows[0]?.week_end ? String(sortedRows[0].week_end).slice(0, 10) : "--"}
-                            </span>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <span style={{ fontSize: 11.5, color: T.subtext, fontFamily: mono, fontVariantNumeric: "tabular-nums" }}>
-                                    {pageStart + 1}{"\u2013"}{Math.min(pageStart + PAGE_SIZE, sortedRows.length)} of {sortedRows.length}
-                                </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-                                    <button onClick={() => goToPage(page - 1)} disabled={page <= 1}
-                                        style={{
-                                            padding: "6px 12px", fontSize: 11.5, fontWeight: 600, fontFamily: sans,
-                                            borderRadius: 999, border: `1px solid ${D.panelBorder}`,
-                                            background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)",
-                                            color: page <= 1 ? T.muted : T.text,
-                                            cursor: page <= 1 ? "not-allowed" : "pointer", opacity: page <= 1 ? 0.4 : 1
-                                        }}>
-                                        Prev
-                                    </button>
-                                    {(() => {
-                                        let s = Math.max(1, page - 3); let e = Math.min(totalPages, s + 6); s = Math.max(1, e - 6);
-                                        const pages = []; for (let p = s; p <= e; p++) pages.push(p);
-                                        return pages.map(p => (
-                                            <button key={p} onClick={() => goToPage(p)}
-                                                style={{
-                                                    padding: "6px 10px", minWidth: 34, fontSize: 11.5,
-                                                    fontWeight: p === page ? 700 : 500, fontFamily: mono,
-                                                    borderRadius: 999,
-                                                    border: `1px solid ${p === page ? ACCENT + "55" : D.panelBorder}`,
-                                                    background: p === page ? withAlpha(ACCENT, isDark ? 0.18 : 0.10) : (isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)"),
-                                                    color: p === page ? ACCENT : T.subtext,
-                                                    cursor: "pointer", fontVariantNumeric: "tabular-nums"
+                                    </thead>
+                                    <tbody>
+                                        {pagedRows.map((row, i) => (
+                                            <tr key={row.id || `${row.ticker}-${i}`}
+                                                style={{ cursor: "pointer" }}
+                                                onMouseEnter={e => {
+                                                    if (window.matchMedia("(hover: none)").matches) return;
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setHoveredRow({ ticker: row.ticker, row, anchorRect: rect });
+                                                }}
+                                                onMouseLeave={() => {
+                                                    if (window.matchMedia("(hover: none)").matches) return;
+                                                    setHoveredRow(null);
+                                                }}
+                                                onClick={e => {
+                                                    // Touch devices: tap to toggle preview
+                                                    if (!window.matchMedia("(hover: none)").matches) return;
+                                                    if (hoveredRow?.ticker === row.ticker) { setHoveredRow(null); return; }
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setHoveredRow({ ticker: row.ticker, row, anchorRect: rect });
                                                 }}>
-                                                {p}
-                                            </button>
-                                        ));
-                                    })()}
-                                    <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages}
-                                        style={{
-                                            padding: "6px 12px", fontSize: 11.5, fontWeight: 600, fontFamily: sans,
-                                            borderRadius: 999, border: `1px solid ${D.panelBorder}`,
-                                            background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)",
-                                            color: page >= totalPages ? T.muted : T.text,
-                                            cursor: page >= totalPages ? "not-allowed" : "pointer", opacity: page >= totalPages ? 0.4 : 1
-                                        }}>
-                                        Next
-                                    </button>
+                                                {columns.map(c => (
+                                                    <td key={c.key} style={{
+                                                        textAlign: c.align,
+                                                        fontFamily: ["ticker", "week_end", "close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? mono : sans,
+                                                        fontWeight: ["ticker", "close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? 600 : (c.key === "name" ? 600 : 400),
+                                                        fontVariantNumeric: ["close", "ret_3m", "ret_6m", "ret_12m"].includes(c.key) ? "tabular-nums" : undefined,
+                                                        color: cellColor(c.key, row[c.key])
+                                                    }}>
+                                                        {fmtCell(row, c.key) ?? <span style={{ color: T.muted }}>{"\u2013"}</span>}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+
+                        {sortedRows.length > 0 && (
+                            <div className="pfv-pagination" style={{
+                                display: "flex", alignItems: "center", justifyContent: "space-between",
+                                padding: "12px 20px", borderTop: `1px solid ${T.border}`, flexWrap: "wrap", gap: 10
+                            }}>
+                                <span style={{ fontSize: 11, color: T.subtext, fontFamily: mono }}>
+                                    Loaded directly from pattern_filters — week ending {sortedRows[0]?.week_end ? String(sortedRows[0].week_end).slice(0, 10) : "--"}
+                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <span style={{ fontSize: 11.5, color: T.subtext, fontFamily: mono, fontVariantNumeric: "tabular-nums" }}>
+                                        {pageStart + 1}{"\u2013"}{Math.min(pageStart + PAGE_SIZE, sortedRows.length)} of {sortedRows.length}
+                                    </span>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                                        <button onClick={() => goToPage(page - 1)} disabled={page <= 1}
+                                            style={{
+                                                padding: "6px 12px", fontSize: 11.5, fontWeight: 600, fontFamily: sans,
+                                                borderRadius: 999, border: `1px solid ${D.panelBorder}`,
+                                                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)",
+                                                color: page <= 1 ? T.muted : T.text,
+                                                cursor: page <= 1 ? "not-allowed" : "pointer", opacity: page <= 1 ? 0.4 : 1
+                                            }}>
+                                            Prev
+                                        </button>
+                                        {(() => {
+                                            let s = Math.max(1, page - 3); let e = Math.min(totalPages, s + 6); s = Math.max(1, e - 6);
+                                            const pages = []; for (let p = s; p <= e; p++) pages.push(p);
+                                            return pages.map(p => (
+                                                <button key={p} onClick={() => goToPage(p)}
+                                                    style={{
+                                                        padding: "6px 10px", minWidth: 34, fontSize: 11.5,
+                                                        fontWeight: p === page ? 700 : 500, fontFamily: mono,
+                                                        borderRadius: 999,
+                                                        border: `1px solid ${p === page ? ACCENT + "55" : D.panelBorder}`,
+                                                        background: p === page ? withAlpha(ACCENT, isDark ? 0.18 : 0.10) : (isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)"),
+                                                        color: p === page ? ACCENT : T.subtext,
+                                                        cursor: "pointer", fontVariantNumeric: "tabular-nums"
+                                                    }}>
+                                                    {p}
+                                                </button>
+                                            ));
+                                        })()}
+                                        <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages}
+                                            style={{
+                                                padding: "6px 12px", fontSize: 11.5, fontWeight: 600, fontFamily: sans,
+                                                borderRadius: 999, border: `1px solid ${D.panelBorder}`,
+                                                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.92)",
+                                                color: page >= totalPages ? T.muted : T.text,
+                                                cursor: page >= totalPages ? "not-allowed" : "pointer", opacity: page >= totalPages ? 0.4 : 1
+                                            }}>
+                                            Next
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
                     </div>
                 </div>
             </div>
@@ -18890,30 +18900,60 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
     //  Multiyear Breakout + Pullback scan  dedicated fetch from the
     // multiyear_breakout_pullback table  stock broke out above a multi-year
-    // high (breakout_date/breakout_level/breakout_strength_pct) and has since
-    // pulled back from its post-breakout high (post_breakout_high,
-    // pullback_from_high_pct, days_since_breakout), all computed server-side.
-    // Own loading flag (not folded into pbLoading), same as Fresh Breakout /
-    // Multiyear Breakout above  independent dedicated-table fetch. pct_from_high
-    // in this table already reflects distance from the post-breakout high, so
-    // it's normalized straight onto pct_from_52w_high for shared column reuse.
+    // high (historical_high/breakout_date/breakout_price) and has since
+    // pulled back from that breakout (pullback_from_breakout, pct_to_high,
+    // high_age_years), all computed server-side. Own loading flag (not
+    // folded into pbLoading), same as Fresh Breakout / Multiyear Breakout
+    // above  independent dedicated-table fetch. breakout_price is normalized
+    // onto breakout_level and pct_to_high onto pct_from_52w_high for shared
+    // column reuse with the rest of the screens tables.
     const [multiyearPullbackRawRows, multiyearPullbackLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.multiyearPullback);
 
     const dMultiyearPullback = useMemo(() => {
         const mapped = (multiyearPullbackRawRows || []).map(r => ({
             ...r,
             close: r.close != null ? Number(r.close) : null,
-            breakout_level: r.breakout_level != null ? Number(r.breakout_level) : null,
-            post_breakout_high: r.post_breakout_high != null ? Number(r.post_breakout_high) : null,
-            pullback_from_high_pct: r.pullback_from_high_pct != null ? Number(r.pullback_from_high_pct) : null,
-            breakout_strength_pct: r.breakout_strength_pct != null ? Number(r.breakout_strength_pct) : null,
-            days_since_breakout: r.days_since_breakout != null ? Number(r.days_since_breakout) : null,
+            breakout_level: r.breakout_price != null ? Number(r.breakout_price) : null,
+            historical_high: r.historical_high != null ? Number(r.historical_high) : null,
+            pullback_from_breakout: r.pullback_from_breakout != null ? Number(r.pullback_from_breakout) : null,
+            pct_to_high: r.pct_to_high != null ? Number(r.pct_to_high) : null,
+            high_age_years: r.high_age_years != null ? Number(r.high_age_years) : null,
             rel_volume: r.rel_vol != null ? Number(r.rel_vol) : null,
-            pct_from_52w_high: r.pct_from_high != null ? Number(r.pct_from_high) : null,
+            rs_rating: r.rs_rating != null ? Number(r.rs_rating) : null,
+            pct_from_52w_high: r.pct_to_high != null ? Number(r.pct_to_high) : null,
             market_cap_cr: r.market_cap_cr != null ? Number(r.market_cap_cr) : null,
-        })).sort((a, b) => (b.pullback_from_high_pct ?? -999) - (a.pullback_from_high_pct ?? -999));
+        })).sort((a, b) => (b.pullback_from_breakout ?? -999) - (a.pullback_from_breakout ?? -999));
         return filterByUniverse(mapped);
     }, [multiyearPullbackRawRows, filterByUniverse]);
+
+    //  Multiyear High Soon scan  dedicated fetch from the multiyear_high_soon
+    // table  stocks still below a multi-year historical high and approaching
+    // it (pct_to_high is negative = % below the high; historical_high,
+    // high_date, high_age_years all computed server-side). Own loading flag,
+    // same fetch  normalize  filterByUniverse pattern as the other dedicated
+    // Breakouts screens tables above. Sorted closest-to-high first.
+    const [multiyearHighSoonRawRows, multiyearHighSoonLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.multiyearHighSoon);
+
+    const dMultiyearHighSoon = useMemo(() => {
+        const num = v => (v != null ? Number(v) : null);
+        const mapped = (multiyearHighSoonRawRows || []).map(r => ({
+            ...r,
+            close: num(r.close),
+            historical_high: num(r.historical_high),
+            pct_to_high: num(r.pct_to_high),
+            high_age_years: num(r.high_age_years),
+            sma50: num(r.sma50),
+            sma150: num(r.sma150),
+            sma200: num(r.sma200),
+            rel_volume: num(r.rel_vol),
+            rs_rating: num(r.rs_rating),
+            ret_3m: num(r.ret_3m),
+            ret_6m: num(r.ret_6m),
+            ret_12m: num(r.ret_12m),
+            market_cap_cr: num(r.market_cap_cr),
+        })).sort((a, b) => (b.pct_to_high ?? -999) - (a.pct_to_high ?? -999));
+        return filterByUniverse(mapped);
+    }, [multiyearHighSoonRawRows, filterByUniverse]);
 
     //  Minervini Trend Template scan  dedicated fetch from minervini_screen table 
     // The table is refreshed daily by the sync pipeline and already carries the
@@ -19092,7 +19132,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length + dAdxDi.length + dRsiMomentum.length;
     const marketLeadersCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
     const momentumScreensCount = dAdxDi.length + dRsiMomentum.length + dVolumeMomentum.length;
-    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length;
+    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length + dMultiyearHighSoon.length;
     const gapScreensCount = dFreshGapBreakoutWeekly.length + dPostGapTightBaseWeekly.length + dPostGapConsolidationWeekly.length + dPostGapExtendedWeekly.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length + dMultiyearPullback.length;
@@ -19487,7 +19527,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
                                 desc="Stocks breaking above key resistance with volume confirmation"
-                                count={(volBreakoutLoading || breakoutLoading || pivotLoading || freshBreakoutLoading || freshBreakoutWeeklyLoading || multiyearBreakoutLoading) ? "..." : breakoutsCount}>
+                                count={(volBreakoutLoading || breakoutLoading || pivotLoading || freshBreakoutLoading || freshBreakoutWeeklyLoading || multiyearBreakoutLoading || multiyearHighSoonLoading) ? "..." : breakoutsCount}>
                                 <ScreenRow
                                     rowKey="bo-vol"
                                     title="Volume Breakout"
@@ -19578,6 +19618,21 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     formatScore={v => `+${Number(v).toFixed(2)}%`}
                                     tfLabel="Multiyear High Breakout"
                                     loadingOverride={multiyearBreakoutLoading}
+                                />
+                                <ScreenRow
+                                    rowKey="bo-multiyear-soon"
+                                    title="Multiyear High Soon"
+                                    subtitle="Approaching a multi-year historical high - closest to breaking out first"
+                                    rows={dMultiyearHighSoon}
+                                    scoreKey="pct_to_high"
+                                    scoreLabel="To High"
+                                    formatScore={v => `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`}
+                                    tfLabel="Multiyear High Soon"
+                                    loadingOverride={multiyearHighSoonLoading}
+                                    detailExtra={{
+                                        pullbackMode: true,
+                                        pullbackCols: ["historical_high", "high_date", "high_age_years", "market_cap_cr"]
+                                    }}
                                 />
                             </CategorySection>
 
@@ -19728,16 +19783,16 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                 <ScreenRow
                                     rowKey="pb-multiyear"
                                     title="Multiyear High + Pullback"
-                                    subtitle="Broke out above a multi-year high, then pulled back from the post-breakout high - early pullback entries in the strongest long-term trends"
+                                    subtitle="Broke out above a multi-year high, then pulled back from the breakout - early pullback entries in the strongest long-term trends"
                                     rows={dMultiyearPullback}
-                                    scoreKey="pullback_from_high_pct"
-                                    scoreLabel="Pullback From High"
+                                    scoreKey="pullback_from_breakout"
+                                    scoreLabel="Pullback From Breakout"
                                     formatScore={v => `${Number(v).toFixed(2)}%`}
                                     tfLabel="Multiyear High + Pullback"
                                     loadingOverride={multiyearPullbackLoading}
                                     detailExtra={{
                                         pullbackMode: true,
-                                        pullbackCols: ["breakout_date", "breakout_level", "post_breakout_high", "pullback_from_high_pct", "breakout_strength_pct", "days_since_breakout", "rs_rating"]
+                                        pullbackCols: ["breakout_date", "breakout_level", "historical_high", "pullback_from_breakout", "pct_to_high", "high_age_years", "rs_rating"]
                                     }}
                                 />
                             </CategorySection>
@@ -22843,8 +22898,8 @@ export default function App() {
                                         <div
                                             key={sub.id}
                                             className={`top-nav-mobile-sub${item.id === "financial" ? (financialSubPage === sub.id ? " active" : "")
-                                                    : item.id === "technical" ? (technicalSubPage === sub.id ? " active" : "")
-                                                        : page === sub.id ? " active" : ""
+                                                : item.id === "technical" ? (technicalSubPage === sub.id ? " active" : "")
+                                                    : page === sub.id ? " active" : ""
                                                 }`}
                                             onClick={() => {
                                                 clearTickerRoute();
@@ -23058,7 +23113,7 @@ export default function App() {
                                                 <AnnouncementsModule T={T} />
                                             </div>
                                         )}
-                                       
+
                                     </div>
                                 )}
 
