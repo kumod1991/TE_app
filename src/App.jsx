@@ -11221,6 +11221,14 @@ const SCREENS_TABLE_FETCHERS = {
     // ordered closest-to-high-first, same dedicated-table fetch/cache pattern
     // as the other Breakouts screens tables above.
     multiyearHighSoon: _makeScreensTableFetcher("multiyear_high_soon", "te_scr_multiyearhighsoon_v1", "select=*&order=pct_to_high.desc.nullslast&limit=1000"),
+    // weekly_breakout_soon: weekly-chart analog of Multiyear High Soon 
+    // stocks still below their weekly_resistance level and approaching it
+    // (pct_to_breakout, weekly_close, weekly_resistance, sma50/sma200,
+    // rs_3m/6m/12m, ret_3m/6m/12m, high_52w, pct_from_high, market_cap_cr,
+    // trend all already computed server-side), ordered closest-to-breakout
+    // first, same dedicated-table fetch/cache pattern as the other Breakouts
+    // screens tables above.
+    weeklyBreakoutSoon: _makeScreensTableFetcher("weekly_breakout_soon", "te_scr_weeklybreakoutsoon_v1", "select=*&order=pct_to_breakout.asc.nullslast&limit=1000"),
 };
 
 //  Pattern Filters  weekly candlestick pattern scans (Morning Star / Bullish
@@ -18955,6 +18963,39 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [multiyearHighSoonRawRows, filterByUniverse]);
 
+    //  Weekly Breakout Soon scan  dedicated fetch from the weekly_breakout_soon
+    // table  weekly-chart analog of Multiyear High Soon above: stocks still
+    // below their weekly_resistance level and approaching it (pct_to_breakout
+    // is positive = % below/away from resistance; weekly_close/weekly_resistance
+    // normalized onto close/breakout_level for shared column reuse with the
+    // other dedicated screens tables). Own loading flag, same fetch 
+    // normalize  filterByUniverse pattern. Sorted closest-to-breakout first.
+    const [weeklyBreakoutSoonRawRows, weeklyBreakoutSoonLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.weeklyBreakoutSoon);
+
+    const dWeeklyBreakoutSoon = useMemo(() => {
+        const num = v => (v != null ? Number(v) : null);
+        const mapped = (weeklyBreakoutSoonRawRows || []).map(r => ({
+            ...r,
+            close: num(r.weekly_close),
+            breakout_level: num(r.weekly_resistance),
+            pct_to_breakout: num(r.pct_to_breakout),
+            sma50: num(r.sma50),
+            sma200: num(r.sma200),
+            rel_volume: num(r.rel_vol),
+            rs_rating: num(r.rs_rating),
+            rs_3m: num(r.rs_3m),
+            rs_6m: num(r.rs_6m),
+            rs_12m: num(r.rs_12m),
+            ret_3m: num(r.ret_3m),
+            ret_6m: num(r.ret_6m),
+            ret_12m: num(r.ret_12m),
+            high_52w: num(r.high_52w),
+            pct_from_52w_high: num(r.pct_from_high),
+            market_cap_cr: num(r.market_cap_cr),
+        })).sort((a, b) => (a.pct_to_breakout ?? 999) - (b.pct_to_breakout ?? 999));
+        return filterByUniverse(mapped);
+    }, [weeklyBreakoutSoonRawRows, filterByUniverse]);
+
     //  Minervini Trend Template scan  dedicated fetch from minervini_screen table 
     // The table is refreshed daily by the sync pipeline and already carries the
     // full 8-criteria Trend Template pass/fail flags (c1_above_150_200 ...
@@ -19132,7 +19173,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length + dAdxDi.length + dRsiMomentum.length;
     const marketLeadersCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
     const momentumScreensCount = dAdxDi.length + dRsiMomentum.length + dVolumeMomentum.length;
-    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length + dMultiyearHighSoon.length;
+    const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length + dMultiyearHighSoon.length + dWeeklyBreakoutSoon.length;
     const gapScreensCount = dFreshGapBreakoutWeekly.length + dPostGapTightBaseWeekly.length + dPostGapConsolidationWeekly.length + dPostGapExtendedWeekly.length;
     const pullbacksCount = dPb50dma.length + dPbPivotRetest.length + dPbShallow.length +
         dPbWeekly.length + dPbVolDryup.length + dMultiyearPullback.length;
@@ -19527,7 +19568,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
                             <CategorySection name="Breakouts" color={isDark ? "#34d399" : "#059669"}
                                 desc="Stocks breaking above key resistance with volume confirmation"
-                                count={(volBreakoutLoading || breakoutLoading || pivotLoading || freshBreakoutLoading || freshBreakoutWeeklyLoading || multiyearBreakoutLoading || multiyearHighSoonLoading) ? "..." : breakoutsCount}>
+                                count={(volBreakoutLoading || breakoutLoading || pivotLoading || freshBreakoutLoading || freshBreakoutWeeklyLoading || multiyearBreakoutLoading || multiyearHighSoonLoading || weeklyBreakoutSoonLoading) ? "..." : breakoutsCount}>
                                 <ScreenRow
                                     rowKey="bo-vol"
                                     title="Volume Breakout"
@@ -19632,6 +19673,21 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     detailExtra={{
                                         pullbackMode: true,
                                         pullbackCols: ["historical_high", "high_date", "high_age_years", "market_cap_cr"]
+                                    }}
+                                />
+                                <ScreenRow
+                                    rowKey="bo-weekly-breakout-soon"
+                                    title="Weekly Breakout Soon"
+                                    subtitle="Weekly close approaching its weekly resistance level - closest to breaking out first"
+                                    rows={dWeeklyBreakoutSoon}
+                                    scoreKey="pct_to_breakout"
+                                    scoreLabel="To Breakout"
+                                    formatScore={v => `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`}
+                                    tfLabel="Weekly Breakout Soon"
+                                    loadingOverride={weeklyBreakoutSoonLoading}
+                                    detailExtra={{
+                                        pullbackMode: true,
+                                        pullbackCols: ["breakout_level", "pct_to_breakout", "sma50", "sma200", "market_cap_cr"]
                                     }}
                                 />
                             </CategorySection>
