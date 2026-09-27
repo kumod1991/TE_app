@@ -624,9 +624,17 @@ const DEFAULT_VISIBLE_ITEMS = 6;
 const DEFAULT_TABLE_MAX_HEIGHT = 44 + DEFAULT_VISIBLE_ITEMS * 49;
 const MOVERS_INITIAL_ROWS = 20;
 const MOVERS_LOAD_MORE_ROWS = 20;
+const TREND_TEMPLATE_PREVIEW_ROWS = 5;
+// Fixed height for the 5-row preview tables (Trend Template Filter + the
+// leadership screen cards) so every card reserves the same vertical space
+// regardless of how many stocks actually qualify — a screen with only 1-2
+// results still renders as tall as a full 5-row card, keeping every card in
+// the 2-column grid aligned instead of collapsing to a short, uneven card.
+const LEADERSHIP_TABLE_MIN_HEIGHT = 34 + TREND_TEMPLATE_PREVIEW_ROWS * 56;
 
 const fmt = (n, d = 2) => n == null ? EMPTY_VALUE : Number(n).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtPct = (n) => n == null ? EMPTY_VALUE : `${Number(n) > 0 ? "+" : ""}${fmt(n)}%`;
+const fmtSigned = (n, d = 2) => n == null ? EMPTY_VALUE : `${Number(n) > 0 ? "+" : ""}${fmt(n, d)}`;
 const fmtVol = (n) => {
     if (n == null) return EMPTY_VALUE;
     if (n >= 1e7) return `${(n / 1e7).toFixed(2)}Cr`;
@@ -1046,26 +1054,207 @@ function FiiDiiFlowBars({ D, data, isCompact }) {
     );
 }
 
-const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, onNavigate }) {
+function NiftyPePanel({ D, isCompact, data }) {
+    const [hoverIdx, setHoverIdx] = React.useState(null);
+    const rows = (data || [])
+        .filter(r => r && r.pe_ratio != null && Number.isFinite(Number(r.pe_ratio)))
+        .slice()
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (!rows.length) {
+        return (
+            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" }}>
+                <div style={{
+                    fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                    color: D.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                }}>
+                    Nifty 50 &middot; P/E (TTM)
+                </div>
+                <div style={{ color: D.muted, fontSize: 13.5, marginTop: 10 }}>waiting for data</div>
+            </div>
+        );
+    }
+
+    const values = rows.map(r => Number(r.pe_ratio));
+    const latest = rows[rows.length - 1];
+    const prev = rows.length > 1 ? rows[rows.length - 2] : null;
+    const pe = values[values.length - 1];
+    const delta = prev ? pe - Number(prev.pe_ratio) : null;
+    const deltaPct = prev && Number(prev.pe_ratio) ? (delta / Number(prev.pe_ratio)) * 100 : null;
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+
+    const zone = pe >= avg * 1.08 ? "Rich" : pe <= avg * 0.92 ? "Cheap" : "Fair";
+    const zoneColor = zone === "Rich" ? (D.neg || "#ef4444") : zone === "Cheap" ? (D.pos || "#10b981") : D.accent;
+    const zoneBg = zone === "Rich" ? D.negSoft : zone === "Cheap" ? D.posSoft : withAlpha(D.accent, D.isDark ? 0.16 : 0.09);
+
+    let dateLabel = latest.date;
+    try {
+        dateLabel = new Date(latest.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    } catch { /* keep raw date on parse failure */ }
+
+    // per-point "Mon YYYY" labels for the hover tooltip
+    const monthLabels = rows.map(r => {
+        try { return new Date(r.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" }); }
+        catch { return String(r.date); }
+    });
+
+    // ── sparkline geometry (hand-rolled SVG, no chart lib) ──────────────────
+    const vw = 300;
+    const vh = isCompact ? 60 : 80;
+    const padY = 6;
+    const range = Math.max(max - min, 0.01);
+    const stepX = values.length > 1 ? vw / (values.length - 1) : vw;
+    const points = values.map((v, i) => [
+        i * stepX,
+        padY + (1 - (v - min) / range) * (vh - padY * 2),
+    ]);
+    const linePath = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    const areaPath = `${linePath} L${vw},${vh} L0,${vh} Z`;
+    const avgY = padY + (1 - (avg - min) / range) * (vh - padY * 2);
+    const last = points[points.length - 1];
+    const lineColor = D.accent || "#2563eb";
+    const hovered = hoverIdx != null ? points[hoverIdx] : null;
+
+    // ── low/avg/high range-bar geometry ──────────────────────────────────────
+    const barPct = v => Math.min(100, Math.max(0, ((v - min) / range) * 100));
+    const avgPct = barPct(avg);
+    const currentPct = barPct(pe);
+
+    return (
+        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", height: "100%" }}>
+            <div style={{
+                display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 999,
+                background: zoneBg, border: `1px solid ${withAlpha(zoneColor, 0.22)}`, color: zoneColor,
+                fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", marginBottom: 14, width: "fit-content",
+            }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: zoneColor }} />
+                {zone === "Fair" ? "Fair Value" : `${zone} vs 2Y Avg`}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <span style={{
+                    fontSize: isCompact ? 34 : 42, fontWeight: 800, letterSpacing: "-0.03em",
+                    color: D.text, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1,
+                }}>{pe.toFixed(2)}</span>
+                {delta != null && (
+                    <span style={{
+                        fontSize: 13.5, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+                        color: delta >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
+                    }}>
+                        {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
+                        {deltaPct != null ? ` (${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%)` : ""}
+                    </span>
+                )}
+            </div>
+            <div style={{ fontSize: 13, color: D.subtext, marginTop: 4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
+                Nifty 50 &middot; P/E (TTM) &middot; {dateLabel}
+            </div>
+
+            <div style={{ marginTop: "auto", paddingTop: 14 }}>
+                <div style={{ position: "relative" }}>
+                    <svg
+                        viewBox={`0 0 ${vw} ${vh}`}
+                        width="100%"
+                        height={isCompact ? 60 : 80}
+                        preserveAspectRatio="none"
+                        style={{ display: "block", overflow: "visible" }}
+                        onMouseLeave={() => setHoverIdx(null)}
+                    >
+                        <defs>
+                            <linearGradient id="niftyPeGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={lineColor} stopOpacity="0.28" />
+                                <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+                            </linearGradient>
+                        </defs>
+                        <line x1="0" y1={avgY} x2={vw} y2={avgY} stroke={D.muted} strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3,3" />
+                        <path d={areaPath} fill="url(#niftyPeGrad)" stroke="none" />
+                        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        {hovered && (
+                            <line x1={hovered[0]} y1="0" x2={hovered[0]} y2={vh} stroke={D.muted} strokeOpacity="0.4" strokeWidth="1" strokeDasharray="2,2" />
+                        )}
+                        {last && <circle cx={last[0]} cy={last[1]} r="3.2" fill={lineColor} stroke={D.panelBg} strokeWidth="1.5" />}
+                        {hovered && <circle cx={hovered[0]} cy={hovered[1]} r="4" fill={lineColor} stroke={D.panelBg} strokeWidth="2" />}
+                        {/* invisible per-month hit targets, one column per data point */}
+                        {points.map(([x], i) => (
+                            <rect
+                                key={i}
+                                x={Math.max(0, x - stepX / 2)}
+                                y="0"
+                                width={Math.max(stepX, 4)}
+                                height={vh}
+                                fill="transparent"
+                                onMouseEnter={() => setHoverIdx(i)}
+                                style={{ cursor: "crosshair" }}
+                            />
+                        ))}
+                    </svg>
+                    {hovered && (
+                        <div style={{
+                            position: "absolute",
+                            left: `${(hovered[0] / vw) * 100}%`,
+                            top: `${(hovered[1] / vh) * 100}%`,
+                            transform: `translate(${hoverIdx === 0 ? "-4px" : hoverIdx === points.length - 1 ? "calc(-100% + 4px)" : "-50%"}, calc(-100% - 10px))`,
+                            background: D.panelBg,
+                            border: `1px solid ${D.panelBorder}`,
+                            borderRadius: 8,
+                            padding: "5px 9px",
+                            boxShadow: D.shadowMd || "0 6px 16px rgba(0,0,0,0.16)",
+                            fontSize: 11.5,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                            color: D.subtext,
+                            whiteSpace: "nowrap",
+                            pointerEvents: "none",
+                            zIndex: 5,
+                        }}>
+                            {monthLabels[hoverIdx]}{"  "}
+                            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: D.text }}>
+                                {values[hoverIdx].toFixed(2)}
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                {/* low → high range bar, colored cheap(green) → rich(red), with a marker at the current reading */}
+                <div style={{ marginTop: 14 }}>
+                    <div style={{
+                        position: "relative", height: 6, borderRadius: 999,
+                        background: `linear-gradient(90deg, ${D.pos || "#10b981"} 0%, #eab308 50%, ${D.neg || "#ef4444"} 100%)`,
+                    }}>
+                        <div title={`2Y average ${avg.toFixed(2)}`} style={{
+                            position: "absolute", left: `${avgPct}%`, top: -3, bottom: -3, width: 2,
+                            background: D.panelBg, opacity: 0.85, transform: "translateX(-50%)",
+                        }} />
+                        <div title={`Now ${pe.toFixed(2)} — ${zone}`} style={{
+                            position: "absolute", left: `${currentPct}%`, top: -5, width: 4, height: 16, borderRadius: 2,
+                            background: zoneColor, border: `1.5px solid ${D.panelBg}`, transform: "translateX(-50%)",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+                        }} />
+                    </div>
+                    <div style={{
+                        display: "flex", justifyContent: "space-between", marginTop: 6,
+                        fontSize: 11, color: D.muted, fontFamily: "'IBM Plex Mono', monospace",
+                    }}>
+                        <span>Low {min.toFixed(1)}</span>
+                        <span>Avg {avg.toFixed(1)}</span>
+                        <span>High {max.toFixed(1)}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, niftyPeData, onNavigate, userToken, onLogin }) {
     const topRsSectors = [...(rsIndustrySummary || [])]
         .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
         .slice(0, 5);
-    const leadershipCount = allHighRsStocks?.length || 0;
-    const gainerCount = gainers?.length || 0;
-    const loserCount = losers?.length || 0;
     const highPct = Number(breadthSnapshot?.near_52w_high);
     const lowPct = Number(breadthSnapshot?.near_52w_low);
     const sma50Pct = Number(breadthSnapshot?.above_sma50);
     const sma200Pct = Number(breadthSnapshot?.above_sma200);
-    const netBreadth = gainerCount - loserCount;
-    const tone = leadershipCount >= 250 || (netBreadth > 0 && highPct >= lowPct)
-        ? "Constructive"
-        : leadershipCount < 120 && lowPct > highPct
-            ? "Defensive"
-            : "Selective";
-    const toneColor = tone === "Constructive" ? D.pos : tone === "Defensive" ? D.neg : D.accent;
-    const toneBg = tone === "Constructive" ? D.posSoft : tone === "Defensive" ? D.negSoft : withAlpha(D.accent, D.isDark ? 0.16 : 0.09);
-
     const heroMetrics = [
         {
             label: "Breadth",
@@ -1081,7 +1270,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
     ];
     const lenses = [
         { type: "screens", title: "Breadth", meta: `Market Participation`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
-        { type: "momentum", title: "TechLens", meta: `Identify leaders`, action: "Technical Screens", onClick: () => onNavigate?.("technical", "screens") },
+        { type: "momentum", title: "TechLens", meta: `Identify leaders`, action: "Technical Screens", locked: true, onClick: () => (userToken ? onNavigate?.("technical", "screens") : onLogin?.()) },
         { type: "flow", title: "Institutions", meta: "FII / DII", action: "Flow Desk", onClick: () => onNavigate?.("financial", "fiidii") },
         { type: "ownership", title: "Ownership", meta: "Promoter / funds", action: "Scans", onClick: () => onNavigate?.("financial", "ownership") },
         { type: "watchlist", title: "Watchlist", meta: "Saved setups", action: "Open", onClick: () => onNavigate?.("watchlist") },
@@ -1107,47 +1296,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     alignItems: "stretch",
                 }}>
                     <div style={{ minWidth: 0 }}>
-                        <div style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "6px 10px",
-                            borderRadius: 999,
-                            background: toneBg,
-                            border: `1px solid ${withAlpha(toneColor, 0.22)}`,
-                            color: toneColor,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                            marginBottom: 14,
-                        }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: toneColor }} />
-                            {tone}
-                        </div>
-                        <h1 style={{
-                            margin: 0,
-                            color: D.text,
-                            fontSize: isCompact ? 25 : 31,
-                            lineHeight: 1.05,
-                            fontWeight: 800,
-                            letterSpacing: "-0.04em",
-                            maxWidth: 760,
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                        }}>
-                            Dashboard
-                        </h1>
-                        <p style={{
-                            margin: "10px 0 0",
-                            color: D.subtext,
-                            fontSize: 15,
-                            lineHeight: 1.6,
-                            maxWidth: 720,
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                        }}>
-
-                        </p>
+                        <NiftyPePanel D={D} isCompact={isCompact} data={niftyPeData} />
                     </div>
 
                     <div style={{
@@ -1263,7 +1412,9 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     gap: 8,
                     marginTop: isCompact ? 18 : 22,
                 }}>
-                    {lenses.map(lens => (
+                    {lenses.map(lens => {
+                        const isLocked = lens.locked && !userToken;
+                        return (
                         <button key={lens.title} onClick={lens.onClick} type="button" style={{
                             minWidth: 0,
                             minHeight: isCompact ? 82 : 88,
@@ -1279,12 +1430,26 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                             color: D.text,
                             cursor: "pointer",
                             padding: "11px",
+                            position: "relative",
                             fontFamily: "inherit",
                             transition: "transform .14s ease, border-color .14s ease, background .14s ease",
                         }}
                             onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(D.accent, 0.42); }}
                             onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
                         >
+                            {isLocked && (
+                                <span style={{
+                                    position: "absolute", top: 9, right: 9,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    width: 20, height: 20, borderRadius: "50%",
+                                    background: withAlpha(D.accent, D.isDark ? 0.20 : 0.12),
+                                }}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                                        <rect x="4" y="10" width="16" height="10" rx="2" fill={D.accent} />
+                                        <path d="M7 10V7a5 5 0 0110 0v3" stroke={D.accent} strokeWidth="2" fill="none" />
+                                    </svg>
+                                </span>
+                            )}
                             <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent }}>
                                 <DashboardLensIcon type={lens.type} />
                             </span>
@@ -1292,9 +1457,10 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                                 <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.title}</span>
                                 <span style={{ display: "block", fontSize: 13, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.meta}</span>
                             </span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: D.accent, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.action}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: D.accent, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{isLocked ? "Login to unlock" : lens.action}</span>
                         </button>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </section>
@@ -1387,7 +1553,7 @@ function MiniSparkline({ values, positive, width = 120, height = 48 }) {
     const color = positive ? "#0ea67a" : "#ef4444";
     const fillColor = positive ? "rgba(14,166,122,0.12)" : "rgba(239,68,68,0.10)";
     return (
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", flexShrink: 0 }}>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
             <defs>
                 <linearGradient id={`sg-${positive ? "p" : "n"}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={color} stopOpacity="0.25" />
@@ -1413,17 +1579,18 @@ function IndexCard({ T, label, value, changePct, sparkData, compact = false }) {
     return (
         <div style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            flexDirection: "column",
             padding: compact ? "12px 0" : "14px 0",
-            gap: compact ? 12 : 16,
+            gap: compact ? 10 : 12,
         }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ minWidth: 0 }}>
                 <div style={{
                     fontSize: 12.5,
                     color: T.muted,
                     marginBottom: 5,
                     whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                     textTransform: "uppercase",
                     letterSpacing: "0.10em",
                     fontWeight: 800,
@@ -1459,13 +1626,13 @@ function IndexCard({ T, label, value, changePct, sparkData, compact = false }) {
                 </div>
             </div>
             <div style={{
-                minWidth: compact ? 104 : 122,
+                width: "100%",
                 padding: compact ? "7px 7px 5px" : "8px 8px 6px",
                 borderRadius: 16,
                 background: T.softFill,
                 border: `1px solid ${T.panelBorder}`,
             }}>
-                <MiniSparkline values={sparkData} positive={isPos} width={compact ? 100 : 120} height={compact ? 42 : 48} />
+                <MiniSparkline values={sparkData} positive={isPos} width={compact ? 190 : 216} height={compact ? 42 : 48} />
             </div>
         </div>
     );
@@ -1545,10 +1712,6 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
     );
 
     const activeIndices = activeIndexTab === "core" ? coreIndices : sectoralIndices;
-    const columnCount = (isCompact || isSideBySide) ? 1 : 2;
-    const rowHeight = isCompact ? 112 : 104;
-    const visibleRows = Math.ceil(Math.min(activeIndices.length, DEFAULT_VISIBLE_ITEMS) / columnCount) || 1;
-    const gridMaxHeight = visibleRows * rowHeight + Math.max(visibleRows - 1, 0) * 14;
 
     return (
         <SectionCard T={T} style={{ padding: isCompact ? 18 : 22, marginBottom: isSideBySide ? 0 : undefined, ...style }}>
@@ -1567,7 +1730,7 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
                         letterSpacing: "-0.01em",
                         color: T.text,
                         fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                    }}>Market Pulse</div>
+                    }}>Indices</div>
                     <div style={{
                         fontSize: isCompact ? 19 : 23,
                         fontWeight: 700,
@@ -1594,9 +1757,9 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
             </TabBar>
 
             {loading ? (
-                <div style={{ display: "grid", gridTemplateColumns: (isCompact || isSideBySide) ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 14, marginTop: 8 }}>
-                    {[...Array(isCompact ? 4 : 6)].map((_, i) => (
-                        <Skeleton key={i} T={T} h={88} style={{ borderRadius: 18 }} />
+                <div style={{ display: "flex", gap: 14, marginTop: 8, overflow: "hidden" }}>
+                    {[...Array(isCompact ? 3 : 5)].map((_, i) => (
+                        <Skeleton key={i} T={T} h={112} style={{ borderRadius: 18, flex: `0 0 ${isCompact ? 220 : 250}px` }} />
                     ))}
                 </div>
             ) : visibleMeta.length === 0 ? (
@@ -1611,12 +1774,14 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
                     padding: 16,
                 }}>
                     <div style={{
-                        display: "grid",
-                        gridTemplateColumns: (isCompact || isSideBySide) ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                        display: "flex",
                         gap: 14,
-                        maxHeight: activeIndices.length > DEFAULT_VISIBLE_ITEMS ? gridMaxHeight : "none",
-                        overflowY: activeIndices.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-                        paddingRight: activeIndices.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
+                        overflowX: "auto",
+                        overflowY: "hidden",
+                        scrollSnapType: "x proximity",
+                        WebkitOverflowScrolling: "touch",
+                        paddingBottom: 4,
+                        marginBottom: -4,
                     }}>
                         {activeIndices.map(idx => (
                             <div key={idx.key} style={{
@@ -1624,7 +1789,8 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
                                 borderRadius: 14,
                                 background: withAlpha(T.surface, T.isDark ? 0.72 : 0.82),
                                 padding: "0 16px",
-                                minWidth: 0,
+                                flex: `0 0 ${isCompact ? 226 : 254}px`,
+                                scrollSnapAlign: "start",
                             }}>
                                 <IndexCard
                                     T={T}
@@ -1637,16 +1803,6 @@ function MarketOverview({ T, userToken, isCompact, isTablet, isSideBySide = fals
                             </div>
                         ))}
                     </div>
-                    {activeIndices.length > DEFAULT_VISIBLE_ITEMS && (
-                        <div style={{
-                            marginTop: 12,
-                            fontSize: 14.5,
-                            color: T.muted,
-                            fontFamily: "'IBM Plex Mono', monospace",
-                        }}>
-                            Showing 6 at a time. Scroll to view the remaining indices.
-                        </div>
-                    )}
                     {!activeIndices.length && (
                         <div style={{ padding: "20px 4px 4px", textAlign: "center", color: T.muted, fontSize: 15.5 }}>
                             No indices available in this group
@@ -1682,12 +1838,13 @@ function SortIcon({ dir }) {
 }
 
 // ─── SHARED PREMIUM TABLE SHELL ───────────────────────────────────────────────
-function PremiumTableShell({ T, children, minWidth, maxHeight, isScrollable }) {
+function PremiumTableShell({ T, children, minWidth, minHeight, maxHeight, isScrollable }) {
     return (
         <div style={{
             overflowX: "auto",
             overflowY: isScrollable ? "auto" : "visible",
             maxHeight: isScrollable ? maxHeight : "none",
+            minHeight,
             borderRadius: 14,
             border: `1px solid ${T.panelBorder}`,
             background: T.panelBg,
@@ -2319,7 +2476,7 @@ function normalizeMinerviniRow(r) {
     };
 }
 
-function TrendTemplateCard({ T, userToken, isCompact }) {
+function TrendTemplateCard({ T, userToken, isCompact, onNavigate, onLogin }) {
     const _cached = useMemo(() => {
         const hit = cacheGet(MINERVINI_PATH, MINERVINI_TTL);
         return hit ? hit.data || [] : null;
@@ -2327,10 +2484,8 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
 
     const [rawRows, setRawRows] = useState(() => _cached || []);
     const [loading, setLoading] = useState(() => !_cached);
-    const [searchTerm, setSearchTerm] = useState("");
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
-    const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
 
     useEffect(() => {
@@ -2369,27 +2524,18 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
             .map(normalizeMinerviniRow);
     }, [rawRows]);
 
-    const filtered = useMemo(() => {
-        const q = searchTerm.trim().toUpperCase();
-        if (!q) return rows;
-        return rows.filter(r => (r.ticker || "").toUpperCase().includes(q) || (r.name || "").toUpperCase().includes(q));
-    }, [rows, searchTerm]);
-
     const sorted = useMemo(() => {
-        if (!filtered.length) return [];
-        return [...filtered].sort((a, b) => {
+        if (!rows.length) return [];
+        return [...rows].sort((a, b) => {
             const aVal = a[sortKey], bVal = b[sortKey];
             const cmp = typeof aVal === "number" && typeof bVal === "number"
                 ? aVal - bVal
                 : String(aVal || "").localeCompare(String(bVal || ""));
             return sortDir === "asc" ? cmp : -cmp;
         });
-    }, [filtered, sortKey, sortDir]);
+    }, [rows, sortKey, sortDir]);
 
-    useEffect(() => { setVisibleCount(MOVERS_INITIAL_ROWS); }, [searchTerm, rawRows]);
-
-    const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
-    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+    const visibleRows = useMemo(() => sorted.slice(0, TREND_TEMPLATE_PREVIEW_ROWS), [sorted]);
 
     // Pre-warm chart cache for visible rows so hover popover is instant
     useEffect(() => {
@@ -2425,7 +2571,7 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
     };
 
     const Th = ({ k, label, align = "right" }) => (
-        <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "10px 14px", textAlign: align }}>
+        <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "8px 8px", textAlign: align }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: align === "left" ? "flex-start" : "flex-end", gap: 2 }}>
                 <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
                 <SortIcon dir={sortKey === k ? sortDir : null} />
@@ -2435,57 +2581,12 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
 
     return (
         <SectionCard T={T} style={{ marginBottom: 0 }}>
-            <div style={{
-                display: "flex",
-                flexDirection: isCompact ? "column" : "row",
-                justifyContent: "space-between",
-                alignItems: isCompact ? "flex-start" : "center",
-                marginBottom: 4,
-                gap: 12,
-            }}>
-                <CardHeader
-                    T={T}
-                    title="Trend Template Filter"
-                    count={sorted.length}
-                    style={{ marginBottom: 0 }}
-                />
-                <div style={{ position: "relative", width: isCompact ? "100%" : 240 }}>
-                    <input
-                        type="text"
-                        placeholder="Search ticker..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "8px 12px 8px 32px",
-                            borderRadius: 8,
-                            border: `1px solid ${T.panelBorder}`,
-                            background: T.isDark ? "rgba(255,255,255,0.06)" : "#fff",
-                            color: T.text,
-                            fontSize: 13,
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                            outline: "none",
-                            transition: "border-color 0.15s",
-                        }}
-                        onFocus={e => e.target.style.borderColor = `${T.pos || "#10b981"}60`}
-                        onBlur={e => e.target.style.borderColor = T.panelBorder}
-                    />
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.muted }}>
-                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    {searchTerm && (
-                        <button onClick={() => setSearchTerm("")} style={{
-                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                            background: "none", border: "none", cursor: "pointer", color: T.muted, padding: 4,
-                        }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
-                    )}
-                </div>
-            </div>
+            <CardHeader
+                T={T}
+                title="Trend Template Filter"
+                count={sorted.length}
+                style={{ marginBottom: 4 }}
+            />
             <div style={{ fontSize: 12, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
                 Stocks passing all 8 criteria of Mark Minervini's Trend Template
             </div>
@@ -2495,26 +2596,20 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
                     {[...Array(6)].map((_, i) => <Skeleton key={i} T={T} h={48} />)}
                 </div>
             ) : !sorted.length ? (
-                <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 15 }}>
-                    {searchTerm ? "No matching stocks" : "No stocks currently pass all 8 criteria"}
+                <div style={{ minHeight: LEADERSHIP_TABLE_MIN_HEIGHT, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 15 }}>
+                    {"No stocks currently pass all 8 criteria"}
                 </div>
             ) : (
                 <div ref={wrapRef} style={{ position: "relative" }}>
-                    <PremiumTableShell T={T} minWidth={1110} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+                    <PremiumTableShell T={T} minWidth={380} minHeight={LEADERSHIP_TABLE_MIN_HEIGHT} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
                         <thead>
                             <tr>
-                                <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
+                                <th style={{ ...thBase, padding: "9px 8px", textAlign: "left", width: 24 }}>#</th>
                                 <Th k="name" label="Name" align="left" />
                                 <Th k="close" label="Price" />
                                 <Th k="rs_rating" label="RS" />
-                                <Th k="ret_3m" label="3M" />
-                                <Th k="ret_6m" label="6M" />
-                                <Th k="ret_12m" label="12M" />
-                                <Th k="rel_volume" label="Rel Vol" />
                                 <Th k="pct_from_52w_high" label="From High" />
-                                <Th k="sma50" label="50 SMA" />
-                                <Th k="sma150" label="150 SMA" />
-                                <Th k="sma200" label="200 SMA" />
+                                <Th k="rel_volume" label="Rel Vol" />
                             </tr>
                         </thead>
                         <tbody>
@@ -2534,57 +2629,354 @@ function TrendTemplateCard({ T, userToken, isCompact }) {
                                     onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
                                     onClick={preview.onClick}
                                 >
-                                    <td style={{ padding: "12px 16px", color: T.muted, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
-                                    <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
+                                    <td style={{ padding: "9px 8px", color: T.muted, fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 24, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                                    <td data-preview-anchor="1" style={{ padding: "9px 8px", maxWidth: 170, minWidth: 110 }}>
                                         <NameCell T={T} name={row.name} ticker={row.ticker} />
                                     </td>
                                     <td style={{
-                                        padding: "12px 16px", textAlign: "right",
-                                        color: T.text, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5,
+                                        padding: "9px 8px", textAlign: "right",
+                                        color: T.text, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5,
                                     }}>{row.close != null ? `₹${fmt(row.close)}` : EMPTY_VALUE}</td>
-                                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                                    <td style={{ padding: "9px 8px", textAlign: "right" }}>
                                         <span style={{
-                                            display: "inline-block", padding: "3px 9px", borderRadius: 6,
+                                            display: "inline-block", padding: "2px 7px", borderRadius: 6,
                                             background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
                                             border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
                                             color: T.pos || "#0ea67a", fontFamily: "'IBM Plex Mono', monospace",
-                                            fontWeight: 700, fontSize: 15.5, fontVariantNumeric: "tabular-nums",
+                                            fontWeight: 700, fontSize: 13.5, fontVariantNumeric: "tabular-nums",
                                         }}>{row.rs_rating != null ? Math.round(row.rs_rating) : EMPTY_VALUE}</span>
                                     </td>
-                                    {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
-                                        <td key={key} style={{
-                                            padding: "12px 16px", textAlign: "right",
-                                            color: val != null ? (val >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444")) : T.muted,
-                                            fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5,
-                                        }}>{val != null ? fmtPct(val) : EMPTY_VALUE}</td>
-                                    ))}
                                     <td style={{
-                                        padding: "12px 16px", textAlign: "right",
-                                        color: row.rel_volume == null ? T.muted : row.rel_volume >= 2 ? (T.pos || "#0ea67a") : T.text,
-                                        fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5,
-                                    }}>{row.rel_volume != null ? `${Number(row.rel_volume).toFixed(2)}x` : EMPTY_VALUE}</td>
-                                    <td style={{
-                                        padding: "12px 16px", textAlign: "right",
-                                        color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5,
+                                        padding: "9px 8px", textAlign: "right",
+                                        color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5,
                                     }}>{row.pct_from_52w_high != null ? `${Number(row.pct_from_52w_high).toFixed(1)}%` : EMPTY_VALUE}</td>
-                                    {[["sma50", row.sma50], ["sma150", row.sma150], ["sma200", row.sma200]].map(([key, val]) => (
-                                        <td key={key} style={{
-                                            padding: "12px 16px", textAlign: "right",
-                                            color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5,
-                                        }}>{fmt(val)}</td>
-                                    ))}
+                                    <td style={{
+                                        padding: "9px 8px", textAlign: "right",
+                                        color: row.rel_volume == null ? T.muted : row.rel_volume >= 2 ? (T.pos || "#0ea67a") : T.text,
+                                        fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5,
+                                    }}>{row.rel_volume != null ? `${Number(row.rel_volume).toFixed(2)}x` : EMPTY_VALUE}</td>
                                 </tr>
                                 );
                             })}
                         </tbody>
                     </PremiumTableShell>
-                    <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
+                    <ViewAllInScreensLink T={T} onNavigate={onNavigate} totalCount={sorted.length} label="Legend Screens" userToken={userToken} onLogin={onLogin} />
                     {PreviewPopover}
                 </div>
             )}
         </SectionCard>
     );
 }
+
+// Generic "View all N in <category> → Screens" CTA shared by the Trend Template
+// card above and the leadership preview cards below — every preview card here
+// only ever shows TREND_TEMPLATE_PREVIEW_ROWS rows, with the rest one tap away
+// on the matching category of the TechLens → Screens page.
+function ViewAllInScreensLink({ T, onNavigate, totalCount, label, userToken, onLogin }) {
+    return (
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 14 }}>
+            <button
+                type="button"
+                onClick={() => (userToken ? onNavigate?.("technical", "screens") : onLogin?.())}
+                style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 16px",
+                    borderRadius: 999,
+                    border: `1px solid ${withAlpha(T.accent || "#2563eb", 0.32)}`,
+                    background: withAlpha(T.accent || "#2563eb", T.isDark ? 0.14 : 0.08),
+                    color: T.accent || "#2563eb",
+                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    transition: "opacity 0.15s ease",
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+                onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+            >
+                {totalCount > TREND_TEMPLATE_PREVIEW_ROWS
+                    ? `View all \u2192`
+                    : `View all \u2192`}
+            </button>
+        </div>
+    );
+}
+
+// ─── LEADERSHIP SCREEN PREVIEW CARDS ──────────────────────────────────────────
+// Four lightweight "preview" cards, same visual language as the Trend Template
+// card above: each fetches its own leadership_* table directly, shows only the
+// top TREND_TEMPLATE_PREVIEW_ROWS rows (already ordered by that screen's own
+// score column), and links out to its category on TechLens → Screens for the
+// full list — High Tight Flag / Volatility Contraction / Weekly Tight Base
+// live under the "Tight Bases" category there; Pullback to 50DMA lives under
+// "Pullbacks".
+const LEADERSHIP_SCREEN_TTL = 60 * 60 * 1000; // these tables refresh once daily
+const LEADERSHIP_BASE_SELECT = "ticker,name,close,rs_rating,ret_3m,ret_6m,ret_12m,rel_vol,pct_from_high,sma50,sma150,sma200";
+
+const LEADERSHIP_SCREEN_CONFIGS = [
+    {
+        key: "htf",
+        title: "High Tight Flag",
+        subtitle: "Sharp prior advance holding a shallow, tightening flag on falling volume",
+        table: "leadership_high_tight_flag",
+        scoreKey: "high_tight_flag_score",
+        scoreLabel: "HTF Score",
+        navLabel: "Tight Bases",
+    },
+    {
+        key: "vcp",
+        title: "Volatility Contraction",
+        subtitle: "Price range tightening step by step on shrinking volume \u2014 a classic VCP",
+        table: "leadership_vcp",
+        scoreKey: "vcp_score",
+        scoreLabel: "VCP Score",
+        navLabel: "Tight Bases",
+    },
+    {
+        key: "weekly_tight",
+        title: "Weekly Tight Base",
+        subtitle: "Four straight weeks of narrowing range on contracting volume",
+        table: "leadership_weekly_tight",
+        scoreKey: "weekly_tight_score",
+        scoreLabel: "WKLY Score",
+        navLabel: "Tight Bases",
+    },
+    {
+        key: "pullback_50dma",
+        title: "Pullback to 50DMA",
+        subtitle: "Stage-2 leaders pulling back toward a rising 50-day average",
+        table: "pullback_to_50dma",
+        scoreKey: "pct_from_50dma",
+        scoreLabel: "From 50DMA",
+        scoreIsPct: true,
+        sortDir: "asc",
+        navLabel: "Pullbacks",
+    },
+    {
+        key: "fresh_gap_breakout",
+        title: "Fresh Gap Breakout",
+        subtitle: "Stocks gapping above a prior base breakout level on a volume surge",
+        table: "fresh_gap_breakout",
+        select: "ticker,name,current_price,current_vs_breakout_pct,rs_rating,current_volume_ratio_10w",
+        priceKey: "current_price",
+        scoreKey: "current_vs_breakout_pct",
+        scoreLabel: "% Above Breakout",
+        scoreIsPct: true,
+        relVolKey: "current_volume_ratio_10w",
+        navLabel: "Breakouts",
+    },
+    {
+        key: "adx_momentum",
+        title: "ADX Momentum",
+        subtitle: "Strong, well-defined trends flagged by a widening +DI/-DI spread",
+        table: "adx_di_screen",
+        scoreKey: "di_spread",
+        scoreLabel: "DI Spread",
+        scoreDecimals: 1,
+        navLabel: "Momentum",
+    },
+    {
+        key: "rsi_momentum",
+        title: "RSI Momentum",
+        subtitle: "Rising RSI over the last 5 sessions \u2014 momentum building underneath the price",
+        table: "rsi_momentum_screen",
+        scoreKey: "rsi_change_5d",
+        scoreLabel: "RSI CHG (5D)",
+        scoreIsSigned: true,
+        navLabel: "Momentum",
+    },
+];
+
+function normalizeLeadershipRow(r, scoreKey, priceKey, rsKey, relVolKey) {
+    const num = v => (v == null || v === "" ? null : Number(v));
+    return {
+        ...r,
+        [priceKey]: num(r[priceKey]),
+        [rsKey]: num(r[rsKey]),
+        [relVolKey]: num(r[relVolKey]),
+        [scoreKey]: num(r[scoreKey]),
+    };
+}
+
+function LeadershipScreenCard({ T, userToken, isCompact, onNavigate, config, onLogin }) {
+    const { table, scoreKey, scoreLabel, scoreIsPct, scoreIsSigned, scoreDecimals, title, subtitle, navLabel } = config;
+    const sortDir = config.sortDir || "desc";
+    const priceKey = config.priceKey || "close";
+    const rsKey = config.rsKey || "rs_rating";
+    const relVolKey = config.relVolKey || "rel_vol";
+    const select = config.select || `${LEADERSHIP_BASE_SELECT},${scoreKey}`;
+    const path = `${table}?select=${select}&order=${scoreKey}.${sortDir}.nullslast&limit=200`;
+
+    const _cached = useMemo(() => {
+        const hit = cacheGet(path, LEADERSHIP_SCREEN_TTL);
+        return hit ? hit.data || [] : null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [path]);
+
+    const [rawRows, setRawRows] = useState(() => _cached || []);
+    const [loading, setLoading] = useState(() => !_cached);
+    const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                if (!_cached) setLoading(true);
+                const rows = await sbFetch(path, userToken, {
+                    ttl: LEADERSHIP_SCREEN_TTL,
+                    onStale: fresh => { if (!cancelled && Array.isArray(fresh)) setRawRows(fresh); },
+                });
+                if (!cancelled && Array.isArray(rows)) setRawRows(rows);
+            } catch (e) {
+                if (!cancelled) console.error(`[LeadershipScreenCard:${config.key}] fetch failed:`, e);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [path, userToken]);
+
+    const rows = useMemo(() => {
+        const allowedSet = getAllowedTickerSetSync();
+        return (rawRows || [])
+            .filter(r => isAllowedTicker(r.ticker, allowedSet))
+            .map(r => normalizeLeadershipRow(r, scoreKey, priceKey, rsKey, relVolKey));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rawRows]);
+
+    const visibleRows = useMemo(() => rows.slice(0, TREND_TEMPLATE_PREVIEW_ROWS), [rows]);
+
+    useEffect(() => {
+        if (!visibleRows || visibleRows.length === 0) return;
+        prefetchWeeklyCharts(visibleRows.map(r => r.ticker));
+    }, [visibleRows]);
+
+    const thBase = {
+        fontWeight: 800,
+        fontSize: 10,
+        color: T.muted,
+        textTransform: "uppercase",
+        letterSpacing: "0.12em",
+        whiteSpace: "nowrap",
+        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+        fontVariantNumeric: "tabular-nums",
+        background: T.tableHeadBg,
+        borderBottom: `1px solid ${T.panelBorder}`,
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+    };
+
+    return (
+        <SectionCard T={T} style={{ marginBottom: 0 }}>
+            <CardHeader T={T} title={title} count={rows.length} style={{ marginBottom: 4 }} />
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                {subtitle}
+            </div>
+
+            {loading ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {[...Array(5)].map((_, i) => <Skeleton key={i} T={T} h={48} />)}
+                </div>
+            ) : !rows.length ? (
+                <div style={{ minHeight: LEADERSHIP_TABLE_MIN_HEIGHT, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 15 }}>
+                    No stocks currently qualify
+                </div>
+            ) : (
+                <div ref={wrapRef} style={{ position: "relative" }}>
+                    <PremiumTableShell T={T} minWidth={360} minHeight={LEADERSHIP_TABLE_MIN_HEIGHT} isScrollable={false} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+                        <thead>
+                            <tr>
+                                <th style={{ ...thBase, padding: "9px 8px", textAlign: "left", width: 24 }}>#</th>
+                                <th style={{ ...thBase, padding: "8px 8px", textAlign: "left" }}>Name</th>
+                                <th style={{ ...thBase, padding: "8px 8px", textAlign: "right" }}>Price</th>
+                                <th style={{ ...thBase, padding: "8px 8px", textAlign: "right" }}>{scoreLabel}</th>
+                                <th style={{ ...thBase, padding: "8px 8px", textAlign: "right" }}>RS</th>
+                                <th style={{ ...thBase, padding: "8px 8px", textAlign: "right" }}>Rel Vol</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {visibleRows.map((row, i) => {
+                                const preview = rowPreviewHandlers(row.ticker, row);
+                                const scoreVal = row[scoreKey];
+                                return (
+                                    <tr
+                                        key={row.ticker}
+                                        style={{
+                                            borderBottom: i < visibleRows.length - 1
+                                                ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
+                                                : "none",
+                                            cursor: "pointer",
+                                            transition: "background 0.12s ease",
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = T.isDark ? "rgba(255,255,255,0.035)" : "rgba(248,250,252,0.85)"; preview.onMouseEnter(e); }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
+                                        onClick={preview.onClick}
+                                    >
+                                        <td style={{ padding: "9px 8px", color: T.muted, fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 24, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                                        <td data-preview-anchor="1" style={{ padding: "9px 8px", maxWidth: 170, minWidth: 110 }}>
+                                            <NameCell T={T} name={row.name} ticker={row.ticker} />
+                                        </td>
+                                        <td style={{ padding: "9px 8px", textAlign: "right", color: T.text, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5 }}>
+                                            {row[priceKey] != null ? `₹${fmt(row[priceKey])}` : EMPTY_VALUE}
+                                        </td>
+                                        <td style={{ padding: "9px 8px", textAlign: "right" }}>
+                                            {scoreVal != null ? (
+                                                scoreIsPct ? (
+                                                    <span style={{
+                                                        color: scoreVal >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444"),
+                                                        fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5,
+                                                    }}>{fmtPct(scoreVal)}</span>
+                                                ) : scoreIsSigned ? (
+                                                    <span style={{
+                                                        color: scoreVal >= 0 ? (T.pos || "#0ea67a") : (T.neg || "#ef4444"),
+                                                        fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5,
+                                                    }}>{fmtSigned(scoreVal, scoreDecimals ?? 2)}</span>
+                                                ) : (
+                                                    <span style={{
+                                                        display: "inline-block", padding: "2px 7px", borderRadius: 6,
+                                                        background: withAlpha(T.pos || "#0ea67a", T.isDark ? 0.18 : 0.10),
+                                                        border: `1px solid ${withAlpha(T.pos || "#0ea67a", 0.28)}`,
+                                                        color: T.pos || "#0ea67a", fontFamily: "'IBM Plex Mono', monospace",
+                                                        fontWeight: 700, fontSize: 13.5, fontVariantNumeric: "tabular-nums",
+                                                    }}>{scoreDecimals ? Number(scoreVal).toFixed(scoreDecimals) : Math.round(scoreVal)}</span>
+                                                )
+                                            ) : EMPTY_VALUE}
+                                        </td>
+                                        <td style={{ padding: "9px 8px", textAlign: "right", color: T.subtext || T.muted, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5 }}>
+                                            {row[rsKey] != null ? Math.round(row[rsKey]) : EMPTY_VALUE}
+                                        </td>
+                                        <td style={{
+                                            padding: "9px 8px", textAlign: "right",
+                                            color: row[relVolKey] == null ? T.muted : row[relVolKey] >= 2 ? (T.pos || "#0ea67a") : T.text,
+                                            fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5,
+                                        }}>{row[relVolKey] != null ? `${Number(row[relVolKey]).toFixed(2)}x` : EMPTY_VALUE}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </PremiumTableShell>
+                    <ViewAllInScreensLink T={T} onNavigate={onNavigate} totalCount={rows.length} label={navLabel} userToken={userToken} onLogin={onLogin} />
+                    {PreviewPopover}
+                </div>
+            )}
+        </SectionCard>
+    );
+}
+
+function LeadershipScreenCards({ T, userToken, isCompact, onNavigate, onLogin }) {
+    return (
+        <>
+            {LEADERSHIP_SCREEN_CONFIGS.map(config => (
+                <LeadershipScreenCard key={config.key} T={T} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} config={config} onLogin={onLogin} />
+            ))}
+        </>
+    );
+}
+
 
 // â”€â”€â”€ MOVERS TABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const MoversTable = React.memo(function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
@@ -2734,7 +3126,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={showDist ? 1010 : 870} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={showDist ? 720 : 420} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
@@ -2742,8 +3134,6 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
                     <MTh k="ltp" label="LTP" />
                     <MTh k="change_pct" label="Chg %" />
                     {showDist && <MTh k="dist_pct" label={type === "near_high" ? "From High" : "From Low"} />}
-                    <MTh k="high_52w" label="52W High" />
-                    <MTh k="low_52w" label="52W Low" />
                 </tr>
             </thead>
             <tbody>
@@ -2814,24 +3204,6 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
                                     fontSize: 15.5,
                                 }}>{row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}</td>
                             )}
-                            {/* 52W High */}
-                            <td style={{
-                                padding: "12px 16px",
-                                textAlign: "right",
-                                color: T.text,
-                                fontFamily: "'IBM Plex Mono', monospace",
-                                fontSize: 15.5,
-                                fontVariantNumeric: "tabular-nums",
-                            }}>{row.high_52w != null ? fmt(row.high_52w) : EMPTY_VALUE}</td>
-                            {/* 52W Low */}
-                            <td style={{
-                                padding: "12px 16px",
-                                textAlign: "right",
-                                fontFamily: "'IBM Plex Mono', monospace",
-                                fontSize: 15.5,
-                                color: T.text,
-                                fontVariantNumeric: "tabular-nums",
-                            }}>{row.low_52w != null ? fmt(row.low_52w) : EMPTY_VALUE}</td>
                         </tr>
                     );
                 })}
@@ -2967,13 +3339,12 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={720} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={400} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
                     <VTh k="name" label="Name" />
                     <VTh k="close" label="LTP" />
-                    <VTh k="today_volume" label="Volume" />
                     <VTh k="volume_ratio" label="Rel Vol" />
                 </tr>
             </thead>
@@ -3005,7 +3376,6 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
                                 <NameCell T={T} name={row.name} ticker={row.ticker} />
                             </td>
                             <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.subtext || T.muted, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5 }}>{fmtVol(row.today_volume)}</td>
                             <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 15.5, color: vrColor }}>
                                 {vr != null ? `${Number(vr).toFixed(2)}x` : EMPTY_VALUE}
                             </td>
@@ -3021,186 +3391,6 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
 });
 
 // ─── RS LOGIN GATE ────────────────────────────────────────────────────────────
-// Bottom-of-dashboard promo strip. Mirrors the 5 real scan categories that
-// live on the TechLens → Screens page (ScreensModule's CategorySection list:
-// Market Leaders, Breakouts, Pullbacks, Legend Screens, Chart Patterns) so
-// the copy actually describes what that page contains, instead of a generic
-// "RS Rating" tagline. Guests get a login CTA; logged-in users get a direct
-// link into Screens since there's nothing left to gate here.
-const DASHBOARD_FOOTER_SCREEN_CATEGORIES = [
-    { label: "Market Leaders", desc: "RS Rating, 3M/6M/12M leaders", colorKey: "accent", type: "leaders" },
-    { label: "Breakouts", desc: "Volume, 52W high & pivot breakouts", colorKey: "pos", type: "breakouts" },
-    { label: "Pullbacks", desc: "50 DMA, pivot retest, shallow & weekly pullbacks", colorKey: "accent", type: "pullbacks" },
-    { label: "Legend Screens", desc: "Minervini Trend Template & Weinstein Stage", colorKey: "pos", type: "legend" },
-    { label: "Chart Patterns", desc: "Weekly Hammer, Engulfing & Morning Star scans", colorKey: "accent", type: "patterns" },
-];
-
-function DashboardFooterPromo({ D, isCompact, isLoggedIn, onLogin, onNavigate }) {
-    // Stick to the app's two categorical tokens (accent/pos) instead of
-    // introducing off-palette amber/blue/purple hexes that exist nowhere
-    // else in the theme.
-    const categoryColor = key => {
-        switch (key) {
-            case "pos": return D.pos || (D.isDark ? "#34d399" : "#059669");
-            default: return D.accent || "#2563eb";
-        }
-    };
-
-    return (
-        <section style={{
-            marginTop: isCompact ? 4 : 8,
-            marginBottom: isCompact ? 14 : 18,
-            borderRadius: 16,
-            border: `1px solid ${D.panelBorder}`,
-            background: D.panelBg,
-            boxShadow: D.shadowLg,
-            overflow: "hidden",
-        }}>
-            <div style={{
-                padding: isCompact ? "18px 16px" : "24px 26px",
-            }}>
-                <div style={{
-                    display: "flex",
-                    flexDirection: isCompact ? "column" : "row",
-                    alignItems: isCompact ? "flex-start" : "center",
-                    justifyContent: "space-between",
-                    gap: 18,
-                    marginBottom: 20,
-                }}>
-                    <div style={{ minWidth: 0, maxWidth: 640 }}>
-                        <div style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "5px 10px",
-                            borderRadius: 999,
-                            background: withAlpha(D.accent || "#2563eb", D.isDark ? 0.18 : 0.10),
-                            border: `1px solid ${withAlpha(D.accent || "#2563eb", 0.28)}`,
-                            color: D.accent || "#2563eb",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                            marginBottom: 12,
-                        }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: D.accent || "#2563eb" }} />
-                            Screens
-                        </div>
-                        <h3 style={{
-                            margin: 0,
-                            color: D.text,
-                            fontSize: isCompact ? 19 : 22,
-                            fontWeight: 800,
-                            letterSpacing: "-0.02em",
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                        }}>
-                            {isLoggedIn
-                                ? "Jump into TechLens \u2192 Screens"
-                                : "5 scan categories, refreshed daily \u2014 free to run"}
-                        </h3>
-                        <p style={{
-                            margin: "8px 0 0",
-                            color: D.subtext,
-                            fontSize: 15,
-                            lineHeight: 1.6,
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                        }}>
-                            {isLoggedIn
-                                ? "Screen the Market Leaders, Breakouts, Pullbacks, Legend Screens (Minervini + Weinstein) and weekly Chart Patterns \u2014  across the full NSE/BSE universe."
-                                : "From momentum leaders to breakout, pullback, Minervini/Weinstein and candlestick pattern scans across the full NSE/BSE universe. Login free to filter, save, and revisit any of them."}
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => isLoggedIn ? onNavigate?.("technical", "screens") : onLogin?.()}
-                        style={{
-                            flexShrink: 0,
-                            padding: "12px 26px",
-                            borderRadius: 999,
-                            background: D.accent || "#2563eb",
-                            color: "#fff",
-                            border: "none",
-                            fontSize: 16,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            fontFamily: "inherit",
-                            letterSpacing: "0.01em",
-                            whiteSpace: "nowrap",
-                            boxShadow: `0 4px 16px ${withAlpha(D.accent || "#2563eb", 0.28)}`,
-                            transition: "opacity 0.15s ease",
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
-                        onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                    >
-                        {isLoggedIn ? "Open Screens \u2192" : "Login \u2014 it's free"}
-                    </button>
-                </div>
-
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: isCompact ? "1fr" : "repeat(5, minmax(0, 1fr))",
-                    gap: 10,
-                }}>
-                    {DASHBOARD_FOOTER_SCREEN_CATEGORIES.map(cat => {
-                        const color = categoryColor(cat.colorKey);
-                        return (
-                            <button
-                                key={cat.label}
-                                type="button"
-                                onClick={() => isLoggedIn ? onNavigate?.("technical", "screens") : onLogin?.()}
-                                style={{
-                                    minWidth: 0,
-                                    minHeight: isCompact ? 82 : 88,
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    alignItems: "flex-start",
-                                    justifyContent: "space-between",
-                                    gap: 10,
-                                    textAlign: "left",
-                                    borderRadius: 14,
-                                    border: `1px solid ${D.panelBorder}`,
-                                    background: D.card,
-                                    color: D.text,
-                                    cursor: "pointer",
-                                    padding: "11px",
-                                    fontFamily: "inherit",
-                                    transition: "transform .14s ease, border-color .14s ease, background .14s ease",
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(color, 0.42); }}
-                                onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
-                            >
-                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(color, D.isDark ? 0.18 : 0.10), color }}>
-                                    <DashboardLensIcon type={cat.type} />
-                                </span>
-                                <span style={{ minWidth: 0, width: "100%" }}>
-                                    <span style={{
-                                        display: "block",
-                                        fontSize: 14.5,
-                                        fontWeight: 700,
-                                        color: D.text,
-                                        marginBottom: 3,
-                                        letterSpacing: "-0.01em",
-                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                        whiteSpace: "nowrap",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                    }}>{cat.label}</span>
-                                    <span style={{
-                                        display: "block",
-                                        fontSize: 13,
-                                        color: D.subtext,
-                                        lineHeight: 1.4,
-                                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                    }}>{cat.desc}</span>
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-        </section>
-    );
-}
 
 function RsLoginGate({ T, isLocked, onLogin, children }) {
     if (isLocked) {
@@ -3536,8 +3726,16 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         const hit = cacheGet(FII_DII_PATH, FII_DII_TTL);
         return hit?.data || [];
     });
+
+    // ── Nifty 50 P/E (monthly) ────────────────────────────────────────────────
+    const NIFTY_PE_PATH = "nifty50_pe?select=date,pe_ratio,close&order=date.desc&limit=24";
+    const NIFTY_PE_TTL = 60 * 60 * 1000;
+    const [niftyPeData, setNiftyPeData] = useState(() => {
+        const hit = cacheGet(NIFTY_PE_PATH, NIFTY_PE_TTL);
+        return hit?.data || [];
+    });
     const [activeMoversTab, setActiveMoversTab] = useState("gainers");
-    const [activeMobilePanel, setActiveMobilePanel] = useState("pulse");
+
     const volumeShockersOffsetRef = useRef(0);
 
     // ── RS stocks – seed from cache ──────────────────────────────────────────
@@ -3555,7 +3753,6 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     });
     const [loadingRs, setLoadingRs] = useState(() => !_cachedRs);
     const [industry, setIndustry] = useState("");
-    const [searchTerm, setSearchTerm] = useState("");
 
     // ── Top 100 RS stocks directly from indicators table ──────────────────────
     const [allRsStocks, setAllRsStocks] = useState(() => {
@@ -3883,6 +4080,22 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
+
+    // ── Nifty 50 P/E fetch ───────────────────────────────────────────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                const rows = await sbFetch(NIFTY_PE_PATH, userToken, {
+                    ttl: NIFTY_PE_TTL,
+                    onStale: fresh => setNiftyPeData(Array.isArray(fresh) ? fresh : []),
+                });
+                if (Array.isArray(rows)) setNiftyPeData(rows);
+            } catch (err) {
+                console.warn("Nifty 50 PE fetch failed:", err);
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToken]);
     // ── RS data — now backed by Postgres RPCs (see migration.sql) ─────────────
     // get_rs_stocks_enriched() and get_rs_industry_summary() replace the old
     // TIRS_RS85_PATH + TIRS_ALL_PATH + RETURNS_PATH raw fetches and all of
@@ -3985,7 +4198,6 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     // PREFETCH adjacent industries
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     useEffect(() => {
-        if (isCompact && activeMobilePanel !== "leaders" && activeMobilePanel !== "movers") return;
         if (!industry || !industries.length) return;
         if (prefetchRef.current) clearTimeout(prefetchRef.current);
         prefetchRef.current = setTimeout(() => {
@@ -3995,7 +4207,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
             });
         }, 800);
         return () => clearTimeout(prefetchRef.current);
-    }, [industry, industries, userToken, isCompact, activeMobilePanel]);
+    }, [industry, industries, userToken]);
 
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -4003,7 +4215,6 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     // (returns are already populated at startup from the full stock_returns fetch)
     // ────────────────────────────────────────────────────────────────────────────
     useEffect(() => {
-        if (isCompact && activeMobilePanel !== "leaders") return;
         if (!industry) return;
         (async () => {
             try {
@@ -4020,7 +4231,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 console.error("Error fetching industry names:", e);
             }
         })();
-    }, [industry, userToken, isCompact, activeMobilePanel]);
+    }, [industry, userToken]);
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // RENDER
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4108,13 +4319,11 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     };
 
     const rsIndustrySummary = useMemo(() => {
-        if (!rsStocks.length && !searchTerm.trim() && cachedRsIndustrySummary.length) {
+        if (!rsStocks.length && cachedRsIndustrySummary.length) {
             return cachedRsIndustrySummary;
         }
         const counts = new Map();
         const labels = new Map();
-        const matchingIndustries = new Set();
-        const term = searchTerm.trim().toUpperCase();
 
         rsStocks.forEach(row => {
             const key = normalizeIndustryKey(row.industry);
@@ -4122,17 +4331,9 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
 
             labels.set(key, normalizeIndustryName(row.industry));
             counts.set(key, (counts.get(key) || 0) + 1);
-
-            if (term && (row.ticker || "").toUpperCase().includes(term)) {
-                matchingIndustries.add(key);
-            }
         });
 
         return [...counts.entries()]
-            .filter(([industryKey]) => {
-                if (!term) return true;
-                return matchingIndustries.has(industryKey);
-            })
             .map(([industryKey, count]) => {
                 const total = industryTotals.get(industryKey) || 0;
                 const safeTotal = total > 0 ? total : count;
@@ -4145,36 +4346,19 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 };
             })
             .sort((a, b) => (b.count || 0) - (a.count || 0) || a.industry.localeCompare(b.industry));
-    }, [rsStocks, industryTotals, searchTerm]);
-
-    // Reset industry selection when starting a new search to show matching sectors in summary
-    useEffect(() => {
-        if (searchTerm.trim()) {
-            setIndustry("");
-        }
-    }, [searchTerm]);
+    }, [rsStocks, industryTotals]);
 
     const rsIndustryStocks = useMemo(() => {
-        let stocks = industry
+        return industry
             ? rsStocks
                 .filter(row => normalizeIndustryKey(row.industry) === normalizeIndustryKey(industry))
                 .sort((a, b) => (Number(b.rs_rating) || 0) - (Number(a.rs_rating) || 0) || (a.ticker || "").localeCompare(b.ticker || ""))
             : [];
-
-        if (searchTerm.trim()) {
-            const term = searchTerm.trim().toUpperCase();
-            stocks = stocks.filter(s => (s.ticker || "").toUpperCase().includes(term));
-        }
-        return stocks;
-    }, [industry, rsStocks, searchTerm]);
+    }, [industry, rsStocks]);
 
     // Top 100 stocks by rs_rating — fetched directly from indicators table (same as DB query)
     // allRsStocks is populated via ALL_RS_PATH fetch, NOT derived from rsStocks (which is RS>85 only)
-    const allHighRsStocks = useMemo(() => {
-        if (!searchTerm.trim()) return allRsStocks;
-        const term = searchTerm.trim().toUpperCase();
-        return allRsStocks.filter(s => (s.ticker || "").toUpperCase().includes(term));
-    }, [allRsStocks, searchTerm]);
+    const allHighRsStocks = allRsStocks;
 
     return (
         <div className={`stock-dashboard-shell ${D.isDark ? "is-dark" : "is-light"} ${isCompact ? "is-compact" : ""}`} style={{
@@ -4218,101 +4402,45 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     allHighRsStocks={allHighRsStocks}
                     rsIndustrySummary={rsIndustrySummary}
                     fiiDiiData={fiiDiiData}
+                    niftyPeData={niftyPeData}
                     onNavigate={onNavigate}
+                    userToken={userToken}
+                    onLogin={onLogin}
                 />
 
-                {isCompact && (
-                    <div style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                        gap: 4,
-                        marginBottom: 12,
-                        padding: 4,
-                        borderRadius: 12,
-                        background: D.isDark ? "#12161d" : "#f1f2ef",
-                        border: `1px solid ${D.panelBorder}`,
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 20,
-                        boxShadow: D.shadowMd,
-                    }}>
-                        {[
-                            { id: "pulse", label: "Market Pulse" },
-                            { id: "movers", label: "Movers" },
-                            { id: "leaders", label: "RS Leaders" },
-                        ].map(tab => {
-                            const active = activeMobilePanel === tab.id;
-                            return (
-                                <button key={tab.id} onClick={() => setActiveMobilePanel(tab.id)} style={{
-                                    position: "relative",
-                                    minHeight: 40,
-                                    border: "none",
-                                    borderRadius: 9,
-                                    background: active ? D.card : "transparent",
-                                    boxShadow: active ? D.shadowMd.split(",")[0] : "none",
-                                    color: active ? D.text : D.muted,
-                                    cursor: "pointer",
-                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                    fontSize: 13.5,
-                                    fontWeight: active ? 700 : 600,
-                                    letterSpacing: "-0.005em",
-                                    padding: "8px 6px",
-                                    whiteSpace: "normal",
-                                    lineHeight: 1.2,
-                                    transition: "color 0.18s ease, background 0.18s ease",
-                                    outline: "none",
-                                }}>
-                                    {tab.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
+                {/* ── MARKET OVERVIEW (Index Cards) — full width, horizontally scrollable ── */}
+                <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} style={{ marginBottom: 18 }} />
 
-                {/* â”€â”€ MARKET OVERVIEW (Index Cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-                {/* ── MARKET PULSE + MOVERS side-by-side on desktop ─── */}
+                {/* ── MARKET MOVERS + SECTORAL LEADERS — two halves, single row ── */}
                 <div style={{
-                    display: isCompact ? "block" : "grid",
-                    gridTemplateColumns: isTablet ? "1fr 1fr" : "420px 1fr",
+                    display: "grid",
+                    gridTemplateColumns: isCompact ? "1fr" : "1fr 1fr",
                     gap: 18,
                     alignItems: "stretch",
                     marginBottom: 18,
                 }}>
-                    {/* Market Pulse */}
-                    {(!isCompact || activeMobilePanel === "pulse") && (
-                        <div style={{ display: "flex", flexDirection: "column" }}>
-                            <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} isSideBySide={!isCompact} style={{ flex: 1 }} />
-                        </div>
-                    )}
+                    {/* Market Movers */}
+                    <SectionCard T={D} style={{ marginBottom: 0, minWidth: 0 }}>
+                        <CardHeader
+                            T={D}
+                            title="Market Movers"
+                            count={currentMoversData.length}
+                        />
+                        <TabBar T={D} style={{ marginBottom: 16, flexWrap: "wrap" }}>
+                            <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
+                            <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
+                            {/*<TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />*/}
+                            {/*<TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />*/}
+                            <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
+                        </TabBar>
+        {activeMoversTab === "volume_shockers"
+            ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} hasMore={volumeShockersHasMore} loadingMore={loadingMoreVolumeShockers} onLoadMore={loadMoreVolumeShockers} />
+            : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} hasMore={moversHasMore} loadingMore={loadingMoreMovers} onLoadMore={loadMoreMovers} />
+        }
+                    </SectionCard>
 
-                    {/* Right column: Market Movers + RS Rating stacked */}
-                    {(!isCompact || activeMobilePanel === "movers" || activeMobilePanel === "leaders") && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 18, minHeight: 0 }}>
-
-                            {/* Market Movers */}
-                            {(!isCompact || activeMobilePanel === "movers") && (
-                                <SectionCard T={D} style={{ marginBottom: 0 }}>
-                                    <CardHeader
-                                        T={D}
-                                        title="Market Movers"
-                                        count={currentMoversData.length}
-                                    />
-                                    <TabBar T={D} style={{ marginBottom: 16, flexWrap: "wrap" }}>
-                                        <TabButton T={D} active={activeMoversTab === "gainers"} label={isCompact ? "Gainers" : "Top Gainers"} count={gainers.length} onClick={() => setActiveMoversTab("gainers")} hideCount={isCompact} />
-                                        <TabButton T={D} active={activeMoversTab === "losers"} label={isCompact ? "Losers" : "Top Losers"} count={losers.length} onClick={() => setActiveMoversTab("losers")} hideCount={isCompact} />
-                                        {/*<TabButton T={D} active={activeMoversTab === "near_high"} label={isCompact ? "52W High" : "Near 52W High"} count={nearHigh.length} onClick={() => setActiveMoversTab("near_high")} hideCount={isCompact} />*/}
-                                        {/*<TabButton T={D} active={activeMoversTab === "near_low"} label={isCompact ? "52W Low" : "Near 52W Low"} count={nearLow.length} onClick={() => setActiveMoversTab("near_low")} hideCount={isCompact} />*/}
-                                        <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
-                                    </TabBar>
-                {activeMoversTab === "volume_shockers"
-                    ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} hasMore={volumeShockersHasMore} loadingMore={loadingMoreVolumeShockers} onLoadMore={loadMoreVolumeShockers} />
-                    : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} hasMore={moversHasMore} loadingMore={loadingMoreMovers} onLoadMore={loadMoreMovers} />
-                }
-                                </SectionCard>
-                            )}
-
-                            {/* -- RS RATING CARD -- */}
-                            <SectionCard T={D} style={{ marginBottom: 0, flex: 1 }}>
+                    {/* -- RS RATING / SECTORAL LEADERS CARD -- */}
+                    <SectionCard T={D} style={{ marginBottom: 0, minWidth: 0 }}>
                                 <div style={{
                                     display: "flex",
                                     flexDirection: isCompact ? "column" : "row",
@@ -4328,62 +4456,17 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                                                 ? "All Stocks with RS Rating > 85"
                                                 : industry
                                                     ? `RS Rating > 85 - ${industry}`
-                                                    : "RS Rating > 85 - All Industries"
+                                                    : "Sectoral Leaders"
                                         }
                                         count={
                                             activeRsTab === "all"
                                                 ? allHighRsStocks.length
                                                 : industry
                                                     ? rsIndustryStocks.length
-                                                    : searchTerm.trim()
-                                                        ? rsIndustrySummary.reduce((sum, row) => sum + row.count, 0)
-                                                        : rsIndustrySummary.length
+                                                    : rsIndustrySummary.length
                                         }
                                         style={{ marginBottom: 0 }}
                                     />
-
-                                    <div style={{ position: "relative", width: isCompact ? "100%" : 240 }}>
-                                        <input
-                                            type="text"
-                                            placeholder="Search ticker..."
-                                            value={searchTerm}
-                                            onChange={e => setSearchTerm(e.target.value)}
-                                            style={{
-                                                width: "100%",
-                                                padding: "8px 12px 8px 32px",
-                                                borderRadius: 8,
-                                                border: `1px solid ${D.panelBorder}`,
-                                                background: D.isDark ? "rgba(255,255,255,0.06)" : "#fff",
-                                                color: D.text,
-                                                fontSize: 15,
-                                                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                                outline: "none",
-                                                transition: "border-color 0.15s",
-                                            }}
-                                            onFocus={e => e.target.style.borderColor = `${D.pos || "#10b981"}60`}
-                                            onBlur={e => e.target.style.borderColor = D.panelBorder}
-                                        />
-                                        <svg
-                                            width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                                            style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: D.muted }}
-                                        >
-                                            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                                        </svg>
-                                        {searchTerm && (
-                                            <button
-                                                onClick={() => setSearchTerm("")}
-                                                style={{
-                                                    position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                                                    background: "none", border: "none", cursor: "pointer", color: D.muted, padding: 4
-                                                }}
-                                            >
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                                                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
 
                                     {activeRsTab === "sector" && industry && (
                                         <button
@@ -4432,19 +4515,27 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                                         <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
                                     )}
                                 </RsLoginGate>
-                            </SectionCard>
-
-                        </div>
-                    )}
+                    </SectionCard>
                 </div>
 
-                {/* â”€â”€ TREND TEMPLATE (MINERVINI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-                {/* Own standalone card — shown regardless of which mobile tab (pulse/movers/
-                    leaders) is active, since it isn't one of the tabbed panels above. */}
-                <TrendTemplateCard T={D} userToken={userToken} isCompact={isCompact} />
-
-                {/* ── FOOTER PROMO ── login CTA for guests, TechLens/Screens guide for logged-in users */}
-                <DashboardFooterPromo D={D} isCompact={isCompact} isLoggedIn={!!userToken} onLogin={onLogin} onNavigate={onNavigate} />
+                {/* ── TREND TEMPLATE (MINERVINI) + LEADERSHIP SCREEN PREVIEWS ────────
+                    Trend Template Filter, High Tight Flag, Volatility Contraction,
+                    Weekly Tight Base, and Pullback to 50DMA — shown regardless of
+                    which mobile tab (pulse/movers/leaders) is active, since these
+                    aren't part of the tabbed panels above. Now that each card's
+                    table is down to a handful of columns, pair two cards per row
+                    on desktop instead of stacking every card full-width. */}
+                <div style={{
+                    marginTop: isCompact ? 14 : 18,
+                    display: isCompact ? "flex" : "grid",
+                    flexDirection: isCompact ? "column" : undefined,
+                    gridTemplateColumns: isCompact ? undefined : "1fr 1fr",
+                    gap: isCompact ? 14 : 18,
+                    alignItems: "start",
+                }}>
+                    <TrendTemplateCard T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
+                    <LeadershipScreenCards T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
+                </div>
 
                 <style>{`
                 .stock-dashboard-shell * {

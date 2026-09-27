@@ -18512,7 +18512,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                 close: row.price != null ? Number(row.price) : null,
                 pivot_high: row.pivot != null ? Number(row.pivot) : null,
                 pct_above_pivot: row.breakout_pct != null ? Number(row.breakout_pct) : null,
-                rel_volume: row.weekly_rel_vol != null ? Number(row.weekly_rel_vol) : null,
+                rel_volume: row.rel_vol != null ? Number(row.rel_vol) : null,
             }))
             // Tightest breakout (closest to pivot = smallest % above) first
             .sort((a, b) => (a.pct_above_pivot ?? 0) - (b.pct_above_pivot ?? 0));
@@ -19834,7 +19834,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     formatScore={v => `${Number(v).toFixed(2)}x`}
                                     tfLabel="Volume Dry-up Pullback"
                                     loadingOverride={pbLoading}
-                                    detailExtra={{ pullbackMode: true, pullbackCols: ["pct_from_sma50", "vol_ratio", "volume", "volume_20ma", "sma50"] }}
+                                    detailExtra={{ pullbackMode: true, pullbackCols: ["pct_from_sma50", "vol_ratio", "sma50"] }}
                                 />
                                 <ScreenRow
                                     rowKey="pb-multiyear"
