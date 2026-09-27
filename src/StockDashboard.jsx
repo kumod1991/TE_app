@@ -2580,7 +2580,7 @@ function TrendTemplateCard({ T, userToken, isCompact, onNavigate, onLogin }) {
     );
 
     return (
-        <SectionCard T={T} style={{ marginBottom: 0 }}>
+        <SectionCard T={T} style={{ marginBottom: 0, minWidth: 0 }}>
             <CardHeader
                 T={T}
                 title="Trend Template Filter"
@@ -2871,7 +2871,7 @@ function LeadershipScreenCard({ T, userToken, isCompact, onNavigate, config, onL
     };
 
     return (
-        <SectionCard T={T} style={{ marginBottom: 0 }}>
+        <SectionCard T={T} style={{ marginBottom: 0, minWidth: 0 }}>
             <CardHeader T={T} title={title} count={rows.length} style={{ marginBottom: 4 }} />
             <div style={{ fontSize: 12, color: T.muted, marginBottom: 14, lineHeight: 1.5 }}>
                 {subtitle}
