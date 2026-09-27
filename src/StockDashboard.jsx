@@ -4362,7 +4362,15 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
 
     return (
         <div className={`stock-dashboard-shell ${D.isDark ? "is-dark" : "is-light"} ${isCompact ? "is-compact" : ""}`} style={{
-            flex: 1, overflow: "auto", minHeight: 0,
+            // minWidth: 0 is the fix here: this shell is itself a flex item (flex: 1)
+            // in the outer page layout (sidebar + content row). Without it, the
+            // default min-width: auto on a flex item means the shell can't shrink
+            // below its content's intrinsic width — so a wide table anywhere inside
+            // pushes the whole shell (and with it the page/header) wider than the
+            // viewport, and the browser scrolls the entire page horizontally instead
+            // of the swipe being caught by the table's own internal overflowX: auto.
+            flex: 1, minWidth: 0, minHeight: 0,
+            overflowY: "auto", overflowX: "hidden",
             background: D.shellBg, padding: isCompact ? "12px 10px 24px" : "20px 20px 32px",
             fontFamily: "'IBM Plex Sans', 'Segoe UI', sans-serif",
             animation: "sdFadeIn 0.3s ease",
@@ -4531,7 +4539,15 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     flexDirection: isCompact ? "column" : undefined,
                     gridTemplateColumns: isCompact ? undefined : "1fr 1fr",
                     gap: isCompact ? 14 : 18,
-                    alignItems: "start",
+                    // On mobile this is a column flex container, where align-items
+                    // governs the CROSS axis (width) — "start" there means "shrink
+                    // each card to its content width" instead of stretching to fill
+                    // the row, which let wide tables push their card past the
+                    // viewport instead of scrolling internally. On desktop this is a
+                    // CSS grid, where align-items only affects the row's vertical
+                    // axis (items already stretch to fill their column via the grid
+                    // default justify-items: stretch), so "start" is safe there.
+                    alignItems: isCompact ? "stretch" : "start",
                 }}>
                     <TrendTemplateCard T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
                     <LeadershipScreenCards T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
