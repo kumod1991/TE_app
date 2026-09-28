@@ -27,6 +27,11 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const PAGE_SIZE = 100;
+// Stable fallbacks (module-level so React.memo rows don't see a new function every render)
+const _DEF_MARKET_LIVE = () => false;
+const _DEF_BEST_PRICE = (_, bhav) => bhav != null ? { price: bhav, source: "bhav" } : null;
+const _DEF_PRICE_PENDING = () => false;
+const _DEF_FETCH_CACHE = () => Promise.resolve();
 const MAX_WATCHLISTS = 25;
 
 // ─── Event Intelligence ────────────────────────────────────────
@@ -1710,7 +1715,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
         return (
             <>
                 <div onClick={onClear}
-                    style={{ position: "fixed", inset: 0, zIndex: 290, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)" }} />
+                    style={{ position: "fixed", inset: 0, zIndex: 290, background: "rgba(0,0,0,0.45)" }} />
                 <div style={{
                     position: "fixed", left: 0, right: 0, bottom: "calc(58px + env(safe-area-inset-bottom, 0px))", zIndex: 300,
                     background: T.surface, borderTop: `1px solid ${T.border}`,
@@ -1718,7 +1723,7 @@ function FilterPanel({ filters, onChange, onApply, onClear, visible, T, isMobile
                     display: "flex", flexDirection: "column",
                     maxHeight: "calc(86vh - 58px)",
                     animation: "slideInBottom 0.22s cubic-bezier(0.4,0,0.2,1)",
-                    boxShadow: "0 -18px 50px rgba(0,0,0,0.35)",
+                    boxShadow: "0 -2px 12px rgba(0,0,0,0.3)",
                 }}>
                     {content}
                 </div>
@@ -1866,14 +1871,14 @@ function TickerSearch({ value, onChange, onSelect, onSubmit, addError, T, compac
 // ONLY KEY UPDATED PARTS (StockRow + improvements)
 // Drop-in replacement for StockRow component
 
-const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onToggleStar, onExpand, isExpanded, isKeySelected, T, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePriceTick, isMobile, earningsDate }) => {
+const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onToggleStar, onExpand, isExpanded, isKeySelected, T, bestPriceFn, isPricePendingFn, isMarketLiveFn, livePx, livePending, rowIndex, isMobile, earningsDate }) => {
     const [hov, setHov] = useState(false);
 
     // Resolve the best available price: Yahoo live (green) > bhav_copy > row.close
     const _bp = bestPriceFn ? bestPriceFn(row.ticker, price?.price ?? row.close) : null;
-    const p = _bp?.price ?? price?.price ?? row.close;
+    const p = livePx ?? _bp?.price ?? price?.price ?? row.close;
     const isLivePrice = _bp?.source === "yahoo";
-    const isPending = isMarketLiveFn?.() && isPricePendingFn?.(row.ticker) && (price?.price ?? row.close) != null;
+    const isPending = livePending ?? (isMarketLiveFn?.() && isPricePendingFn?.(row.ticker) && (price?.price ?? row.close) != null);
     const rsVal = row.rs_rating != null ? Math.round(+row.rs_rating) : null;
     const isStarred = !!row.is_starred;
 
@@ -1904,12 +1909,15 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onToggleS
             : row.trend === "stage4" ? "Stage 4"
                 : null;
 
+    // Big blurred drop-shadows on ~100 rows are very costly on mobile GPUs
+    const rowShadow = isMobile ? "0 0 0 0 transparent" : `0 10px 24px ${T.shadow || "rgba(15,23,42,0.08)"}`;
+
     return (
         <div
             className="wl-stock-row"
-            onClick={() => onExpand(row.ticker)}
-            onMouseEnter={() => setHov(true)}
-            onMouseLeave={() => setHov(false)}
+            onClick={() => onExpand(row.ticker, rowIndex)}
+            onMouseEnter={isMobile ? undefined : () => setHov(true)}
+            onMouseLeave={isMobile ? undefined : () => setHov(false)}
             style={{
                 background: isExpanded
                     ? (T.green ? `${T.green}14` : T.hover)
@@ -1919,9 +1927,9 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onToggleS
                 borderLeft,
                 padding: isMobile ? "12px 14px 12px 10px" : "10px 16px 10px 14px",
                 boxShadow: isLeader
-                    ? `inset 3px 0 0 ${T.green}, 0 10px 24px ${T.shadow || "rgba(15,23,42,0.08)"}`
+                    ? `inset 3px 0 0 ${T.green}, ${rowShadow}`
                     : hov || isKeySelected || isExpanded
-                        ? `0 10px 24px ${T.shadow || "rgba(15,23,42,0.08)"}`
+                        ? `${rowShadow}`
                         : "none",
                 maxWidth: isMobile ? 420 : undefined,
                 marginLeft: isMobile ? "auto" : 0,
@@ -1929,7 +1937,9 @@ const StockRow = memo(({ row, price, sparkData, companyName, onRemove, onToggleS
                 marginBottom: 10,
                 borderRadius: isMobile ? 16 : 18,
                 cursor: "pointer",
-                transition: "all 0.15s ease",
+                transition: "background 0.15s ease, border-color 0.15s ease",
+                // Skip layout/paint for off-screen rows (big win with 100 rows on mobile)
+                ...(isMobile ? { contentVisibility: "auto", containIntrinsicSize: "auto 84px" } : null),
             }}
         >
             {/* ROW 1 — ticker + price + RS + sparkline */}
@@ -2336,7 +2346,7 @@ function ComparePanel({ watchlists, token, onClose, T }) {
     }, [sel, token]);
     const wlMap = useMemo(() => { const m = {}; watchlists.forEach(w => { m[w.id] = w.name; }); return m; }, [watchlists]);
     return (
-        <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}
+        <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
             onClick={e => e.target === e.currentTarget && onClose()}>
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 22, width: 580, maxHeight: "80vh", overflow: "auto" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -2485,10 +2495,10 @@ function DetailPanel({ row, sparkData, onClose, T }) {
 export default function WatchlistDashboard({ T, session, getToken, darkMode: darkModeProp, onToggleDark, onNavigateToScreen, onTechnoFunda,
     fetchAndCachePrice, bestPrice, isPricePending, isMarketLive }) {
     // ── Fallback stubs so the component works standalone (e.g. storybook / tests) ──
-    const _isMarketLive = isMarketLive ?? (() => false);
-    const _bestPrice = bestPrice ?? ((_, bhav) => bhav != null ? { price: bhav, source: "bhav" } : null);
-    const _isPricePending = isPricePending ?? (() => false);
-    const _fetchAndCache = fetchAndCachePrice ?? (() => Promise.resolve());
+    const _isMarketLive = isMarketLive ?? _DEF_MARKET_LIVE;
+    const _bestPrice = bestPrice ?? _DEF_BEST_PRICE;
+    const _isPricePending = isPricePending ?? _DEF_PRICE_PENDING;
+    const _fetchAndCache = fetchAndCachePrice ?? _DEF_FETCH_CACHE;
     const token = session?.access_token || null;
     const userId = session?.user?.id || null;
 
@@ -2784,6 +2794,20 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         if (!isMobile) return;
         const anySheetOpen = filterOpen || feedOpen || earningsOpen || compareOpen || !!expandedTicker || sidebarOpen;
         if (!anySheetOpen) return;
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (!isIOS) {
+            // Android / Chrome WebView: overflow:hidden is enough, and unlike
+            // position:fixed it does NOT force a full-page relayout on open/close.
+            const html = document.documentElement;
+            const prevBodyOv = document.body.style.overflow;
+            const prevHtmlOv = html.style.overflow;
+            document.body.style.overflow = "hidden";
+            html.style.overflow = "hidden";
+            return () => {
+                document.body.style.overflow = prevBodyOv;
+                html.style.overflow = prevHtmlOv;
+            };
+        }
         const prevOverflow = document.body.style.overflow;
         const prevPosition = document.body.style.position;
         const prevWidth = document.body.style.width;
@@ -2800,6 +2824,18 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             window.scrollTo(0, scrollY);
         };
     }, [isMobile, filterOpen, feedOpen, earningsOpen, compareOpen, expandedTicker, sidebarOpen]);
+
+    // While a mobile sheet is animating/open, don't re-render the whole dashboard
+    // on every live-price batch — flush one update when the sheet closes.
+    const sheetOpenRef = useRef(false);
+    const pendingTickRef = useRef(false);
+    sheetOpenRef.current = isMobile && (filterOpen || feedOpen || earningsOpen || compareOpen || !!expandedTicker || sidebarOpen);
+    useEffect(() => {
+        if (!sheetOpenRef.current && pendingTickRef.current) {
+            pendingTickRef.current = false;
+            setLivePriceTick(n => n + 1);
+        }
+    }, [filterOpen, feedOpen, earningsOpen, compareOpen, expandedTicker, sidebarOpen]);
 
     // Cache-first row load (persistent SWR)
     useEffect(() => {
@@ -2924,7 +2960,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
             batchIdx += BATCH;
             await Promise.allSettled(batch.map(t => _fetchAndCache(t, bhavMap[t.toUpperCase()])));
             if (!cancelled) {
-                setLivePriceTick(n => n + 1); // trigger re-render with freshly cached Yahoo prices
+                if (sheetOpenRef.current) pendingTickRef.current = true; else setLivePriceTick(n => n + 1); // re-render with freshly cached Yahoo prices
                 setTimeout(runBatch, 600);    // 600 ms stagger — mirrors Screener pattern
             }
         };
@@ -3242,6 +3278,19 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
         }
     }, [activeWl, showStarredOnly, token]);
 
+    // Stable props so memo(AnnouncementsFeed / EarningsCalendar) can skip re-renders
+    const closeFeed = useCallback(() => setFeedOpen(false), []);
+    const closeEarnings = useCallback(() => setEarningsOpen(false), []);
+    const onFeedPanelEnter = useCallback(() => { hoveredPanelRef.current = "announcements"; }, []);
+    const onEarningsPanelEnter = useCallback(() => { hoveredPanelRef.current = "earnings"; }, []);
+    const rowTickers = useMemo(() => rows.map(r => r.ticker), [rows]);
+
+    // Stable identity so memo(StockRow) can actually skip re-renders
+    const handleExpand = useCallback((ticker, idx) => {
+        setExpandedTicker(t => t === ticker ? null : ticker);
+        if (idx != null) setKeySelectedIdx(idx);
+    }, []);
+
     const toggleSort = useCallback(col => {
         const colToField = { from_high: "pct_from_high", from_low: "pct_from_low" };
         const field = colToField[col] || col;
@@ -3417,10 +3466,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         style={{
                             position: "fixed", inset: 0, zIndex: 150,
                             background: dark ? "rgba(2,6,23,0.58)" : "rgba(15,23,42,0.30)",
-                            backdropFilter: sidebarOpen ? "blur(4px)" : "blur(0px)",
                             opacity: sidebarOpen ? 1 : 0,
                             pointerEvents: sidebarOpen ? "auto" : "none",
-                            transition: "opacity 0.24s ease, backdrop-filter 0.24s ease",
+                            transition: "opacity 0.24s ease",
                         }}
                     />
                 )}
@@ -3437,7 +3485,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                     flexDirection: "column",
                     overflow: "hidden",
                     transition: isMobile
-                        ? "transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease"
+                        ? "transform 0.28s cubic-bezier(0.22,1,0.36,1)"
                         : "width 0.22s cubic-bezier(0.4,0,0.2,1)",
                     boxShadow: isMobile ? "none" : (T.shadowMd ?? (dark ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)")),
 
@@ -3455,6 +3503,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                         zIndex: 200,
                         width: "min(86vw, 340px)",
                         maxWidth: 340,
+                        willChange: "transform",
                         transform: sidebarOpen ? "translate3d(0,0,0)" : "translate3d(-104%,0,0)",
                         pointerEvents: sidebarOpen ? "auto" : "none",
                         boxShadow: sidebarOpen
@@ -4341,7 +4390,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             companyName={companyNames[row.ticker]}
                                             onRemove={removeStock}
                                             onToggleStar={toggleStarStock}
-                                            onExpand={ticker => { setExpandedTicker(t => t === ticker ? null : ticker); setKeySelectedIdx(i); }}
+                                            onExpand={handleExpand}
                                             isExpanded={expandedTicker === row.ticker}
                                             isKeySelected={keySelectedIdx === i}
                                             T={T}
@@ -4351,7 +4400,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             bestPriceFn={_bestPrice}
                                             isPricePendingFn={_isPricePending}
                                             isMarketLiveFn={_isMarketLive}
-                                            livePriceTick={livePriceTick}
+                                            livePx={_bestPrice(row.ticker, prices[row.ticker]?.price ?? row.close)?.price}
+                                            livePending={!!(_isMarketLive() && _isPricePending(row.ticker) && (prices[row.ticker]?.price ?? row.close) != null)}
                                             isMobile={isMobile}
                                         />
                                     )) : displayRows.map((row, i) => (
@@ -4405,7 +4455,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     // Mobile bottom sheet
                                     <>
                                         <div onClick={() => setExpandedTicker(null)}
-                                            style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)" }} />
+                                            style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.5)" }} />
                                         <div style={{
                                             position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220,
                                             background: T.surface, borderTop: `1px solid ${T.border}`,
@@ -4413,7 +4463,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             maxHeight: "80vh", overflowY: "auto",
                                             animation: "slideInBottom 0.25s cubic-bezier(0.32,0.72,0,1)",
                                             paddingBottom: "env(safe-area-inset-bottom, 20px)",
-                                            boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
+                                            boxShadow: "0 -2px 12px rgba(0,0,0,0.3)",
                                         }}>
                                             {/* Drag handle */}
                                             <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
@@ -4587,7 +4637,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 isMobile ? (
                                     <>
                                         <div onClick={() => setFeedOpen(false)}
-                                            style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)" }} />
+                                            style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.5)" }} />
                                         <div style={{
                                             position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220,
                                             background: T.surface, borderTop: `1px solid ${T.border}`,
@@ -4595,7 +4645,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             display: "flex", flexDirection: "column", overflow: "hidden",
                                             animation: "slideInBottom 0.25s cubic-bezier(0.32,0.72,0,1)",
                                             paddingBottom: "env(safe-area-inset-bottom, 2px)",
-                                            boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
+                                            boxShadow: "0 -2px 12px rgba(0,0,0,0.3)",
                                         }}>
                                             <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6, flexShrink: 0 }}>
                                                 <div style={{ width: 40, height: 4, borderRadius: 99, background: T.border, opacity: 0.6 }} />
@@ -4605,9 +4655,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                                 loading={feedLoading && feedAnnouncements.length === 0}
                                                 refreshing={feedLoading && feedAnnouncements.length > 0}
                                                 T={T}
-                                                onClose={() => setFeedOpen(false)}
+                                                onClose={closeFeed}
                                                 scrollRef={announcScrollRef}
-                                                onPanelEnter={() => { hoveredPanelRef.current = "announcements"; }}
+                                                onPanelEnter={onFeedPanelEnter}
                                                 isMobile={true}
                                                 token={token}
                                             />
@@ -4619,9 +4669,9 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                         loading={feedLoading && feedAnnouncements.length === 0}
                                         refreshing={feedLoading && feedAnnouncements.length > 0}
                                         T={T}
-                                        onClose={() => setFeedOpen(false)}
+                                        onClose={closeFeed}
                                         scrollRef={announcScrollRef}
-                                        onPanelEnter={() => { hoveredPanelRef.current = "announcements"; }}
+                                        onPanelEnter={onFeedPanelEnter}
                                         token={token}
                                     />
                                 )
@@ -4632,7 +4682,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                 isMobile ? (
                                     <>
                                         <div onClick={() => setEarningsOpen(false)}
-                                            style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)" }} />
+                                            style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.5)" }} />
                                         <div style={{
                                             position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220,
                                             background: T.surface, borderTop: `1px solid ${T.border}`,
@@ -4640,7 +4690,7 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             display: "flex", flexDirection: "column", overflow: "hidden",
                                             animation: "slideInBottom 0.25s cubic-bezier(0.32,0.72,0,1)",
                                             paddingBottom: "env(safe-area-inset-bottom, 0px)",
-                                            boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
+                                            boxShadow: "0 -2px 12px rgba(0,0,0,0.3)",
                                         }}>
                                             <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6, flexShrink: 0 }}>
                                                 <div style={{ width: 40, height: 4, borderRadius: 99, background: T.border, opacity: 0.6 }} />
@@ -4648,10 +4698,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                             <EarningsCalendar
                                                 T={T}
                                                 token={token}
-                                                watchlistTickers={rows.map(r => r.ticker)}
-                                                onClose={() => setEarningsOpen(false)}
+                                                watchlistTickers={rowTickers}
+                                                onClose={closeEarnings}
                                                 scrollRef={earningsScrollRef}
-                                                onPanelEnter={() => { hoveredPanelRef.current = "earnings"; }}
+                                                onPanelEnter={onEarningsPanelEnter}
                                                 isMobile={true}
                                             />
                                         </div>
@@ -4660,10 +4710,10 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
                                     <EarningsCalendar
                                         T={T}
                                         token={token}
-                                        watchlistTickers={rows.map(r => r.ticker)}
-                                        onClose={() => setEarningsOpen(false)}
+                                        watchlistTickers={rowTickers}
+                                        onClose={closeEarnings}
                                         scrollRef={earningsScrollRef}
-                                        onPanelEnter={() => { hoveredPanelRef.current = "earnings"; }}
+                                        onPanelEnter={onEarningsPanelEnter}
                                     />
                                 )
                             )}
@@ -4731,7 +4781,8 @@ export default function WatchlistDashboard({ T, session, getToken, darkMode: dar
 // ═══════════════════════════════════════════════════════════════
 const FEED_PAGE_SIZE = 8; // announcements revealed per "Show more" click
 
-function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scrollRef, onPanelEnter, isMobile, token }) {
+const AnnouncementsFeed = memo(AnnouncementsFeedImpl);
+function AnnouncementsFeedImpl({ announcements, loading, refreshing, T, onClose, scrollRef, onPanelEnter, isMobile, token }) {
     const [filter, setFilter] = useState("all");
     const [visibleCount, setVisibleCount] = useState(FEED_PAGE_SIZE);
 
@@ -5031,7 +5082,8 @@ function AnnouncementsFeed({ announcements, loading, refreshing, T, onClose, scr
 //  Shows upcoming results for all companies or watchlist stocks
 //  Includes company name search filter
 // ═══════════════════════════════════════════════════════════════
-function EarningsCalendar({ T, token, watchlistTickers = [], onClose, scrollRef, onPanelEnter, isMobile }) {
+const EarningsCalendar = memo(EarningsCalendarImpl);
+function EarningsCalendarImpl({ T, token, watchlistTickers = [], onClose, scrollRef, onPanelEnter, isMobile }) {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);

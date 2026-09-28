@@ -2002,8 +2002,6 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                 paddingRight: data.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
             }}>
                 {data.map(row => {
-                    const pct = row.pct || 0;
-                    const color = pct >= 60 ? "#22c55e" : pct >= 35 ? "#f59e0b" : "#ef4444";
                     return (
                         <button
                             key={row.industry}
@@ -2018,29 +2016,14 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                                 cursor: "pointer",
                             }}
                         >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                                     <IndustryIcon industry={row.industry} size={30} />
                                     <div style={{ fontWeight: 700, lineHeight: 1.4, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.industry}</div>
                                 </div>
-                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16.5, color, flexShrink: 0 }}>{pct.toFixed(1)}%</div>
-                            </div>
-                            <div style={{
-                                height: 8,
-                                borderRadius: 999,
-                                background: T.softFill,
-                                overflow: "hidden",
-                                marginBottom: 8,
-                            }}>
-                                <div style={{
-                                    width: `${Math.min(pct, 100)}%`,
-                                    height: "100%",
-                                    borderRadius: 999,
-                                    background: color,
-                                }} />
-                            </div>
-                            <div style={{ color: T.muted, fontSize: 16.5, fontFamily: "'IBM Plex Mono', monospace" }}>
-                                {row.count}/{row.total} stocks above RS 85
+                                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 16.5, color: T.text, flexShrink: 0 }}>
+                                    {row.count} <span style={{ color: T.muted, fontWeight: 500, fontSize: 13 }}>stocks &gt; RS 85</span>
+                                </div>
                             </div>
                         </button>
                     );
@@ -2071,13 +2054,11 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
             <thead>
                 <tr>
                     <th style={{ ...thStyle }}>Industry</th>
-                    <th style={{ ...thStyle, textAlign: "right", width: 260 }}>Coverage</th>
+                    <th style={{ ...thStyle, textAlign: "right", width: 160 }}>Stocks &gt; RS 85</th>
                 </tr>
             </thead>
             <tbody>
                 {data.map((row, i) => {
-                    const pct = row.pct || 0;
-                    const color = pct >= 60 ? "#22c55e" : pct >= 35 ? "#f59e0b" : "#ef4444";
                     const isLast = i === data.length - 1;
                     return (
                         <tr
@@ -2099,30 +2080,11 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                                     <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.industry}</span>
                                 </div>
                             </td>
-                            <td style={{ padding: "11px 14px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
-                                    <div style={{
-                                        width: 90, height: 4, borderRadius: 999,
-                                        background: T.isDark ? "rgba(71,85,105,0.4)" : "rgba(203,213,225,0.6)",
-                                        overflow: "hidden", flexShrink: 0,
-                                    }}>
-                                        <div style={{
-                                            width: `${Math.min(pct, 100)}%`,
-                                            height: "100%",
-                                            borderRadius: 999,
-                                            background: color,
-                                            transition: "width 0.5s ease",
-                                        }} />
-                                    </div>
-                                    <span style={{
-                                        fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
-                                        fontSize: 15.5, color, minWidth: 40, textAlign: "right",
-                                    }}>{pct.toFixed(1)}%</span>
-                                    <span style={{
-                                        fontFamily: "'IBM Plex Mono', monospace", fontSize: 14.5,
-                                        color: T.muted, minWidth: 50, textAlign: "right",
-                                    }}>{row.count}/{row.total}</span>
-                                </div>
+                            <td style={{ padding: "11px 14px", textAlign: "right" }}>
+                                <span style={{
+                                    fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
+                                    fontSize: 16, color: T.text,
+                                }}>{row.count}</span>
                             </td>
                         </tr>
                     );

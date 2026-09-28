@@ -9,6 +9,9 @@ import StockDashboard, { warmStockDashboardCaches, buildDashboardTheme, withAlph
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 import { fetchWeeklyOHLCFromDB, MiniCandleChart, ChartPreviewPopover, prefetchWeeklyCharts } from "./ChartPreviewPopover";
 import { QuoteContext } from "./QuoteContext";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+import { App as CapApp } from "@capacitor/app";
 export { QuoteContext };
 
 
@@ -17,6 +20,11 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://munqjcjvzgqyx
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q";
 const PUBLIC_SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://tradeedge.in");
 const AUTH_SESSION_KEY = "te_supabase_session";
+// ── Capacitor (Android/iOS) auth redirect ───────────────────────────────────
+// Must match the intent-filter in AndroidManifest.xml AND the Redirect URLs list in Supabase.
+const IS_NATIVE = Capacitor.isNativePlatform();
+const NATIVE_REDIRECT = "in.tradeedge.app://auth-callback";
+const AUTH_REDIRECT = IS_NATIVE ? NATIVE_REDIRECT : PUBLIC_SITE_URL;
 const BRAND_LOGO_SRC = "/tradeedge_logo.png";
 // Marketing preview shown to logged-out users on the Journals tab (put the file in /public)
 const JOURNAL_PROMO_IMG = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/journal-preview.webp';
@@ -149,6 +157,7 @@ const supabase = {
             const refreshed = await this.auth.refreshSession(s.refresh_token);
             if (refreshed?.access_token) {
                 this._session = refreshed;
+                savePersistedSession(refreshed);
                 return refreshed.access_token;
             }
         }
@@ -156,16 +165,11 @@ const supabase = {
     },
     auth: {
         async signUp(email, password) {
-            const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+            // The REST API reads redirect_to from the query string (the JS-SDK-style `options` body is ignored)
+            const r = await fetch(`${SUPABASE_URL}/auth/v1/signup?redirect_to=${encodeURIComponent(AUTH_REDIRECT)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-                body: JSON.stringify({
-                    email,
-                    password,
-                    options: {
-                        emailRedirectTo: PUBLIC_SITE_URL
-                    }
-                })
+                body: JSON.stringify({ email, password })
             });
             const data = await r.json();
             if (data.error) throw new Error(data.error.message || data.msg || "Signup failed");
@@ -211,27 +215,37 @@ const supabase = {
                 return null;
             }
         },
-        signInWithGoogle() {
-            window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(PUBLIC_SITE_URL)}`;
+        async signInWithGoogle() {
+            const url = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(AUTH_REDIRECT)}`;
+            if (IS_NATIVE) {
+                await Browser.open({ url }); // Chrome Custom Tab; returns via deep link
+            } else {
+                window.location.href = url;
+            }
         },
-        async getSessionFromHash() {
-            const hash = window.location.hash;
-            const search = window.location.search;
-            const p = new URLSearchParams(hash.replace("#", ""));
-            const q = new URLSearchParams(search.replace("?", ""));
+        // Parses tokens from a web URL or a deep-link URL (hash or query)
+        async sessionFromUrl(url) {
+            const [beforeHash, hash = ""] = String(url).split("#");
+            const query = beforeHash.includes("?") ? beforeHash.split("?")[1] : "";
+            const p = new URLSearchParams(hash);
+            const q = new URLSearchParams(query);
             const access_token = p.get("access_token") || q.get("access_token");
             if (!access_token) return null;
             const refresh_token = p.get("refresh_token") || q.get("refresh_token");
             const expires_in = p.get("expires_in") || q.get("expires_in");
             const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${access_token}` } });
             const user = await r.json();
-            window.history.replaceState(null, "", window.location.pathname);
             return {
                 access_token,
                 refresh_token: refresh_token || null,
                 expires_at: Math.floor(Date.now() / 1000) + (Number(expires_in) || 3600),
                 user,
             };
+        },
+        async getSessionFromHash() {
+            const session = await this.sessionFromUrl(window.location.href);
+            if (session) window.history.replaceState(null, "", window.location.pathname);
+            return session;
         },
     },
     async db(table, token) {
@@ -22216,6 +22230,36 @@ export default function App() {
 
         loadTrades(sess); loadFunds(sess); loadDividends(sess);
     };
+
+    // ── Native (Capacitor) OAuth / email-confirm deep-link handler ──────────
+    const handleLoginRef = useRef(null);
+    handleLoginRef.current = handleLogin;
+    useEffect(() => {
+        if (!IS_NATIVE) return;
+        let removed = false;
+        let listener = null;
+
+        const handleUrl = async (url) => {
+            if (!url || !url.startsWith(NATIVE_REDIRECT)) return;
+            try {
+                const sess = await supabase.auth.sessionFromUrl(url);
+                try { await Browser.close(); } catch { } // no-op on Android; dismisses on iOS
+                if (sess?.access_token && sess.user?.id) {
+                    supabase._session = sess;
+                    savePersistedSession(sess);
+                    await handleLoginRef.current?.(sess);
+                }
+            } catch (e) { console.warn("[Native auth] deep link failed:", e); }
+        };
+
+        CapApp.addListener("appUrlOpen", ({ url }) => handleUrl(url)).then(h => {
+            if (removed) h.remove(); else listener = h;
+        });
+        // App cold-started by the deep link
+        CapApp.getLaunchUrl().then(l => { if (l?.url) handleUrl(l.url); }).catch(() => { });
+
+        return () => { removed = true; listener?.remove(); };
+    }, []);
 
     const handleDemo = () => {
         setIsDemo(true);
