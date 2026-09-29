@@ -5,6 +5,7 @@ import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule";
 import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule";
 import AnnouncementsModule from "./AnnouncementsModule";
+import DeleteAccountPage from "./DeleteAccountPage";
 import StockDashboard, { warmStockDashboardCaches, buildDashboardTheme, withAlpha } from "./StockDashboard";
 import PremiumTickerDashboard from "./PremiumTickerDashboard";
 import { fetchWeeklyOHLCFromDB, MiniCandleChart, ChartPreviewPopover, prefetchWeeklyCharts } from "./ChartPreviewPopover";
@@ -72,6 +73,7 @@ const APP_ROUTE_MAP = {
     tradevault: "/journal",
     forum: "/forum",
     disclaimer: "/legal",
+    "delete-account": "/delete-account",
 };
 const SITE_NAME = "TradeEdge";
 const DEFAULT_SEO_DESCRIPTION = "TradeEdge is an Indian stock market analytics workspace for watchlists, screeners, FII/DII flows, market breadth, portfolio tracking, trade journaling, and stock research.";
@@ -99,6 +101,11 @@ const ROUTE_SEO = {
     forum: {
         title: "Investor Community Forum",
         description: "Discuss theses, share conviction calls, and debate Indian stocks with the TradeEdge investor community.",
+    },
+    "delete-account": {
+        title: "Delete Account",
+        description: "Permanently delete your TradeEdge account and associated data.",
+        noindex: true,
     },
     disclaimer: {
         title: "Legal, Privacy and Contact",
@@ -2842,6 +2849,7 @@ function parseAppRoute(pathname = "/") {
         };
     }
     if (section === "forum") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "forum" };
+    if (section === "delete-account") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "delete-account" };
     if (section === "legal") {
         return {
             kind: "app",
@@ -2901,7 +2909,7 @@ function updateSeoMetadata(profile, theme) {
 
     document.title = title;
     upsertHeadElement("meta", 'meta[name="description"]', { name: "description", content: description });
-    upsertHeadElement("meta", 'meta[name="robots"]', { name: "robots", content: "index,follow,max-image-preview:large" });
+    upsertHeadElement("meta", 'meta[name="robots"]', { name: "robots", content: profile.noindex ? "noindex,follow" : "index,follow,max-image-preview:large" });
     upsertHeadElement("meta", 'meta[name="theme-color"]', { name: "theme-color", content: theme === "dark" ? "#080b10" : "#f8fafc" });
     upsertHeadElement("link", 'link[rel="canonical"]', { rel: "canonical", href: canonicalUrl });
 
@@ -21242,7 +21250,7 @@ function TopNavItem({
     );
 }
 /*  TopNavProfilePopup  fixed-position profile popup  */
-function TopNavProfilePopup({ emailDisplay, isDemo, isLight, toggleTheme, handleLogout, setShowProfileMenu }) {
+function TopNavProfilePopup({ emailDisplay, isDemo, isLight, toggleTheme, handleLogout, setShowProfileMenu, onDeleteAccount }) {
     return createPortal(
         <div className="top-nav-profile-popup" style={{ top: 60, right: 16, left: "auto" }}>
             <div className="top-nav-profile-popup-header">
@@ -21257,6 +21265,14 @@ function TopNavProfilePopup({ emailDisplay, isDemo, isLight, toggleTheme, handle
                 {isLight ? "Switch to Dark" : "Switch to Light"}
             </div>
             <div className="top-nav-popup-divider" />
+            {!isDemo && (
+                <div className="top-nav-popup-item" onClick={() => { onDeleteAccount(); setShowProfileMenu(false); }}>
+                    <span className="item-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /></svg>
+                    </span>
+                    Delete Account
+                </div>
+            )}
             <div className="top-nav-popup-item danger" onClick={() => { handleLogout(); setShowProfileMenu(false); }}>
                 <span className="item-icon">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
@@ -21847,6 +21863,29 @@ export default function App() {
         });
         setLegalInitialTab(tabId);
         setProductTab("disclaimer");
+    };
+
+    const openDeleteAccount = () => {
+        setPreviousState({ productTab, page, financialSubPage, technicalSubPage });
+        setProductTab("delete-account");
+    };
+
+    const handleDeleteAccount = async () => {
+        const token = await supabase.getValidToken();
+        if (!token) throw new Error("Your session has expired. Please sign in again.");
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ confirm_email: session?.user?.email || "" }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || "Could not delete your account. Please try again.");
+        // Wipe cached per-user data on this device
+        try {
+            const uid = session?.user?.id;
+            if (uid) Object.keys(localStorage).forEach(k => { if (k.includes(uid)) localStorage.removeItem(k); });
+        } catch { }
+        clearPersistedSession();
     };
 
     const closeLegal = () => {
@@ -22896,6 +22935,7 @@ export default function App() {
                                             toggleTheme={toggleTheme}
                                             handleLogout={handleLogout}
                                             setShowProfileMenu={setShowProfileMenu}
+                                            onDeleteAccount={openDeleteAccount}
                                         />
                                     </>
                                 )}
@@ -23028,6 +23068,14 @@ export default function App() {
                             <span className="top-nav-mobile-item-icon">T</span>
                             {isLight ? "Switch to Dark" : "Switch to Light"}
                         </div>
+                        {session && !isDemo && (
+                            <div className="top-nav-mobile-item" onClick={() => { openDeleteAccount(); setRailCollapsed(true); }}>
+                                <span className="top-nav-mobile-item-icon">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /></svg>
+                                </span>
+                                Delete Account
+                            </div>
+                        )}
                         {session || isDemo ? (
                             <div className="top-nav-mobile-item" style={{ color: T.red }} onClick={() => { handleLogout(); setRailCollapsed(true); }}>
                                 <span className="top-nav-mobile-item-icon">
@@ -23077,7 +23125,17 @@ export default function App() {
                     {/*  MODULE CONTENT  */}
                     <div className="content-area">
 
-                        {productTab === "disclaimer" ? (
+                        {productTab === "delete-account" ? (
+                            <DeleteAccountPage
+                                T={T}
+                                session={session}
+                                isDemo={isDemo}
+                                onConfirmDelete={handleDeleteAccount}
+                                onDone={() => { handleLogout(); setPreviousState(null); }}
+                                onCancel={closeLegal}
+                                onLoginRequired={() => setShowLoginModal(true)}
+                            />
+                        ) : productTab === "disclaimer" ? (
                             <LegalPage T={T} initialTab={legalInitialTab} onClose={closeLegal} />
                         ) : route.kind === "ticker" ? (
                             <PremiumTickerDashboard symbol={route.symbol} T={T} />
@@ -23272,6 +23330,7 @@ export default function App() {
                                 { label: "Privacy", tabId: "privacy", href: "/legal/privacy" },
                                 { label: "Terms", tabId: "terms", href: "/legal/terms" },
                                 { label: "Contact Us", tabId: "contact", href: "/legal/contact" },
+                                { label: "Delete Account", tabId: "delete-account", href: "/delete-account" },
                             ].map((link, i) => (
                                 <span key={link.label} style={{ display: "flex", alignItems: "center" }}>
                                     {i > 0 && <span style={{ fontSize: 11, color: T.border, margin: "0 5px", userSelect: "none" }}>{"\u00B7"}</span>}
@@ -23279,7 +23338,8 @@ export default function App() {
                                         href={link.href}
                                         onClick={(event) => {
                                             event.preventDefault();
-                                            openLegal(link.tabId);
+                                            if (link.tabId === "delete-account") openDeleteAccount();
+                                            else openLegal(link.tabId);
                                         }}
                                         style={{ fontSize: 11, color: T.green, cursor: "pointer", padding: 0, fontFamily: "inherit", fontWeight: 500, opacity: .85, textDecoration: "none" }}
                                     >{link.label}</a>
