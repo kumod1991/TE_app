@@ -1089,9 +1089,9 @@ function NiftyPePanel({ D, isCompact, data }) {
     const zoneColor = zone === "Rich" ? (D.neg || "#ef4444") : zone === "Cheap" ? (D.pos || "#10b981") : D.accent;
     const zoneBg = zone === "Rich" ? D.negSoft : zone === "Cheap" ? D.posSoft : withAlpha(D.accent, D.isDark ? 0.16 : 0.09);
 
-    let dateLabel = latest.date;
+    let dateLabel = latest.updated_at || latest.date;
     try {
-        dateLabel = new Date(latest.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+        dateLabel = new Date(latest.updated_at || latest.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     } catch { /* keep raw date on parse failure */ }
 
     // per-point "Mon YYYY" labels for the hover tooltip
@@ -3690,7 +3690,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     });
 
     // ── Nifty 50 P/E (monthly) ────────────────────────────────────────────────
-    const NIFTY_PE_PATH = "nifty50_pe?select=date,pe_ratio,close&order=date.desc&limit=24";
+    const NIFTY_PE_PATH = "nifty50_pe?select=date,pe_ratio,close,updated_at&order=date.desc&limit=24";
     const NIFTY_PE_TTL = 60 * 60 * 1000;
     const [niftyPeData, setNiftyPeData] = useState(() => {
         const hit = cacheGet(NIFTY_PE_PATH, NIFTY_PE_TTL);
@@ -4045,17 +4045,32 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
 
     // ── Nifty 50 P/E fetch ───────────────────────────────────────────────────
     useEffect(() => {
-        (async () => {
-            try {
-                const rows = await sbFetch(NIFTY_PE_PATH, userToken, {
-                    ttl: NIFTY_PE_TTL,
-                    onStale: fresh => setNiftyPeData(Array.isArray(fresh) ? fresh : []),
-                });
-                if (Array.isArray(rows)) setNiftyPeData(rows);
-            } catch (err) {
-                console.warn("Nifty 50 PE fetch failed:", err);
-            }
-        })();
+        let cancelled = false;
+        const fetchNiftyPe = () => sbFetch(NIFTY_PE_PATH, userToken, {
+            ttl: NIFTY_PE_TTL,
+            onStale: fresh => { if (!cancelled && Array.isArray(fresh)) setNiftyPeData(fresh); },
+        })
+            .then(rows => { if (!cancelled && Array.isArray(rows)) setNiftyPeData(rows); })
+            .catch(err => console.warn("Nifty 50 PE fetch failed:", err));
+
+        fetchNiftyPe();
+
+        // Long-lived app sessions (in particular the Android wrapped-webview build,
+        // which is kept alive in the background rather than reloading the page the
+        // way a PWA/browser tab tends to) never remount this component, so without
+        // an interval + focus/visibility revalidation this effect only ever fires
+        // once and the card is frozen on whatever was cached at first mount.
+        const intervalId = setInterval(fetchNiftyPe, NIFTY_PE_TTL);
+        const onVisible = () => { if (document.visibilityState === "visible") fetchNiftyPe(); };
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("focus", onVisible);
+
+        return () => {
+            cancelled = true;
+            clearInterval(intervalId);
+            document.removeEventListener("visibilitychange", onVisible);
+            window.removeEventListener("focus", onVisible);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
     // ── RS data — now backed by Postgres RPCs (see migration.sql) ─────────────
