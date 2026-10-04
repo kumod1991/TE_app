@@ -944,115 +944,268 @@ function DashboardLensIcon({ type, size = 16 }) {
     return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
 }
 
-function FiiDiiFlowBars({ D, data, isCompact }) {
-    // data: array of fii_dii_activity rows, sorted desc by date
-    const rows = (data || []).slice(0, 7).reverse(); // show last 7 days, oldest→newest
-    if (!rows.length) {
-        return <div style={{ color: D.muted, fontSize: 13.5 }}>waiting for data</div>;
-    }
+// ─── FII / DII FLOW PANEL ────────────────────────────────────────────────────
+// Premium treatment for the hero "FII / DII Daily Flow" tile: diverging bars
+// around a true zero line (net buying up, net selling down), fixed entity
+// colors (FII navy, DII gold) so green/red is reserved for the numbers, an
+// interactive day readout (hover / focus / tap) and a FII + DII net tile.
+const FLOW_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const FLOW_DII_COLOR = "#c9973a";
 
-    const allValues = rows.flatMap(r => [r.fii_net, r.dii_net]).filter(v => v != null);
-    const absMax = Math.max(...allValues.map(Math.abs), 1);
+function flowNum(v) {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
 
-    const fmtCr = v => {
-        if (v == null) return "-";
-        // raw values from DB are already in Crores
-        const sign = v >= 0 ? "+" : "";
-        const abs = Math.abs(v);
-        if (abs >= 1e5) return `${sign}${(v / 1e5).toFixed(1)}L`;
-        return `${sign}${Math.round(v).toLocaleString("en-IN")}`;
-    };
+function flowDateLabel(raw) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw || ""));
+    if (!m) return raw ? String(raw).slice(5) : "";
+    return `${m[3]} ${FLOW_MONTHS[Number(m[2]) - 1] || ""}`.trim();
+}
 
-    const barMaxH = isCompact ? 44 : 72;
-    const barGap = isCompact ? 2 : 4;
-    const barMaxW = isCompact ? 14 : 22;
-    const dateFontSize = isCompact ? 11 : 12.5;
+// raw DB values are already in Crores
+function flowFmt(v) {
+    if (v == null) return null;
+    const abs = Math.abs(v);
+    const rounded = Math.round(abs);
+    const sign = v < 0 && (rounded > 0 || abs >= 1e5) ? "\u2212" : "+";
+    const body = abs >= 1e5 ? `${(abs / 1e5).toFixed(1)}L` : rounded.toLocaleString("en-IN");
+    return `${sign}${body}`;
+}
 
+function FlowArrow({ up }) {
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, width: "100%" }}>
-            {/* bars + date labels: one column per day, fills available width */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: isCompact ? 3 : 8, width: "100%", minWidth: 0 }}>
-                {rows.map((r, i) => {
-                    const fiiH = Math.max(2, Math.round(Math.abs(r.fii_net || 0) / absMax * barMaxH));
-                    const diiH = Math.max(2, Math.round(Math.abs(r.dii_net || 0) / absMax * barMaxH));
-                    const fiiPos = (r.fii_net || 0) >= 0;
-                    const diiPos = (r.dii_net || 0) >= 0;
-                    const d = r.date ? String(r.date).slice(5) : "";
-                    return (
-                        <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                            {/* bar pair */}
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: barGap, height: barMaxH, width: "100%", justifyContent: "center" }}>
-                                <div title={`FII: ${fmtCr(r.fii_net)}Cr`} style={{
-                                    flex: 1,
-                                    maxWidth: barMaxW,
-                                    height: fiiH,
-                                    borderRadius: "2px 2px 0 0",
-                                    background: fiiPos ? withAlpha(D.pos || "#10b981", 0.85) : withAlpha(D.neg || "#ef4444", 0.82),
-                                }} />
-                                <div title={`DII: ${fmtCr(r.dii_net)}Cr`} style={{
-                                    flex: 1,
-                                    maxWidth: barMaxW,
-                                    height: diiH,
-                                    borderRadius: "2px 2px 0 0",
-                                    background: diiPos ? withAlpha(D.accent || "#2563eb", 0.78) : withAlpha("#f59e0b", 0.78),
-                                }} />
-                            </div>
-                            {/* date */}
-                            <div style={{
-                                fontSize: dateFontSize,
-                                color: D.muted,
-                                fontFamily: "'IBM Plex Mono', monospace",
-                                letterSpacing: "-0.02em",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "clip",
-                                width: "100%",
-                                textAlign: "center",
-                            }}>{d}</div>
-                        </div>
-                    );
-                })}
-            </div>
-            {/* latest day net values */}
-            {rows.length > 0 && (() => {
-                const latest = rows[rows.length - 1];
-                // raw DB values are already in Crores – no conversion needed
-                const fiiNet = latest.fii_net || 0;
-                const diiNet = latest.dii_net || 0;
-                return (
-                    <div style={{ display: "flex", gap: isCompact ? 10 : 16, marginTop: isCompact ? 2 : 6 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{
-                                width: 6, height: 6, borderRadius: 1, flexShrink: 0,
-                                background: fiiNet >= 0 ? withAlpha(D.pos || "#10b981", 0.85) : withAlpha(D.neg || "#ef4444", 0.82),
-                            }} />
-                            <span style={{ fontSize: isCompact ? 11.5 : 13.5, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>FII</span>
-                            <span style={{
-                                fontSize: isCompact ? 13.5 : 16.5,
-                                fontWeight: 800,
-                                fontFamily: "'IBM Plex Mono', monospace",
-                                color: fiiNet >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
-                            }}>{fmtCr(fiiNet)}Cr</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{
-                                width: 6, height: 6, borderRadius: 1, flexShrink: 0,
-                                background: diiNet >= 0 ? withAlpha(D.accent || "#2563eb", 0.78) : withAlpha("#f59e0b", 0.78),
-                            }} />
-                            <span style={{ fontSize: isCompact ? 11.5 : 13.5, color: D.muted, fontFamily: "'IBM Plex Sans', sans-serif" }}>DII</span>
-                            <span style={{
-                                fontSize: isCompact ? 13.5 : 16.5,
-                                fontWeight: 800,
-                                fontFamily: "'IBM Plex Mono', monospace",
-                                color: diiNet >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
-                            }}>{fmtCr(diiNet)}Cr</span>
-                        </div>
-                    </div>
-                );
-            })()}
-        </div>
+        <svg width="7" height="7" viewBox="0 0 8 8" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d={up ? "M4 1L7.5 7H.5Z" : "M4 7L.5 1H7.5Z"} fill="currentColor" />
+        </svg>
     );
 }
+
+const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data }) {
+    const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const [ready, setReady] = useState(reduceMotion);
+    const [active, setActive] = useState(null);
+    const [width, setWidth] = useState(0);
+    const rootRef = useRef(null);
+
+    useEffect(() => {
+        if (reduceMotion) return undefined;
+        const id = requestAnimationFrame(() => setReady(true));
+        return () => cancelAnimationFrame(id);
+    }, [reduceMotion]);
+
+    useEffect(() => {
+        const el = rootRef.current;
+        if (!el || typeof ResizeObserver === "undefined") return undefined;
+        const ro = new ResizeObserver(entries => {
+            const w = entries[0]?.contentRect?.width;
+            if (Number.isFinite(w)) setWidth(Math.round(w));
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    // data: fii_dii_activity rows sorted desc by date -> last 7 sessions, oldest→newest
+    const rows = useMemo(() => (data || []).slice(0, 7).reverse().map(r => ({
+        date: r.date,
+        fii: flowNum(r.fii_net),
+        dii: flowNum(r.dii_net),
+    })), [data]);
+
+    const fiiColor = D.accent || "#1e3a5f";
+    const diiColor = FLOW_DII_COLOR;
+    const posColor = D.pos || "#0e7a53";
+    const negColor = D.neg || "#c23b3b";
+    const narrow = width > 0 && width < 270;
+
+    const lastIdx = rows.length - 1;
+    const idx = active != null && active <= lastIdx ? active : lastIdx;
+    const showing = rows[idx];
+    const isLatest = idx === lastIdx;
+
+    // ── scale: shared unit, zero line positioned by data range ──────────────
+    const H = isCompact ? 76 : 112;
+    const vals = rows.flatMap(r => [r.fii, r.dii]).filter(v => v != null);
+    const posMax = Math.max(0, ...vals);
+    const negMax = Math.max(0, ...vals.map(v => -v));
+    const span = Math.max(posMax + negMax, 1);
+    const unit = (H - 8) / span;
+    const zeroY = 4 + posMax * unit;
+    const barW = isCompact ? 11 : 16;
+    const barGap = isCompact ? 2 : 3;
+    const zeroLine = D.isDark ? withAlpha("#e2e8f0", 0.22) : withAlpha("#0f172a", 0.2);
+
+    const net = showing && showing.fii != null && showing.dii != null ? showing.fii + showing.dii : null;
+    const tone = net == null ? null : net >= 0 ? posColor : negColor;
+    const signColor = v => (v == null ? D.muted : v >= 0 ? posColor : negColor);
+
+    const stats = [
+        { key: "fii", label: "FII", v: showing?.fii, swatch: { background: fiiColor } },
+        { key: "dii", label: "DII", v: showing?.dii, swatch: { background: diiColor } },
+        ...(narrow ? [] : [{ key: "net", label: "Net", v: net, swatch: { border: `1.5px solid ${D.muted}`, boxSizing: "border-box" } }]),
+    ];
+    const statFont = isCompact || narrow ? 14.5 : 16;
+
+    const renderBar = (v, color, i) => {
+        if (v == null) return <div key="empty" style={{ flex: 1, maxWidth: barW }} />;
+        const pos = v >= 0;
+        const h = Math.max(2, Math.round(Math.abs(v) * unit));
+        return (
+            <div key={pos ? "p" : "n"} style={{ flex: 1, maxWidth: barW, position: "relative" }}>
+                <div style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    [pos ? "bottom" : "top"]: pos ? H - zeroY : zeroY,
+                    height: h,
+                    background: color,
+                    borderRadius: pos ? "3px 3px 1px 1px" : "1px 1px 3px 3px",
+                    transformOrigin: pos ? "bottom" : "top",
+                    transform: `scaleY(${ready ? 1 : 0})`,
+                    transition: reduceMotion ? "none" : "transform .6s cubic-bezier(.22,1,.36,1)",
+                    transitionDelay: reduceMotion ? "0ms" : `${i * 45}ms`,
+                }} />
+            </div>
+        );
+    };
+
+    return (
+        <div ref={rootRef} style={{
+            position: "relative",
+            minWidth: 0,
+            width: "100%",
+            maxWidth: "100%",
+            height: "100%",
+            boxSizing: "border-box",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 12,
+            borderRadius: 12,
+            padding: isCompact ? "14px 12px 12px" : "16px 14px 14px",
+            background: D.softFill,
+            border: `1px solid ${D.panelBorder}`,
+            ...(isCompact ? { gridColumn: "span 2" } : {}),
+        }}>
+            {tone && (
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 14, right: 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(tone, D.isDark ? 0.75 : 0.6) }} />
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
+                <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>FII / DII Daily Flow</span>
+                {showing && (
+                    <span aria-live="polite" style={{ flexShrink: 0, color: D.muted, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap" }}>
+                        {isLatest && !narrow ? "Latest \u00b7 " : ""}{flowDateLabel(showing.date)}
+                    </span>
+                )}
+            </div>
+
+            {!rows.length ? (
+                <div style={{ color: D.muted, fontSize: 13.5 }}>waiting for data</div>
+            ) : (
+                <>
+                    <div style={{ position: "relative", width: "100%", minWidth: 0 }}>
+                        <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: zeroY, height: 1, background: zeroLine, pointerEvents: "none" }} />
+                        <div style={{ display: "flex", alignItems: "stretch", gap: isCompact ? 3 : 6, width: "100%", minWidth: 0 }}>
+                            {rows.map((r, i) => {
+                                const hl = i === idx;
+                                const dim = active != null && !hl;
+                                return (
+                                    <div
+                                        key={`${r.date}-${i}`}
+                                        tabIndex={0}
+                                        role="group"
+                                        aria-label={`${flowDateLabel(r.date)}: FII ${flowFmt(r.fii) ?? "n/a"} crore, DII ${flowFmt(r.dii) ?? "n/a"} crore`}
+                                        onMouseEnter={() => setActive(i)}
+                                        onMouseLeave={() => setActive(null)}
+                                        onFocus={() => setActive(i)}
+                                        onBlur={() => setActive(null)}
+                                        onClick={() => setActive(i)}
+                                        style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, outline: "none", cursor: "default" }}
+                                    >
+                                        <div aria-hidden="true" style={{
+                                            position: "absolute",
+                                            inset: 0,
+                                            borderRadius: 8,
+                                            background: hl ? withAlpha(fiiColor, D.isDark ? 0.12 : 0.06) : "transparent",
+                                            transition: "background .15s ease",
+                                        }} />
+                                        <div style={{
+                                            position: "relative",
+                                            display: "flex",
+                                            justifyContent: "center",
+                                            gap: barGap,
+                                            width: "100%",
+                                            height: H,
+                                            opacity: dim ? 0.5 : 1,
+                                            transition: "opacity .15s ease",
+                                        }}>
+                                            {renderBar(r.fii, fiiColor, i)}
+                                            {renderBar(r.dii, diiColor, i)}
+                                        </div>
+                                        <div style={{
+                                            position: "relative",
+                                            width: "100%",
+                                            textAlign: "center",
+                                            whiteSpace: "nowrap",
+                                            paddingBottom: 3,
+                                            fontSize: isCompact ? 10 : 10.5,
+                                            fontFamily: "'IBM Plex Mono', monospace",
+                                            letterSpacing: "-0.02em",
+                                            fontWeight: hl ? 700 : 500,
+                                            color: hl ? D.text : D.muted,
+                                            transition: "color .15s ease",
+                                        }}>{flowDateLabel(r.date)}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "stretch", width: "100%", minWidth: 0 }}>
+                        {stats.map((st, i) => {
+                            const txt = flowFmt(st.v);
+                            return (
+                                <div key={st.key} style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    paddingLeft: i ? 12 : 0,
+                                    marginLeft: i ? 12 : 0,
+                                    borderLeft: i ? `1px solid ${D.panelBorder}` : "none",
+                                }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+                                        <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0, ...st.swatch }} />
+                                        <span style={{ fontSize: 10.5, color: D.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{st.label}</span>
+                                    </div>
+                                    <div style={{
+                                        display: "flex",
+                                        alignItems: "baseline",
+                                        gap: 4,
+                                        color: signColor(st.v),
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontSize: statFont,
+                                        fontWeight: 700,
+                                        lineHeight: 1,
+                                        letterSpacing: "-0.02em",
+                                        fontVariantNumeric: "tabular-nums",
+                                        whiteSpace: "nowrap",
+                                    }}>
+                                        {st.v != null && <span style={{ alignSelf: "center", display: "inline-flex" }}><FlowArrow up={st.v >= 0} /></span>}
+                                        <span>{txt ?? EMPTY_VALUE}</span>
+                                        {txt && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.6, letterSpacing: 0 }}>Cr</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+});
 
 function NiftyPePanel({ D, isCompact, data }) {
     const [hoverIdx, setHoverIdx] = React.useState(null);
@@ -1247,6 +1400,300 @@ function NiftyPePanel({ D, isCompact, data }) {
     );
 }
 
+// ─── BREADTH PANEL ───────────────────────────────────────────────────────────
+// Premium treatment for the hero "Breadth" tile: regime chip, proportional
+// meter rails (with a 50% reference tick on the SMA rows), split-weight
+// numerals, and an as-of footer. Flat surfaces only, per the design system.
+const BREADTH_REGIME_STRONG = 60;   // avg(above 50D, above 200D) >= this -> "Strong"
+const BREADTH_REGIME_MIXED = 40;    // avg >= this -> "Mixed", otherwise "Weak"
+
+const BreadthMeterRow = React.memo(function BreadthMeterRow({ D, isCompact, item, ready, reduceMotion }) {
+    const ok = Number.isFinite(item.raw);
+    const pct = ok ? Math.max(0, Math.min(100, item.raw)) : 0;
+    const railColor = item.color === D.text ? D.muted : item.color;
+    const trackColor = D.isDark ? withAlpha("#94a3b8", 0.16) : withAlpha("#0f172a", 0.07);
+    const tickColor = D.isDark ? withAlpha("#e2e8f0", 0.5) : withAlpha("#0f172a", 0.32);
+    return (
+        <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                <span style={{
+                    color: D.subtext,
+                    fontSize: isCompact ? 11 : 12,
+                    lineHeight: 1.2,
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                    letterSpacing: "0.01em",
+                }}>{item.label}</span>
+                <span style={{
+                    color: item.color,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: isCompact ? 15 : 16.5,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    letterSpacing: "-0.02em",
+                    fontVariantNumeric: "tabular-nums",
+                    flexShrink: 0,
+                }}>
+                    {ok ? item.raw.toFixed(1) : EMPTY_VALUE}
+                    {ok && <span style={{ fontSize: "0.62em", fontWeight: 600, marginLeft: 1, opacity: 0.6, letterSpacing: 0 }}>%</span>}
+                </span>
+            </div>
+            <div
+                role="meter"
+                aria-label={item.label}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={ok ? Number(item.raw.toFixed(1)) : undefined}
+                style={{ position: "relative", height: 8 }}
+            >
+                <div style={{ position: "absolute", left: 0, right: 0, top: 2, height: 4, borderRadius: 999, background: trackColor, overflow: "hidden" }}>
+                    <div style={{
+                        height: "100%",
+                        width: `${ready ? pct : 0}%`,
+                        borderRadius: 999,
+                        background: railColor,
+                        transition: reduceMotion ? "none" : "width .7s cubic-bezier(.22,1,.36,1)",
+                    }} />
+                </div>
+                {item.ref50 && (
+                    <div title="50% line" style={{ position: "absolute", left: "50%", top: 0, width: 1, height: 8, background: tickColor, transform: "translateX(-0.5px)", borderRadius: 1 }} />
+                )}
+            </div>
+        </div>
+    );
+});
+
+const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot }) {
+    const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const [ready, setReady] = useState(reduceMotion);
+    useEffect(() => {
+        if (reduceMotion) return undefined;
+        const id = requestAnimationFrame(() => setReady(true));
+        return () => cancelAnimationFrame(id);
+    }, [reduceMotion]);
+
+    const high = Number(snapshot?.near_52w_high);
+    const low = Number(snapshot?.near_52w_low);
+    const sma50 = Number(snapshot?.above_sma50);
+    const sma200 = Number(snapshot?.above_sma200);
+    const hasSnapshot = snapshot != null;
+
+    const items = [
+        { label: "52W High", raw: high, color: high >= low ? D.pos : D.text },
+        { label: "52W Low", raw: low, color: low > high ? D.neg : D.text },
+        { label: "Above 50D", raw: sma50, color: sma50 >= 50 ? D.pos : D.neg, ref50: true },
+        { label: "Above 200D", raw: sma200, color: sma200 >= 50 ? D.pos : D.neg, ref50: true },
+    ];
+
+    // Regime verdict from the two participation reads (tune thresholds above).
+    let regime = null;
+    if (Number.isFinite(sma50) && Number.isFinite(sma200)) {
+        const avg = (sma50 + sma200) / 2;
+        regime = avg >= BREADTH_REGIME_STRONG
+            ? { text: "Strong", tone: D.pos }
+            : avg >= BREADTH_REGIME_MIXED
+                ? { text: "Mixed", tone: D.accent }
+                : { text: "Weak", tone: D.neg };
+    }
+
+    let asOf = null;
+    if (snapshot?.date) {
+        try {
+            asOf = new Date(snapshot.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+            if (asOf === "Invalid Date") asOf = null;
+        } catch { asOf = null; }
+    }
+
+    return (
+        <div style={{
+            position: "relative",
+            minWidth: 0,
+            width: "100%",
+            maxWidth: "100%",
+            height: "100%",
+            boxSizing: "border-box",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 12,
+            borderRadius: 12,
+            padding: isCompact ? "14px 12px 12px" : "16px 14px 12px",
+            background: D.softFill,
+            border: `1px solid ${D.panelBorder}`,
+        }}>
+            {regime && (
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 14, right: 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(regime.tone, D.isDark ? 0.75 : 0.6) }} />
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
+                <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Breadth</span>
+                {regime && (
+                    <span style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        padding: "3px 8px 3px 7px",
+                        borderRadius: 999,
+                        background: withAlpha(regime.tone, D.isDark ? 0.16 : 0.09),
+                        color: regime.tone,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                        whiteSpace: "nowrap",
+                    }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: regime.tone }} />
+                        {regime.text}
+                    </span>
+                )}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                {items.slice(0, 2).map(it => <BreadthMeterRow key={it.label} D={D} isCompact={isCompact} item={it} ready={ready} reduceMotion={reduceMotion} />)}
+                <div aria-hidden="true" style={{ height: 1, background: D.panelBorder, margin: "1px 0" }} />
+                {items.slice(2).map(it => <BreadthMeterRow key={it.label} D={D} isCompact={isCompact} item={it} ready={ready} reduceMotion={reduceMotion} />)}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: D.muted, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.85 }}>
+                <span>NSE</span>
+                <span>{hasSnapshot && asOf ? `As of ${asOf}` : EMPTY_VALUE}</span>
+            </div>
+        </div>
+    );
+});
+
+
+// ─── STRONG SECTORS PANEL ────────────────────────────────────────────────────
+// Premium treatment for the hero "Strong Sectors" tile: leader-highlighted rank
+// badges, proportional rails (count relative to the leading industry), an
+// "of N" density caption per row, and a ranked footer. Flat surfaces only.
+const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact, sectors }) {
+    const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const [ready, setReady] = useState(reduceMotion);
+    useEffect(() => {
+        if (reduceMotion) return undefined;
+        const id = requestAnimationFrame(() => setReady(true));
+        return () => cancelAnimationFrame(id);
+    }, [reduceMotion]);
+
+    const rows = useMemo(() => (sectors || []).map(sec => ({
+        industry: sec.industry || EMPTY_VALUE,
+        count: Number(sec.count) || 0,
+        total: Number(sec.total) || 0,
+    })), [sectors]);
+    const max = Math.max(1, ...rows.map(r => r.count));
+    const trackColor = D.isDark ? withAlpha("#94a3b8", 0.16) : withAlpha("#0f172a", 0.07);
+    const onAccent = D.isDark ? "#0b0e13" : "#ffffff";
+    const sans = "'IBM Plex Sans', -apple-system, sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+
+    return (
+        <div style={{
+            position: "relative",
+            minWidth: 0,
+            width: "100%",
+            maxWidth: "100%",
+            height: "100%",
+            boxSizing: "border-box",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 12,
+            borderRadius: 12,
+            padding: isCompact ? "14px 12px 12px" : "16px 14px 12px",
+            background: D.softFill,
+            border: `1px solid ${D.panelBorder}`,
+        }}>
+            <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 14, right: 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(D.accent, D.isDark ? 0.75 : 0.6) }} />
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
+                <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: sans, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>Strong Sectors</span>
+                <span style={{ flexShrink: 0, color: D.muted, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: sans, whiteSpace: "nowrap" }}>{"RS > 85"}</span>
+            </div>
+
+            {rows.length ? (
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 11, flex: 1 }}>
+                    {rows.map((row, idx) => {
+                        const lead = idx === 0;
+                        const pct = Math.max(0, Math.min(100, (row.count / max) * 100));
+                        const detail = row.total >= row.count && row.total > 0 ? `${row.count} of ${row.total} stocks` : `${row.count} stocks`;
+                        return (
+                            <div key={row.industry + idx} title={`${row.industry} \u2014 ${detail}`} style={{ minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                    <span style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: 6,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        flexShrink: 0,
+                                        background: lead ? D.accent : withAlpha(D.accent, D.isDark ? 0.18 : 0.10),
+                                        color: lead ? onAccent : D.accent,
+                                        fontFamily: mono,
+                                        fontSize: 11.5,
+                                        fontWeight: 800,
+                                        lineHeight: 1,
+                                    }}>{idx + 1}</span>
+                                    <span style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        color: D.text,
+                                        fontSize: isCompact ? 13 : 14,
+                                        fontWeight: lead ? 700 : 600,
+                                        letterSpacing: "-0.005em",
+                                        fontFamily: sans,
+                                    }}>{row.industry}</span>
+                                    <span style={{
+                                        flexShrink: 0,
+                                        color: lead ? D.accent : D.text,
+                                        fontFamily: mono,
+                                        fontSize: isCompact ? 14.5 : 16,
+                                        fontWeight: 700,
+                                        lineHeight: 1,
+                                        letterSpacing: "-0.02em",
+                                        fontVariantNumeric: "tabular-nums",
+                                    }}>{row.count}</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 28, marginTop: 6 }}>
+                                    <div style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: trackColor, overflow: "hidden" }}>
+                                        <div style={{
+                                            height: "100%",
+                                            width: `${ready ? pct : 0}%`,
+                                            borderRadius: 999,
+                                            background: D.accent,
+                                            opacity: lead ? 1 : 0.55,
+                                            transition: reduceMotion ? "none" : "width .7s cubic-bezier(.22,1,.36,1)",
+                                            transitionDelay: reduceMotion ? "0ms" : `${idx * 55}ms`,
+                                        }} />
+                                    </div>
+                                    {row.total >= row.count && row.total > 0 && (
+                                        <span style={{ flexShrink: 0, color: D.muted, fontFamily: mono, fontSize: 10.5, fontWeight: 500, lineHeight: 1, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>of {row.total}</span>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div style={{ color: D.subtext, fontSize: 13, flex: 1 }}>waiting for RS data</div>
+            )}
+        </div>
+    );
+});
+
 const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, niftyPeData, onNavigate, userToken, onLogin }) {
     const topRsSectors = [...(rsIndustrySummary || [])]
         .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
@@ -1306,7 +1753,13 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                             : "minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1.7fr)",
                         gap: 10,
                     }}>
-                        {heroMetrics.map(metric => (
+                        {heroMetrics.map(metric => metric.breadth ? (
+                            <BreadthPanel key={metric.label} D={D} isCompact={isCompact} snapshot={breadthSnapshot} />
+                        ) : metric.sectors ? (
+                            <StrongSectorsPanel key={metric.label} D={D} isCompact={isCompact} sectors={metric.sectors} />
+                        ) : metric.fiiDii ? (
+                            <FiiDiiPanel key={metric.label} D={D} isCompact={isCompact} data={fiiDiiData} />
+                        ) : (
                             <div key={metric.label} style={{
                                 minWidth: 0,
                                 width: "100%",
@@ -1317,76 +1770,9 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                                 padding: isCompact ? "12px 12px" : "14px 14px",
                                 background: D.softFill,
                                 border: `1px solid ${D.panelBorder}`,
-                                ...(metric.fiiDii && isCompact ? { gridColumn: "span 2" } : {}),
                             }}>
                                 <div style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", marginBottom: 7, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{metric.label}</div>
-                                {metric.fiiDii ? (
-                                    <FiiDiiFlowBars D={D} data={fiiDiiData} isCompact={isCompact} />
-                                ) : metric.breadth ? (
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-                                        {metric.breadth.map(item => (
-                                            <div key={item.label} style={{ minWidth: 0 }}>
-                                                <div style={{
-                                                    color: D.subtext,
-                                                    fontSize: isCompact ? 11 : 12,
-                                                    lineHeight: 1.2,
-                                                    whiteSpace: "nowrap",
-                                                    overflow: "hidden",
-                                                    textOverflow: "ellipsis",
-                                                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                                                    fontWeight: 600,
-                                                }}>{item.label}</div>
-                                                <div style={{
-                                                    color: item.color,
-                                                    fontFamily: "'IBM Plex Mono', monospace",
-                                                    fontSize: isCompact ? 15 : 16.5,
-                                                    fontWeight: 800,
-                                                    marginTop: 3,
-                                                }}>{item.value}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : metric.sectors ? (
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                                        {metric.sectors.length ? metric.sectors.map((sector, idx) => (
-                                            <div key={sector.industry || idx} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                                <span style={{
-                                                    width: 18,
-                                                    height: 18,
-                                                    borderRadius: 6,
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    flexShrink: 0,
-                                                    background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10),
-                                                    color: D.accent,
-                                                    fontFamily: "'IBM Plex Mono', monospace",
-                                                    fontSize: 12,
-                                                    fontWeight: 800,
-                                                }}>{idx + 1}</span>
-                                                <span style={{
-                                                    flex: 1,
-                                                    minWidth: 0,
-                                                    overflow: "hidden",
-                                                    textOverflow: "ellipsis",
-                                                    whiteSpace: "nowrap",
-                                                    color: D.text,
-                                                    fontSize: isCompact ? 13 : 14,
-                                                    fontWeight: 700,
-                                                }}>{sector.industry}</span>
-                                                <span style={{
-                                                    flexShrink: 0,
-                                                    color: D.accent,
-                                                    fontFamily: "'IBM Plex Mono', monospace",
-                                                    fontSize: isCompact ? 14 : 15,
-                                                    fontWeight: 800,
-                                                }}>{sector.count}</span>
-                                            </div>
-                                        )) : (
-                                            <div style={{ color: D.subtext, fontSize: 13 }}>waiting for RS data</div>
-                                        )}
-                                    </div>
-                                ) : (
+                                {(
                                     <>
                                         <div style={{
                                             color: metric.color,
@@ -2022,7 +2408,7 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                                     <div style={{ fontWeight: 700, lineHeight: 1.4, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.industry}</div>
                                 </div>
                                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 16.5, color: T.text, flexShrink: 0 }}>
-                                    {row.count} <span style={{ color: T.muted, fontWeight: 500, fontSize: 13 }}>stocks &gt; RS 85</span>
+                                    {row.count} <span style={{ color: T.muted, fontWeight: 500, fontSize: 13 }}>RS &gt; 85</span>
                                 </div>
                             </div>
                         </button>
@@ -2054,7 +2440,7 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
             <thead>
                 <tr>
                     <th style={{ ...thStyle }}>Industry</th>
-                    <th style={{ ...thStyle, textAlign: "right", width: 160 }}>Stocks &gt; RS 85</th>
+                    <th style={{ ...thStyle, textAlign: "right", width: 160 }}>RS &gt; 85</th>
                 </tr>
             </thead>
             <tbody>
