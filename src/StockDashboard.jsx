@@ -1088,7 +1088,7 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data }) {
             padding: isCompact ? "14px 12px 12px" : "16px 14px 14px",
             background: D.softFill,
             border: `1px solid ${D.panelBorder}`,
-            ...(isCompact ? { gridColumn: "span 2" } : {}),
+            ...(isCompact ? { gridColumn: "1 / -1" } : {}),
         }}>
             {tone && (
                 <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 14, right: 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(tone, D.isDark ? 0.75 : 0.6) }} />
@@ -1415,10 +1415,10 @@ const BreadthMeterRow = React.memo(function BreadthMeterRow({ D, isCompact, item
     const tickColor = D.isDark ? withAlpha("#e2e8f0", 0.5) : withAlpha("#0f172a", 0.32);
     return (
         <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: isCompact ? 9 : 6 }}>
                 <span style={{
                     color: D.subtext,
-                    fontSize: isCompact ? 11 : 12,
+                    fontSize: 12,
                     lineHeight: 1.2,
                     fontWeight: 600,
                     whiteSpace: "nowrap",
@@ -1430,7 +1430,7 @@ const BreadthMeterRow = React.memo(function BreadthMeterRow({ D, isCompact, item
                 <span style={{
                     color: item.color,
                     fontFamily: "'IBM Plex Mono', monospace",
-                    fontSize: isCompact ? 15 : 16.5,
+                    fontSize: isCompact ? 18 : 16.5,
                     fontWeight: 700,
                     lineHeight: 1,
                     letterSpacing: "-0.02em",
@@ -1520,14 +1520,14 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot }
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            gap: 12,
-            borderRadius: 12,
-            padding: isCompact ? "14px 12px 12px" : "16px 14px 12px",
+            gap: isCompact ? 16 : 12,
+            borderRadius: isCompact ? 14 : 12,
+            padding: isCompact ? "18px 18px 14px" : "16px 14px 12px",
             background: D.softFill,
             border: `1px solid ${D.panelBorder}`,
         }}>
             {regime && (
-                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 14, right: 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(regime.tone, D.isDark ? 0.75 : 0.6) }} />
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: isCompact ? 18 : 14, right: isCompact ? 18 : 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(regime.tone, D.isDark ? 0.75 : 0.6) }} />
             )}
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
@@ -1555,11 +1555,26 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot }
                 )}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-                {items.slice(0, 2).map(it => <BreadthMeterRow key={it.label} D={D} isCompact={isCompact} item={it} ready={ready} reduceMotion={reduceMotion} />)}
-                <div aria-hidden="true" style={{ height: 1, background: D.panelBorder, margin: "1px 0" }} />
-                {items.slice(2).map(it => <BreadthMeterRow key={it.label} D={D} isCompact={isCompact} item={it} ready={ready} reduceMotion={reduceMotion} />)}
-            </div>
+            {isCompact ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {[items.slice(0, 2), items.slice(2)].map((pair, pi) => (
+                        <React.Fragment key={pi}>
+                            {pi === 1 && <div aria-hidden="true" style={{ height: 1, background: D.panelBorder }} />}
+                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 1px minmax(0, 1fr)", columnGap: 18, alignItems: "stretch" }}>
+                                <BreadthMeterRow D={D} isCompact={isCompact} item={pair[0]} ready={ready} reduceMotion={reduceMotion} />
+                                <div aria-hidden="true" style={{ background: D.panelBorder }} />
+                                <BreadthMeterRow D={D} isCompact={isCompact} item={pair[1]} ready={ready} reduceMotion={reduceMotion} />
+                            </div>
+                        </React.Fragment>
+                    ))}
+                </div>
+            ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                    {items.slice(0, 2).map(it => <BreadthMeterRow key={it.label} D={D} isCompact={isCompact} item={it} ready={ready} reduceMotion={reduceMotion} />)}
+                    <div aria-hidden="true" style={{ height: 1, background: D.panelBorder, margin: "1px 0" }} />
+                    {items.slice(2).map(it => <BreadthMeterRow key={it.label} D={D} isCompact={isCompact} item={it} ready={ready} reduceMotion={reduceMotion} />)}
+                </div>
+            )}
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: D.muted, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", opacity: 0.85 }}>
                 <span>NSE</span>
@@ -1607,13 +1622,13 @@ const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            gap: 12,
-            borderRadius: 12,
-            padding: isCompact ? "14px 12px 12px" : "16px 14px 12px",
+            gap: isCompact ? 16 : 12,
+            borderRadius: isCompact ? 14 : 12,
+            padding: isCompact ? "18px 18px 16px" : "16px 14px 12px",
             background: D.softFill,
             border: `1px solid ${D.panelBorder}`,
         }}>
-            <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 14, right: 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(D.accent, D.isDark ? 0.75 : 0.6) }} />
+            <div aria-hidden="true" style={{ position: "absolute", top: 0, left: isCompact ? 18 : 14, right: isCompact ? 18 : 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(D.accent, D.isDark ? 0.75 : 0.6) }} />
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
                 <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: sans, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>Strong Sectors</span>
@@ -1621,18 +1636,18 @@ const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact
             </div>
 
             {rows.length ? (
-                <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 11, flex: 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: isCompact ? 16 : 11, flex: 1 }}>
                     {rows.map((row, idx) => {
                         const lead = idx === 0;
                         const pct = Math.max(0, Math.min(100, (row.count / max) * 100));
                         const detail = row.total >= row.count && row.total > 0 ? `${row.count} of ${row.total} stocks` : `${row.count} stocks`;
                         return (
                             <div key={row.industry + idx} title={`${row.industry} \u2014 ${detail}`} style={{ minWidth: 0 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 12 : 8, minWidth: 0 }}>
                                     <span style={{
-                                        width: 20,
-                                        height: 20,
-                                        borderRadius: 6,
+                                        width: isCompact ? 24 : 20,
+                                        height: isCompact ? 24 : 20,
+                                        borderRadius: isCompact ? 7 : 6,
                                         display: "inline-flex",
                                         alignItems: "center",
                                         justifyContent: "center",
@@ -1640,7 +1655,7 @@ const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact
                                         background: lead ? D.accent : withAlpha(D.accent, D.isDark ? 0.18 : 0.10),
                                         color: lead ? onAccent : D.accent,
                                         fontFamily: mono,
-                                        fontSize: 11.5,
+                                        fontSize: isCompact ? 12.5 : 11.5,
                                         fontWeight: 800,
                                         lineHeight: 1,
                                     }}>{idx + 1}</span>
@@ -1651,7 +1666,7 @@ const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact
                                         textOverflow: "ellipsis",
                                         whiteSpace: "nowrap",
                                         color: D.text,
-                                        fontSize: isCompact ? 13 : 14,
+                                        fontSize: isCompact ? 14.5 : 14,
                                         fontWeight: lead ? 700 : 600,
                                         letterSpacing: "-0.005em",
                                         fontFamily: sans,
@@ -1660,15 +1675,15 @@ const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact
                                         flexShrink: 0,
                                         color: lead ? D.accent : D.text,
                                         fontFamily: mono,
-                                        fontSize: isCompact ? 14.5 : 16,
+                                        fontSize: isCompact ? 17 : 16,
                                         fontWeight: 700,
                                         lineHeight: 1,
                                         letterSpacing: "-0.02em",
                                         fontVariantNumeric: "tabular-nums",
                                     }}>{row.count}</span>
                                 </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 28, marginTop: 6 }}>
-                                    <div style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: trackColor, overflow: "hidden" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 12 : 8, paddingLeft: isCompact ? 36 : 28, marginTop: isCompact ? 9 : 6 }}>
+                                    <div style={{ flex: 1, minWidth: 0, height: isCompact ? 5 : 4, borderRadius: 999, background: trackColor, overflow: "hidden" }}>
                                         <div style={{
                                             height: "100%",
                                             width: `${ready ? pct : 0}%`,
@@ -1680,7 +1695,7 @@ const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact
                                         }} />
                                     </div>
                                     {row.total >= row.count && row.total > 0 && (
-                                        <span style={{ flexShrink: 0, color: D.muted, fontFamily: mono, fontSize: 10.5, fontWeight: 500, lineHeight: 1, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>of {row.total}</span>
+                                        <span style={{ flexShrink: 0, color: D.muted, fontFamily: mono, fontSize: isCompact ? 11 : 10.5, fontWeight: 500, lineHeight: 1, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{isCompact ? `of ${row.total} stocks` : `of ${row.total}`}</span>
                                     )}
                                 </div>
                             </div>
@@ -1749,9 +1764,9 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     <div style={{
                         display: "grid",
                         gridTemplateColumns: isCompact
-                            ? "repeat(2, minmax(0, 1fr))"
+                            ? "minmax(0, 1fr)"
                             : "minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1.7fr)",
-                        gap: 10,
+                        gap: isCompact ? 12 : 10,
                     }}>
                         {heroMetrics.map(metric => metric.breadth ? (
                             <BreadthPanel key={metric.label} D={D} isCompact={isCompact} snapshot={breadthSnapshot} />
