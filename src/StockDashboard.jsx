@@ -1585,134 +1585,7 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot }
 });
 
 
-// ─── STRONG SECTORS PANEL ────────────────────────────────────────────────────
-// Premium treatment for the hero "Strong Sectors" tile: leader-highlighted rank
-// badges, proportional rails (count relative to the leading industry), an
-// "of N" density caption per row, and a ranked footer. Flat surfaces only.
-const StrongSectorsPanel = React.memo(function StrongSectorsPanel({ D, isCompact, sectors }) {
-    const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
-        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const [ready, setReady] = useState(reduceMotion);
-    useEffect(() => {
-        if (reduceMotion) return undefined;
-        const id = requestAnimationFrame(() => setReady(true));
-        return () => cancelAnimationFrame(id);
-    }, [reduceMotion]);
-
-    const rows = useMemo(() => (sectors || []).map(sec => ({
-        industry: sec.industry || EMPTY_VALUE,
-        count: Number(sec.count) || 0,
-        total: Number(sec.total) || 0,
-    })), [sectors]);
-    const max = Math.max(1, ...rows.map(r => r.count));
-    const trackColor = D.isDark ? withAlpha("#94a3b8", 0.16) : withAlpha("#0f172a", 0.07);
-    const onAccent = D.isDark ? "#0b0e13" : "#ffffff";
-    const sans = "'IBM Plex Sans', -apple-system, sans-serif";
-    const mono = "'IBM Plex Mono', monospace";
-
-    return (
-        <div style={{
-            position: "relative",
-            minWidth: 0,
-            width: "100%",
-            maxWidth: "100%",
-            height: "100%",
-            boxSizing: "border-box",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            gap: isCompact ? 16 : 12,
-            borderRadius: isCompact ? 14 : 12,
-            padding: isCompact ? "18px 18px 16px" : "16px 14px 12px",
-            background: D.softFill,
-            border: `1px solid ${D.panelBorder}`,
-        }}>
-            <div aria-hidden="true" style={{ position: "absolute", top: 0, left: isCompact ? 18 : 14, right: isCompact ? 18 : 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(D.accent, D.isDark ? 0.75 : 0.6) }} />
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
-                <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: sans, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>Strong Sectors</span>
-                <span style={{ flexShrink: 0, color: D.muted, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: sans, whiteSpace: "nowrap" }}>{"RS > 85"}</span>
-            </div>
-
-            {rows.length ? (
-                <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: isCompact ? 16 : 11, flex: 1 }}>
-                    {rows.map((row, idx) => {
-                        const lead = idx === 0;
-                        const pct = Math.max(0, Math.min(100, (row.count / max) * 100));
-                        const detail = row.total >= row.count && row.total > 0 ? `${row.count} of ${row.total} stocks` : `${row.count} stocks`;
-                        return (
-                            <div key={row.industry + idx} title={`${row.industry} \u2014 ${detail}`} style={{ minWidth: 0 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 12 : 8, minWidth: 0 }}>
-                                    <span style={{
-                                        width: isCompact ? 24 : 20,
-                                        height: isCompact ? 24 : 20,
-                                        borderRadius: isCompact ? 7 : 6,
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        flexShrink: 0,
-                                        background: lead ? D.accent : withAlpha(D.accent, D.isDark ? 0.18 : 0.10),
-                                        color: lead ? onAccent : D.accent,
-                                        fontFamily: mono,
-                                        fontSize: isCompact ? 12.5 : 11.5,
-                                        fontWeight: 800,
-                                        lineHeight: 1,
-                                    }}>{idx + 1}</span>
-                                    <span style={{
-                                        flex: 1,
-                                        minWidth: 0,
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                        color: D.text,
-                                        fontSize: isCompact ? 14.5 : 14,
-                                        fontWeight: lead ? 700 : 600,
-                                        letterSpacing: "-0.005em",
-                                        fontFamily: sans,
-                                    }}>{row.industry}</span>
-                                    <span style={{
-                                        flexShrink: 0,
-                                        color: lead ? D.accent : D.text,
-                                        fontFamily: mono,
-                                        fontSize: isCompact ? 17 : 16,
-                                        fontWeight: 700,
-                                        lineHeight: 1,
-                                        letterSpacing: "-0.02em",
-                                        fontVariantNumeric: "tabular-nums",
-                                    }}>{row.count}</span>
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 12 : 8, paddingLeft: isCompact ? 36 : 28, marginTop: isCompact ? 9 : 6 }}>
-                                    <div style={{ flex: 1, minWidth: 0, height: isCompact ? 5 : 4, borderRadius: 999, background: trackColor, overflow: "hidden" }}>
-                                        <div style={{
-                                            height: "100%",
-                                            width: `${ready ? pct : 0}%`,
-                                            borderRadius: 999,
-                                            background: D.accent,
-                                            opacity: lead ? 1 : 0.55,
-                                            transition: reduceMotion ? "none" : "width .7s cubic-bezier(.22,1,.36,1)",
-                                            transitionDelay: reduceMotion ? "0ms" : `${idx * 55}ms`,
-                                        }} />
-                                    </div>
-                                    {row.total >= row.count && row.total > 0 && (
-                                        <span style={{ flexShrink: 0, color: D.muted, fontFamily: mono, fontSize: isCompact ? 11 : 10.5, fontWeight: 500, lineHeight: 1, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{isCompact ? `of ${row.total} stocks` : `of ${row.total}`}</span>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : (
-                <div style={{ color: D.subtext, fontSize: 13, flex: 1 }}>waiting for RS data</div>
-            )}
-        </div>
-    );
-});
-
-const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, niftyPeData, onNavigate, userToken, onLogin }) {
-    const topRsSectors = [...(rsIndustrySummary || [])]
-        .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
-        .slice(0, 5);
+const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, fiiDiiData, niftyPeData, onNavigate, userToken, onLogin }) {
     const highPct = Number(breadthSnapshot?.near_52w_high);
     const lowPct = Number(breadthSnapshot?.near_52w_low);
     const sma50Pct = Number(breadthSnapshot?.above_sma50);
@@ -1727,7 +1600,6 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                 { label: "Above 200D", value: Number.isFinite(sma200Pct) ? `${sma200Pct.toFixed(1)}%` : EMPTY_VALUE, color: sma200Pct >= 50 ? D.pos : D.neg },
             ],
         },
-        { label: "Strong Sectors", sectors: topRsSectors, color: D.accent },
         { label: "FII / DII Daily Flow", fiiDii: true },
     ];
     const lenses = [
@@ -1765,13 +1637,11 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                         display: "grid",
                         gridTemplateColumns: isCompact
                             ? "minmax(0, 1fr)"
-                            : "minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1.7fr)",
+                            : "minmax(0, 1fr) minmax(0, 1.5fr)",
                         gap: isCompact ? 12 : 10,
                     }}>
                         {heroMetrics.map(metric => metric.breadth ? (
                             <BreadthPanel key={metric.label} D={D} isCompact={isCompact} snapshot={breadthSnapshot} />
-                        ) : metric.sectors ? (
-                            <StrongSectorsPanel key={metric.label} D={D} isCompact={isCompact} sectors={metric.sectors} />
                         ) : metric.fiiDii ? (
                             <FiiDiiPanel key={metric.label} D={D} isCompact={isCompact} data={fiiDiiData} />
                         ) : (
@@ -2393,16 +2263,18 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
         );
     }
 
+    const rows = data.slice(0, TREND_TEMPLATE_PREVIEW_ROWS);
+
     if (isCompact) {
         return (
             <div style={{
                 display: "grid",
                 gap: 12,
-                maxHeight: data.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_VISIBLE_ITEMS * 108 : "none",
-                overflowY: data.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
-                paddingRight: data.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
+                maxHeight: rows.length > DEFAULT_VISIBLE_ITEMS ? DEFAULT_VISIBLE_ITEMS * 108 : "none",
+                overflowY: rows.length > DEFAULT_VISIBLE_ITEMS ? "auto" : "visible",
+                paddingRight: rows.length > DEFAULT_VISIBLE_ITEMS ? 4 : 0,
             }}>
-                {data.map(row => {
+                {rows.map(row => {
                     return (
                         <button
                             key={row.industry}
@@ -2451,7 +2323,7 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
     };
 
     return (
-        <PremiumTableShell T={T} minWidth={520} isScrollable={data.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={520} isScrollable={rows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <th style={{ ...thStyle }}>Industry</th>
@@ -2459,8 +2331,8 @@ function RsIndustrySummaryTable({ T, data, loading, onIndustryClick, isCompact }
                 </tr>
             </thead>
             <tbody>
-                {data.map((row, i) => {
-                    const isLast = i === data.length - 1;
+                {rows.map((row, i) => {
+                    const isLast = i === rows.length - 1;
                     return (
                         <tr
                             key={row.industry}
@@ -2526,6 +2398,7 @@ function RsTable({ T, data, loading, isCompact }) {
             return sortDir === "asc" ? cmp : -cmp;
         });
     }, [data, sortKey, sortDir]);
+    const visibleRows = useMemo(() => sorted.slice(0, TREND_TEMPLATE_PREVIEW_ROWS), [sorted]);
 
     if (loading) {
         return (
@@ -2580,7 +2453,7 @@ function RsTable({ T, data, loading, isCompact }) {
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={580} isScrollable={sorted.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={580} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <RTTh k="ticker" label="Ticker" />
@@ -2591,13 +2464,13 @@ function RsTable({ T, data, loading, isCompact }) {
                 </tr>
             </thead>
             <tbody>
-                {sorted.map((row, i) => {
+                {visibleRows.map((row, i) => {
                     const preview = rowPreviewHandlers(row.ticker, row);
                     return (
                     <tr
                         key={row.ticker}
                         style={{
-                            borderBottom: i < sorted.length - 1
+                            borderBottom: i < visibleRows.length - 1
                                 ? `1px solid ${T.isDark ? "rgba(51,65,85,0.5)" : "rgba(226,232,240,0.7)"}`
                                 : "none",
                             cursor: "pointer",
@@ -2648,14 +2521,9 @@ function RsTable({ T, data, loading, isCompact }) {
 
 // --- ALL RS TABLE (Top 50 stocks by RS Rating from indicators) ---
 const AllRsTable = React.memo(function AllRsTable({ T, data, loading, isCompact }) {
-    const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const [sortKey, setSortKey] = useState("rs_rating");
     const [sortDir, setSortDir] = useState("desc");
     const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
-
-    useEffect(() => {
-        setVisibleCount(MOVERS_INITIAL_ROWS);
-    }, [data]);
 
     // Pre-warm chart cache for visible rows so hover popover is instant
     useEffect(() => {
@@ -2683,8 +2551,7 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, isCompact 
             return sortDir === "asc" ? cmp : -cmp;
         });
     }, [data, sortKey, sortDir]);
-    const visibleRows = useMemo(() => sorted.slice(0, visibleCount), [sorted, visibleCount]);
-    const loadMoreRows = () => setVisibleCount(prev => Math.min(prev + MOVERS_LOAD_MORE_ROWS, sorted.length));
+    const visibleRows = useMemo(() => sorted.slice(0, TREND_TEMPLATE_PREVIEW_ROWS), [sorted]);
 
     if (loading) {
         return (
@@ -2741,7 +2608,7 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, isCompact 
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={660} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={540} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
             <thead>
                 <tr>
                     <th style={{ ...thBaseAR, padding: "11px 16px", textAlign: "left", width: 36 }}>#</th>
@@ -2749,7 +2616,6 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, isCompact 
                     <ARTh k="rs_rating" label="RS" />
                     <ARTh k="ret_3m" label="3M" />
                     <ARTh k="ret_6m" label="6M" />
-                    <ARTh k="ret_12m" label="12M" />
                 </tr>
             </thead>
             <tbody>
@@ -2788,7 +2654,7 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, isCompact 
                                 fontVariantNumeric: "tabular-nums",
                             }}>{row.rs_rating != null ? row.rs_rating : EMPTY_VALUE}</span>
                         </td>
-                        {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m], ["ret_12m", row.ret_12m]].map(([key, val]) => (
+                        {[["ret_3m", row.ret_3m], ["ret_6m", row.ret_6m]].map(([key, val]) => (
                             <td key={key} style={{
                                 padding: "11px 14px",
                                 textAlign: "right",
@@ -2803,7 +2669,6 @@ const AllRsTable = React.memo(function AllRsTable({ T, data, loading, isCompact 
                 })}
             </tbody>
         </PremiumTableShell>
-        <LoadMoreRowsButton T={T} visibleCount={visibleRows.length} totalCount={sorted.length} onLoadMore={loadMoreRows} />
         {PreviewPopover}
         </div>
     );
@@ -4786,7 +4651,6 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     gainers={gainers}
                     losers={losers}
                     allHighRsStocks={allHighRsStocks}
-                    rsIndustrySummary={rsIndustrySummary}
                     fiiDiiData={fiiDiiData}
                     niftyPeData={niftyPeData}
                     onNavigate={onNavigate}
@@ -4901,6 +4765,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                                         <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
                                     )}
                                 </RsLoginGate>
+                                <ViewAllInScreensLink T={D} onNavigate={onNavigate} totalCount={activeRsTab === "all" ? allHighRsStocks.length : industry ? rsIndustryStocks.length : rsIndustrySummary.length} label="RS Leaders" userToken={userToken} onLogin={onLogin} />
                     </SectionCard>
                 </div>
 
