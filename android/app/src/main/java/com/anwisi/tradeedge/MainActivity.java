@@ -1,4 +1,4 @@
-package com.tradeedge.app;
+package com.anwisi.tradeedge;
 
 import com.getcapacitor.BridgeActivity;
 

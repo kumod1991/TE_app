@@ -27,11 +27,6 @@ const IS_NATIVE = Capacitor.isNativePlatform();
 const NATIVE_REDIRECT = "in.tradeedge.app://auth-callback";
 const AUTH_REDIRECT = IS_NATIVE ? NATIVE_REDIRECT : PUBLIC_SITE_URL;
 const BRAND_LOGO_SRC = "/tradeedge_logo.png";
-// Marketing preview shown to logged-out users on the Journals tab (put the file in /public)
-const JOURNAL_PROMO_IMG = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/journal-preview.webp';
-const JOURNAL_PROMO_IMG_MOBILE = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/journal-preview-mobile.webp';
-const WATCHLIST_PROMO_IMG = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/watchlist-preview.webp';
-const WATCHLIST_PROMO_IMG_MOBILE = 'https://munqjcjvzgqyxzlmuyjj.supabase.co/storage/v1/object/public/previews/watchlist-preview-mobile.webp';
 
 function loadPersistedSession() {
     try {
@@ -1835,24 +1830,110 @@ a:hover { text-decoration: underline; }
   border: 1px solid ${T.border}; color: ${T.subtext}; transition: all .14s ease;
 }
 .journal-pill-filter.active { background: ${T.accentFill || T.greenGlow}; border-color: ${T.accent}; color: ${T.accent}; }
-.journal-promo { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 20px 0 40px; text-align: center; }
-.journal-promo-image-wrap { width: 100%; }
-.journal-promo-image {
-  width: 100%; display: block;
-  -webkit-mask-image: radial-gradient(ellipse 85% 88% at 50% 50%, #000 68%, transparent 100%);
-  mask-image: radial-gradient(ellipse 85% 88% at 50% 50%, #000 68%, transparent 100%);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
+.jt-page-wrap { width: 100%; display: flex; flex-direction: column; gap: 22px; text-align: left; font-family: 'IBM Plex Sans', -apple-system, sans-serif; }
+.jt-hero { position: relative; overflow: hidden; padding: 34px 32px; border-radius: 16px; border: 1px solid ${T.border}; background: ${T.card};
+  box-shadow: ${D ? "0 12px 32px rgba(0,0,0,0.34)" : "0 1px 2px rgba(15,23,42,0.04), 0 12px 28px rgba(15,23,42,0.05)"}; }
+.jt-hero-copy { position: relative; z-index: 1; max-width: 560px; }
+.jt-hero-copy .journal-kicker-row { margin-bottom: 16px; }
+.jt-hero-title { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -.04em; line-height: 1.05; margin: 0 0 14px; color: ${T.text}; }
+.jt-hero-sub { font-size: 15px; line-height: 1.65; color: ${T.subtext}; margin: 0 0 22px; max-width: 54ch; }
+.jt-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.jt-hero-note { margin-top: 14px; font-size: 12.5px; color: ${T.muted}; }
+.jt-btn { font-family: inherit; font-size: 13.5px; font-weight: 700; border-radius: 10px; padding: 11px 20px; cursor: pointer; transition: transform .14s, border-color .14s, color .14s, opacity .14s; }
+.jt-btn:focus-visible { outline: 2px solid ${T.accent}; outline-offset: 2px; }
+.jt-btn-primary { background: ${T.accent}; color: ${D ? "#0b1220" : "#fff"}; border: 1px solid ${T.accent}; }
+.jt-btn-primary:hover { opacity: .92; transform: translateY(-1px); }
+.jt-btn-ghost { background: ${T.card}; color: ${T.text}; border: 1px solid ${T.border}; }
+.jt-btn-ghost:hover { border-color: ${T.accent}; transform: translateY(-1px); }
+.jt-curve { position: absolute; right: 2%; top: 10%; width: 56%; height: 80%; z-index: 0; pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 40%); mask-image: linear-gradient(to right, transparent 0%, #000 40%); }
+.jt-curve-grid { stroke: ${T.border}; stroke-width: 1; stroke-dasharray: 2 6; vector-effect: non-scaling-stroke; }
+.jt-curve-line { fill: none; stroke: ${T.green}; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: jt-draw 2.4s cubic-bezier(.22,.7,.2,1) .25s forwards; }
+.jt-curve-area { opacity: 0; animation: jt-fade 1.2s ease-out 1.6s forwards; }
+.jt-curve-dot { fill: ${T.green}; stroke: ${T.card}; stroke-width: 2; opacity: 0; animation: jt-fade .5s ease-out 2.4s forwards; }
+@keyframes jt-draw { to { stroke-dashoffset: 0; } }
+@keyframes jt-fade { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .jt-curve-line { animation: none; stroke-dashoffset: 0; }
+  .jt-curve-area, .jt-curve-dot { animation: none; opacity: 1; }
 }
-.journal-promo-image-mobile { display: none; }
-.journal-promo-copy { max-width: 560px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.journal-promo-title { font-size: 26px; font-weight: 800; color: ${T.text}; margin: 4px 0 0; letter-spacing: -.02em; }
-.journal-promo-subtitle { font-size: 14px; color: ${T.subtext}; line-height: 1.6; margin: 0; }
-.journal-promo-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
-.journal-promo-cta { background: ${T.green}; color: #fff; border: none; border-radius: 8px; padding: 12px 22px; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .12s, opacity .12s; }
-.journal-promo-cta:hover { opacity: .92; transform: translateY(-1px); }
-.journal-promo-cta-ghost { background: transparent; border: 1px solid ${T.border}; color: ${T.text}; border-radius: 8px; padding: 12px 22px; font-size: 14px; font-weight: 600; cursor: pointer; transition: .15s; }
-.journal-promo-cta-ghost:hover { border-color: ${T.green}; color: ${T.green}; }
+.jt { width: 100%; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 22px; align-items: start; }
+.jt-rail { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 14px; border: 1px solid ${T.border}; background: ${T.card};
+  box-shadow: ${D ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"}; }
+.jt-rail-title { font-size: 11.5px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; color: ${T.muted}; margin: 4px 8px 8px; }
+.jt-rail button { text-align: left; background: transparent; border: none; border-radius: 9px; padding: 8px 10px; font-family: inherit; font-size: 13.5px; font-weight: 600; color: ${T.muted}; cursor: pointer; transition: color .18s, background .18s; }
+.jt-rail button:hover { color: ${T.text}; background: ${D ? "rgba(148,163,184,0.08)" : "rgba(226,232,240,0.45)"}; }
+.jt-rail button.active { color: ${T.accent}; font-weight: 700; background: ${D ? "rgba(96,165,250,0.16)" : "rgba(37,99,235,0.09)"}; }
+.jt-rail button:focus-visible, .jt-q summary:focus-visible { outline: 2px solid ${T.accent}; outline-offset: 2px; border-radius: 6px; }
+.jt-main { min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.jt-intro, .jt-sec { padding: 22px; border-radius: 14px; border: 1px solid ${T.border}; background: ${T.card}; scroll-margin-top: 12px;
+  box-shadow: ${D ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"}; }
+.jt-intro h2 { font-size: 22px; font-weight: 800; letter-spacing: -.03em; line-height: 1.15; margin: 0 0 10px; color: ${T.text}; }
+.jt-lede { font-size: 14.5px; line-height: 1.7; color: ${T.subtext}; max-width: 68ch; margin: 0; }
+.jt-sec-h { font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: ${T.text}; margin: 0 0 6px; }
+.jt-sec-sub { font-size: 14px; line-height: 1.65; color: ${T.subtext}; margin: 0 0 18px; max-width: 68ch; }
+.jt-sub-h { font-size: 15px; font-weight: 700; color: ${T.text}; margin: 28px 0 6px; letter-spacing: -.01em; }
+.jt-chip { display: inline; background: ${T.pill}; color: ${T.text}; font-weight: 600; font-size: 12.5px; padding: 2px 7px; margin: 0 1px; border-radius: 6px; white-space: nowrap; }
+.jt-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.jt-steps li { padding: 16px 18px; border-radius: 10px; border: 1px solid ${T.border}; background: ${D ? "rgba(148,163,184,0.08)" : "rgba(226,232,240,0.45)"}; }
+.jt-step-n { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: ${T.accent};
+  padding: 2px 8px; border-radius: 999px; margin-bottom: 10px; background: ${D ? "rgba(96,165,250,0.16)" : "rgba(37,99,235,0.09)"}; border: 1px solid ${D ? "rgba(96,165,250,0.22)" : "rgba(37,99,235,0.22)"}; }
+.jt-step-t { font-size: 15px; font-weight: 700; letter-spacing: -.01em; color: ${T.text}; margin-bottom: 6px; }
+.jt-step-d { font-size: 13.5px; line-height: 1.7; color: ${T.subtext}; }
+.jt-pages { border-top: 1px solid ${T.border}; }
+.jt-page { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; padding: 20px 0; border-bottom: 1px solid ${T.border}; }
+.jt-page:last-child { border-bottom: none; padding-bottom: 0; }
+.jt-page-name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; line-height: 1.5; color: ${T.text}; }
+.jt-page-lead { font-size: 14.5px; font-weight: 600; color: ${T.text}; line-height: 1.55; margin: 0 0 10px; }
+.jt-list { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.7; color: ${T.subtext}; max-width: 68ch; }
+.jt-list li { margin: 4px 0; }
+.jt-list li::marker { color: ${T.muted}; }
+.jt-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.jt-panel { padding: 16px 18px; border-radius: 10px; border: 1px solid ${T.border}; background: ${D ? "rgba(148,163,184,0.08)" : "rgba(226,232,240,0.45)"}; }
+.jt-panel-t { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; color: ${T.text}; margin-bottom: 6px; }
+.jt-panel p { margin: 0; font-size: 13.5px; line-height: 1.7; color: ${T.subtext}; }
+.jt-table-wrap { overflow-x: auto; border: 1px solid ${T.border}; border-radius: 14px; background: ${T.card}; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.jt-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; min-width: 420px; }
+.jt-table th { text-align: left; font-weight: 800; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: ${T.muted}; padding: 11px 16px; border-bottom: 1px solid ${T.border}; background: ${T.tableHead}; }
+.jt-table td { padding: 11px 16px; color: ${T.subtext}; border-bottom: 1px solid ${T.border}; }
+.jt-table td:first-child { color: ${T.text}; font-weight: 600; white-space: nowrap; }
+.jt-table td:last-child { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+.jt-table tbody tr:hover td { background: ${T.hover}; }
+.jt-table tr:last-child td { border-bottom: none; }
+.jt-note { margin-top: 14px; padding: 14px 16px; border-radius: 10px; border: 1px solid ${D ? "rgba(96,165,250,0.22)" : "rgba(37,99,235,0.22)"}; background: ${D ? "rgba(96,165,250,0.10)" : "rgba(37,99,235,0.06)"};
+  font-size: 13.5px; line-height: 1.7; color: ${T.text}; }
+.jt-gloss { margin: 0; border-top: 1px solid ${T.border}; }
+.jt-gloss-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; padding: 14px 0; border-bottom: 1px solid ${T.border}; }
+.jt-gloss-row:last-child { border-bottom: none; padding-bottom: 0; }
+.jt-gloss dt { font-weight: 700; font-size: 14px; line-height: 1.65; color: ${T.text}; }
+.jt-gloss dd { margin: 0; font-size: 13.5px; line-height: 1.7; color: ${T.subtext}; max-width: 68ch; }
+.jt-faq { border-top: 1px solid ${T.border}; }
+.jt-q { border-bottom: 1px solid ${T.border}; }
+.jt-q:last-child { border-bottom: none; }
+.jt-q summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 0; font-size: 14.5px; font-weight: 600; color: ${T.text}; }
+.jt-q summary::-webkit-details-marker { display: none; }
+.jt-q summary::after { content: '+'; font-size: 20px; font-weight: 300; color: ${T.muted}; flex-shrink: 0; }
+.jt-q[open] summary::after { content: '\\2212'; color: ${T.accent}; }
+.jt-q p { margin: 0 0 16px; font-size: 13.5px; line-height: 1.7; color: ${T.subtext}; max-width: 68ch; }
+.jt-cta { padding: 22px 24px; border: 1px solid ${T.border}; border-radius: 14px; background: ${T.card};
+  box-shadow: ${D ? "0 8px 20px rgba(0,0,0,0.28)" : "0 1px 2px rgba(15,23,42,0.03), 0 8px 20px rgba(15,23,42,0.04)"}; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.jt-cta-t { font-size: 16px; font-weight: 700; color: ${T.text}; letter-spacing: -.01em; }
+.jt-cta-d { font-size: 13.5px; color: ${T.subtext}; margin-top: 4px; }
+@media (max-width: 1000px) {
+  .jt { grid-template-columns: minmax(0, 1fr); }
+  .jt-rail { display: none; }
+}
+@media (max-width: 720px) {
+  .jt-hero { padding: 22px 18px 150px; }
+  .jt-curve { width: 100%; right: 0; top: auto; bottom: 6px; height: 120px; opacity: .85; -webkit-mask-image: none; mask-image: none; }
+  .jt-hero-sub { font-size: 14px; margin-bottom: 18px; }
+  .jt-hero-actions .jt-btn { flex: 1; min-width: 0; }
+  .jt-intro, .jt-sec { padding: 18px 16px; }
+  .jt-intro h2 { font-size: 20px; }
+  .jt-steps, .jt-trio { grid-template-columns: minmax(0, 1fr); }
+  .jt-page, .jt-gloss-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .jt-cta { padding: 18px 16px; }
+}
 .tab-promo-shell { flex: 1; overflow-y: auto; padding: 20px 22px 34px; background: ${T.bg}; }
 .tab-promo-shell-inner { width: 100%; max-width: 1400px; margin: 0 auto; }
 @media (max-width: 1120px) { .tab-promo-shell { padding: 18px 16px 28px; } }
@@ -1874,10 +1955,6 @@ a:hover { text-decoration: underline; }
   .journal-hero-aside { display: none; }
   .journal-hero-carousel-mobile { display: block; }
   .journal-toolbar { align-items: stretch; }
-  .journal-promo-title { font-size: 20px; }
-  .journal-promo { padding: 8px 0 24px; gap: 20px; }
-  .journal-promo-image-desktop { display: none; }
-  .journal-promo-image-mobile { display: block; }
 }
 @media (max-width: 520px) {
   .journal-main { padding: 12px 10px 22px; }
@@ -3435,63 +3512,456 @@ function JournalHero({ T, kicker, title, subtitle, metrics = [], mobileMetrics =
     );
 }
 
-function JournalLandingPromo({ T, onLogin }) {
+const JT_PAGES = [
+    { name: "Dashboard", lead: "How am I doing overall, and what do I hold right now?", points: [
+        "Combined P&L, win rate, reward/risk and average holding days sit at the top.",
+        "Charts show cumulative P&L, the win/loss split and P&L by ticker.",
+        "The holdings table uses end-of-day prices. Press Refresh to update, click a column header to sort, and click a row to see its lots.",
+    ] },
+    { name: "Trade Journal", lead: "What exactly did I buy and sell?", points: [
+        "Add Trade logs a buy. Edit an open trade to record the sell.",
+        "Search by ticker and filter by All, Open, Closed, Win or Loss.",
+        "Import CSV brings in your history. Export CSV downloads the trades in the current view.",
+    ] },
+    { name: "Analytics", lead: "Where do my results come from?", points: [
+        "Best trade, worst trade and profit factor show the extremes and the overall balance.",
+        "Monthly P&L bars are green for profit and red for loss.",
+        "Analytics only count closed trades, so record your exits first.",
+    ] },
+    { name: "Capital Gains", lead: "How much have I realised in each financial year?", points: [
+        "Gains are grouped by sell date into April to March financial years.",
+        "Short-term (held 365 days or fewer) and long-term (held longer) sit side by side.",
+        "These are gross realised gains. Charges and tax are not applied, so check them against your broker statement.",
+    ] },
+    { name: "Funds & XIRR", lead: "What is my true annualised return?", points: [
+        "Log deposits, withdrawals and charges & taxes, tagged by broker.",
+        "XIRR is shown for all time, the last 3 years and the last 5 years.",
+        "Use the template and Import CSV to load many entries at once.",
+    ] },
+    { name: "Dividends", lead: "How much income have I received?", points: [
+        "Log each dividend credit. The financial year is filled in for you.",
+        "Click a bar in the yearly chart, or a year chip, to filter the table.",
+        "Use the template and Import CSV for bulk entry.",
+    ] },
+];
+
+const JT_GLOSSARY = [
+    ["Win rate", "Closed trades that made a profit, divided by all closed trades."],
+    ["Reward / risk", "Average winning amount divided by average losing amount. Above 1 means your wins are larger than your losses."],
+    ["Profit factor", "Total profit from winners divided by total loss from losers. Above 1 means you are profitable overall."],
+    ["Avg gain, avg loss", "Average return of winning and losing trades, as a percentage of the amount invested in them."],
+    ["Avg hold", "Average days a position is held, weighted by amount invested, shown separately for winners and losers."],
+    ["Unrealised P&L", "Profit or loss on open holdings at the latest end-of-day price. Added to realised P&L to give Combined P&L."],
+    ["Net invested", "Deposits minus withdrawals and charges."],
+    ["XIRR", "Annualised return that accounts for the date of every deposit and withdrawal. Calculated the same way as Excel's XIRR."],
+];
+
+const JT_FAQ = [
+    ["Why does Live posture say Pending?", "Holdings prices load when you press Refresh in the holdings section on the Dashboard. Once they load, Live posture, Portfolio Value and unrealised P&L fill in."],
+    ["Why is my XIRR blank?", "XIRR needs at least one deposit in Funds & XIRR and some trades. For the most accurate figure, refresh holdings on the Dashboard first so open positions use current prices."],
+    ["Are the prices real-time?", "No. Holdings use end-of-day closing prices, so they update once the day's market data is in."],
+    ["Why is a trade missing from Capital Gains or Analytics?", "Only closed trades count. Open the trade, switch to the Sell tab and record the exit. Capital Gains places it in the financial year of the sell date."],
+    ["Is Capital Gains my tax calculation?", "No. It shows gross realised gains split into short-term and long-term. Brokerage, STT, exemptions and loss set-off are not applied. Confirm figures with your broker's tax P&L statement or a tax professional."],
+    ["Can I sell only part of a position?", "Yes. Enter a sell quantity smaller than the quantity held and the trade splits into a closed row and an open row for the remainder."],
+];
+
+function jtGo(id) {
+    const el = typeof document !== "undefined" ? document.getElementById(id) : null;
+    if (!el) return;
+    const reduce = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
+
+const JT_NAV = [
+    ["jt-start", "Quick start"],
+    ["jt-pages", "The six pages"],
+    ["jt-trades", "Recording trades"],
+    ["jt-metrics", "Reading your numbers"],
+    ["jt-faq", "Questions"],
+];
+
+function JournalTutorial({ T, onLogin }) {
+    const [active, setActive] = useState("jt-start");
+    useEffect(() => {
+        if (typeof IntersectionObserver === "undefined") return undefined;
+        const els = JT_NAV.map(([id]) => document.getElementById(id)).filter(Boolean);
+        const io = new IntersectionObserver(entries => {
+            const vis = entries.filter(e => e.isIntersecting).sort((x, y) => x.boundingClientRect.top - y.boundingClientRect.top);
+            if (vis[0]) setActive(vis[0].target.id);
+        }, { root: document.querySelector(".journal-main"), rootMargin: "-8% 0px -72% 0px", threshold: 0 });
+        els.forEach(el => io.observe(el));
+        return () => io.disconnect();
+    }, []);
+
+    const steps = [
+        ["Log in or create a free account", "The Journal pages open as soon as you are logged in. Your trades are saved to your account."],
+        ["Add your trades", <>Open <span className="jt-chip">Trade Journal</span> and choose <span className="jt-chip">Add Trade</span> for a single buy, or <span className="jt-chip">Import CSV</span> to bring in your history. Everything else is calculated from these trades.</>],
+        ["Add your funds and dividends", <>In <span className="jt-chip">Funds &amp; XIRR</span> record deposits, withdrawals and charges. In <span className="jt-chip">Dividends</span> record dividend credits. Funds are needed for XIRR.</>],
+        ["Refresh holdings and review", <>Open the <span className="jt-chip">Dashboard</span> and press <span className="jt-chip">Refresh</span> to load end-of-day prices. Then read <span className="jt-chip">Analytics</span> and <span className="jt-chip">Capital Gains</span>.</>],
+    ];
+    const csvRows = [
+        ["Ticker", "Yes", "TATAMOTORS"],
+        ["Entry date", "Yes", "13/03/2018 or 2018-03-13"],
+        ["Buy qty", "Yes", "60"],
+        ["Buy price", "Yes", "353.42"],
+        ["Exit date", "No. Leave blank if the position is open.", "16/03/2018"],
+        ["Sell qty", "No", "60"],
+        ["Sell price", "No", "346.00"],
+    ];
+    const curveLine = "M0 262 C46 256 74 276 118 246 S178 222 222 236 S284 186 328 198 S392 146 436 158 S502 102 552 112 S608 56 660 40";
     return (
-        <div className="journal-promo">
-            <div className="journal-promo-image-wrap">
-                <img
-                    src={JOURNAL_PROMO_IMG}
-                    alt="TradeEdge trading journal preview"
-                    className="journal-promo-image journal-promo-image-desktop"
-                />
-                <img
-                    src={JOURNAL_PROMO_IMG_MOBILE}
-                    alt="TradeEdge trading journal preview"
-                    className="journal-promo-image journal-promo-image-mobile"
-                />
-            </div>
-            <div className="journal-promo-copy">
-                <div className="journal-kicker">All-in-one Trading Journal</div>
-                <h2 className="journal-promo-title">Track. Analyze. Improve. Repeat.</h2>
-                <p className="journal-promo-subtitle">
-                    Sign up free to log every trade, track your real P&amp;L, and see the analytics
-                    that show you your actual edge  right inside TradeEdge.
-                </p>
-                <div className="journal-promo-actions">
-                    <button className="journal-promo-cta" onClick={onLogin}>Start Your Edge Today →</button>
-                    <button className="journal-promo-cta-ghost" onClick={onLogin}>Login</button>
+        <div className="jt-page-wrap">
+            <section className="jt-hero">
+                <svg className="jt-curve" viewBox="0 0 676 320" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="jtCurveFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={T.green} stopOpacity="0.18" />
+                            <stop offset="100%" stopColor={T.green} stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <line className="jt-curve-grid" x1="0" y1="80" x2="660" y2="80" />
+                    <line className="jt-curve-grid" x1="0" y1="160" x2="660" y2="160" />
+                    <line className="jt-curve-grid" x1="0" y1="240" x2="660" y2="240" />
+                    <path d={curveLine + " L660 320 L0 320 Z"} fill="url(#jtCurveFill)" className="jt-curve-area" />
+                    <path d={curveLine} pathLength="1" className="jt-curve-line" />
+                    <circle cx="660" cy="40" r="5" className="jt-curve-dot" />
+                </svg>
+                <div className="jt-hero-copy">
+                    <div className="journal-kicker-row"><span className="journal-kicker">TradeEdge trading journal</span></div>
+                    <h1 className="jt-hero-title">Track. Analyze.<br />Improve. Repeat.</h1>
+                    <p className="jt-hero-sub">
+                        Log every trade, see your real P&amp;L, and let the numbers show you where your edge is.
+                        Win rate, financial-year gains, holdings, XIRR and dividends, all in one place.
+                    </p>
+                    <div className="jt-hero-actions">
+                        <button type="button" className="jt-btn jt-btn-primary" onClick={onLogin}>Start your edge today</button>
+                        <button type="button" className="jt-btn jt-btn-ghost" onClick={onLogin}>Login</button>
+                    </div>
+                    <div className="jt-hero-note">Free to sign up. The Journal opens after you log in.</div>
                 </div>
+            </section>
+
+            <div className="jt">
+                <nav className="jt-rail" aria-label="Journal guide sections">
+                    <div className="jt-rail-title">In this guide</div>
+                    {JT_NAV.map(([id, label]) => (
+                        <button key={id} type="button" className={active === id ? "active" : ""} onClick={() => { setActive(id); jtGo(id); }}>{label}</button>
+                    ))}
+                </nav>
+
+                <article className="jt-main">
+                    <header className="jt-intro">
+                        <h2>How to use the Journal</h2>
+                        <p className="jt-lede">
+                            The Journal turns the trades you log into win rate, financial-year gains, live holdings,
+                            annualised returns and dividend income. This guide takes you from your first entry to a
+                            complete picture of your performance.
+                        </p>
+                    </header>
+
+                    <section className="jt-sec" id="jt-start">
+                        <h3 className="jt-sec-h">Quick start</h3>
+                        <p className="jt-sec-sub">Four steps, in this order, give you accurate numbers on every page.</p>
+                        <ol className="jt-steps">
+                            {steps.map(([title, body], i) => (
+                                <li key={title}>
+                                    <span className="jt-step-n">Step {i + 1}</span>
+                                    <div className="jt-step-t">{title}</div>
+                                    <div className="jt-step-d">{body}</div>
+                                </li>
+                            ))}
+                        </ol>
+                    </section>
+
+                    <section className="jt-sec" id="jt-pages">
+                        <h3 className="jt-sec-h">The six pages</h3>
+                        <p className="jt-sec-sub">Each page answers one question about your trading. Use the Journal menu to move between them.</p>
+                        <div className="jt-pages">
+                            {JT_PAGES.map(p => (
+                                <div className="jt-page" key={p.name}>
+                                    <div className="jt-page-name">{p.name}</div>
+                                    <div>
+                                        <p className="jt-page-lead">{p.lead}</p>
+                                        <ul className="jt-list">
+                                            {p.points.map(pt => <li key={pt}>{pt}</li>)}
+                                        </ul>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="jt-sec" id="jt-trades">
+                        <h3 className="jt-sec-h">Recording trades</h3>
+                        <p className="jt-sec-sub">A trade is open until you record its sell. Closed trades feed Analytics, Capital Gains and realised P&amp;L.</p>
+                        <div className="jt-trio">
+                            <div className="jt-panel">
+                                <div className="jt-panel-t">Buy</div>
+                                <p>Choose Add Trade, then enter ticker, buy date, quantity and price. Ticker suggestions come from NSE listings. The auto-fill button beside the price can fetch the closing price for that date. Replace it with your contract-note price if it differs.</p>
+                            </div>
+                            <div className="jt-panel">
+                                <div className="jt-panel-t">Sell</div>
+                                <p>Click the edit icon on an open trade and switch to the Sell tab. Enter the sell date, quantity and price. A P&amp;L preview appears before you save, and you cannot sell more than you hold.</p>
+                            </div>
+                            <div className="jt-panel">
+                                <div className="jt-panel-t">Partial sell</div>
+                                <p>Sell fewer shares than you hold and the trade splits in two: a closed row for the quantity sold, and an open row for the remainder at the original buy price and date.</p>
+                            </div>
+                        </div>
+
+                        <h4 className="jt-sub-h">Importing a CSV</h4>
+                        <p className="jt-sec-sub" style={{ marginBottom: 14 }}>
+                            Import CSV walks you through four steps: upload, map columns, preview, import. The importer guesses your column names, so check each one on the mapping step. Rows with problems are skipped and listed by row number. Comma- and semicolon-separated files both work, and a template is available to download.
+                        </p>
+                        <div className="jt-table-wrap">
+                            <table className="jt-table">
+                                <thead><tr><th>Column</th><th>Required</th><th>Example</th></tr></thead>
+                                <tbody>
+                                    {csvRows.map(r => (
+                                        <tr key={r[0]}><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="jt-note">
+                            Use plain numbers without thousands separators. Import each file once, because duplicates are not detected.
+                            For a partial exit, use two rows: the sold quantity with its exit details, and the remainder as an open row.
+                        </div>
+                    </section>
+
+                    <section className="jt-sec" id="jt-metrics">
+                        <h3 className="jt-sec-h">Reading your numbers</h3>
+                        <p className="jt-sec-sub">The terms you will see across the Dashboard, Analytics and Funds &amp; XIRR.</p>
+                        <dl className="jt-gloss">
+                            {JT_GLOSSARY.map(([term, def]) => (
+                                <div className="jt-gloss-row" key={term}>
+                                    <dt>{term}</dt>
+                                    <dd>{def}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </section>
+
+                    <section className="jt-sec" id="jt-faq">
+                        <h3 className="jt-sec-h">Questions</h3>
+                        <p className="jt-sec-sub">Quick answers to the things people check first.</p>
+                        <div className="jt-faq">
+                            {JT_FAQ.map(([q, a]) => (
+                                <details className="jt-q" key={q}>
+                                    <summary>{q}</summary>
+                                    <p>{a}</p>
+                                </details>
+                            ))}
+                        </div>
+                    </section>
+
+                    <div className="jt-cta">
+                        <div>
+                            <div className="jt-cta-t">Log your first trade</div>
+                            <div className="jt-cta-d">Create a free account or log in to open your Journal.</div>
+                        </div>
+                        <div className="jt-hero-actions" style={{ margin: 0 }}>
+                            <button type="button" className="jt-btn jt-btn-primary" onClick={onLogin}>Start your edge today</button>
+                            <button type="button" className="jt-btn jt-btn-ghost" onClick={onLogin}>Login</button>
+                        </div>
+                    </div>
+                </article>
             </div>
         </div>
     );
 }
 
+function JournalLandingPromo({ T, onLogin }) {
+    return <JournalTutorial T={T} onLogin={onLogin} />;
+}
+
+const WT_AREAS = [
+    { name: "Summary cards", lead: "How strong is this list as a whole?", points: [
+        "On desktop, four cards sit above the table: Avg RS Rating, RS Leaders, Stage 2 and Avg Market Cap.",
+        "Avg RS Rating carries a label: 80 and above is Very Strong, 60 and above Strong, 40 and above Average, and anything lower Weak.",
+        "Stage 2 shows how many of your names are in an uptrend, out of the total in the list.",
+    ] },
+    { name: "Stock table", lead: "Which names deserve attention right now?", points: [
+        "Rows are sorted by RS rating by default. Click a column header to change the sort.",
+        "Each stock shows its stage and signal pills: Near 52w High, Volume Spike, Pullback to 50DMA and RS Accelerating.",
+        "Use the quick filters (Stage 2, Pullback, Leaders) or set your own RS range and moving-average conditions.",
+    ] },
+    { name: "Stock detail panel", lead: "What is behind a single stock?", points: [
+        "Click a row to open Performance, Trend & Moving Averages, Relative Strength, Pivot Levels, 52-Week Range and Volume & Size.",
+        "Quarterly Financials, the next results date and Corporate Actions (dividend, bonus, split) are in the same panel.",
+        "A candlestick chart and an RS line chart show the price and relative strength history.",
+    ] },
+    { name: "Announcements feed", lead: "What has the company just told the exchange?", points: [
+        "Company announcements for the stocks you follow are collected in one feed.",
+        "Filter the feed by All, Results, Orders or Investor.",
+    ] },
+];
+
+const WT_GLOSSARY = [
+    ["RS rating", "A relative strength score for the stock. The Avg RS Rating card averages it across your list, and higher means stronger."],
+    ["Stage 1", "The stock is trading above its 200-day moving average."],
+    ["Stage 2", "The stock is trading above both its 50-day and 200-day moving averages."],
+    ["RS Leader", "A stock flagged as a relative strength leader. The Leaders quick filter and the RS Leaders card both count these."],
+    ["RS Accelerating", "A stock whose relative strength is improving, shown as a pill on the row."],
+    ["Near 52w High", "The price is close to its 52-week high, a possible breakout setup."],
+    ["Volume Spike", "Trading volume is at least 1.5 times its usual level."],
+    ["Pullback to 50DMA", "The price has pulled back toward its 50-day moving average."],
+];
+
+const WT_FAQ = [
+    ["How many watchlists can I create?", "Up to 25. The sidebar shows how many you have used, and the new-watchlist box is disabled once you reach the limit."],
+    ["How do I find and add a stock?", "Type a ticker or company name into the Add ticker or company box and pick the match from the suggestions."],
+    ["Can I reorder, rename or delete a watchlist?", "Yes. Drag the handle on a watchlist to reorder it, and use the rename and delete icons on the same row."],
+    ["How do I keep a short list of favourites?", "Star the stocks you care about, then switch on the starred-only filter to see just those."],
+    ["How do I update prices or take the data elsewhere?", "Use Refresh prices to update the table, and Export CSV to download it."],
+];
+
+const WT_NAV = [
+    ["wt-start", "Quick start"],
+    ["wt-areas", "What you see"],
+    ["wt-terms", "Reading the signals"],
+    ["wt-faq", "Questions"],
+];
+
 function WatchlistLandingPromo({ T, onLogin }) {
+    const [active, setActive] = useState("wt-start");
+    useEffect(() => {
+        if (typeof IntersectionObserver === "undefined") return undefined;
+        const els = WT_NAV.map(([id]) => document.getElementById(id)).filter(Boolean);
+        const io = new IntersectionObserver(entries => {
+            const vis = entries.filter(e => e.isIntersecting).sort((x, y) => x.boundingClientRect.top - y.boundingClientRect.top);
+            if (vis[0]) setActive(vis[0].target.id);
+        }, { root: document.querySelector(".tab-promo-shell"), rootMargin: "-8% 0px -72% 0px", threshold: 0 });
+        els.forEach(el => io.observe(el));
+        return () => io.disconnect();
+    }, []);
+
+    const steps = [
+        ["Log in or create a free account", "Your watchlists are saved to your account, so they are there on every device."],
+        ["Create a watchlist", <>Type a name into the <span className="jt-chip">New watchlist</span> box in the sidebar and add it. You can keep up to 25, for example one per strategy or sector.</>],
+        ["Add your stocks", <>Search by ticker or company name in <span className="jt-chip">Add ticker or company</span> and pick the match. The table fills in with prices, RS rating and signals.</>],
+        ["Review and refine", <>Sort by RS rating, apply a quick filter, and click a row to open its detail panel. Star your best ideas and use <span className="jt-chip">Export CSV</span> to take the list with you.</>],
+    ];
+    const curveLine = "M0 262 C46 256 74 276 118 246 S178 222 222 236 S284 186 328 198 S392 146 436 158 S502 102 552 112 S608 56 660 40";
+
     return (
-        <div className="journal-promo">
-            <div className="journal-promo-image-wrap">
-                <img
-                    src={WATCHLIST_PROMO_IMG}
-                    alt="TradeEdge watchlist preview"
-                    className="journal-promo-image journal-promo-image-desktop"
-                />
-                <img
-                    src={WATCHLIST_PROMO_IMG_MOBILE}
-                    alt="TradeEdge watchlist preview"
-                    className="journal-promo-image journal-promo-image-mobile"
-                />
-            </div>
-            <div className="journal-promo-copy">
-                <div className="journal-kicker">Watchlists</div>
-                <h2 className="journal-promo-title">Your Watchlist, Organized.</h2>
-                <p className="journal-promo-subtitle">
-                    Sign up free to build watchlists, track live prices, and get RS ratings and
-                    breakout signals for every stock you follow.
-                </p>
-                <div className="journal-promo-actions">
-                    <button className="journal-promo-cta" onClick={onLogin}>Start Your Edge Today →</button>
-                    <button className="journal-promo-cta-ghost" onClick={onLogin}>Login</button>
+        <div className="jt-page-wrap">
+            <section className="jt-hero">
+                <svg className="jt-curve" viewBox="0 0 676 320" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="wtCurveFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={T.green} stopOpacity="0.18" />
+                            <stop offset="100%" stopColor={T.green} stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <line className="jt-curve-grid" x1="0" y1="80" x2="660" y2="80" />
+                    <line className="jt-curve-grid" x1="0" y1="160" x2="660" y2="160" />
+                    <line className="jt-curve-grid" x1="0" y1="240" x2="660" y2="240" />
+                    <path d={curveLine + " L660 320 L0 320 Z"} fill="url(#wtCurveFill)" className="jt-curve-area" />
+                    <path d={curveLine} pathLength="1" className="jt-curve-line" />
+                    <circle cx="660" cy="40" r="5" className="jt-curve-dot" />
+                </svg>
+                <div className="jt-hero-copy">
+                    <div className="journal-kicker-row"><span className="journal-kicker">TradeEdge watchlists</span></div>
+                    <h1 className="jt-hero-title">Your watchlist,<br />organized.</h1>
+                    <p className="jt-hero-sub">
+                        Build watchlists, rank every stock by RS rating, spot Stage 2 leaders and breakout setups,
+                        and follow company announcements, all in one place.
+                    </p>
+                    <div className="jt-hero-actions">
+                        <button type="button" className="jt-btn jt-btn-primary" onClick={onLogin}>Start your edge today</button>
+                        <button type="button" className="jt-btn jt-btn-ghost" onClick={onLogin}>Login</button>
+                    </div>
+                    <div className="jt-hero-note">Free to sign up. Watchlists open after you log in.</div>
                 </div>
+            </section>
+
+            <div className="jt">
+                <nav className="jt-rail" aria-label="Watchlist guide sections">
+                    <div className="jt-rail-title">In this guide</div>
+                    {WT_NAV.map(([id, label]) => (
+                        <button key={id} type="button" className={active === id ? "active" : ""} onClick={() => { setActive(id); jtGo(id); }}>{label}</button>
+                    ))}
+                </nav>
+
+                <article className="jt-main">
+                    <header className="jt-intro">
+                        <h2>How to use Watchlists</h2>
+                        <p className="jt-lede">
+                            A watchlist turns the stocks you follow into a ranked table of relative strength, trend stage and
+                            setup signals, with the company detail and announcements one click away.
+                        </p>
+                    </header>
+
+                    <section className="jt-sec" id="wt-start">
+                        <h3 className="jt-sec-h">Quick start</h3>
+                        <p className="jt-sec-sub">Four steps take you from an empty page to a ranked list.</p>
+                        <ol className="jt-steps">
+                            {steps.map(([title, body], i) => (
+                                <li key={title}>
+                                    <span className="jt-step-n">Step {i + 1}</span>
+                                    <div className="jt-step-t">{title}</div>
+                                    <div className="jt-step-d">{body}</div>
+                                </li>
+                            ))}
+                        </ol>
+                    </section>
+
+                    <section className="jt-sec" id="wt-areas">
+                        <h3 className="jt-sec-h">What you see</h3>
+                        <p className="jt-sec-sub">Each part of a watchlist answers one question about the stocks you follow.</p>
+                        <div className="jt-pages">
+                            {WT_AREAS.map(p => (
+                                <div className="jt-page" key={p.name}>
+                                    <div className="jt-page-name">{p.name}</div>
+                                    <div>
+                                        <p className="jt-page-lead">{p.lead}</p>
+                                        <ul className="jt-list">
+                                            {p.points.map(pt => <li key={pt}>{pt}</li>)}
+                                        </ul>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="jt-sec" id="wt-terms">
+                        <h3 className="jt-sec-h">Reading the signals</h3>
+                        <p className="jt-sec-sub">The labels and pills you will see in the table and summary cards.</p>
+                        <dl className="jt-gloss">
+                            {WT_GLOSSARY.map(([term, def]) => (
+                                <div className="jt-gloss-row" key={term}>
+                                    <dt>{term}</dt>
+                                    <dd>{def}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </section>
+
+                    <section className="jt-sec" id="wt-faq">
+                        <h3 className="jt-sec-h">Questions</h3>
+                        <p className="jt-sec-sub">Quick answers to the things people check first.</p>
+                        <div className="jt-faq">
+                            {WT_FAQ.map(([q, a]) => (
+                                <details className="jt-q" key={q}>
+                                    <summary>{q}</summary>
+                                    <p>{a}</p>
+                                </details>
+                            ))}
+                        </div>
+                    </section>
+
+                    <div className="jt-cta">
+                        <div>
+                            <div className="jt-cta-t">Build your first watchlist</div>
+                            <div className="jt-cta-d">Create a free account or log in to start tracking your stocks.</div>
+                        </div>
+                        <div className="jt-hero-actions" style={{ margin: 0 }}>
+                            <button type="button" className="jt-btn jt-btn-primary" onClick={onLogin}>Start your edge today</button>
+                            <button type="button" className="jt-btn jt-btn-ghost" onClick={onLogin}>Login</button>
+                        </div>
+                    </div>
+                </article>
             </div>
         </div>
     );
