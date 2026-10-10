@@ -1085,17 +1085,20 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data, bare =
             justifyContent: "space-between",
             gap: 12,
             borderRadius: bare ? 0 : 12,
-            padding: bare ? "20px 16px 16px" : isCompact ? "14px 12px 12px" : "16px 14px 14px",
+            padding: bare ? "20px 16px 16px" : isCompact ? "14px 12px 12px" : "20px 20px 18px",
             background: bare ? "transparent" : D.softFill,
             border: bare ? "none" : `1px solid ${D.panelBorder}`,
             ...(isCompact ? { gridColumn: "1 / -1" } : {}),
         }}>
             {tone && (
-                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 14, right: 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(tone, D.isDark ? 0.75 : 0.6) }} />
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: bare ? 14 : 20, right: bare ? 14 : 20, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(tone, D.isDark ? 0.75 : 0.6) }} />
             )}
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
-                <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>FII / DII Daily Flow</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: bare ? 18 : 26 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    {!bare && <HeroIconTile D={D} type="flow" />}
+                    <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>FII / DII Daily Flow</span>
+                </span>
                 {showing && (
                     <span aria-live="polite" style={{ flexShrink: 0, color: D.muted, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap" }}>
                         {isLatest && !narrow ? "Latest \u00b7 " : ""}{flowDateLabel(showing.date)}
@@ -1207,7 +1210,7 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data, bare =
     );
 });
 
-function NiftyPePanel({ D, isCompact, data }) {
+function NiftyPePanel({ D, isCompact, data, card = false }) {
     const [hoverIdx, setHoverIdx] = React.useState(null);
     const rows = (data || [])
         .filter(r => r && r.pe_ratio != null && Number.isFinite(Number(r.pe_ratio)))
@@ -1255,7 +1258,7 @@ function NiftyPePanel({ D, isCompact, data }) {
 
     // ── sparkline geometry (hand-rolled SVG, no chart lib) ──────────────────
     const vw = 300;
-    const vh = isCompact ? 60 : 80;
+    const vh = isCompact ? 60 : card ? 74 : 80;
     const padY = 6;
     const range = Math.max(max - min, 0.01);
     const stepX = values.length > 1 ? vw / (values.length - 1) : vw;
@@ -1276,7 +1279,33 @@ function NiftyPePanel({ D, isCompact, data }) {
     const currentPct = barPct(pe);
 
     return (
-        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{
+            minWidth: 0, display: "flex", flexDirection: "column", height: "100%",
+            ...(card ? {
+                position: "relative", overflow: "hidden", boxSizing: "border-box", borderRadius: 12,
+                padding: "20px 20px 18px", background: D.softFill, border: `1px solid ${D.panelBorder}`,
+            } : {}),
+        }}>
+            {card && (
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 20, right: 20, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(zoneColor, D.isDark ? 0.75 : 0.6) }} />
+            )}
+            {card ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minHeight: 26, marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <HeroIconTile D={D} type="pe" />
+                        <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap" }}>Nifty 50 P/E</span>
+                    </div>
+                    <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 7px", borderRadius: 999,
+                        background: zoneBg, border: `1px solid ${withAlpha(zoneColor, 0.22)}`, color: zoneColor,
+                        fontSize: 10.5, fontWeight: 700, lineHeight: 1, letterSpacing: "0.04em", textTransform: "uppercase",
+                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap",
+                    }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: zoneColor }} />
+                        {zone === "Fair" ? "Fair Value" : `${zone} vs 2Y Avg`}
+                    </span>
+                </div>
+            ) : (
             <div style={{
                 display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 999,
                 background: zoneBg, border: `1px solid ${withAlpha(zoneColor, 0.22)}`, color: zoneColor,
@@ -1286,10 +1315,11 @@ function NiftyPePanel({ D, isCompact, data }) {
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: zoneColor }} />
                 {zone === "Fair" ? "Fair Value" : `${zone} vs 2Y Avg`}
             </div>
+            )}
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                 <span style={{
-                    fontSize: isCompact ? 34 : 42, fontWeight: 800, letterSpacing: "-0.03em",
+                    fontSize: isCompact ? 34 : card ? 36 : 42, fontWeight: 800, letterSpacing: "-0.03em",
                     color: D.text, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1,
                 }}>{pe.toFixed(2)}</span>
                 {delta != null && (
@@ -1303,7 +1333,7 @@ function NiftyPePanel({ D, isCompact, data }) {
                 )}
             </div>
             <div style={{ fontSize: 13, color: D.subtext, marginTop: 4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                Nifty 50 &middot; P/E (TTM) &middot; {dateLabel}
+                {card ? "Price / earnings (TTM)" : <>Nifty 50 &middot; P/E (TTM)</>} &middot; {dateLabel}
             </div>
 
             <div style={{ marginTop: "auto", paddingTop: 14 }}>
@@ -1311,7 +1341,7 @@ function NiftyPePanel({ D, isCompact, data }) {
                     <svg
                         viewBox={`0 0 ${vw} ${vh}`}
                         width="100%"
-                        height={isCompact ? 60 : 80}
+                        height={vh}
                         preserveAspectRatio="none"
                         style={{ display: "block", overflow: "visible" }}
                         onMouseLeave={() => setHoverIdx(null)}
@@ -1522,16 +1552,23 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
             justifyContent: "space-between",
             gap: isCompact ? 16 : 12,
             borderRadius: bare ? 0 : isCompact ? 14 : 12,
-            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "16px 14px 12px",
+            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
             background: bare ? "transparent" : D.softFill,
             border: bare ? "none" : `1px solid ${D.panelBorder}`,
         }}>
             {regime && (
-                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: isCompact ? 18 : 14, right: isCompact ? 18 : 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(regime.tone, D.isDark ? 0.75 : 0.6) }} />
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: isCompact ? 18 : 20, right: isCompact ? 18 : 20, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(regime.tone, D.isDark ? 0.75 : 0.6) }} />
             )}
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 18 }}>
-                <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Breadth</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: bare ? 18 : 26 }}>
+                {bare ? (
+                    <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Breadth</span>
+                ) : (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                        <HeroIconTile D={D} type="breadth" />
+                        <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Breadth</span>
+                    </span>
+                )}
                 {regime && (
                     <span style={{
                         display: "inline-flex",
@@ -1589,7 +1626,7 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
 // Premium tiles that sit under the P/E · Breadth · FII/DII row. Backed by
 // `yahoo_macro_daily` (one row per symbol per day). Same visual language as the
 // panels above: regime chip, hairline tone bar, mono numerals, true-pixel
-// sparkline with hover/tap scrub, 2Y range rail and a 3-up stat strip.
+// sparkline with hover/tap scrub and a 2Y range rail.
 const MACRO_YEARS = 2;      // lookback for the sparkline, range rail and average
 const MACRO_MAX_ROWS = 560; // ~2Y of daily sessions per symbol (stays under PostgREST's 1000-row cap)
 const MACRO_CARDS = [
@@ -1666,10 +1703,26 @@ function macroDateLabel(raw) {
     return `${m[3]} ${FLOW_MONTHS[Number(m[2]) - 1] || ""} ${m[1]}`.trim();
 }
 
+// Shared 26px icon tile used in the header of every desktop hero card so the
+// six cards (P/E, Breadth, FII/DII, USD/INR, Brent, DXY) read as one set.
+function HeroIconTile({ D, type }) {
+    return (
+        <span style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+            background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent,
+        }}>
+            <MacroIcon type={type} />
+        </span>
+    );
+}
+
 function MacroIcon({ type, size = 15 }) {
     const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
     if (type === "fx") return <svg {...common}><path d="M4 8h14" /><path d="M14 4l4 4-4 4" /><path d="M20 16H6" /><path d="M10 12l-4 4 4 4" /></svg>;
     if (type === "oil") return <svg {...common}><path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.2" /></svg>;
+    if (type === "pe") return <svg {...common}><path d="M5 19L19 5" /><circle cx="7.5" cy="7.5" r="2.5" /><circle cx="16.5" cy="16.5" r="2.5" /></svg>;
+    if (type === "breadth") return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
+    if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
     return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M14.6 9.3c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.5.8-2.5 1.9 0 2.7 5.2 1.4 5.2 4.1 0 1.2-1.1 2-2.6 2-1.3 0-2.3-.7-2.7-1.7" /><path d="M12 5.8v1.9M12 16.3v1.9" /></svg>;
 }
 
@@ -1724,10 +1777,6 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
     const avgPct = has ? (flat ? 50 : Math.min(100, Math.max(0, ((avg - min) / range) * 100))) : 0;
     const position = posPct >= 85 ? "Near 2Y High" : posPct <= 15 ? "Near 2Y Low" : "Mid-Range";
 
-    const changeOver = k => (n > k && series[n - 1 - k].close ? ((price - series[n - 1 - k].close) / series[n - 1 - k].close) * 100 : null);
-    const d5 = has ? changeOver(5) : null;
-    const m1 = has ? changeOver(21) : null;
-
     let asOf = null;
     if (lastRow) {
         const lbl = flowDateLabel(lastRow.date);
@@ -1761,12 +1810,6 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
         setHoverIdx(Math.max(0, Math.min(n - 1, Math.round((x / rect.width) * (n - 1)))));
     };
 
-    const stats = [
-        { key: "d5", label: "5D", text: fmtPct(d5), color: signColor(d5) },
-        { key: "m1", label: "1M", text: fmtPct(m1), color: signColor(m1) },
-        { key: "pc", label: "Prev Close", text: prevClose != null ? `${card.prefix}${fmt(prevClose)}` : EMPTY_VALUE, color: D.text },
-    ];
-
     const sans = "'IBM Plex Sans', -apple-system, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
 
@@ -1781,25 +1824,20 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            gap: isCompact ? 14 : 12,
+            gap: isCompact ? 14 : 14,
             borderRadius: bare ? 0 : 12,
-            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "16px 16px 14px",
+            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
             background: bare ? "transparent" : D.softFill,
             border: bare ? "none" : `1px solid ${D.panelBorder}`,
         }}>
             {has && (
-                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 16, right: 16, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(delta === 0 ? D.muted : tone, D.isDark ? 0.75 : 0.6) }} />
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: bare ? 16 : 20, right: bare ? 16 : 20, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(delta === 0 ? D.muted : tone, D.isDark ? 0.75 : 0.6) }} />
             )}
 
             {/* header: icon tile + label  |  range-position chip */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minHeight: 24 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, flexShrink: 0,
-                        background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent,
-                    }}>
-                        <MacroIcon type={card.icon} />
-                    </span>
+                    <HeroIconTile D={D} type={card.icon} />
                     <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: sans, whiteSpace: "nowrap" }}>{card.label}</span>
                 </div>
                 {has && (
@@ -1866,6 +1904,7 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
                             </linearGradient>
                         </defs>
                         <line x1="0" y1={avgY} x2={W} y2={avgY} stroke={D.muted} strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3,3" />
+                        <text x="0" y={avgY > 14 ? avgY - 5 : avgY + 12} fontSize="9.5" fontFamily={mono} fill={D.muted} fillOpacity="0.95" style={{ letterSpacing: "0.05em" }}>{`${MACRO_YEARS}Y AVG ${fmt(avg)}`}</text>
                         <path d={areaPath} fill={`url(#${gradId})`} stroke="none" style={{ opacity: ready ? 1 : 0, transition: reduceMotion ? "none" : "opacity .9s ease .15s" }} />
                         <path
                             d={linePath}
@@ -1902,36 +1941,29 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
             {has && (
                 <div>
                     <div style={{ position: "relative", height: 5, borderRadius: 999, background: D.isDark ? withAlpha("#94a3b8", 0.18) : withAlpha("#0f172a", 0.08) }}>
+                        {/* shaded span = distance between the 2Y average and today's level */}
                         <div style={{
-                            position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: 999,
-                            width: ready ? `${posPct}%` : "0%",
-                            background: `linear-gradient(90deg, ${withAlpha(D.accent, 0.25)}, ${D.accent})`,
+                            position: "absolute", top: 0, bottom: 0, borderRadius: 999,
+                            left: `${Math.min(avgPct, posPct)}%`,
+                            width: ready ? `${Math.abs(posPct - avgPct)}%` : "0%",
+                            background: posPct >= avgPct
+                                ? `linear-gradient(90deg, ${withAlpha(D.accent, 0.35)}, ${D.accent})`
+                                : `linear-gradient(270deg, ${withAlpha(D.accent, 0.35)}, ${D.accent})`,
                             transition: reduceMotion ? "none" : "width .8s cubic-bezier(.22,.8,.3,1)",
                         }} />
-                        <div title={`${MACRO_YEARS}Y average ${fmt(avg)}`} style={{ position: "absolute", left: `${avgPct}%`, top: -3, bottom: -3, width: 2, background: D.panelBg, opacity: 0.85, transform: "translateX(-50%)" }} />
+                        <div title={`${MACRO_YEARS}Y average ${fmt(avg)}`} style={{ position: "absolute", left: `${avgPct}%`, top: -4, bottom: -4, width: 2, borderRadius: 1, background: D.muted, opacity: 0.7, transform: "translateX(-50%)" }} />
                         <div title={`Now ${fmt(price)}`} style={{
                             position: "absolute", left: `${posPct}%`, top: "50%", width: 11, height: 11, borderRadius: "50%",
                             background: D.accent, border: `2px solid ${D.isDark ? D.card : D.panelBg}`, transform: "translate(-50%, -50%)",
                             boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
                         }} />
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 7, fontSize: 11, color: D.muted, fontFamily: mono, whiteSpace: "nowrap" }}>
-                        <span>2Y Low {fmt(min)}</span>
-                        {width >= 260 && <span>2Y Avg {fmt(avg)}</span>}
-                        <span>2Y High {fmt(max)}</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 8, fontSize: 11, color: D.muted, fontFamily: mono, whiteSpace: "nowrap" }}>
+                        <span>{MACRO_YEARS}Y Low {fmt(min)}</span>
+                        <span>{MACRO_YEARS}Y High {fmt(max)}</span>
                     </div>
                 </div>
             )}
-
-            {/* 3-up stat strip */}
-            <div style={{ display: "flex", alignItems: "stretch", width: "100%", minWidth: 0, paddingTop: 12, borderTop: `1px solid ${D.panelBorder}` }}>
-                {stats.map((st, i) => (
-                    <div key={st.key} style={{ flex: 1, minWidth: 0, paddingLeft: i ? 12 : 0, marginLeft: i ? 12 : 0, borderLeft: i ? `1px solid ${D.panelBorder}` : "none" }}>
-                        <div style={{ fontSize: 10.5, color: D.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: sans, marginBottom: 5, whiteSpace: "nowrap" }}>{st.label}</div>
-                        <div style={{ color: st.color, fontFamily: mono, fontSize: isCompact ? 14 : 14.5, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.text}</div>
-                    </div>
-                ))}
-            </div>
         </div>
     );
 });
@@ -2051,7 +2083,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     display: "grid",
                     gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
                     gap: 8,
-                    marginTop: isCompact ? 0 : 22,
+                    marginTop: isCompact ? 0 : 28,
                 }}>
                     {lenses.map(lens => {
                         const isLocked = lens.locked && !userToken;
@@ -2133,17 +2165,28 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
             position: "relative",
         }}>
             <div style={{ padding: isCompact ? "18px 16px" : "24px 26px" }}>
+                {!isCompact && (
+                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                        <div>
+                            <div style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: "-0.01em", color: D.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Market Snapshot</div>
+                            <div style={{ fontSize: 13, color: D.subtext, marginTop: 3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Valuation, breadth, institutional flows and macro cues</div>
+                        </div>
+                        {breadthSnapshot?.date && flowDateLabel(breadthSnapshot.date) && (
+                            <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: D.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap" }}>
+                                As of {flowDateLabel(breadthSnapshot.date)}
+                            </span>
+                        )}
+                    </div>
+                )}
                 <div style={{
                     display: "grid",
                     gridTemplateColumns: isCompact
                         ? "1fr"
                         : "repeat(3, minmax(0, 1fr))",
-                    gap: isCompact ? 18 : 10,
+                    gap: isCompact ? 18 : 16,
                     alignItems: "stretch",
                 }}>
-                    <div style={{ minWidth: 0 }}>
-                        <NiftyPePanel D={D} isCompact={isCompact} data={niftyPeData} />
-                    </div>
+                    <NiftyPePanel D={D} isCompact={isCompact} data={niftyPeData} card={!isCompact} />
 
                     {/* display: contents -> Breadth and FII/DII become direct grid items,
                         so they sit in the same 3 equal columns as the macro cards below */}
@@ -2183,15 +2226,8 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                             </div>
                         ))}
                     </div>
-                </div>
 
-                {/* USD/INR · Brent · DXY — sits directly under the P/E · Breadth · FII/DII row */}
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                    gap: 10,
-                    marginTop: 18,
-                }}>
+                    {/* USD/INR · Brent · DXY: second row of the same 3-column grid */}
                     {MACRO_CARDS.map(card => (
                         <MacroPanel key={card.key} D={D} isCompact={isCompact} card={card} series={macroSeries?.[card.symbol]} gid={`${card.key}-d`} />
                     ))}
