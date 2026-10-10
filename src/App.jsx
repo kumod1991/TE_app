@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import ForumModule from "./ForumModule";
+const LearnModule = lazy(() => import("./LearnModule"));
 import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule";
 import OwnershipScansModule, { prefetchOwnershipData } from "./OwnershipScansModule";
@@ -67,6 +68,7 @@ const APP_ROUTE_MAP = {
     technical: "/technicals",
     tradevault: "/journal",
     forum: "/forum",
+    learn: "/learn",
     disclaimer: "/legal",
     "delete-account": "/delete-account",
 };
@@ -96,6 +98,10 @@ const ROUTE_SEO = {
     forum: {
         title: "Investor Community Forum",
         description: "Discuss theses, share conviction calls, and debate Indian stocks with the TradeEdge investor community.",
+    },
+    learn: {
+        title: "Learn Fundamental Analysis",
+        description: "Learn fundamental analysis step by step: P&L, balance sheet, cash flow statement and key financial ratios, with Indian market examples.",
     },
     "delete-account": {
         title: "Delete Account",
@@ -2926,6 +2932,7 @@ function parseAppRoute(pathname = "/") {
         };
     }
     if (section === "forum") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "forum" };
+    if (section === "learn") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "learn" };
     if (section === "delete-account") return { kind: "app", ...DEFAULT_APP_STATE, productTab: "delete-account" };
     if (section === "legal") {
         return {
@@ -22450,6 +22457,7 @@ export default function App() {
     const [modal, setModal] = useState(null);
     const [checking, setChecking] = useState(true);
     const [railCollapsed, setRailCollapsed] = useState(true);   //  changed to true
+    const [mobileExpandedNav, setMobileExpandedNav] = useState(null); // which drawer group is expanded on mobile
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLoginModal, setShowLoginModal] = useState(false);
     const journalPortfolioRefreshIdRef = useRef(0);
@@ -23083,6 +23091,10 @@ export default function App() {
             id: "forum", label: "Community", section: "Community",
             icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>,
         },
+        {
+            id: "learn", label: "Learn", section: "Resources",
+            icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>,
+        },
     ];
 
     const emailDisplay = isDemo ? "demo@tradeedge.app" : (session?.user?.email || session?.email || "Guest");
@@ -23255,7 +23267,10 @@ export default function App() {
                     <button
                         className="top-nav-mobile-menu-btn"
                         aria-label={railCollapsed ? "Open navigation menu" : "Close navigation menu"}
-                        onClick={() => setRailCollapsed(c => !c)}
+                        onClick={() => {
+                            if (railCollapsed) setMobileExpandedNav(productTab);
+                            setRailCollapsed(c => !c);
+                        }}
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                             {railCollapsed
@@ -23488,6 +23503,12 @@ export default function App() {
                                                 setShowLoginModal(true);
                                                 return;
                                             }
+                                            // Tapping an already-expanded group just collapses it
+                                            if (item.subItems && mobileExpandedNav === item.id) {
+                                                setMobileExpandedNav(null);
+                                                return;
+                                            }
+                                            if (item.subItems) setMobileExpandedNav(item.id);
                                             clearTickerRoute();
                                             setProductTab(item.id);
                                             if (item.id === "financial") {
@@ -23502,9 +23523,9 @@ export default function App() {
                                     >
                                         <span className="top-nav-mobile-item-icon">{item.icon}</span>
                                         {item.label}
-                                        {item.subItems && <svg style={{ marginLeft: "auto", opacity: .4 }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>}
+                                        {item.subItems && <svg style={{ marginLeft: "auto", opacity: .4, transition: "transform .2s ease", transform: mobileExpandedNav === item.id ? "rotate(180deg)" : "none" }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>}
                                     </div>
-                                    {item.subItems && productTab === item.id && item.subItems.map(sub => (
+                                    {item.subItems && mobileExpandedNav === item.id && item.subItems.map(sub => (
                                         <div
                                             key={sub.id}
                                             className={`top-nav-mobile-sub${item.id === "financial" ? (financialSubPage === sub.id ? " active" : "")
@@ -23767,6 +23788,20 @@ export default function App() {
                                                 onLoginRequired={() => setShowLoginModal(true)}
                                             />
                                         </QuoteContext.Provider>
+                                    </ModuleErrorBoundary>
+                                )}
+
+                                {/* LEARN */}
+                                {productTab === "learn" && (
+                                    <ModuleErrorBoundary
+                                        T={T}
+                                        moduleName="Learn"
+                                        resetKey={`learn-${theme}`}
+                                        onRecover={() => { setProductTab(SAFE_PRODUCT_TAB); setPage("dashboard"); }}
+                                    >
+                                        <Suspense fallback={<div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: T.subtext, fontSize: 13 }}>Loading lessons...</div>}>
+                                            <LearnModule T={T} />
+                                        </Suspense>
                                     </ModuleErrorBoundary>
                                 )}
 

@@ -982,7 +982,7 @@ function FlowArrow({ up }) {
     );
 }
 
-const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data }) {
+const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data, bare = false }) {
     const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
         && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const [ready, setReady] = useState(reduceMotion);
@@ -1084,10 +1084,10 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data }) {
             flexDirection: "column",
             justifyContent: "space-between",
             gap: 12,
-            borderRadius: 12,
-            padding: isCompact ? "14px 12px 12px" : "16px 14px 14px",
-            background: D.softFill,
-            border: `1px solid ${D.panelBorder}`,
+            borderRadius: bare ? 0 : 12,
+            padding: bare ? "20px 16px 16px" : isCompact ? "14px 12px 12px" : "16px 14px 14px",
+            background: bare ? "transparent" : D.softFill,
+            border: bare ? "none" : `1px solid ${D.panelBorder}`,
             ...(isCompact ? { gridColumn: "1 / -1" } : {}),
         }}>
             {tone && (
@@ -1466,7 +1466,7 @@ const BreadthMeterRow = React.memo(function BreadthMeterRow({ D, isCompact, item
     );
 });
 
-const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot }) {
+const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, bare = false }) {
     const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
         && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const [ready, setReady] = useState(reduceMotion);
@@ -1521,10 +1521,10 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot }
             flexDirection: "column",
             justifyContent: "space-between",
             gap: isCompact ? 16 : 12,
-            borderRadius: isCompact ? 14 : 12,
-            padding: isCompact ? "18px 18px 14px" : "16px 14px 12px",
-            background: D.softFill,
-            border: `1px solid ${D.panelBorder}`,
+            borderRadius: bare ? 0 : isCompact ? 14 : 12,
+            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "16px 14px 12px",
+            background: bare ? "transparent" : D.softFill,
+            border: bare ? "none" : `1px solid ${D.panelBorder}`,
         }}>
             {regime && (
                 <div aria-hidden="true" style={{ position: "absolute", top: 0, left: isCompact ? 18 : 14, right: isCompact ? 18 : 14, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(regime.tone, D.isDark ? 0.75 : 0.6) }} />
@@ -1585,6 +1585,84 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot }
 });
 
 
+// ─── MOBILE HERO CAROUSEL (dark, swipeable) ─────────────────────────────────
+// Mirrors the Journal/Dashboard `HeroMobileCarousel` look: navy gradient cards,
+// snap scrolling, pill dots. Panels render with a dark theme + `bare` surfaces.
+const HERO_DARK_THEME_INPUT = {
+    bg: "#0a1424",
+    card: "#0e1b31",
+    surface: "#0e1b31",
+    text: "#e2e8f0",
+    muted: "#8795ab",
+    subtext: "#a5b2c6",
+    accent: "#7fa8db",
+    pos: "#4ade80",
+    neg: "#f87171",
+};
+const HERO_DARK_CARD_CSS = `
+.sd-hero-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;padding:0 0 14px;margin:0 0 -10px}
+.sd-hero-track::-webkit-scrollbar{display:none}
+.sd-hero-card{flex:0 0 100%;box-sizing:border-box;scroll-snap-align:start;scroll-snap-stop:always;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden;border-radius:18px;background:linear-gradient(150deg,#0e1b31 0%,#0a1424 100%);border:1px solid rgba(148,163,184,0.14);box-shadow:0 4px 12px rgba(3,8,20,0.28)}
+.sd-hero-card>*{flex:1 1 auto;min-width:0}
+.sd-hero-dots{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px}
+.sd-hero-dot{display:block;flex:none;width:6px;height:6px;border-radius:50%;cursor:pointer;transition:all .15s ease}
+.sd-hero-dot.active{width:16px;border-radius:4px}
+`;
+
+const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact, breadthSnapshot, fiiDiiData, niftyPeData }) {
+    const trackRef = useRef(null);
+    const [active, setActive] = useState(0);
+    const COUNT = 3;
+
+    const slideStep = () => {
+        const el = trackRef.current;
+        const first = el && el.children[0];
+        if (!el || !first) return 0;
+        return first.getBoundingClientRect().width + 12; // card width + gap
+    };
+    const handleScroll = () => {
+        const el = trackRef.current;
+        const step = slideStep();
+        if (!el || !step) return;
+        setActive(Math.max(0, Math.min(COUNT - 1, Math.round(el.scrollLeft / step))));
+    };
+    const goTo = i => {
+        const el = trackRef.current;
+        const step = slideStep();
+        if (el && step) el.scrollTo({ left: i * step, behavior: "smooth" });
+    };
+
+    return (
+        <div style={{ marginBottom: 14 }}>
+            <style>{HERO_DARK_CARD_CSS}</style>
+            <div className="sd-hero-track" ref={trackRef} onScroll={handleScroll}>
+                <div className="sd-hero-card" style={{ padding: "20px 18px 20px" }}>
+                    <NiftyPePanel D={DD} isCompact={isCompact} data={niftyPeData} />
+                </div>
+                <div className="sd-hero-card">
+                    <BreadthPanel D={DD} isCompact={isCompact} snapshot={breadthSnapshot} bare />
+                </div>
+                <div className="sd-hero-card">
+                    <FiiDiiPanel D={DD} isCompact={isCompact} data={fiiDiiData} bare />
+                </div>
+            </div>
+            <div className="sd-hero-dots" role="tablist" aria-label="Market snapshot cards">
+                {["Nifty P/E", "Breadth", "FII / DII"].map((name, i) => (
+                    <span
+                        key={name}
+                        role="tab"
+                        aria-label={name}
+                        aria-selected={i === active}
+                        className={`sd-hero-dot${i === active ? " active" : ""}`}
+                        style={{ background: i === active ? (D.green || D.pos) : (D.isDark ? "rgba(148,163,184,0.35)" : "rgba(100,116,139,0.35)") }}
+                        onClick={() => goTo(i)}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+});
+
 const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, fiiDiiData, niftyPeData, onNavigate, userToken, onLogin }) {
     const highPct = Number(breadthSnapshot?.near_52w_high);
     const lowPct = Number(breadthSnapshot?.near_52w_low);
@@ -1602,6 +1680,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
         },
         { label: "FII / DII Daily Flow", fiiDii: true },
     ];
+    const DD = useMemo(() => buildDashboardTheme(HERO_DARK_THEME_INPUT), []);
     const lenses = [
         { type: "screens", title: "Breadth", meta: `Market Participation`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
         { type: "momentum", title: "TechLens", meta: `Identify leaders`, action: "Technical Screens", locked: true, onClick: () => (userToken ? onNavigate?.("technical", "screens") : onLogin?.()) },
@@ -1610,6 +1689,83 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
         { type: "watchlist", title: "Watchlist", meta: "Saved setups", action: "Open", onClick: () => onNavigate?.("watchlist") },
         { type: "journal", title: "Journal", meta: "P&L / execution", action: "Review", onClick: () => onNavigate?.("tradevault", "dashboard") },
     ];
+
+    const lensGrid = (
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
+                    gap: 8,
+                    marginTop: isCompact ? 0 : 22,
+                }}>
+                    {lenses.map(lens => {
+                        const isLocked = lens.locked && !userToken;
+                        return (
+                        <button key={lens.title} onClick={lens.onClick} type="button" style={{
+                            minWidth: 0,
+                            minHeight: isCompact ? 82 : 88,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-start",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            textAlign: "left",
+                            borderRadius: 14,
+                            border: `1px solid ${D.panelBorder}`,
+                            background: D.card,
+                            color: D.text,
+                            cursor: "pointer",
+                            padding: "11px",
+                            position: "relative",
+                            fontFamily: "inherit",
+                            transition: "transform .14s ease, border-color .14s ease, background .14s ease",
+                        }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(D.accent, 0.42); }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
+                        >
+                            {isLocked && (
+                                <span style={{
+                                    position: "absolute", top: 9, right: 9,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    width: 20, height: 20, borderRadius: "50%",
+                                    background: withAlpha(D.accent, D.isDark ? 0.20 : 0.12),
+                                }}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                                        <rect x="4" y="10" width="16" height="10" rx="2" fill={D.accent} />
+                                        <path d="M7 10V7a5 5 0 0110 0v3" stroke={D.accent} strokeWidth="2" fill="none" />
+                                    </svg>
+                                </span>
+                            )}
+                            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent }}>
+                                <DashboardLensIcon type={lens.type} />
+                            </span>
+                            <span style={{ minWidth: 0, width: "100%" }}>
+                                <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.title}</span>
+                                <span style={{ display: "block", fontSize: 13, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.meta}</span>
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: D.accent, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{isLocked ? "Login to unlock" : lens.action}</span>
+                        </button>
+                        );
+                    })}
+                </div>
+    );
+
+    if (isCompact) {
+        return (
+            <>
+                <HeroDarkCarousel D={D} DD={DD} isCompact={isCompact} breadthSnapshot={breadthSnapshot} fiiDiiData={fiiDiiData} niftyPeData={niftyPeData} />
+                <section style={{
+                    marginBottom: 14,
+                    borderRadius: 16,
+                    border: `1px solid ${D.panelBorder}`,
+                    background: D.panelBg,
+                    boxShadow: D.shadowLg,
+                    padding: "14px 12px",
+                }}>
+                    {lensGrid}
+                </section>
+            </>
+        );
+    }
 
     return (
         <section style={{
@@ -1677,62 +1833,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     </div>
                 </div>
 
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
-                    gap: 8,
-                    marginTop: isCompact ? 18 : 22,
-                }}>
-                    {lenses.map(lens => {
-                        const isLocked = lens.locked && !userToken;
-                        return (
-                        <button key={lens.title} onClick={lens.onClick} type="button" style={{
-                            minWidth: 0,
-                            minHeight: isCompact ? 82 : 88,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-start",
-                            justifyContent: "space-between",
-                            gap: 10,
-                            textAlign: "left",
-                            borderRadius: 14,
-                            border: `1px solid ${D.panelBorder}`,
-                            background: D.card,
-                            color: D.text,
-                            cursor: "pointer",
-                            padding: "11px",
-                            position: "relative",
-                            fontFamily: "inherit",
-                            transition: "transform .14s ease, border-color .14s ease, background .14s ease",
-                        }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(D.accent, 0.42); }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
-                        >
-                            {isLocked && (
-                                <span style={{
-                                    position: "absolute", top: 9, right: 9,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    width: 20, height: 20, borderRadius: "50%",
-                                    background: withAlpha(D.accent, D.isDark ? 0.20 : 0.12),
-                                }}>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                                        <rect x="4" y="10" width="16" height="10" rx="2" fill={D.accent} />
-                                        <path d="M7 10V7a5 5 0 0110 0v3" stroke={D.accent} strokeWidth="2" fill="none" />
-                                    </svg>
-                                </span>
-                            )}
-                            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent }}>
-                                <DashboardLensIcon type={lens.type} />
-                            </span>
-                            <span style={{ minWidth: 0, width: "100%" }}>
-                                <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.title}</span>
-                                <span style={{ display: "block", fontSize: 13, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.meta}</span>
-                            </span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: D.accent, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{isLocked ? "Login to unlock" : lens.action}</span>
-                        </button>
-                        );
-                    })}
-                </div>
+                {lensGrid}
             </div>
         </section>
     );
