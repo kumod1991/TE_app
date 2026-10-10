@@ -1084,10 +1084,8 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data, bare =
             flexDirection: "column",
             justifyContent: "space-between",
             gap: 12,
-            borderRadius: bare ? 0 : 12,
             padding: bare ? "20px 16px 16px" : isCompact ? "14px 12px 12px" : "20px 20px 18px",
-            background: bare ? "transparent" : D.softFill,
-            border: bare ? "none" : `1px solid ${D.panelBorder}`,
+            ...(bare ? { borderRadius: 0, background: "transparent", border: "none" } : heroSurface(D)),
             ...(isCompact ? { gridColumn: "1 / -1" } : {}),
         }}>
             {tone && (
@@ -1097,7 +1095,7 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data, bare =
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: bare ? 18 : 26 }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     {!bare && <HeroIconTile D={D} type="flow" />}
-                    <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>FII / DII Daily Flow</span>
+                    <HeroCardTitle D={D} bare={bare} style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{bare ? "FII / DII Daily Flow" : "Institutional Flows"}</HeroCardTitle>
                 </span>
                 {showing && (
                     <span aria-live="polite" style={{ flexShrink: 0, color: D.muted, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap" }}>
@@ -1161,24 +1159,26 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data, bare =
                                             fontWeight: hl ? 700 : 500,
                                             color: hl ? D.text : D.muted,
                                             transition: "color .15s ease",
-                                        }}>{flowDateLabel(r.date)}</div>
+                                        }}>{!bare && width > 0 && width < 300 ? String(flowDateLabel(r.date)).split(" ")[0] : flowDateLabel(r.date)}</div>
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "stretch", width: "100%", minWidth: 0 }}>
+                    <div style={bare
+                        ? { display: "flex", alignItems: "stretch", width: "100%", minWidth: 0 }
+                        : { display: "grid", gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))`, gap: 8, width: "100%", minWidth: 0 }}>
                         {stats.map((st, i) => {
                             const txt = flowFmt(st.v);
                             return (
-                                <div key={st.key} style={{
+                                <div key={st.key} style={bare ? {
                                     flex: 1,
                                     minWidth: 0,
                                     paddingLeft: i ? 12 : 0,
                                     marginLeft: i ? 12 : 0,
                                     borderLeft: i ? `1px solid ${D.panelBorder}` : "none",
-                                }}>
+                                } : { minWidth: 0, background: D.softFill, borderRadius: 10, padding: "10px 12px" }}>
                                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
                                         <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0, ...st.swatch }} />
                                         <span style={{ fontSize: 10.5, color: D.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{st.label}</span>
@@ -1282,8 +1282,8 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
         <div style={{
             minWidth: 0, display: "flex", flexDirection: "column", height: "100%",
             ...(card ? {
-                position: "relative", overflow: "hidden", boxSizing: "border-box", borderRadius: 12,
-                padding: "20px 20px 18px", background: D.softFill, border: `1px solid ${D.panelBorder}`,
+                position: "relative", overflow: "hidden", boxSizing: "border-box",
+                padding: "20px 20px 18px", ...heroSurface(D),
             } : {}),
         }}>
             {card && (
@@ -1293,7 +1293,7 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minHeight: 26, marginBottom: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                         <HeroIconTile D={D} type="pe" />
-                        <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap" }}>Nifty 50 P/E</span>
+                        <HeroCardTitle D={D}>Nifty 50 P/E</HeroCardTitle>
                     </div>
                     <span style={{
                         display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 7px", borderRadius: 999,
@@ -1324,20 +1324,28 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
                 }}>{pe.toFixed(2)}</span>
                 {delta != null && (
                     <span style={{
-                        fontSize: 13.5, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+                        fontSize: card ? 12.5 : 13.5, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
                         color: delta >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
+                        ...(card ? {
+                            display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 8px", borderRadius: 7, whiteSpace: "nowrap",
+                            background: delta >= 0 ? D.posSoft : D.negSoft,
+                        } : {}),
                     }}>
-                        {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
+                        {card && delta !== 0 && <FlowArrow up={delta > 0} />}
+                        {delta >= 0 ? "+" : "\u2212"}{Math.abs(delta).toFixed(2)}
                         {deltaPct != null ? ` (${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%)` : ""}
                     </span>
                 )}
             </div>
             <div style={{ fontSize: 13, color: D.subtext, marginTop: 4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                {card ? "Price / earnings (TTM)" : <>Nifty 50 &middot; P/E (TTM)</>} &middot; {dateLabel}
+                {card ? "Price / earnings (TTM)" : <>Nifty 50 &middot; P/E (TTM)</>} &middot; {card ? String(dateLabel).replace(/-/g, " ") : dateLabel}
             </div>
 
             <div style={{ marginTop: "auto", paddingTop: 14 }}>
-                <div style={{ position: "relative" }}>
+                {card && (
+                    <HeroTrendChart D={D} points={rows.map(r => ({ date: r.date, value: Number(r.pe_ratio) }))} dp={2} height={104} gid="pe" avgLabel="2Y AVG" tipLabel={heroMonthYear} />
+                )}
+                <div style={{ position: "relative", display: card ? "none" : "block" }}>
                     <svg
                         viewBox={`0 0 ${vw} ${vh}`}
                         width="100%"
@@ -1551,10 +1559,8 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
             flexDirection: "column",
             justifyContent: "space-between",
             gap: isCompact ? 16 : 12,
-            borderRadius: bare ? 0 : isCompact ? 14 : 12,
             padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
-            background: bare ? "transparent" : D.softFill,
-            border: bare ? "none" : `1px solid ${D.panelBorder}`,
+            ...(bare ? { borderRadius: 0, background: "transparent", border: "none" } : heroSurface(D)),
         }}>
             {regime && (
                 <div aria-hidden="true" style={{ position: "absolute", top: 0, left: isCompact ? 18 : 20, right: isCompact ? 18 : 20, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(regime.tone, D.isDark ? 0.75 : 0.6) }} />
@@ -1562,11 +1568,11 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: bare ? 18 : 26 }}>
                 {bare ? (
-                    <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Breadth</span>
+                    <HeroCardTitle D={D} bare>Breadth</HeroCardTitle>
                 ) : (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                         <HeroIconTile D={D} type="breadth" />
-                        <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Breadth</span>
+                        <HeroCardTitle D={D}>Market Breadth</HeroCardTitle>
                     </span>
                 )}
                 {regime && (
@@ -1703,30 +1709,54 @@ function macroDateLabel(raw) {
     return `${m[3]} ${FLOW_MONTHS[Number(m[2]) - 1] || ""} ${m[1]}`.trim();
 }
 
-// Shared 26px icon tile used in the header of every desktop hero card so the
-// six cards (P/E, Breadth, FII/DII, USD/INR, Brent, DXY) read as one set.
-function HeroIconTile({ D, type }) {
+// ─── SHARED HERO CARD PRIMITIVES (desktop "Market Snapshot" cards) ───────────
+const HERO_SANS = "'IBM Plex Sans', -apple-system, sans-serif";
+const HERO_MONO = "'IBM Plex Mono', monospace";
+
+// One elevated surface for all six cards: white, hairline border, layered soft shadow.
+function heroSurface(D) {
+    return {
+        background: D.panelBg,
+        border: `1px solid ${D.panelBorder}`,
+        borderRadius: 14,
+        boxShadow: D.isDark
+            ? "0 8px 20px rgba(0,0,0,0.28)"
+            : "0 1px 2px rgba(15,23,42,0.04), 0 10px 24px -14px rgba(15,23,42,0.20)",
+    };
+}
+
+// Desktop: sentence-case title (same voice as the "Indices" heading). Mobile carousel keeps the tracked caps label.
+function HeroCardTitle({ D, bare = false, style, children }) {
     return (
-        <span style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, flexShrink: 0,
-            background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent,
-        }}>
-            <MacroIcon type={type} />
+        <span style={bare
+            ? { fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: HERO_SANS, whiteSpace: "nowrap", ...style }
+            : { fontSize: 14.5, color: D.text, fontWeight: 700, letterSpacing: "-0.01em", fontFamily: HERO_SANS, whiteSpace: "nowrap", ...style }}>
+            {children}
         </span>
     );
 }
 
-function MacroIcon({ type, size = 15 }) {
-    const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
-    if (type === "fx") return <svg {...common}><path d="M4 8h14" /><path d="M14 4l4 4-4 4" /><path d="M20 16H6" /><path d="M10 12l-4 4 4 4" /></svg>;
-    if (type === "oil") return <svg {...common}><path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.2" /></svg>;
-    if (type === "pe") return <svg {...common}><path d="M5 19L19 5" /><circle cx="7.5" cy="7.5" r="2.5" /><circle cx="16.5" cy="16.5" r="2.5" /></svg>;
-    if (type === "breadth") return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
-    if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
-    return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M14.6 9.3c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.5.8-2.5 1.9 0 2.7 5.2 1.4 5.2 4.1 0 1.2-1.1 2-2.6 2-1.3 0-2.3-.7-2.7-1.7" /><path d="M12 5.8v1.9M12 16.3v1.9" /></svg>;
+function heroMonthYear(raw) {
+    const m = /^(\d{4})-(\d{2})/.exec(String(raw || ""));
+    if (!m) return raw ? String(raw) : "";
+    return `${FLOW_MONTHS[Number(m[2]) - 1] || ""} ${m[1]}`.trim();
 }
 
-const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, card, series, gid }) {
+// 2-4 "nice" round tick values inside (min, max)
+function heroNiceTicks(min, max, count = 3) {
+    if (!(max > min)) return [];
+    const rawStep = (max - min) / count;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+    const out = [];
+    for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) out.push(Number(v.toFixed(10)));
+    return out;
+}
+
+// Trend chart with a right-hand value axis, dashed average line, a "current value" tag,
+// a 3-point time axis and hover/tap scrub. Used by the P/E card and the three macro cards.
+const HeroTrendChart = React.memo(function HeroTrendChart({ D, points, dp = 2, height = 100, gid = "c", avgLabel = "2Y AVG", xLabel = heroMonthYear, tipLabel = macroDateLabel }) {
     const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
         && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const [ready, setReady] = useState(reduceMotion);
@@ -1751,6 +1781,153 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
         return () => ro.disconnect();
     }, []);
 
+    const n = Array.isArray(points) ? points.length : 0;
+    const values = n ? points.map(p => p.value) : [];
+    const min = n ? Math.min(...values) : 0;
+    const max = n ? Math.max(...values) : 0;
+    const avg = n ? values.reduce((a, b) => a + b, 0) / n : 0;
+    const flat = !(max - min > 0);
+
+    const gutter = width >= 300 ? 64 : 0;           // right-hand axis gutter; dropped on very narrow cards
+    const plotW = Math.max(width - gutter, 0);
+    const padT = 9;
+    const padB = 6;
+    const yOf = v => (flat ? height / 2 : padT + (1 - (v - min) / (max - min)) * (height - padT - padB));
+    const pts = n && plotW > 0 ? values.map((v, i) => [n > 1 ? (i * plotW) / (n - 1) : plotW / 2, yOf(v)]) : [];
+    const linePath = pts.length > 1 ? (pts.length > 90 ? macroLinePath(pts) : macroSmoothPath(pts)) : "";
+    const areaPath = linePath ? `${linePath} L${plotW},${height} L0,${height} Z` : "";
+    const ticks = gutter && !flat ? heroNiceTicks(min, max, 3) : [];
+    const tickStep = ticks.length > 1 ? ticks[1] - ticks[0] : 1;
+    const tickDp = tickStep >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(tickStep)));
+    const lastPt = pts.length ? pts[pts.length - 1] : null;
+    const hoverPt = hoverIdx != null && pts[hoverIdx] ? pts[hoverIdx] : null;
+    const avgY = yOf(avg);
+
+    const lineColor = D.accent || "#1e3a5f";
+    const gridColor = D.isDark ? withAlpha("#e2e8f0", 0.08) : withAlpha("#0f172a", 0.06);
+    const surface = D.isDark ? (D.card || D.panelBg) : D.panelBg;
+    const gradId = `heroTrend-${gid}`;
+
+    const onMove = e => {
+        const el = plotRef.current;
+        if (!el || n < 2 || !plotW) return;
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        setHoverIdx(Math.max(0, Math.min(n - 1, Math.round((x / plotW) * (n - 1)))));
+    };
+
+    if (n < 2) return <div style={{ height }} />;
+
+    const tipLeft = hoverPt ? Math.min(Math.max(hoverPt[0], 64), Math.max(plotW - 64, 64)) : 0;
+    const tipBelow = hoverPt ? hoverPt[1] < 40 : false;
+    const pillTop = lastPt ? Math.min(Math.max(lastPt[1] - 9, 0), height - 18) : 0;
+
+    return (
+        <div style={{ width: "100%", minWidth: 0 }}>
+            <div
+                ref={plotRef}
+                role="img"
+                aria-label={`Trend, latest ${values[n - 1].toFixed(dp)}, average ${avg.toFixed(dp)}`}
+                onPointerMove={onMove}
+                onPointerDown={onMove}
+                onPointerLeave={() => setHoverIdx(null)}
+                onPointerCancel={() => setHoverIdx(null)}
+                style={{ position: "relative", height, touchAction: "pan-x pan-y" }}
+            >
+                {pts.length > 1 && (
+                    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", overflow: "visible" }} aria-hidden="true">
+                        <defs>
+                            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={lineColor} stopOpacity="0.20" />
+                                <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+                            </linearGradient>
+                        </defs>
+                        {ticks.map(t => <line key={`g${t}`} x1="0" y1={yOf(t)} x2={plotW} y2={yOf(t)} stroke={gridColor} strokeWidth="1" />)}
+                        {ticks.map(t => ((lastPt && Math.abs(yOf(t) - lastPt[1]) < 11) || Math.abs(yOf(t) - avgY) < 10) ? null : (
+                            <text key={`t${t}`} x={plotW + 10} y={yOf(t) + 3.5} fontSize="10" fontFamily={HERO_MONO} fill={D.muted}>{t.toFixed(tickDp)}</text>
+                        ))}
+                        <line x1="0" y1={avgY} x2={plotW} y2={avgY} stroke={D.muted} strokeOpacity="0.45" strokeWidth="1" strokeDasharray="3,3" />
+                        {gutter > 0 ? (
+                            !(lastPt && Math.abs(avgY - lastPt[1]) < 12) && (
+                                <text x={plotW + 10} y={avgY + 3.5} fontSize="9.5" fontFamily={HERO_MONO} fill={D.muted} fontWeight="700">{`AVG ${avg.toFixed(dp)}`}</text>
+                            )
+                        ) : (
+                            <text x="0" y={avgY > 16 ? avgY - 5 : avgY + 12} fontSize="9.5" fontFamily={HERO_MONO} fill={D.muted} style={{ letterSpacing: "0.05em" }}>{`${avgLabel} ${avg.toFixed(dp)}`}</text>
+                        )}
+                        <path d={areaPath} fill={`url(#${gradId})`} stroke="none" style={{ opacity: ready ? 1 : 0, transition: reduceMotion ? "none" : "opacity .9s ease .15s" }} />
+                        <path
+                            d={linePath}
+                            fill="none"
+                            stroke={lineColor}
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            pathLength="1"
+                            style={{ strokeDasharray: 1, strokeDashoffset: ready ? 0 : 1, transition: reduceMotion ? "none" : "stroke-dashoffset .9s cubic-bezier(.22,.8,.3,1)" }}
+                        />
+                        {hoverPt && <line x1={hoverPt[0]} y1="0" x2={hoverPt[0]} y2={height} stroke={D.muted} strokeOpacity="0.4" strokeWidth="1" strokeDasharray="2,2" />}
+                        {lastPt && <circle cx={lastPt[0]} cy={lastPt[1]} r="3.6" fill={lineColor} stroke={surface} strokeWidth="1.6" />}
+                        {hoverPt && <circle cx={hoverPt[0]} cy={hoverPt[1]} r="4.4" fill={lineColor} stroke={surface} strokeWidth="2" />}
+                    </svg>
+                )}
+
+                {gutter > 0 && lastPt && (
+                    <div style={{
+                        position: "absolute", left: plotW + 6, top: pillTop, height: 18, padding: "0 6px", borderRadius: 5,
+                        display: "inline-flex", alignItems: "center", background: lineColor, color: D.isDark ? "#0b1220" : "#ffffff",
+                        fontFamily: HERO_MONO, fontSize: 10, fontWeight: 700, letterSpacing: "-0.01em", whiteSpace: "nowrap", pointerEvents: "none",
+                    }}>{values[n - 1].toFixed(dp)}</div>
+                )}
+
+                {hoverPt && (
+                    <div style={{
+                        position: "absolute", left: tipLeft, top: tipBelow ? hoverPt[1] + 14 : hoverPt[1] - 10,
+                        transform: tipBelow ? "translateX(-50%)" : "translate(-50%, -100%)",
+                        background: D.panelBg, border: `1px solid ${D.panelBorder}`, borderRadius: 8, padding: "5px 9px",
+                        boxShadow: D.shadowMd || "0 6px 16px rgba(0,0,0,0.16)", fontSize: 11.5, fontFamily: HERO_SANS, color: D.subtext,
+                        whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
+                    }}>
+                        {tipLabel(points[hoverIdx].date)}{"  "}
+                        <span style={{ fontFamily: HERO_MONO, fontWeight: 700, color: D.text }}>{values[hoverIdx].toFixed(dp)}</span>
+                    </div>
+                )}
+            </div>
+
+            {plotW > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", width: plotW, marginTop: 8, fontSize: 10.5, color: D.muted, fontFamily: HERO_MONO, whiteSpace: "nowrap" }}>
+                    <span>{xLabel(points[0].date)}</span>
+                    <span>{xLabel(points[Math.floor((n - 1) / 2)].date)}</span>
+                    <span>{xLabel(points[n - 1].date)}</span>
+                </div>
+            )}
+        </div>
+    );
+});
+
+// Shared 26px icon tile used in the header of every desktop hero card so the
+// six cards (P/E, Breadth, FII/DII, USD/INR, Brent, DXY) read as one set.
+function HeroIconTile({ D, type }) {
+    return (
+        <span style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+            background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent,
+        }}>
+            <MacroIcon type={type} />
+        </span>
+    );
+}
+
+function MacroIcon({ type, size = 15 }) {
+    const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+    if (type === "fx") return <svg {...common}><path d="M4 8h14" /><path d="M14 4l4 4-4 4" /><path d="M20 16H6" /><path d="M10 12l-4 4 4 4" /></svg>;
+    if (type === "oil") return <svg {...common}><path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.2" /></svg>;
+    if (type === "pe") return <svg {...common}><path d="M5 19L19 5" /><circle cx="7.5" cy="7.5" r="2.5" /><circle cx="16.5" cy="16.5" r="2.5" /></svg>;
+    if (type === "breadth") return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
+    if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
+    return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M14.6 9.3c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.5.8-2.5 1.9 0 2.7 5.2 1.4 5.2 4.1 0 1.2-1.1 2-2.6 2-1.3 0-2.3-.7-2.7-1.7" /><path d="M12 5.8v1.9M12 16.3v1.9" /></svg>;
+}
+
+const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, card, series, gid }) {
     const posColor = D.pos || "#0e7a53";
     const negColor = D.neg || "#c23b3b";
     const signColor = v => (v == null || v === 0 ? D.muted : v > 0 ? posColor : negColor);
@@ -1772,46 +1949,16 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
     const max = has ? Math.max(...values) : 0;
     const avg = has ? values.reduce((a, b) => a + b, 0) / n : 0;
     const flat = !(max - min > 0);
-    const range = flat ? 1 : max - min;
-    const posPct = has ? (flat ? 50 : Math.min(100, Math.max(0, ((price - min) / range) * 100))) : 0;
-    const avgPct = has ? (flat ? 50 : Math.min(100, Math.max(0, ((avg - min) / range) * 100))) : 0;
-    const position = posPct >= 85 ? "Near 2Y High" : posPct <= 15 ? "Near 2Y Low" : "Mid-Range";
+    const posPct = has ? (flat ? 50 : Math.min(100, Math.max(0, ((price - min) / (max - min)) * 100))) : 0;
+    const position = posPct >= 85 ? `Near ${MACRO_YEARS}Y High` : posPct <= 15 ? `Near ${MACRO_YEARS}Y Low` : "Mid-Range";
+    const asOf = lastRow ? (flowDateLabel(lastRow.date) || null) : null;
+    const chartPoints = has ? series.map(p => ({ date: p.date, value: p.close })) : [];
 
-    let asOf = null;
-    if (lastRow) {
-        const lbl = flowDateLabel(lastRow.date);
-        asOf = lbl || null;
-    }
-
-    // ── sparkline geometry (true pixels, no stretch) ────────────────────────
-    const H = isCompact ? 62 : 74;
-    const padY = 6;
-    const W = Math.max(width, 0);
-    const points = has && W > 0
-        ? values.map((v, i) => [
-            n > 1 ? (i * W) / (n - 1) : W / 2,
-            flat ? H / 2 : padY + (1 - (v - min) / range) * (H - padY * 2),
-        ])
-        : [];
-    const linePath = points.length > 1 ? (points.length > 90 ? macroLinePath(points) : macroSmoothPath(points)) : "";
-    const areaPath = linePath ? `${linePath} L${W},${H} L0,${H} Z` : "";
-    const avgY = flat ? H / 2 : padY + (1 - (avg - min) / range) * (H - padY * 2);
-    const lastPt = points.length ? points[points.length - 1] : null;
-    const hoverPt = hoverIdx != null && points[hoverIdx] ? points[hoverIdx] : null;
-    const lineColor = D.accent || "#1e3a5f";
-    const gradId = `macroGrad-${gid || card.key}`;
-
-    const onMove = e => {
-        const el = plotRef.current;
-        if (!el || n < 2) return;
-        const rect = el.getBoundingClientRect();
-        if (!rect.width) return;
-        const x = e.clientX - rect.left;
-        setHoverIdx(Math.max(0, Math.min(n - 1, Math.round((x / rect.width) * (n - 1)))));
-    };
-
-    const sans = "'IBM Plex Sans', -apple-system, sans-serif";
-    const mono = "'IBM Plex Mono', monospace";
+    const tiles = [
+        { key: "lo", label: `${MACRO_YEARS}Y Low`, v: min },
+        { key: "av", label: `${MACRO_YEARS}Y Avg`, v: avg },
+        { key: "hi", label: `${MACRO_YEARS}Y High`, v: max },
+    ];
 
     return (
         <div style={{
@@ -1824,28 +1971,26 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            gap: isCompact ? 14 : 14,
-            borderRadius: bare ? 0 : 12,
+            gap: 14,
             padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
-            background: bare ? "transparent" : D.softFill,
-            border: bare ? "none" : `1px solid ${D.panelBorder}`,
+            ...(bare ? { borderRadius: 0, background: "transparent", border: "none" } : heroSurface(D)),
         }}>
             {has && (
                 <div aria-hidden="true" style={{ position: "absolute", top: 0, left: bare ? 16 : 20, right: bare ? 16 : 20, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(delta === 0 ? D.muted : tone, D.isDark ? 0.75 : 0.6) }} />
             )}
 
-            {/* header: icon tile + label  |  range-position chip */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minHeight: 24 }}>
+            {/* header: icon tile + title  |  range-position chip */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minHeight: 26 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <HeroIconTile D={D} type={card.icon} />
-                    <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: sans, whiteSpace: "nowrap" }}>{card.label}</span>
+                    <HeroCardTitle D={D} bare={bare}>{card.label}</HeroCardTitle>
                 </div>
                 {has && (
                     <span style={{
                         display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 7px", borderRadius: 999,
                         background: withAlpha(D.accent, D.isDark ? 0.16 : 0.09), border: `1px solid ${withAlpha(D.accent, 0.2)}`,
                         color: D.accent, fontSize: 10.5, fontWeight: 700, lineHeight: 1, letterSpacing: "0.04em", textTransform: "uppercase",
-                        fontFamily: sans, whiteSpace: "nowrap",
+                        fontFamily: HERO_SANS, whiteSpace: "nowrap",
                     }}>
                         <span style={{ width: 5, height: 5, borderRadius: "50%", background: D.accent }} />
                         {position}
@@ -1858,110 +2003,46 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
                 {has ? (
                     <>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                            <span style={{ fontFamily: mono, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 34 : 36, fontVariantNumeric: "tabular-nums" }}>
+                            <span style={{ fontFamily: HERO_MONO, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 34 : 36, fontVariantNumeric: "tabular-nums" }}>
                                 {card.prefix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginRight: 3, letterSpacing: 0 }}>{card.prefix}</span>}
                                 {fmt(price)}
                             </span>
                             <span style={{
                                 display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 8px", borderRadius: 7,
                                 background: delta > 0 ? D.posSoft : delta < 0 ? D.negSoft : D.softFill,
-                                color: tone, fontFamily: mono, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+                                color: tone, fontFamily: HERO_MONO, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
                             }}>
                                 {delta !== 0 && delta != null && <FlowArrow up={delta > 0} />}
                                 {fmtDelta(delta)}
                                 <span style={{ opacity: 0.85 }}>({fmtPct(pct)})</span>
                             </span>
                         </div>
-                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: sans }}>
+                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: HERO_SANS }}>
                             {card.sub}{asOf ? ` \u00B7 ${asOf}` : ""}
                         </div>
                     </>
                 ) : (
                     <>
-                        <div style={{ fontFamily: mono, fontWeight: 800, fontSize: isCompact ? 34 : 36, lineHeight: 1, color: D.muted, opacity: 0.5 }}>{EMPTY_VALUE}</div>
-                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: sans }}>{card.sub} &middot; waiting for data</div>
+                        <div style={{ fontFamily: HERO_MONO, fontWeight: 800, fontSize: isCompact ? 34 : 36, lineHeight: 1, color: D.muted, opacity: 0.5 }}>{EMPTY_VALUE}</div>
+                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: HERO_SANS }}>{card.sub} &middot; waiting for data</div>
                     </>
                 )}
             </div>
 
-            {/* sparkline with hover / tap scrub */}
-            <div
-                ref={plotRef}
-                role="img"
-                aria-label={has ? `${card.label} last ${MACRO_YEARS} years, latest ${fmt(price)}` : `${card.label} chart unavailable`}
-                onPointerMove={onMove}
-                onPointerDown={onMove}
-                onPointerLeave={() => setHoverIdx(null)}
-                onPointerCancel={() => setHoverIdx(null)}
-                style={{ position: "relative", height: H, marginTop: "auto", touchAction: "pan-x pan-y" }}
-            >
-                {points.length > 1 && (
-                    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }} aria-hidden="true">
-                        <defs>
-                            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor={lineColor} stopOpacity="0.28" />
-                                <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-                            </linearGradient>
-                        </defs>
-                        <line x1="0" y1={avgY} x2={W} y2={avgY} stroke={D.muted} strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3,3" />
-                        <text x="0" y={avgY > 14 ? avgY - 5 : avgY + 12} fontSize="9.5" fontFamily={mono} fill={D.muted} fillOpacity="0.95" style={{ letterSpacing: "0.05em" }}>{`${MACRO_YEARS}Y AVG ${fmt(avg)}`}</text>
-                        <path d={areaPath} fill={`url(#${gradId})`} stroke="none" style={{ opacity: ready ? 1 : 0, transition: reduceMotion ? "none" : "opacity .9s ease .15s" }} />
-                        <path
-                            d={linePath}
-                            fill="none"
-                            stroke={lineColor}
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            pathLength="1"
-                            style={{ strokeDasharray: 1, strokeDashoffset: ready ? 0 : 1, transition: reduceMotion ? "none" : "stroke-dashoffset .9s cubic-bezier(.22,.8,.3,1)" }}
-                        />
-                        {hoverPt && <line x1={hoverPt[0]} y1="0" x2={hoverPt[0]} y2={H} stroke={D.muted} strokeOpacity="0.4" strokeWidth="1" strokeDasharray="2,2" />}
-                        {lastPt && <circle cx={lastPt[0]} cy={lastPt[1]} r="3.4" fill={lineColor} stroke={D.isDark ? D.card : D.panelBg} strokeWidth="1.5" />}
-                        {hoverPt && <circle cx={hoverPt[0]} cy={hoverPt[1]} r="4.2" fill={lineColor} stroke={D.isDark ? D.card : D.panelBg} strokeWidth="2" />}
-                    </svg>
-                )}
-                {hoverPt && (
-                    <div style={{
-                        position: "absolute",
-                        left: hoverPt[0],
-                        top: hoverPt[1],
-                        transform: `translate(${hoverIdx === 0 ? "-4px" : hoverIdx === n - 1 ? "calc(-100% + 4px)" : "-50%"}, calc(-100% - 10px))`,
-                        background: D.panelBg, border: `1px solid ${D.panelBorder}`, borderRadius: 8, padding: "5px 9px",
-                        boxShadow: D.shadowMd || "0 6px 16px rgba(0,0,0,0.16)", fontSize: 11.5, fontFamily: sans, color: D.subtext,
-                        whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
-                    }}>
-                        {macroDateLabel(series[hoverIdx].date)}{"  "}
-                        <span style={{ fontFamily: mono, fontWeight: 700, color: D.text }}>{card.prefix}{fmt(values[hoverIdx])}</span>
-                    </div>
-                )}
+            {/* chart with value axis, average line, current-value tag and time axis */}
+            <div style={{ marginTop: "auto" }}>
+                {has && <HeroTrendChart D={D} points={chartPoints} dp={card.dp} height={isCompact ? 96 : 104} gid={gid || card.key} avgLabel={`${MACRO_YEARS}Y AVG`} />}
             </div>
 
-            {/* 2Y low -> high rail with a marker at the current reading */}
-            {has && (
-                <div>
-                    <div style={{ position: "relative", height: 5, borderRadius: 999, background: D.isDark ? withAlpha("#94a3b8", 0.18) : withAlpha("#0f172a", 0.08) }}>
-                        {/* shaded span = distance between the 2Y average and today's level */}
-                        <div style={{
-                            position: "absolute", top: 0, bottom: 0, borderRadius: 999,
-                            left: `${Math.min(avgPct, posPct)}%`,
-                            width: ready ? `${Math.abs(posPct - avgPct)}%` : "0%",
-                            background: posPct >= avgPct
-                                ? `linear-gradient(90deg, ${withAlpha(D.accent, 0.35)}, ${D.accent})`
-                                : `linear-gradient(270deg, ${withAlpha(D.accent, 0.35)}, ${D.accent})`,
-                            transition: reduceMotion ? "none" : "width .8s cubic-bezier(.22,.8,.3,1)",
-                        }} />
-                        <div title={`${MACRO_YEARS}Y average ${fmt(avg)}`} style={{ position: "absolute", left: `${avgPct}%`, top: -4, bottom: -4, width: 2, borderRadius: 1, background: D.muted, opacity: 0.7, transform: "translateX(-50%)" }} />
-                        <div title={`Now ${fmt(price)}`} style={{
-                            position: "absolute", left: `${posPct}%`, top: "50%", width: 11, height: 11, borderRadius: "50%",
-                            background: D.accent, border: `2px solid ${D.isDark ? D.card : D.panelBg}`, transform: "translate(-50%, -50%)",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-                        }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 8, fontSize: 11, color: D.muted, fontFamily: mono, whiteSpace: "nowrap" }}>
-                        <span>{MACRO_YEARS}Y Low {fmt(min)}</span>
-                        <span>{MACRO_YEARS}Y High {fmt(max)}</span>
-                    </div>
+            {/* 2Y low / avg / high tiles (desktop only; the mobile carousel omits them) */}
+            {has && !bare && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                    {tiles.map(t => (
+                        <div key={t.key} style={{ minWidth: 0, background: D.softFill, borderRadius: 10, padding: "9px 11px" }}>
+                            <div style={{ fontSize: 10, color: D.muted, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", fontFamily: HERO_SANS, marginBottom: 5, whiteSpace: "nowrap" }}>{t.label}</div>
+                            <div style={{ color: D.text, fontFamily: HERO_MONO, fontSize: 13.5, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{card.prefix}{fmt(t.v)}</div>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
@@ -2160,7 +2241,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
             marginBottom: isCompact ? 14 : 18,
             borderRadius: 16,
             border: `1px solid ${D.panelBorder}`,
-            background: D.panelBg,
+            background: D.isDark ? D.panelBg : "#f6f8fa",
             boxShadow: D.shadowLg,
             position: "relative",
         }}>
@@ -2171,11 +2252,27 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                             <div style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: "-0.01em", color: D.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Market Snapshot</div>
                             <div style={{ fontSize: 13, color: D.subtext, marginTop: 3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Valuation, breadth, institutional flows and macro cues</div>
                         </div>
-                        {breadthSnapshot?.date && flowDateLabel(breadthSnapshot.date) && (
-                            <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: D.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap" }}>
-                                As of {flowDateLabel(breadthSnapshot.date)}
-                            </span>
-                        )}
+                        {(() => {
+                            const raw = breadthSnapshot?.date ? String(breadthSnapshot.date).slice(0, 10) : "";
+                            if (!raw) return null;
+                            let label = flowDateLabel(raw);
+                            try {
+                                const d = new Date(`${raw}T00:00:00`);
+                                if (!Number.isNaN(d.getTime())) label = `${d.toLocaleDateString("en-IN", { weekday: "short" })}, ${macroDateLabel(raw)}`;
+                            } catch { /* keep short label */ }
+                            if (!label) return null;
+                            return (
+                                <span style={{
+                                    display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 999,
+                                    border: `1px solid ${D.panelBorder}`, background: D.panelBg, boxShadow: D.shadowMd,
+                                    fontSize: 12, fontWeight: 600, color: D.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap",
+                                }}>
+                                    <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: D.accent }} />
+                                    <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: D.muted }}>As of</span>
+                                    {label}
+                                </span>
+                            );
+                        })()}
                     </div>
                 )}
                 <div style={{

@@ -16570,7 +16570,6 @@ function MarketBreadthModule({ T, onDataReady }) {
                                         Market participation across trend horizons
                                     </div>
                                     <div style={{ fontSize: 12, lineHeight: 1.65, color: T.subtext, marginBottom: 12 }}>
-                                        Swipe through a mobile-first stack of the six internal breadth panels with the same live participation signals.
                                     </div>
                                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                         <div style={{
