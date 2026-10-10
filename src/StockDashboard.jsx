@@ -1585,6 +1585,357 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
 });
 
 
+// ─── MACRO CARDS (USD/INR · BRENT CRUDE · US DOLLAR INDEX) ───────────────────
+// Premium tiles that sit under the P/E · Breadth · FII/DII row. Backed by
+// `yahoo_macro_daily` (one row per symbol per day). Same visual language as the
+// panels above: regime chip, hairline tone bar, mono numerals, true-pixel
+// sparkline with hover/tap scrub, 2Y range rail and a 3-up stat strip.
+const MACRO_YEARS = 2;      // lookback for the sparkline, range rail and average
+const MACRO_MAX_ROWS = 560; // ~2Y of daily sessions per symbol (stays under PostgREST's 1000-row cap)
+const MACRO_CARDS = [
+    { key: "usdinr", symbol: "USDINR=X", label: "USD / INR", sub: "Rupees per US dollar", prefix: "\u20B9", icon: "fx", dp: 2 },
+    { key: "brent", symbol: "BZ=F", label: "Brent Crude", sub: "Futures \u00B7 USD per barrel", prefix: "$", icon: "oil", dp: 2 },
+    { key: "dxy", symbol: "DX-Y.NYB", label: "US Dollar Index", sub: "ICE \u00B7 index points", prefix: "", icon: "dxy", dp: 2 },
+];
+const MACRO_SYMBOLS = MACRO_CARDS.map(c => c.symbol);
+
+// rows (desc by observation_date, any symbol mix) -> { [symbol]: points[] oldest -> newest }
+function buildMacroSeries(rows) {
+    const bucket = {};
+    (Array.isArray(rows) ? rows : []).forEach(r => {
+        if (!r || !r.symbol || !r.observation_date) return;
+        const close = flowNum(r.close_price);
+        if (close == null) return;
+        const b = bucket[r.symbol] || (bucket[r.symbol] = { seen: new Set(), list: [] });
+        if (b.seen.has(r.observation_date)) return;
+        b.seen.add(r.observation_date);
+        b.list.push({
+            date: r.observation_date,
+            close,
+            prev: flowNum(r.previous_close),
+            change: flowNum(r.change_value),
+            pct: flowNum(r.change_percent),
+        });
+    });
+    const out = {};
+    Object.keys(bucket).forEach(sym => {
+        // list is newest-first; keep only the trailing MACRO_YEARS from the latest date
+        const latest = new Date(`${bucket[sym].list[0].date}T00:00:00Z`);
+        latest.setUTCFullYear(latest.getUTCFullYear() - MACRO_YEARS);
+        const cutoff = Number.isNaN(latest.getTime()) ? "" : latest.toISOString().slice(0, 10);
+        const list = bucket[sym].list.filter(p => !cutoff || String(p.date) >= cutoff).reverse();
+        if (list.length) out[sym] = list;
+    });
+    return out;
+}
+
+// Monotone cubic (Fritsch-Carlson) so the curve never overshoots the data.
+function macroSmoothPath(pts) {
+    const n = pts.length;
+    if (n < 2) return "";
+    const f = v => v.toFixed(1);
+    if (n === 2) return `M${f(pts[0][0])},${f(pts[0][1])} L${f(pts[1][0])},${f(pts[1][1])}`;
+    const dx = [], m = [], t = [];
+    for (let i = 0; i < n - 1; i++) {
+        dx[i] = pts[i + 1][0] - pts[i][0];
+        m[i] = (pts[i + 1][1] - pts[i][1]) / (dx[i] || 1);
+    }
+    t[0] = m[0];
+    t[n - 1] = m[n - 2];
+    for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+    for (let i = 0; i < n - 1; i++) {
+        if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+        const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b;
+        if (s > 9) { const k = 3 / Math.sqrt(s); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+    }
+    let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
+    for (let i = 0; i < n - 1; i++) {
+        const h = dx[i] / 3;
+        d += ` C${f(pts[i][0] + h)},${f(pts[i][1] + t[i] * h)} ${f(pts[i + 1][0] - h)},${f(pts[i + 1][1] - t[i + 1] * h)} ${f(pts[i + 1][0])},${f(pts[i + 1][1])}`;
+    }
+    return d;
+}
+
+function macroLinePath(pts) {
+    return pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+}
+
+function macroDateLabel(raw) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw || ""));
+    if (!m) return raw ? String(raw) : "";
+    return `${m[3]} ${FLOW_MONTHS[Number(m[2]) - 1] || ""} ${m[1]}`.trim();
+}
+
+function MacroIcon({ type, size = 15 }) {
+    const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+    if (type === "fx") return <svg {...common}><path d="M4 8h14" /><path d="M14 4l4 4-4 4" /><path d="M20 16H6" /><path d="M10 12l-4 4 4 4" /></svg>;
+    if (type === "oil") return <svg {...common}><path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.2" /></svg>;
+    return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M14.6 9.3c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.5.8-2.5 1.9 0 2.7 5.2 1.4 5.2 4.1 0 1.2-1.1 2-2.6 2-1.3 0-2.3-.7-2.7-1.7" /><path d="M12 5.8v1.9M12 16.3v1.9" /></svg>;
+}
+
+const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, card, series, gid }) {
+    const reduceMotion = typeof window !== "undefined" && typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const [ready, setReady] = useState(reduceMotion);
+    const [hoverIdx, setHoverIdx] = useState(null);
+    const [width, setWidth] = useState(0);
+    const plotRef = useRef(null);
+
+    useEffect(() => {
+        if (reduceMotion) return undefined;
+        const id = requestAnimationFrame(() => setReady(true));
+        return () => cancelAnimationFrame(id);
+    }, [reduceMotion]);
+
+    useEffect(() => {
+        const el = plotRef.current;
+        if (!el || typeof ResizeObserver === "undefined") return undefined;
+        const ro = new ResizeObserver(entries => {
+            const w = entries[0]?.contentRect?.width;
+            if (Number.isFinite(w)) setWidth(Math.round(w));
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    const posColor = D.pos || "#0e7a53";
+    const negColor = D.neg || "#c23b3b";
+    const signColor = v => (v == null || v === 0 ? D.muted : v > 0 ? posColor : negColor);
+    const fmt = v => (v == null ? EMPTY_VALUE : v.toFixed(card.dp));
+    const fmtPct = v => (v == null ? EMPTY_VALUE : `${v >= 0 ? "+" : "\u2212"}${Math.abs(v).toFixed(2)}%`);
+    const fmtDelta = v => (v == null ? EMPTY_VALUE : `${v >= 0 ? "+" : "\u2212"}${Math.abs(v).toFixed(card.dp)}`);
+
+    const has = Array.isArray(series) && series.length > 0;
+    const n = has ? series.length : 0;
+    const values = has ? series.map(p => p.close) : [];
+    const lastRow = has ? series[n - 1] : null;
+    const price = lastRow ? lastRow.close : null;
+    const prevClose = lastRow ? (lastRow.prev != null ? lastRow.prev : n > 1 ? series[n - 2].close : null) : null;
+    const delta = lastRow ? (lastRow.change != null ? lastRow.change : prevClose != null ? price - prevClose : null) : null;
+    const pct = lastRow ? (lastRow.pct != null ? lastRow.pct : prevClose ? (delta / prevClose) * 100 : null) : null;
+    const tone = signColor(delta);
+
+    const min = has ? Math.min(...values) : 0;
+    const max = has ? Math.max(...values) : 0;
+    const avg = has ? values.reduce((a, b) => a + b, 0) / n : 0;
+    const flat = !(max - min > 0);
+    const range = flat ? 1 : max - min;
+    const posPct = has ? (flat ? 50 : Math.min(100, Math.max(0, ((price - min) / range) * 100))) : 0;
+    const avgPct = has ? (flat ? 50 : Math.min(100, Math.max(0, ((avg - min) / range) * 100))) : 0;
+    const position = posPct >= 85 ? "Near 2Y High" : posPct <= 15 ? "Near 2Y Low" : "Mid-Range";
+
+    const changeOver = k => (n > k && series[n - 1 - k].close ? ((price - series[n - 1 - k].close) / series[n - 1 - k].close) * 100 : null);
+    const d5 = has ? changeOver(5) : null;
+    const m1 = has ? changeOver(21) : null;
+
+    let asOf = null;
+    if (lastRow) {
+        const lbl = flowDateLabel(lastRow.date);
+        asOf = lbl || null;
+    }
+
+    // ── sparkline geometry (true pixels, no stretch) ────────────────────────
+    const H = isCompact ? 62 : 74;
+    const padY = 6;
+    const W = Math.max(width, 0);
+    const points = has && W > 0
+        ? values.map((v, i) => [
+            n > 1 ? (i * W) / (n - 1) : W / 2,
+            flat ? H / 2 : padY + (1 - (v - min) / range) * (H - padY * 2),
+        ])
+        : [];
+    const linePath = points.length > 1 ? (points.length > 90 ? macroLinePath(points) : macroSmoothPath(points)) : "";
+    const areaPath = linePath ? `${linePath} L${W},${H} L0,${H} Z` : "";
+    const avgY = flat ? H / 2 : padY + (1 - (avg - min) / range) * (H - padY * 2);
+    const lastPt = points.length ? points[points.length - 1] : null;
+    const hoverPt = hoverIdx != null && points[hoverIdx] ? points[hoverIdx] : null;
+    const lineColor = D.accent || "#1e3a5f";
+    const gradId = `macroGrad-${gid || card.key}`;
+
+    const onMove = e => {
+        const el = plotRef.current;
+        if (!el || n < 2) return;
+        const rect = el.getBoundingClientRect();
+        if (!rect.width) return;
+        const x = e.clientX - rect.left;
+        setHoverIdx(Math.max(0, Math.min(n - 1, Math.round((x / rect.width) * (n - 1)))));
+    };
+
+    const stats = [
+        { key: "d5", label: "5D", text: fmtPct(d5), color: signColor(d5) },
+        { key: "m1", label: "1M", text: fmtPct(m1), color: signColor(m1) },
+        { key: "pc", label: "Prev Close", text: prevClose != null ? `${card.prefix}${fmt(prevClose)}` : EMPTY_VALUE, color: D.text },
+    ];
+
+    const sans = "'IBM Plex Sans', -apple-system, sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+
+    return (
+        <div style={{
+            position: "relative",
+            minWidth: 0,
+            width: "100%",
+            maxWidth: "100%",
+            height: "100%",
+            boxSizing: "border-box",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            gap: isCompact ? 14 : 12,
+            borderRadius: bare ? 0 : 12,
+            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "16px 16px 14px",
+            background: bare ? "transparent" : D.softFill,
+            border: bare ? "none" : `1px solid ${D.panelBorder}`,
+        }}>
+            {has && (
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 16, right: 16, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(delta === 0 ? D.muted : tone, D.isDark ? 0.75 : 0.6) }} />
+            )}
+
+            {/* header: icon tile + label  |  range-position chip */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minHeight: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                        background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent,
+                    }}>
+                        <MacroIcon type={card.icon} />
+                    </span>
+                    <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", fontFamily: sans, whiteSpace: "nowrap" }}>{card.label}</span>
+                </div>
+                {has && (
+                    <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 7px", borderRadius: 999,
+                        background: withAlpha(D.accent, D.isDark ? 0.16 : 0.09), border: `1px solid ${withAlpha(D.accent, 0.2)}`,
+                        color: D.accent, fontSize: 10.5, fontWeight: 700, lineHeight: 1, letterSpacing: "0.04em", textTransform: "uppercase",
+                        fontFamily: sans, whiteSpace: "nowrap",
+                    }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: D.accent }} />
+                        {position}
+                    </span>
+                )}
+            </div>
+
+            {/* value + day change */}
+            <div>
+                {has ? (
+                    <>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                            <span style={{ fontFamily: mono, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 34 : 36, fontVariantNumeric: "tabular-nums" }}>
+                                {card.prefix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginRight: 3, letterSpacing: 0 }}>{card.prefix}</span>}
+                                {fmt(price)}
+                            </span>
+                            <span style={{
+                                display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 8px", borderRadius: 7,
+                                background: delta > 0 ? D.posSoft : delta < 0 ? D.negSoft : D.softFill,
+                                color: tone, fontFamily: mono, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+                            }}>
+                                {delta !== 0 && delta != null && <FlowArrow up={delta > 0} />}
+                                {fmtDelta(delta)}
+                                <span style={{ opacity: 0.85 }}>({fmtPct(pct)})</span>
+                            </span>
+                        </div>
+                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: sans }}>
+                            {card.sub}{asOf ? ` \u00B7 ${asOf}` : ""}
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div style={{ fontFamily: mono, fontWeight: 800, fontSize: isCompact ? 34 : 36, lineHeight: 1, color: D.muted, opacity: 0.5 }}>{EMPTY_VALUE}</div>
+                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: sans }}>{card.sub} &middot; waiting for data</div>
+                    </>
+                )}
+            </div>
+
+            {/* sparkline with hover / tap scrub */}
+            <div
+                ref={plotRef}
+                role="img"
+                aria-label={has ? `${card.label} last ${MACRO_YEARS} years, latest ${fmt(price)}` : `${card.label} chart unavailable`}
+                onPointerMove={onMove}
+                onPointerDown={onMove}
+                onPointerLeave={() => setHoverIdx(null)}
+                onPointerCancel={() => setHoverIdx(null)}
+                style={{ position: "relative", height: H, marginTop: "auto", touchAction: "pan-x pan-y" }}
+            >
+                {points.length > 1 && (
+                    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }} aria-hidden="true">
+                        <defs>
+                            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={lineColor} stopOpacity="0.28" />
+                                <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+                            </linearGradient>
+                        </defs>
+                        <line x1="0" y1={avgY} x2={W} y2={avgY} stroke={D.muted} strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3,3" />
+                        <path d={areaPath} fill={`url(#${gradId})`} stroke="none" style={{ opacity: ready ? 1 : 0, transition: reduceMotion ? "none" : "opacity .9s ease .15s" }} />
+                        <path
+                            d={linePath}
+                            fill="none"
+                            stroke={lineColor}
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            pathLength="1"
+                            style={{ strokeDasharray: 1, strokeDashoffset: ready ? 0 : 1, transition: reduceMotion ? "none" : "stroke-dashoffset .9s cubic-bezier(.22,.8,.3,1)" }}
+                        />
+                        {hoverPt && <line x1={hoverPt[0]} y1="0" x2={hoverPt[0]} y2={H} stroke={D.muted} strokeOpacity="0.4" strokeWidth="1" strokeDasharray="2,2" />}
+                        {lastPt && <circle cx={lastPt[0]} cy={lastPt[1]} r="3.4" fill={lineColor} stroke={D.isDark ? D.card : D.panelBg} strokeWidth="1.5" />}
+                        {hoverPt && <circle cx={hoverPt[0]} cy={hoverPt[1]} r="4.2" fill={lineColor} stroke={D.isDark ? D.card : D.panelBg} strokeWidth="2" />}
+                    </svg>
+                )}
+                {hoverPt && (
+                    <div style={{
+                        position: "absolute",
+                        left: hoverPt[0],
+                        top: hoverPt[1],
+                        transform: `translate(${hoverIdx === 0 ? "-4px" : hoverIdx === n - 1 ? "calc(-100% + 4px)" : "-50%"}, calc(-100% - 10px))`,
+                        background: D.panelBg, border: `1px solid ${D.panelBorder}`, borderRadius: 8, padding: "5px 9px",
+                        boxShadow: D.shadowMd || "0 6px 16px rgba(0,0,0,0.16)", fontSize: 11.5, fontFamily: sans, color: D.subtext,
+                        whiteSpace: "nowrap", pointerEvents: "none", zIndex: 5,
+                    }}>
+                        {macroDateLabel(series[hoverIdx].date)}{"  "}
+                        <span style={{ fontFamily: mono, fontWeight: 700, color: D.text }}>{card.prefix}{fmt(values[hoverIdx])}</span>
+                    </div>
+                )}
+            </div>
+
+            {/* 2Y low -> high rail with a marker at the current reading */}
+            {has && (
+                <div>
+                    <div style={{ position: "relative", height: 5, borderRadius: 999, background: D.isDark ? withAlpha("#94a3b8", 0.18) : withAlpha("#0f172a", 0.08) }}>
+                        <div style={{
+                            position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: 999,
+                            width: ready ? `${posPct}%` : "0%",
+                            background: `linear-gradient(90deg, ${withAlpha(D.accent, 0.25)}, ${D.accent})`,
+                            transition: reduceMotion ? "none" : "width .8s cubic-bezier(.22,.8,.3,1)",
+                        }} />
+                        <div title={`${MACRO_YEARS}Y average ${fmt(avg)}`} style={{ position: "absolute", left: `${avgPct}%`, top: -3, bottom: -3, width: 2, background: D.panelBg, opacity: 0.85, transform: "translateX(-50%)" }} />
+                        <div title={`Now ${fmt(price)}`} style={{
+                            position: "absolute", left: `${posPct}%`, top: "50%", width: 11, height: 11, borderRadius: "50%",
+                            background: D.accent, border: `2px solid ${D.isDark ? D.card : D.panelBg}`, transform: "translate(-50%, -50%)",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+                        }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginTop: 7, fontSize: 11, color: D.muted, fontFamily: mono, whiteSpace: "nowrap" }}>
+                        <span>2Y Low {fmt(min)}</span>
+                        {width >= 260 && <span>2Y Avg {fmt(avg)}</span>}
+                        <span>2Y High {fmt(max)}</span>
+                    </div>
+                </div>
+            )}
+
+            {/* 3-up stat strip */}
+            <div style={{ display: "flex", alignItems: "stretch", width: "100%", minWidth: 0, paddingTop: 12, borderTop: `1px solid ${D.panelBorder}` }}>
+                {stats.map((st, i) => (
+                    <div key={st.key} style={{ flex: 1, minWidth: 0, paddingLeft: i ? 12 : 0, marginLeft: i ? 12 : 0, borderLeft: i ? `1px solid ${D.panelBorder}` : "none" }}>
+                        <div style={{ fontSize: 10.5, color: D.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: sans, marginBottom: 5, whiteSpace: "nowrap" }}>{st.label}</div>
+                        <div style={{ color: st.color, fontFamily: mono, fontSize: isCompact ? 14 : 14.5, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.text}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+});
+
 // ─── MOBILE HERO CAROUSEL (dark, swipeable) ─────────────────────────────────
 // Mirrors the Journal/Dashboard `HeroMobileCarousel` look: navy gradient cards,
 // snap scrolling, pill dots. Panels render with a dark theme + `bare` surfaces.
@@ -1609,10 +1960,10 @@ const HERO_DARK_CARD_CSS = `
 .sd-hero-dot.active{width:16px;border-radius:4px}
 `;
 
-const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact, breadthSnapshot, fiiDiiData, niftyPeData }) {
+const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact, breadthSnapshot, fiiDiiData, niftyPeData, macroSeries }) {
     const trackRef = useRef(null);
     const [active, setActive] = useState(0);
-    const COUNT = 3;
+    const COUNT = 3 + MACRO_CARDS.length;
 
     const slideStep = () => {
         const el = trackRef.current;
@@ -1645,9 +1996,14 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
                 <div className="sd-hero-card">
                     <FiiDiiPanel D={DD} isCompact={isCompact} data={fiiDiiData} bare />
                 </div>
+                {MACRO_CARDS.map(card => (
+                    <div className="sd-hero-card" key={card.key}>
+                        <MacroPanel D={DD} isCompact={isCompact} bare card={card} series={macroSeries?.[card.symbol]} gid={`${card.key}-m`} />
+                    </div>
+                ))}
             </div>
             <div className="sd-hero-dots" role="tablist" aria-label="Market snapshot cards">
-                {["Nifty P/E", "Breadth", "FII / DII"].map((name, i) => (
+                {["Nifty P/E", "Breadth", "FII / DII", ...MACRO_CARDS.map(c => c.label)].map((name, i) => (
                     <span
                         key={name}
                         role="tab"
@@ -1663,7 +2019,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
     );
 });
 
-const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, fiiDiiData, niftyPeData, onNavigate, userToken, onLogin }) {
+const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, fiiDiiData, niftyPeData, macroSeries, onNavigate, userToken, onLogin }) {
     const highPct = Number(breadthSnapshot?.near_52w_high);
     const lowPct = Number(breadthSnapshot?.near_52w_low);
     const sma50Pct = Number(breadthSnapshot?.above_sma50);
@@ -1752,7 +2108,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
     if (isCompact) {
         return (
             <>
-                <HeroDarkCarousel D={D} DD={DD} isCompact={isCompact} breadthSnapshot={breadthSnapshot} fiiDiiData={fiiDiiData} niftyPeData={niftyPeData} />
+                <HeroDarkCarousel D={D} DD={DD} isCompact={isCompact} breadthSnapshot={breadthSnapshot} fiiDiiData={fiiDiiData} niftyPeData={niftyPeData} macroSeries={macroSeries} />
                 <section style={{
                     marginBottom: 14,
                     borderRadius: 16,
@@ -1781,21 +2137,17 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     display: "grid",
                     gridTemplateColumns: isCompact
                         ? "1fr"
-                        : "minmax(0, 0.72fr) minmax(0, 1.5fr)",
-                    gap: isCompact ? 18 : 24,
+                        : "repeat(3, minmax(0, 1fr))",
+                    gap: isCompact ? 18 : 10,
                     alignItems: "stretch",
                 }}>
                     <div style={{ minWidth: 0 }}>
                         <NiftyPePanel D={D} isCompact={isCompact} data={niftyPeData} />
                     </div>
 
-                    <div style={{
-                        display: "grid",
-                        gridTemplateColumns: isCompact
-                            ? "minmax(0, 1fr)"
-                            : "minmax(0, 1fr) minmax(0, 1.5fr)",
-                        gap: isCompact ? 12 : 10,
-                    }}>
+                    {/* display: contents -> Breadth and FII/DII become direct grid items,
+                        so they sit in the same 3 equal columns as the macro cards below */}
+                    <div style={{ display: "contents" }}>
                         {heroMetrics.map(metric => metric.breadth ? (
                             <BreadthPanel key={metric.label} D={D} isCompact={isCompact} snapshot={breadthSnapshot} />
                         ) : metric.fiiDii ? (
@@ -1831,6 +2183,18 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                             </div>
                         ))}
                     </div>
+                </div>
+
+                {/* USD/INR · Brent · DXY — sits directly under the P/E · Breadth · FII/DII row */}
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 10,
+                    marginTop: 18,
+                }}>
+                    {MACRO_CARDS.map(card => (
+                        <MacroPanel key={card.key} D={D} isCompact={isCompact} card={card} series={macroSeries?.[card.symbol]} gid={`${card.key}-d`} />
+                    ))}
                 </div>
 
                 {lensGrid}
@@ -4063,6 +4427,19 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         const hit = cacheGet(NIFTY_PE_PATH, NIFTY_PE_TTL);
         return hit?.data || [];
     });
+
+    // ── Macro indicators: USD/INR, Brent, DXY (yahoo_macro_daily) ────────────
+    const macroPath = sym => `yahoo_macro_daily?select=observation_date,symbol,close_price,previous_close,change_value,change_percent&symbol=eq.${encodeURIComponent(sym)}&order=observation_date.desc&limit=${MACRO_MAX_ROWS}`;
+    const MACRO_TTL = 30 * 60 * 1000;
+    const [macroRows, setMacroRows] = useState(() => {
+        const init = {};
+        MACRO_SYMBOLS.forEach(sym => {
+            const hit = cacheGet(macroPath(sym), MACRO_TTL);
+            if (hit?.data) init[sym] = hit.data;
+        });
+        return init;
+    });
+    const macroSeries = useMemo(() => buildMacroSeries(Object.values(macroRows).flat()), [macroRows]);
     const [activeMoversTab, setActiveMoversTab] = useState("gainers");
 
     const volumeShockersOffsetRef = useRef(0);
@@ -4440,6 +4817,30 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
+    // ── Macro indicators fetch (daily data; revalidate on focus / visibility) ──
+    useEffect(() => {
+        let cancelled = false;
+        const fetchMacro = () => Promise.all(MACRO_SYMBOLS.map(sym => sbFetch(macroPath(sym), userToken, {
+            ttl: MACRO_TTL,
+            onStale: fresh => { if (!cancelled && Array.isArray(fresh)) setMacroRows(prev => ({ ...prev, [sym]: fresh })); },
+        })
+            .then(rows => { if (!cancelled && Array.isArray(rows)) setMacroRows(prev => ({ ...prev, [sym]: rows })); })
+            .catch(err => console.warn("Macro indicators fetch failed:", sym, err))));
+
+        fetchMacro();
+        const intervalId = setInterval(fetchMacro, MACRO_TTL);
+        const onVisible = () => { if (document.visibilityState === "visible") fetchMacro(); };
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("focus", onVisible);
+        return () => {
+            cancelled = true;
+            clearInterval(intervalId);
+            document.removeEventListener("visibilitychange", onVisible);
+            window.removeEventListener("focus", onVisible);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToken]);
+
     // ── RS data — now backed by Postgres RPCs (see migration.sql) ─────────────
     // get_rs_stocks_enriched() and get_rs_industry_summary() replace the old
     // TIRS_RS85_PATH + TIRS_ALL_PATH + RETURNS_PATH raw fetches and all of
@@ -4754,6 +5155,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     allHighRsStocks={allHighRsStocks}
                     fiiDiiData={fiiDiiData}
                     niftyPeData={niftyPeData}
+                    macroSeries={macroSeries}
                     onNavigate={onNavigate}
                     userToken={userToken}
                     onLogin={onLogin}
