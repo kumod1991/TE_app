@@ -1564,10 +1564,10 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
     const hasSnapshot = snapshot != null;
 
     const items = [
-        { label: "52W High", raw: high, color: high >= low ? D.pos : D.text },
-        { label: "52W Low", raw: low, color: low > high ? D.neg : D.text },
-        { label: "Above 50D", raw: sma50, color: sma50 >= 50 ? D.pos : D.neg, ref50: true },
-        { label: "Above 200D", raw: sma200, color: sma200 >= 50 ? D.pos : D.neg, ref50: true },
+        { label: "Near 52W High", raw: high, color: high >= low ? D.pos : D.text },
+        { label: "Near 52W Low", raw: low, color: low > high ? D.neg : D.text },
+        { label: "Above 50DMA", raw: sma50, color: sma50 >= 50 ? D.pos : D.neg, ref50: true },
+        { label: "Above 200DMA", raw: sma200, color: sma200 >= 50 ? D.pos : D.neg, ref50: true },
     ];
 
     // Regime verdict from the two participation reads (tune thresholds above).
@@ -2513,7 +2513,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                         onMouseEnter={e => { e.currentTarget.style.opacity = "0.85"; }}
                         onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
                     >
-                        {showAllCards ? "Show less" : `View all ${3 + MACRO_CARDS.length}`}
+                        {showAllCards ? "Show less" : `View more`}
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
                             style={{ transform: showAllCards ? "rotate(180deg)" : "none", transition: "transform .2s ease" }}>
                             <path d="M6 9l6 6 6-6" />
@@ -3984,12 +3984,51 @@ function LeadershipScreenCard({ T, userToken, isCompact, onNavigate, config, onL
     );
 }
 
+// Screens up to and including High Tight Flag are always visible; everything
+// after it sits behind a "View more" toggle. Collapsed cards are not mounted,
+// so their Supabase fetches only fire once the user expands the section.
+const LEADERSHIP_VISIBLE_COUNT = 1; // High Tight Flag is the last always-visible screen
+
 function LeadershipScreenCards({ T, userToken, isCompact, onNavigate, onLogin }) {
+    const [expanded, setExpanded] = useState(false);
+    const accent = T.accent || "#2563eb";
+    const visibleConfigs = LEADERSHIP_SCREEN_CONFIGS.slice(0, LEADERSHIP_VISIBLE_COUNT);
+    const extraConfigs = LEADERSHIP_SCREEN_CONFIGS.slice(LEADERSHIP_VISIBLE_COUNT);
+    const renderCard = config => (
+        <LeadershipScreenCard key={config.key} T={T} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} config={config} onLogin={onLogin} />
+    );
     return (
         <>
-            {LEADERSHIP_SCREEN_CONFIGS.map(config => (
-                <LeadershipScreenCard key={config.key} T={T} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} config={config} onLogin={onLogin} />
-            ))}
+            {visibleConfigs.map(renderCard)}
+            {expanded && extraConfigs.map(renderCard)}
+            {extraConfigs.length > 0 && (
+                <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "center" }}>
+                    <button
+                        type="button"
+                        aria-expanded={expanded}
+                        onClick={() => setExpanded(v => !v)}
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "8px 18px",
+                            borderRadius: 999,
+                            border: `1px solid ${withAlpha(accent, 0.32)}`,
+                            background: withAlpha(accent, T.isDark ? 0.14 : 0.08),
+                            color: accent,
+                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            transition: "opacity 0.15s ease",
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+                    >
+                        {expanded ? "View less \u2191" : "View more \u2193"}
+                    </button>
+                </div>
+            )}
         </>
     );
 }

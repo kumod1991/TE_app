@@ -3782,39 +3782,6 @@ function JournalLandingPromo({ T, onLogin }) {
     return <JournalTutorial T={T} onLogin={onLogin} />;
 }
 
-const WT_AREAS = [
-    { name: "Summary cards", lead: "How strong is this list as a whole?", points: [
-        "On desktop, four cards sit above the table: Avg RS Rating, RS Leaders, Stage 2 and Avg Market Cap.",
-        "Avg RS Rating carries a label: 80 and above is Very Strong, 60 and above Strong, 40 and above Average, and anything lower Weak.",
-        "Stage 2 shows how many of your names are in an uptrend, out of the total in the list.",
-    ] },
-    { name: "Stock table", lead: "Which names deserve attention right now?", points: [
-        "Rows are sorted by RS rating by default. Click a column header to change the sort.",
-        "Each stock shows its stage and signal pills: Near 52w High, Volume Spike, Pullback to 50DMA and RS Accelerating.",
-        "Use the quick filters (Stage 2, Pullback, Leaders) or set your own RS range and moving-average conditions.",
-    ] },
-    { name: "Stock detail panel", lead: "What is behind a single stock?", points: [
-        "Click a row to open Performance, Trend & Moving Averages, Relative Strength, Pivot Levels, 52-Week Range and Volume & Size.",
-        "Quarterly Financials, the next results date and Corporate Actions (dividend, bonus, split) are in the same panel.",
-        "A candlestick chart and an RS line chart show the price and relative strength history.",
-    ] },
-    { name: "Announcements feed", lead: "What has the company just told the exchange?", points: [
-        "Company announcements for the stocks you follow are collected in one feed.",
-        "Filter the feed by All, Results, Orders or Investor.",
-    ] },
-];
-
-const WT_GLOSSARY = [
-    ["RS rating", "A relative strength score for the stock. The Avg RS Rating card averages it across your list, and higher means stronger."],
-    ["Stage 1", "The stock is trading above its 200-day moving average."],
-    ["Stage 2", "The stock is trading above both its 50-day and 200-day moving averages."],
-    ["RS Leader", "A stock flagged as a relative strength leader. The Leaders quick filter and the RS Leaders card both count these."],
-    ["RS Accelerating", "A stock whose relative strength is improving, shown as a pill on the row."],
-    ["Near 52w High", "The price is close to its 52-week high, a possible breakout setup."],
-    ["Volume Spike", "Trading volume is at least 1.5 times its usual level."],
-    ["Pullback to 50DMA", "The price has pulled back toward its 50-day moving average."],
-];
-
 const WT_FAQ = [
     ["How many watchlists can I create?", "Up to 25. The sidebar shows how many you have used, and the new-watchlist box is disabled once you reach the limit."],
     ["How do I find and add a stock?", "Type a ticker or company name into the Add ticker or company box and pick the match from the suggestions."],
@@ -3825,8 +3792,6 @@ const WT_FAQ = [
 
 const WT_NAV = [
     ["wt-start", "Quick start"],
-    ["wt-areas", "What you see"],
-    ["wt-terms", "Reading the signals"],
     ["wt-faq", "Questions"],
 ];
 
@@ -3912,37 +3877,6 @@ function WatchlistLandingPromo({ T, onLogin }) {
                                 </li>
                             ))}
                         </ol>
-                    </section>
-
-                    <section className="jt-sec" id="wt-areas">
-                        <h3 className="jt-sec-h">What you see</h3>
-                        <p className="jt-sec-sub">Each part of a watchlist answers one question about the stocks you follow.</p>
-                        <div className="jt-pages">
-                            {WT_AREAS.map(p => (
-                                <div className="jt-page" key={p.name}>
-                                    <div className="jt-page-name">{p.name}</div>
-                                    <div>
-                                        <p className="jt-page-lead">{p.lead}</p>
-                                        <ul className="jt-list">
-                                            {p.points.map(pt => <li key={pt}>{pt}</li>)}
-                                        </ul>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-
-                    <section className="jt-sec" id="wt-terms">
-                        <h3 className="jt-sec-h">Reading the signals</h3>
-                        <p className="jt-sec-sub">The labels and pills you will see in the table and summary cards.</p>
-                        <dl className="jt-gloss">
-                            {WT_GLOSSARY.map(([term, def]) => (
-                                <div className="jt-gloss-row" key={term}>
-                                    <dt>{term}</dt>
-                                    <dd>{def}</dd>
-                                </div>
-                            ))}
-                        </dl>
                     </section>
 
                     <section className="jt-sec" id="wt-faq">
@@ -19668,7 +19602,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             .sort((a, b) => Math.abs(a.pct_to_breakout) - Math.abs(b.pct_to_breakout));
     }, [dWeinsteinBase]);
 
-    const totalCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length + dAdxDi.length + dRsiMomentum.length;
     const marketLeadersCount = dRsImproving.length + dRsRating.length + dPowerTrend.length + dStage2Early.length;
     const momentumScreensCount = dAdxDi.length + dRsiMomentum.length + dVolumeMomentum.length;
     const breakoutsCount = dVolBreakout.length + d52wBreakout.length + dPivotBreakout.length + dFreshBreakout.length + dFreshBreakoutWeekly.length + dMultiyearBreakout.length + dMultiyearHighSoon.length + dWeeklyBreakoutSoon.length;
@@ -19977,7 +19910,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         display: "flex", alignItems: "center", gap: 2, padding: "4px",
                         border: `1px solid ${D.panelBorder}`, borderRadius: 12, background: D.pillBg
                     }}>
-                        {[{ v: "all", l: "All" }, { v: "nifty500", l: "Nifty 500" }, { v: "fo", l: "F&O" }].map(opt => (
+                        {[{ v: "all", l: "All" }, { v: "nifty500", l: "Nifty 500" }, { v: "fo", l: "Futures" }].map(opt => (
                             <button key={opt.v} onClick={() => setUniverse(opt.v)}
                                 style={{
                                     height: 28, padding: "0 14px", border: "none", borderRadius: 9,
@@ -19991,23 +19924,6 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                             </button>
                         ))}
                     </div>
-                    <div style={{ flex: 1 }} />
-                    {!tablesLoading && (
-                        <div className="scr-ctrl-summary" style={{ display: "flex", alignItems: "center" }}>
-                            <span style={{
-                                fontSize: 12, color: T.subtext, fontFamily: mono,
-                                fontVariantNumeric: "tabular-nums"
-                            }}>
-                                {(universe !== "all" && universeLoading) ? (
-                                    <span style={{ color: T.muted, fontStyle: "italic" }}>loading…</span>
-                                ) : (
-                                    <><strong style={{ color: T.text, fontWeight: 600 }}>
-                                        {totalCount.toLocaleString("en-IN")}
-                                    </strong>{" stocks"}</>
-                                )}
-                            </span>
-                        </div>
-                    )}
                 </div>
             </div>
 
