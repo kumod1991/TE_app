@@ -929,6 +929,56 @@ function SectionCard({ T, children, style = {}, className = "" }) {
     );
 }
 
+// ─── MOMENTUM & LEADERSHIP PANEL ─────────────────────────────────────────────
+// Shared parent surface for everything from Market Movers down to the pattern
+// screens. Mirrors the "Market Snapshot" hero shell (same tinted surface,
+// radius, shadow and heading scale) so the two bookend the dashboard, with the
+// inner SectionCards sitting on it like the hero's white tiles.
+function LeadershipPanel({ D, isCompact, children }) {
+    const font = "'IBM Plex Sans', -apple-system, sans-serif";
+    return (
+        <section
+            aria-label="Momentum and leadership"
+            style={{
+                marginTop: isCompact ? 14 : 18,
+                marginBottom: isCompact ? 14 : 18,
+                borderRadius: 16,
+                border: `1px solid ${D.panelBorder}`,
+                background: D.isDark ? D.panelBg : "#f6f8fa",
+                boxShadow: D.shadowLg,
+                position: "relative",
+                minWidth: 0,
+            }}
+        >
+            <div style={{ padding: isCompact ? "18px 12px" : "24px 26px", minWidth: 0 }}>
+                <div style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    marginBottom: isCompact ? 14 : 18,
+                    paddingBottom: isCompact ? 14 : 16,
+                    borderBottom: `1px solid ${D.panelBorder}`,
+                }}>
+                    <span aria-hidden="true" style={{
+                        width: 36, height: 36, flexShrink: 0, borderRadius: 11,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        color: D.accent,
+                        background: withAlpha(D.accent, D.isDark ? 0.16 : 0.08),
+                        border: `1px solid ${withAlpha(D.accent, D.isDark ? 0.28 : 0.16)}`,
+                    }}>
+                        <DashboardLensIcon type="leaders" size={18} />
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: "-0.01em", color: D.text, fontFamily: font }}>Momentum &amp; Leadership</div>
+                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 3, fontFamily: font }}>Top movers, sector strength and high-conviction chart setups</div>
+                    </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: isCompact ? 14 : 16, minWidth: 0 }}>
+                    {children}
+                </div>
+            </div>
+        </section>
+    );
+}
+
 function DashboardLensIcon({ type, size = 16 }) {
     const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
     if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
@@ -1289,33 +1339,26 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
             {card && (
                 <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 20, right: 20, height: 2, borderRadius: "0 0 2px 2px", background: withAlpha(zoneColor, D.isDark ? 0.75 : 0.6) }} />
             )}
-            {card ? (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minHeight: 26, marginBottom: 12 }}>
+            {/* Header row — title top-left, valuation badge top-right (desktop card + mobile) */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: card ? "wrap" : "nowrap", minHeight: card ? 26 : 18, marginBottom: card ? 12 : 14 }}>
+                {card ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                         <HeroIconTile D={D} type="pe" />
                         <HeroCardTitle D={D}>Nifty 50 P/E</HeroCardTitle>
                     </div>
-                    <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 7px", borderRadius: 999,
-                        background: zoneBg, border: `1px solid ${withAlpha(zoneColor, 0.22)}`, color: zoneColor,
-                        fontSize: 10.5, fontWeight: 700, lineHeight: 1, letterSpacing: "0.04em", textTransform: "uppercase",
-                        fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap",
-                    }}>
-                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: zoneColor }} />
-                        {zone === "Fair" ? "Fair Value" : `${zone} vs 2Y Avg`}
-                    </span>
-                </div>
-            ) : (
-            <div style={{
-                display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 999,
-                background: zoneBg, border: `1px solid ${withAlpha(zoneColor, 0.22)}`, color: zoneColor,
-                fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", marginBottom: 14, width: "fit-content",
-            }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: zoneColor }} />
-                {zone === "Fair" ? "Fair Value" : `${zone} vs 2Y Avg`}
+                ) : (
+                    <HeroCardTitle D={D} bare>Nifty 50 P/E</HeroCardTitle>
+                )}
+                <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px 3px 7px", borderRadius: 999,
+                    background: zoneBg, border: `1px solid ${withAlpha(zoneColor, 0.22)}`, color: zoneColor,
+                    fontSize: 10.5, fontWeight: 700, lineHeight: 1, letterSpacing: "0.04em", textTransform: "uppercase",
+                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", whiteSpace: "nowrap", flexShrink: 0,
+                }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: zoneColor }} />
+                    {zone === "Fair" ? "Fair Value" : `${zone} vs 2Y Avg`}
+                </span>
             </div>
-            )}
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                 <span style={{
@@ -1338,7 +1381,7 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
                 )}
             </div>
             <div style={{ fontSize: 13, color: D.subtext, marginTop: 4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                {card ? "Price / earnings (TTM)" : <>Nifty 50 &middot; P/E (TTM)</>} &middot; {card ? String(dateLabel).replace(/-/g, " ") : dateLabel}
+                Price / earnings (TTM) &middot; {card ? String(dateLabel).replace(/-/g, " ") : dateLabel}
             </div>
 
             <div style={{ marginTop: "auto", paddingTop: 14 }}>
@@ -1635,12 +1678,32 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
 // sparkline with hover/tap scrub and a 2Y range rail.
 const MACRO_YEARS = 2;      // lookback for the sparkline, range rail and average
 const MACRO_MAX_ROWS = 560; // ~2Y of daily sessions per symbol (stays under PostgREST's 1000-row cap)
-const MACRO_CARDS = [
+const YAHOO_MACRO_CARDS = [
     { key: "usdinr", symbol: "USDINR=X", label: "USD / INR", sub: "Rupees per US dollar", prefix: "\u20B9", icon: "fx", dp: 2 },
     { key: "brent", symbol: "BZ=F", label: "Brent Crude", sub: "Futures \u00B7 USD per barrel", prefix: "$", icon: "oil", dp: 2 },
     { key: "dxy", symbol: "DX-Y.NYB", label: "US Dollar Index", sub: "ICE \u00B7 index points", prefix: "", icon: "dxy", dp: 2 },
 ];
-const MACRO_SYMBOLS = MACRO_CARDS.map(c => c.symbol);
+const MACRO_SYMBOLS = YAHOO_MACRO_CARDS.map(c => c.symbol);
+
+// Third row: Gold, Silver (precious_metal_prices) and the US 10Y yield (us_treasury_yields).
+// `tint` gives the metals a restrained metallic accent (icon tile, chip, chart line);
+// drop it to fall back to the theme accent. `bps` renders the day change in basis points.
+const EXTRA_MACRO_CARDS = [
+    { key: "gold", symbol: "GC=F", label: "Gold", sub: "COMEX futures \u00B7 USD per troy oz", prefix: "$", icon: "gold", dp: 2, tint: { light: "#a8741a", dark: "#e0b64a" } },
+    { key: "silver", symbol: "SI=F", label: "Silver", sub: "COMEX futures \u00B7 USD per troy oz", prefix: "$", icon: "silver", dp: 2, tint: { light: "#64748b", dark: "#a9b6c9" } },
+    { key: "us10y", symbol: "US10Y", label: "US 10Y Yield", sub: "10-year Treasury \u00B7 FRED", suffix: "%", icon: "yield", dp: 2, bps: true },
+];
+const MACRO_CARDS = [...YAHOO_MACRO_CARDS, ...EXTRA_MACRO_CARDS];
+
+// Feeds for the extra cards. International metals + yields give the 2Y chart; the India
+// metal rows (IBJA, INR) only need the latest print per symbol.
+const metalPath = sym => `precious_metal_prices?select=observation_date,symbol,price,previous_price,change_value,change_percent&symbol=eq.${encodeURIComponent(sym)}&order=observation_date.desc&limit=${MACRO_MAX_ROWS}`;
+const EXTRA_MACRO_FEEDS = [
+    { key: "gold", path: metalPath("GC=F") },
+    { key: "silver", path: metalPath("SI=F") },
+    { key: "india", path: "precious_metal_prices?select=observation_date,symbol,price,change_percent,source_status&market=eq.India&order=observation_date.desc&limit=24" },
+    { key: "yields", path: `us_treasury_yields?select=observation_date,yield_3m,yield_2y,yield_10y,yield_30y,change_3m,change_2y,change_10y,change_30y&order=observation_date.desc&limit=${MACRO_MAX_ROWS}` },
+];
 
 // rows (desc by observation_date, any symbol mix) -> { [symbol]: points[] oldest -> newest }
 function buildMacroSeries(rows) {
@@ -1669,6 +1732,79 @@ function buildMacroSeries(rows) {
         const list = bucket[sym].list.filter(p => !cutoff || String(p.date) >= cutoff).reverse();
         if (list.length) out[sym] = list;
     });
+    return out;
+}
+
+// Gold / Silver / US10Y rows -> the same { [symbol]: points[] } shape as buildMacroSeries.
+function buildExtraMacroSeries(rows) {
+    const r = rows || {};
+    const metal = list => (Array.isArray(list) ? list : []).map(x => ({
+        symbol: x.symbol, observation_date: x.observation_date,
+        close_price: x.price, previous_close: x.previous_price,
+        change_value: x.change_value, change_percent: x.change_percent,
+    }));
+    const yields = (Array.isArray(r.yields) ? r.yields : []).map(x => {
+        const close = flowNum(x.yield_10y);
+        const ch = flowNum(x.change_10y);
+        const prev = close != null && ch != null ? close - ch : null;
+        return {
+            symbol: "US10Y", observation_date: x.observation_date, close_price: close,
+            previous_close: prev, change_value: ch, change_percent: prev ? (ch / prev) * 100 : null,
+        };
+    });
+    return buildMacroSeries([...metal(r.gold), ...metal(r.silver), ...yields]);
+}
+
+// Footer content for the extra cards: INR prices for gold/silver, tenor strip for yields.
+// Shape: { caption: { left, right: { text, sign } }, tiles: [{ label, text, delta?: { text, sign } }], cols }
+function buildMacroExtras(rows) {
+    const r = rows || {};
+    const out = {};
+    const sgn = v => (v > 0 ? 1 : v < 0 ? -1 : 0);
+    const signed = (v, dp, unit = "") => `${v >= 0 ? "+" : "\u2212"}${Math.abs(v).toFixed(dp)}${unit}`;
+    const inr = v => `\u20B9${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+
+    const latest = {};
+    (Array.isArray(r.india) ? r.india : []).forEach(x => {
+        if (!x || !x.symbol || flowNum(x.price) == null) return;
+        const cur = latest[x.symbol];
+        if (!cur || String(x.observation_date) > String(cur.observation_date)) latest[x.symbol] = x;
+    });
+    const caption = row => {
+        const pct = flowNum(row.change_percent);
+        return {
+            left: `India \u00B7 IBJA${String(row.source_status || "").toLowerCase() === "provisional" ? " \u00B7 provisional" : ""}`,
+            right: pct != null ? { text: signed(pct, 2, "%"), sign: sgn(pct) } : null,
+        };
+    };
+    const goldTiles = [["GOLD_IN_24K", "24K / g"], ["GOLD_IN_22K", "22K / g"], ["GOLD_IN_18K", "18K / g"]]
+        .filter(([sym]) => latest[sym])
+        .map(([sym, label]) => ({ label, text: inr(flowNum(latest[sym].price)) }));
+    if (goldTiles.length) out.gold = { caption: caption(latest.GOLD_IN_24K || latest[Object.keys(latest).find(k => k.startsWith("GOLD_IN"))]), tiles: goldTiles };
+    if (latest.SILVER_IN) {
+        const kg = flowNum(latest.SILVER_IN.price);
+        out.silver = { caption: caption(latest.SILVER_IN), tiles: [{ label: "Per kg", text: inr(kg) }, { label: "Per 10 g", text: inr(kg / 100) }] };
+    }
+
+    const y = (Array.isArray(r.yields) ? r.yields : []).reduce((a, x) => (!a || String(x.observation_date) > String(a.observation_date) ? x : a), null);
+    if (y && flowNum(y.yield_10y) != null) {
+        const tile = (label, vKey, cKey) => {
+            const v = flowNum(y[vKey]);
+            if (v == null) return null;
+            const c = flowNum(y[cKey]);
+            return { label, text: `${v.toFixed(2)}%`, delta: c != null ? { text: signed(c * 100, 0, "bp"), sign: sgn(c) } : null };
+        };
+        const tiles = [tile("3M", "yield_3m", "change_3m"), tile("2Y", "yield_2y", "change_2y"), tile("30Y", "yield_30y", "change_30y")].filter(Boolean);
+        const y2 = flowNum(y.yield_2y);
+        const spread = y2 != null ? flowNum(y.yield_10y) - y2 : null;
+        out.us10y = {
+            caption: {
+                left: spread == null ? "Yield curve" : `Yield curve \u00B7 ${spread < 0 ? "Inverted" : spread < 0.25 ? "Flat" : "Normal"}`,
+                right: spread != null ? { text: `10Y\u20132Y ${signed(spread * 100, 0, " bps")}`, sign: sgn(spread) } : null,
+            },
+            tiles,
+        };
+    }
     return out;
 }
 
@@ -1921,19 +2057,27 @@ function MacroIcon({ type, size = 15 }) {
     const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
     if (type === "fx") return <svg {...common}><path d="M4 8h14" /><path d="M14 4l4 4-4 4" /><path d="M20 16H6" /><path d="M10 12l-4 4 4 4" /></svg>;
     if (type === "oil") return <svg {...common}><path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.2" /></svg>;
+    if (type === "gold") return <svg {...common}><path d="M4 18l2.2-7h11.6L20 18z" /><path d="M8.6 14.5h6.8" /><path d="M9.5 7.5h5" /></svg>;
+    if (type === "silver") return <svg {...common}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /></svg>;
+    if (type === "yield") return <svg {...common}><path d="M3 4v16h18" /><path d="M7 15.5c2-4.5 5-6.5 11-7.5" /></svg>;
     if (type === "pe") return <svg {...common}><path d="M5 19L19 5" /><circle cx="7.5" cy="7.5" r="2.5" /><circle cx="16.5" cy="16.5" r="2.5" /></svg>;
     if (type === "breadth") return <svg {...common}><path d="M4 19V5" /><path d="M9 19v-7" /><path d="M14 19V8" /><path d="M19 19v-4" /></svg>;
     if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
     return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M14.6 9.3c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.5.8-2.5 1.9 0 2.7 5.2 1.4 5.2 4.1 0 1.2-1.1 2-2.6 2-1.3 0-2.3-.7-2.7-1.7" /><path d="M12 5.8v1.9M12 16.3v1.9" /></svg>;
 }
 
-const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, card, series, gid }) {
+const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = false, card, series, gid, extras }) {
+    // Optional per-card accent (metals) — applied to icon tile, chip and chart line.
+    const tintHex = card.tint ? (Dbase.isDark ? card.tint.dark : card.tint.light) : null;
+    const D = React.useMemo(() => (tintHex ? { ...Dbase, accent: tintHex } : Dbase), [Dbase, tintHex]);
     const posColor = D.pos || "#0e7a53";
     const negColor = D.neg || "#c23b3b";
     const signColor = v => (v == null || v === 0 ? D.muted : v > 0 ? posColor : negColor);
-    const fmt = v => (v == null ? EMPTY_VALUE : v.toFixed(card.dp));
+    const fmt = v => (v == null ? EMPTY_VALUE : v.toLocaleString("en-US", { minimumFractionDigits: card.dp, maximumFractionDigits: card.dp }));
     const fmtPct = v => (v == null ? EMPTY_VALUE : `${v >= 0 ? "+" : "\u2212"}${Math.abs(v).toFixed(2)}%`);
-    const fmtDelta = v => (v == null ? EMPTY_VALUE : `${v >= 0 ? "+" : "\u2212"}${Math.abs(v).toFixed(card.dp)}`);
+    const fmtDelta = v => (v == null ? EMPTY_VALUE
+        : card.bps ? `${v >= 0 ? "+" : "\u2212"}${Math.abs(v * 100).toFixed(0)} bps`
+        : `${v >= 0 ? "+" : "\u2212"}${Math.abs(v).toFixed(card.dp)}`);
 
     const has = Array.isArray(series) && series.length > 0;
     const n = has ? series.length : 0;
@@ -1954,6 +2098,10 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
     const asOf = lastRow ? (flowDateLabel(lastRow.date) || null) : null;
     const chartPoints = has ? series.map(p => ({ date: p.date, value: p.close })) : [];
 
+    // Mobile carousel cards that carry an extras strip (Gold / Silver / US 10Y) are the tallest in the
+    // track (every card stretches to the tallest), so they get a denser layout to keep the carousel short.
+    const dense = bare && !!(extras && extras.tiles && extras.tiles.length > 0);
+
     const tiles = [
         { key: "lo", label: `${MACRO_YEARS}Y Low`, v: min },
         { key: "av", label: `${MACRO_YEARS}Y Avg`, v: avg },
@@ -1971,8 +2119,8 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            gap: 14,
-            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
+            gap: dense ? 10 : 14,
+            padding: dense ? "16px 18px 12px" : bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
             ...(bare ? { borderRadius: 0, background: "transparent", border: "none" } : heroSurface(D)),
         }}>
             {has && (
@@ -2006,6 +2154,7 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
                             <span style={{ fontFamily: HERO_MONO, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 34 : 36, fontVariantNumeric: "tabular-nums" }}>
                                 {card.prefix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginRight: 3, letterSpacing: 0 }}>{card.prefix}</span>}
                                 {fmt(price)}
+                                {card.suffix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginLeft: 3, letterSpacing: 0 }}>{card.suffix}</span>}
                             </span>
                             <span style={{
                                 display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 8px", borderRadius: 7,
@@ -2014,7 +2163,7 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
                             }}>
                                 {delta !== 0 && delta != null && <FlowArrow up={delta > 0} />}
                                 {fmtDelta(delta)}
-                                <span style={{ opacity: 0.85 }}>({fmtPct(pct)})</span>
+                                {!card.bps && <span style={{ opacity: 0.85 }}>({fmtPct(pct)})</span>}
                             </span>
                         </div>
                         <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: HERO_SANS }}>
@@ -2031,11 +2180,28 @@ const MacroPanel = React.memo(function MacroPanel({ D, isCompact, bare = false, 
 
             {/* chart with value axis, average line, current-value tag and time axis */}
             <div style={{ marginTop: "auto" }}>
-                {has && <HeroTrendChart D={D} points={chartPoints} dp={card.dp} height={isCompact ? 96 : 104} gid={gid || card.key} avgLabel={`${MACRO_YEARS}Y AVG`} />}
+                {has && <HeroTrendChart D={D} points={chartPoints} dp={card.dp} height={dense ? 68 : isCompact ? 96 : 104} gid={gid || card.key} avgLabel={`${MACRO_YEARS}Y AVG`} />}
             </div>
 
+            {/* extras footer: India INR prices (metals) / tenor strip (yields) — desktop + mobile */}
+            {has && extras && extras.tiles && extras.tiles.length > 0 && (
+                <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: `repeat(${extras.tiles.length}, minmax(0, 1fr))`, gap: 8 }}>
+                        {extras.tiles.map(t => (
+                            <div key={t.label} style={{ minWidth: 0, background: D.softFill, borderRadius: 10, padding: bare ? "6px 9px" : "9px 11px" }}>
+                                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 4, marginBottom: bare ? 3 : 5 }}>
+                                    <span style={{ fontSize: 10, color: D.muted, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", fontFamily: HERO_SANS, whiteSpace: "nowrap" }}>{t.label}</span>
+                                    {t.delta && <span style={{ fontSize: 9.5, color: signColor(t.delta.sign), fontFamily: HERO_MONO, fontWeight: 700, whiteSpace: "nowrap" }}>{t.delta.text}</span>}
+                                </div>
+                                <div style={{ color: D.text, fontFamily: HERO_MONO, fontSize: bare ? 12.5 : 13.5, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t.text}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* 2Y low / avg / high tiles (desktop only; the mobile carousel omits them) */}
-            {has && !bare && (
+            {has && !bare && !(extras && extras.tiles && extras.tiles.length > 0) && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
                     {tiles.map(t => (
                         <div key={t.key} style={{ minWidth: 0, background: D.softFill, borderRadius: 10, padding: "9px 11px" }}>
@@ -2073,7 +2239,7 @@ const HERO_DARK_CARD_CSS = `
 .sd-hero-dot.active{width:16px;border-radius:4px}
 `;
 
-const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact, breadthSnapshot, fiiDiiData, niftyPeData, macroSeries }) {
+const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact, breadthSnapshot, fiiDiiData, niftyPeData, macroSeries, macroExtras }) {
     const trackRef = useRef(null);
     const [active, setActive] = useState(0);
     const COUNT = 3 + MACRO_CARDS.length;
@@ -2111,7 +2277,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
                 </div>
                 {MACRO_CARDS.map(card => (
                     <div className="sd-hero-card" key={card.key}>
-                        <MacroPanel D={DD} isCompact={isCompact} bare card={card} series={macroSeries?.[card.symbol]} gid={`${card.key}-m`} />
+                        <MacroPanel D={DD} isCompact={isCompact} bare card={card} series={macroSeries?.[card.symbol]} extras={macroExtras?.[card.key]} gid={`${card.key}-m`} />
                     </div>
                 ))}
             </div>
@@ -2132,7 +2298,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
     );
 });
 
-const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, fiiDiiData, niftyPeData, macroSeries, onNavigate, userToken, onLogin }) {
+const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, fiiDiiData, niftyPeData, macroSeries, macroExtras, onNavigate, userToken, onLogin }) {
     const highPct = Number(breadthSnapshot?.near_52w_high);
     const lowPct = Number(breadthSnapshot?.near_52w_low);
     const sma50Pct = Number(breadthSnapshot?.above_sma50);
@@ -2150,6 +2316,8 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
         { label: "FII / DII Daily Flow", fiiDii: true },
     ];
     const DD = useMemo(() => buildDashboardTheme(HERO_DARK_THEME_INPUT), []);
+    // Desktop shows the first row (P/E · Breadth · FII/DII); the six macro/metal/yield cards sit behind "View all".
+    const [showAllCards, setShowAllCards] = useState(false);
     const lenses = [
         { type: "screens", title: "Breadth", meta: `Market Participation`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
         { type: "momentum", title: "TechLens", meta: `Identify leaders`, action: "Technical Screens", locked: true, onClick: () => (userToken ? onNavigate?.("technical", "screens") : onLogin?.()) },
@@ -2221,7 +2389,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
     if (isCompact) {
         return (
             <>
-                <HeroDarkCarousel D={D} DD={DD} isCompact={isCompact} breadthSnapshot={breadthSnapshot} fiiDiiData={fiiDiiData} niftyPeData={niftyPeData} macroSeries={macroSeries} />
+                <HeroDarkCarousel D={D} DD={DD} isCompact={isCompact} breadthSnapshot={breadthSnapshot} fiiDiiData={fiiDiiData} niftyPeData={niftyPeData} macroSeries={macroSeries} macroExtras={macroExtras} />
                 <section style={{
                     marginBottom: 14,
                     borderRadius: 16,
@@ -2250,7 +2418,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
                         <div>
                             <div style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: "-0.01em", color: D.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Market Snapshot</div>
-                            <div style={{ fontSize: 13, color: D.subtext, marginTop: 3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Valuation, breadth, institutional flows and macro cues</div>
+                            <div style={{ fontSize: 13, color: D.subtext, marginTop: 3, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>Valuation, breadth, institutional flows, macro cues, metals and yields</div>
                         </div>
                         {(() => {
                             const raw = breadthSnapshot?.date ? String(breadthSnapshot.date).slice(0, 10) : "";
@@ -2324,10 +2492,33 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                         ))}
                     </div>
 
-                    {/* USD/INR · Brent · DXY: second row of the same 3-column grid */}
-                    {MACRO_CARDS.map(card => (
-                        <MacroPanel key={card.key} D={D} isCompact={isCompact} card={card} series={macroSeries?.[card.symbol]} gid={`${card.key}-d`} />
+                    {/* USD/INR · Brent · DXY, then Gold · Silver · US 10Y: extra rows of the same 3-column grid (collapsed by default) */}
+                    {showAllCards && MACRO_CARDS.map(card => (
+                        <MacroPanel key={card.key} D={D} isCompact={isCompact} card={card} series={macroSeries?.[card.symbol]} extras={macroExtras?.[card.key]} gid={`${card.key}-d`} />
                     ))}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "center", margin: "16px 0 4px" }}>
+                    <button
+                        type="button"
+                        aria-expanded={showAllCards}
+                        onClick={() => setShowAllCards(v => !v)}
+                        style={{
+                            display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 999,
+                            border: `1px solid ${withAlpha(D.accent || "#2563eb", 0.32)}`,
+                            background: withAlpha(D.accent || "#2563eb", D.isDark ? 0.14 : 0.08),
+                            color: D.accent || "#2563eb", fontFamily: HERO_SANS, fontSize: 14, fontWeight: 700,
+                            cursor: "pointer", transition: "opacity 0.15s ease",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = "0.85"; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                    >
+                        {showAllCards ? "Show less" : `View all ${3 + MACRO_CARDS.length}`}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                            style={{ transform: showAllCards ? "rotate(180deg)" : "none", transition: "transform .2s ease" }}>
+                            <path d="M6 9l6 6 6-6" />
+                        </svg>
+                    </button>
                 </div>
 
                 {lensGrid}
@@ -4572,7 +4763,20 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         });
         return init;
     });
-    const macroSeries = useMemo(() => buildMacroSeries(Object.values(macroRows).flat()), [macroRows]);
+    // ── Gold / Silver (precious_metal_prices) + US 10Y (us_treasury_yields) ──
+    const [extraRows, setExtraRows] = useState(() => {
+        const init = {};
+        EXTRA_MACRO_FEEDS.forEach(f => {
+            const hit = cacheGet(f.path, MACRO_TTL);
+            if (hit?.data) init[f.key] = hit.data;
+        });
+        return init;
+    });
+    const macroSeries = useMemo(
+        () => ({ ...buildMacroSeries(Object.values(macroRows).flat()), ...buildExtraMacroSeries(extraRows) }),
+        [macroRows, extraRows]
+    );
+    const macroExtras = useMemo(() => buildMacroExtras(extraRows), [extraRows]);
     const [activeMoversTab, setActiveMoversTab] = useState("gainers");
 
     const volumeShockersOffsetRef = useRef(0);
@@ -4974,6 +5178,30 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
+    // ── Gold / Silver / US yields fetch (daily data; same cadence as macro) ───
+    useEffect(() => {
+        let cancelled = false;
+        const fetchExtra = () => Promise.all(EXTRA_MACRO_FEEDS.map(f => sbFetch(f.path, userToken, {
+            ttl: MACRO_TTL,
+            onStale: fresh => { if (!cancelled && Array.isArray(fresh)) setExtraRows(prev => ({ ...prev, [f.key]: fresh })); },
+        })
+            .then(rows => { if (!cancelled && Array.isArray(rows)) setExtraRows(prev => ({ ...prev, [f.key]: rows })); })
+            .catch(err => console.warn("Metals/yields fetch failed:", f.key, err))));
+
+        fetchExtra();
+        const intervalId = setInterval(fetchExtra, MACRO_TTL);
+        const onVisible = () => { if (document.visibilityState === "visible") fetchExtra(); };
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("focus", onVisible);
+        return () => {
+            cancelled = true;
+            clearInterval(intervalId);
+            document.removeEventListener("visibilitychange", onVisible);
+            window.removeEventListener("focus", onVisible);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToken]);
+
     // ── RS data — now backed by Postgres RPCs (see migration.sql) ─────────────
     // get_rs_stocks_enriched() and get_rs_industry_summary() replace the old
     // TIRS_RS85_PATH + TIRS_ALL_PATH + RETURNS_PATH raw fetches and all of
@@ -5289,6 +5517,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     fiiDiiData={fiiDiiData}
                     niftyPeData={niftyPeData}
                     macroSeries={macroSeries}
+                    macroExtras={macroExtras}
                     onNavigate={onNavigate}
                     userToken={userToken}
                     onLogin={onLogin}
@@ -5297,13 +5526,14 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 {/* ── MARKET OVERVIEW (Index Cards) — full width, horizontally scrollable ── */}
                 <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} style={{ marginBottom: 18 }} />
 
+                <LeadershipPanel D={D} isCompact={isCompact}>
                 {/* ── MARKET MOVERS + SECTORAL LEADERS — two halves, single row ── */}
                 <div style={{
                     display: "grid",
                     gridTemplateColumns: isCompact ? "1fr" : "1fr 1fr",
                     gap: 18,
                     alignItems: "stretch",
-                    marginBottom: 18,
+                    minWidth: 0,
                 }}>
                     {/* Market Movers */}
                     <SectionCard T={D} style={{ marginBottom: 0, minWidth: 0 }}>
@@ -5413,7 +5643,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     table is down to a handful of columns, pair two cards per row
                     on desktop instead of stacking every card full-width. */}
                 <div style={{
-                    marginTop: isCompact ? 14 : 18,
+                    minWidth: 0,
                     display: isCompact ? "flex" : "grid",
                     flexDirection: isCompact ? "column" : undefined,
                     gridTemplateColumns: isCompact ? undefined : "1fr 1fr",
@@ -5431,6 +5661,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     <TrendTemplateCard T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
                     <LeadershipScreenCards T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
                 </div>
+                </LeadershipPanel>
 
                 <style>{`
                 .stock-dashboard-shell * {
