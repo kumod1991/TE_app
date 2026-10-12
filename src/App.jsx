@@ -11661,6 +11661,17 @@ const SCREENS_TABLE_FETCHERS = {
     // trend all already computed server-side), ordered closest-to-breakout
     // first, same dedicated-table fetch/cache pattern as the other Breakouts
     // screens tables above.
+    // stage4_downtrend: Stage-4 declines (close below SMA50/150/200, weak RS,
+    // falling 200 SMA) already filtered server-side, with bear_strength_score and
+    // distance_from_sma50/200 computed server-side too. Ordered strongest-bear
+    // first, then furthest below the 200 SMA, same fetch/cache pattern as above.
+    stage4Downtrend: _makeScreensTableFetcher("stage4_downtrend", "te_scr_stage4downtrend_v1", "select=*&order=bear_strength_score.desc.nullslast,distance_from_sma200.asc.nullslast&limit=1000"),
+    // fresh_breakdown: bearish mirror of fresh_breakout  close breaks below the
+    // previous 20D low (previous_20d_low, breakdown_pct, sma20/sma50, volume vs
+    // avg_volume_20d / volume_ratio and bearish_score already computed
+    // server-side). Direct table fetch, strongest bearish score first, then the
+    // deepest breakdown (most negative breakdown_pct).
+    freshBreakdown: _makeScreensTableFetcher("fresh_breakdown", "te_scr_freshbreakdown_v1", "select=*&order=bearish_score.desc.nullslast,breakdown_pct.asc.nullslast&limit=1000"),
     weeklyBreakoutSoon: _makeScreensTableFetcher("weekly_breakout_soon", "te_scr_weeklybreakoutsoon_v1", "select=*&order=pct_to_breakout.asc.nullslast&limit=1000"),
 };
 
@@ -16732,6 +16743,14 @@ const ALL_COLUMNS = [
     { key: "pct_to_high", label: "% To High", defaultOn: false },
     { key: "high_age_years", label: "High Age (Yrs)", defaultOn: false },
     { key: "high_date", label: "High Date", defaultOn: false },
+    { key: "distance_from_sma50", label: "% From 50 SMA", defaultOn: false },
+    { key: "distance_from_sma200", label: "% From 200 SMA", defaultOn: false },
+    { key: "sma200_20d_ago", label: "200 SMA (20D Ago)", defaultOn: false },
+    { key: "bear_strength_score", label: "Bear Strength", defaultOn: false },
+    { key: "sma20", label: "20 SMA", defaultOn: false },
+    { key: "previous_20d_low", label: "Prev 20D Low", defaultOn: false },
+    { key: "breakdown_pct", label: "Breakdown %", defaultOn: false },
+    { key: "bearish_score", label: "Bearish Score", defaultOn: false },
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
@@ -16760,6 +16779,16 @@ const RSI_MOMENTUM_DEFAULT_COLS = ["close", "rsi", "rsi_5d_ago", "rsi_change_5d"
 // fields that screen actually has data for.
 const VOLUME_MOMENTUM_DEFAULT_COLS = ["close", "obv_strength_20d", "obv_5d_change", "cmf_21", "cmf_change_5d", "rs_rating", "rel_volume", "market_cap_cr"];
 
+// stage4_downtrend carries SMA-distance and bear-strength fields (no volume /
+// market cap / 52W-high data), so the default-on columns swap in the fields
+// that screen actually has data for.
+const STAGE4_DOWNTREND_DEFAULT_COLS = ["close", "ret_3m", "rs_rating", "rs_3m", "mansfield_rs", "sma50", "sma150", "sma200", "distance_from_sma50", "distance_from_sma200", "bear_strength_score"];
+
+// fresh_breakdown carries the 20D-low breakdown fields plus SMA20/SMA50 and
+// volume vs 20D average (no 150/200 SMA data), so the default-on columns swap in
+// the fields that screen actually has data for.
+const FRESH_BREAKDOWN_DEFAULT_COLS = ["close", "previous_20d_low", "breakdown_pct", "ret_3m", "rs_rating", "mansfield_rs", "sma20", "sma50", "volume", "volume_20ma", "rel_volume", "market_cap_cr", "bearish_score"];
+
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
     { key: "pct_from_52w_low", label: "From 52W Low %", defaultOp: ">", num: true },
@@ -16776,6 +16805,11 @@ const FILTER_DEFS = [
     { key: "mansfield_rs_slope", label: "Mansfield RS Slope", defaultOp: ">", num: true },
     { key: "market_cap_cr", label: "Mkt Cap (Cr)", defaultOp: ">", num: true },
     { key: "pct_to_breakout", label: "% To Breakout", defaultOp: ">", num: true },
+    { key: "distance_from_sma50", label: "% From 50 SMA", defaultOp: "<", num: true },
+    { key: "distance_from_sma200", label: "% From 200 SMA", defaultOp: "<", num: true },
+    { key: "bear_strength_score", label: "Bear Strength", defaultOp: ">", num: true },
+    { key: "breakdown_pct", label: "Breakdown %", defaultOp: "<", num: true },
+    { key: "bearish_score", label: "Bearish Score", defaultOp: ">", num: true },
 ];
 
 // Pattern Filter (Chart Patterns) numeric filters  full-screen view only
@@ -16805,6 +16839,8 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     const adxDiMode = !!detail.adxDiMode;
     const rsiMomentumMode = !!detail.rsiMomentumMode;
     const volumeMomentumMode = !!detail.volumeMomentumMode;
+    const stage4DowntrendMode = !!detail.stage4DowntrendMode;
+    const freshBreakdownMode = !!detail.freshBreakdownMode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -16920,6 +16956,12 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
             // Volume Momentum scan: swap in the columns volume_momentum_screen actually has data for
         } else if (volumeMomentumMode) {
             a[c.key] = VOLUME_MOMENTUM_DEFAULT_COLS.includes(c.key);
+            // Stage 4 Downtrend scan: swap in the columns stage4_downtrend actually has data for
+        } else if (stage4DowntrendMode) {
+            a[c.key] = STAGE4_DOWNTREND_DEFAULT_COLS.includes(c.key);
+            // Fresh Breakdown scan: swap in the columns fresh_breakdown actually has data for
+        } else if (freshBreakdownMode) {
+            a[c.key] = FRESH_BREAKDOWN_DEFAULT_COLS.includes(c.key);
         } else {
             a[c.key] = c.defaultOn;
         }
@@ -16975,7 +17017,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "rs_rating") return Math.round(Number(v)).toString();
         if (["volume", "volume_20ma"].includes(key)) return Number(v) > 0 ? Number(v).toLocaleString("en-IN") : null;
         if (key === "rel_volume") return Number(v) > 0 ? `${Number(v).toFixed(2)}x` : null;
-        if (["sma50", "sma150", "sma200"].includes(key)) return fmtINR(v);
+        if (["sma20", "sma50", "sma150", "sma200", "previous_20d_low"].includes(key)) return fmtINR(v);
         if (key === "pivot_high") return fmtINR(v);
         if (key === "pct_above_pivot") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "pct_from_sma50") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
@@ -17014,6 +17056,10 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "high_52w") return fmtINR(v);
         if (["obv_20d_change", "obv_5d_change", "obv_strength_20d", "cmf_21", "cmf_21_5d_ago"].includes(key)) return Number(v).toFixed(4);
         if (key === "cmf_change_5d") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(4)}`;
+        if (["distance_from_sma50", "distance_from_sma200"].includes(key)) return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "sma200_20d_ago") return fmtINR(v);
+        if (key === "bear_strength_score" || key === "bearish_score") return Math.round(Number(v)).toString();
+        if (key === "breakdown_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         return String(v);
     };
 
@@ -17027,6 +17073,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pct_from_52w_high") return Number(v) <= 0 ? posClr : negClr;
         if (key === "pct_from_52w_low") return Number(v) >= 0 ? posClr : negClr;
         if (key === "pct_above_pivot") return Number(v) >= 0 ? posClr : negClr;
+        if (key === "breakdown_pct") return Number(v) <= 0 ? negClr : T.text;
         if (key === "pct_from_sma50") return Math.abs(Number(v)) <= 1.5 ? posClr : T.text;
         if (key === "pct_from_pivot") return Number(v) >= 0 ? posClr : negClr;
         if (key === "vol_ratio") return Number(v) < 0.7 ? posClr : Number(v) < 1 ? T.text : negClr;
@@ -17038,6 +17085,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pct_to_high") return Number(v) >= -3 ? posClr : T.text;
         if (["adx_change_5d", "di_plus_change_5d", "di_spread"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         if (key === "rsi_change_5d") return Number(v) >= 0 ? posClr : negClr;
+        if (["distance_from_sma50", "distance_from_sma200"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         if (["obv_20d_change", "obv_5d_change", "obv_strength_20d", "cmf_change_5d"].includes(key)) return Number(v) >= 0 ? posClr : negClr;
         return T.text;
     };
@@ -17850,7 +17898,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                                                     const isRS = ["rs_3m", "rs_6m", "rs_12m"].includes(c.key);
                                                     const isRating = c.key === "rs_rating";
                                                     const isRelVol = c.key === "rel_volume";
-                                                    const isWeinsteinTrend = ["mansfield_rs", "mansfield_rs_slope", "sma150_slope_pct", "pct_to_breakout"].includes(c.key);
+                                                    const isWeinsteinTrend = ["mansfield_rs", "mansfield_rs_slope", "sma150_slope_pct", "pct_to_breakout", "distance_from_sma50", "distance_from_sma200"].includes(c.key);
                                                     const isStageLabel = c.key === "stage_label";
                                                     let cellColor = T.subtext;
                                                     if (isRet) cellColor = retColor(c.key, v);
@@ -18768,6 +18816,59 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         })).sort((a, b) => (b.rs_rating ?? -Infinity) - (a.rs_rating ?? -Infinity));
         return filterByUniverse(mapped);
     }, [stage2EarlyRawRows, filterByUniverse]);
+
+    //  Stage 4 Downtrend scan  dedicated fetch from the stage4_downtrend table
+    // (rows already filtered server-side). Strongest bear score first, then
+    // furthest below the 200 SMA, matching the table's own ORDER BY.
+    const [stage4DowntrendRawRows, stage4DowntrendLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.stage4Downtrend);
+    const dStage4Downtrend = useMemo(() => {
+        const num = v => (v != null && v !== "" ? Number(v) : null);
+        const mapped = (stage4DowntrendRawRows || []).map(r => ({
+            ...r,
+            close: num(r.close),
+            sma50: num(r.sma50),
+            sma150: num(r.sma150),
+            sma200: num(r.sma200),
+            sma200_20d_ago: num(r.sma200_20d_ago),
+            ret_3m: num(r.ret_3m),
+            rs_rating: num(r.rs_rating),
+            rs_3m: num(r.rs_3m),
+            mansfield_rs: num(r.mansfield_rs),
+            distance_from_sma50: num(r.distance_from_sma50),
+            distance_from_sma200: num(r.distance_from_sma200),
+            bear_strength_score: num(r.bear_strength_score),
+        })).sort((a, b) =>
+            (b.bear_strength_score ?? -Infinity) - (a.bear_strength_score ?? -Infinity) ||
+            (a.distance_from_sma200 ?? Infinity) - (b.distance_from_sma200 ?? Infinity));
+        return filterByUniverse(mapped);
+    }, [stage4DowntrendRawRows, filterByUniverse]);
+
+    //  Fresh Breakdown scan  direct fetch from the fresh_breakdown table (rows
+    // already filtered server-side). Highest bearish_score first, then deepest
+    // breakdown (most negative breakdown_pct), matching the table's ORDER BY.
+    const [freshBreakdownRawRows, freshBreakdownLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.freshBreakdown);
+    const dFreshBreakdown = useMemo(() => {
+        const num = v => (v != null && v !== "" ? Number(v) : null);
+        const mapped = (freshBreakdownRawRows || []).map(r => ({
+            ...r,
+            close: num(r.close),
+            previous_20d_low: num(r.previous_20d_low),
+            sma20: num(r.sma20),
+            sma50: num(r.sma50),
+            ret_3m: num(r.ret_3m),
+            rs_rating: num(r.rs_rating),
+            mansfield_rs: num(r.mansfield_rs),
+            volume: num(r.volume),
+            volume_20ma: num(r.avg_volume_20d),
+            rel_volume: num(r.volume_ratio),
+            breakdown_pct: num(r.breakdown_pct),
+            market_cap_cr: num(r.market_cap_cr),
+            bearish_score: num(r.bearish_score),
+        })).sort((a, b) =>
+            (b.bearish_score ?? -Infinity) - (a.bearish_score ?? -Infinity) ||
+            (a.breakdown_pct ?? Infinity) - (b.breakdown_pct ?? Infinity));
+        return filterByUniverse(mapped);
+    }, [freshBreakdownRawRows, filterByUniverse]);
 
     //  ADX/DI Momentum scan  dedicated fetch from the adx_di_screen table (rows
     // already filtered server-side: Mkt Cap > 500 Cr, Stage 2 trend, RS Rating >
@@ -19778,7 +19879,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
     // Square screen card  replaces the old row + inline preview-table pattern.
     // Clicking anywhere on the card jumps straight to the full table (ScreenDetailView),
     // no truncated inline preview anymore.
-    const ScreenCard = ({ rowKey, title, subtitle, rows, scoreKey, scoreLabel, formatScore, tfLabel, loadingOverride, onViewAll, extraControls, detailExtra }) => {
+    const ScreenCard = ({ rowKey, title, subtitle, rows, scoreKey, scoreLabel, formatScore, tfLabel, loadingOverride, onViewAll, extraControls, detailExtra, bearish }) => {
         const accentColor = useContext(catColorCtx);
         const isLoading = loadingOverride !== undefined ? loadingOverride : tablesLoading;
         const stats = quickStats(rows, scoreKey);
@@ -19798,7 +19899,9 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                         background: `${accentColor}${isDark ? "1c" : "12"}`, border: `1px solid ${accentColor}30`
                     }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" />
+                            {bearish
+                                ? <><path d="M3 7l6 6 4-4 8 8" /><path d="M15 17h6v-6" /></>
+                                : <><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></>}
                         </svg>
                     </div>
                     <svg className="scr-card-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={D.subtext} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -20413,6 +20516,23 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                         onViewAll={() => { setPatternFilterInitialTab(tab.id); setPatternFilterOpen(true); }}
                                     />
                                 ))}
+                            </CategorySection>
+
+                            <CategorySection name="Bearish Screens" color={isDark ? "#f87171" : "#dc2626"}
+                                desc="Weak stocks in confirmed downtrends: below key moving averages with poor relative strength"
+                                count={(stage4DowntrendLoading || freshBreakdownLoading) ? "" : dStage4Downtrend.length + dFreshBreakdown.length}>
+                                <ScreenRow rowKey="bs-stage4downtrend" title="Stage 4 Downtrend" bearish
+                                    subtitle="Close below SMA50, SMA150 and SMA200 with weak relative strength, ranked by bear strength and distance below the 200 SMA"
+                                    rows={dStage4Downtrend} scoreKey="bear_strength_score" scoreLabel="Bear Strength"
+                                    formatScore={v => Math.round(v).toString()} tfLabel="Stage 4 Downtrend"
+                                    loadingOverride={stage4DowntrendLoading}
+                                    detailExtra={{ stage4DowntrendMode: true }} />
+                                <ScreenRow rowKey="bs-freshbreakdown" title="Fresh Breakdown" bearish
+                                    subtitle="Close breaks below the previous 20-day low with volume above its 20D average, ranked by bearish score and depth of breakdown"
+                                    rows={dFreshBreakdown} scoreKey="bearish_score" scoreLabel="Bearish Score"
+                                    formatScore={v => Math.round(v).toString()} tfLabel="Fresh Breakdown"
+                                    loadingOverride={freshBreakdownLoading}
+                                    detailExtra={{ freshBreakdownMode: true }} />
                             </CategorySection>
 
                         </div>
