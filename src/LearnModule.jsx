@@ -4,9 +4,10 @@ import { FOUNDATIONS_TRACKS } from "./learnFoundations";
 import { STATEMENT_TRACKS } from "./learnStatements";
 import { RATIO_TRACKS, GLOSSARY } from "./learnRatios";
 import { CASE_TRACKS, CASE_SECTORS } from "./learnCases";
+import { TECHNICAL_TRACKS, TECHNICAL_LEVELS, TECHNICAL_GLOSSARY } from "./learnTechnical";
 
 /*
- * LearnModule — structured course on fundamental analysis.
+ * LearnModule — structured courses on fundamental and technical analysis, plus case studies and a glossary.
  * Props: T (theme tokens). All styling is inline with theme tokens.
  * Progress is stored in localStorage (guarded) under LS_KEY.
  */
@@ -18,12 +19,36 @@ const SHELL_MAX = 1400;   // same centered container width as StockDashboard
 const TEXT_MAX = 940;     // readable measure for paragraphs and lists only
 
 const COURSE_TRACKS = [START_TRACK, ...FOUNDATIONS_TRACKS.filter(tr => tr.id !== "foundations"), ...STATEMENT_TRACKS, ...RATIO_TRACKS];
-const TRACKS = [...COURSE_TRACKS, ...CASE_TRACKS];
+
+/* Technicals: tracks grouped into four difficulty levels (resolved from learnTechnical). */
+const TECH_LEVEL_COLORS = ["#059669", "#2563eb", "#7c3aed", "#ea580c"];
+const _techById = Object.fromEntries(TECHNICAL_TRACKS.map(t => [t.id, t]));
+const TECH_LEVELS = TECHNICAL_LEVELS.map((g, i) => ({
+    ...g, color: TECH_LEVEL_COLORS[i % TECH_LEVEL_COLORS.length], unit: ["track", "tracks"],
+    tracks: g.trackIds.map(id => _techById[id]).filter(Boolean),
+}));
+const _techAssigned = new Set(TECH_LEVELS.flatMap(g => g.trackIds));
+const TECH_TRACKS = [...TECH_LEVELS.flatMap(g => g.tracks), ...TECHNICAL_TRACKS.filter(t => !_techAssigned.has(t.id))];
+const TECH_TRACK_COLOR = {};
+const TECH_LEVEL_OF = {};
+TECH_LEVELS.forEach(g => g.tracks.forEach(t => { TECH_TRACK_COLOR[t.id] = g.color; TECH_LEVEL_OF[t.id] = g; }));
+
+const TRACKS = [...COURSE_TRACKS, ...TECH_TRACKS, ...CASE_TRACKS];
 const CASE_TRACK_IDS = new Set(CASE_TRACKS.map(t => t.id));
+const TECH_TRACK_IDS = new Set(TECH_TRACKS.map(t => t.id));
+const sectionOf = (trackId) => (CASE_TRACK_IDS.has(trackId) ? "cases" : TECH_TRACK_IDS.has(trackId) ? "tech" : "course");
 const LESSONS = TRACKS.flatMap(tr => tr.lessons.map(l => ({ ...l, trackId: tr.id, trackTitle: tr.title })));
-const COURSE_LESSONS = LESSONS.filter(l => !CASE_TRACK_IDS.has(l.trackId));
-const CASE_LESSONS = LESSONS.filter(l => CASE_TRACK_IDS.has(l.trackId));
+const COURSE_LESSONS = LESSONS.filter(l => sectionOf(l.trackId) === "course");
+const TECH_LESSONS = LESSONS.filter(l => sectionOf(l.trackId) === "tech");
+const CASE_LESSONS = LESSONS.filter(l => sectionOf(l.trackId) === "cases");
 const LESSON_INDEX = Object.fromEntries(LESSONS.map((l, i) => [l.id, i]));
+
+/* Everything that differs between the three lesson sections lives here. */
+const SECTIONS = {
+    course: { lessons: COURSE_LESSONS, tracks: COURSE_TRACKS, groups: undefined, title: "Learn fundamental analysis", sub: (n) => `From reading a P&L to judging a stock, in ${n} short lessons.`, foot: "This course is for education only and is not investment advice. The company in the examples is fictional." },
+    tech: { lessons: TECH_LESSONS, tracks: TECH_TRACKS, groups: TECH_LEVELS, title: "Learn technical analysis", sub: (n) => `From reading a chart to a complete, risk-managed trading plan, in ${n} lessons across four levels.`, foot: "Educational content only, not investment advice. All stocks, prices and setups in the examples are fictional. No setup works every time, and trading involves risk of loss." },
+    cases: { lessons: CASE_LESSONS, tracks: CASE_TRACKS, groups: CASE_SECTORS, title: "Learn fundamental analysis", sub: () => "Real companies analysed from their annual reports, step by step.", foot: "This course is for education only and is not investment advice. The company in the examples is fictional." },
+};
 
 function loadProgress() {
     try {
@@ -122,7 +147,7 @@ function buildLearnTheme(T = {}) {
 
 /* Each track gets its own colour so the outline reads at a glance. */
 const TRACK_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#ea580c", "#c026d3"];
-const trackColor = (trackId) => TRACK_COLORS[Math.max(0, TRACKS.findIndex(t => t.id === trackId)) % TRACK_COLORS.length];
+const trackColor = (trackId) => TECH_TRACK_COLOR[trackId] || TRACK_COLORS[Math.max(0, TRACKS.findIndex(t => t.id === trackId)) % TRACK_COLORS.length];
 
 function buildCss(T) {
     return `
@@ -727,8 +752,10 @@ function Outline({ activeId, done, onPick, T, tracks, groups, mobile }) {
                     return (
                         <section key={g.id} aria-label={g.title} style={{ marginTop: gi === 0 ? 0 : (mobile ? 10 : 6), paddingTop: gi === 0 ? 0 : (mobile ? 10 : 14), borderTop: gi === 0 ? "none" : `1px solid ${T.panelBorder}` }}>
                             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "2px 10px 10px", fontFamily: SANS }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.muted }}>{g.title}</span>
-                                <span style={{ fontSize: 11, fontWeight: 600, color: T.muted, fontFamily: MONO }}>{g.tracks.length} {g.tracks.length === 1 ? "company" : "companies"} · {d}/{lessons.length}</span>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.muted }}>
+                                    {g.color && <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: g.color, boxShadow: `0 0 0 3px ${withAlpha(g.color, 0.18)}` }} />}{g.title}
+                                </span>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: T.muted, fontFamily: MONO }}>{g.tracks.length} {g.tracks.length === 1 ? (g.unit || ["company", "companies"])[0] : (g.unit || ["company", "companies"])[1]} · {d}/{lessons.length}</span>
                             </div>
                             {g.tracks.map(renderTrack)}
                         </section>
@@ -740,14 +767,20 @@ function Outline({ activeId, done, onPick, T, tracks, groups, mobile }) {
 }
 
 /* ── Glossary ────────────────────────────────────────────────────────────── */
+const ALL_TERMS = [
+    ...GLOSSARY.map(g => ({ ...g, kind: "fund" })),
+    ...TECHNICAL_GLOSSARY.map(g => ({ ...g, kind: "tech" })),
+];
 function Glossary({ T, mobile }) {
     const [q, setQ] = useState("");
+    const [scope, setScope] = useState("all"); // all | fund | tech
     const items = useMemo(() => {
         const s = q.trim().toLowerCase();
-        return [...GLOSSARY]
+        return ALL_TERMS
+            .filter(g => scope === "all" || g.kind === scope)
             .sort((a, b) => a.term.localeCompare(b.term))
             .filter(g => !s || g.term.toLowerCase().includes(s) || g.def.toLowerCase().includes(s));
-    }, [q]);
+    }, [q, scope]);
     const groups = useMemo(() => {
         const m = new Map();
         items.forEach(g => {
@@ -764,7 +797,7 @@ function Glossary({ T, mobile }) {
                 <h2 style={{ margin: 0, fontSize: mobile ? 23 : 28, fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.2, color: T.text }}>Glossary</h2>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: T.accent, padding: "2px 9px", borderRadius: 999, background: T.accentSoft, border: `1px solid ${withAlpha(T.accent, 0.22)}`, fontFamily: MONO }}>{items.length}</span>
             </div>
-            <p style={{ margin: "0 0 18px", fontSize: 15, color: T.subtext, lineHeight: 1.6 }}>Short definitions of the terms used across the course.</p>
+            <p style={{ margin: "0 0 18px", fontSize: 15, color: T.subtext, lineHeight: 1.6 }}>Short definitions of the terms used across the fundamental and technical courses.</p>
 
             <div style={{ position: "sticky", top: 0, zIndex: 2, padding: "6px 0 14px", background: T.bg }}>
                 <div style={{ position: "relative" }}>
@@ -774,7 +807,7 @@ function Glossary({ T, mobile }) {
                         className="lm-input"
                         value={q}
                         onChange={e => setQ(e.target.value)}
-                        placeholder="Search terms, e.g. ROCE"
+                        placeholder="Search terms, e.g. ROCE or RSI"
                         aria-label="Search glossary"
                         style={{
                             width: "100%", padding: "12px 14px 12px 40px", borderRadius: 14,
@@ -782,6 +815,18 @@ function Glossary({ T, mobile }) {
                             color: T.text, fontFamily: SANS, fontSize: 14.5,
                         }}
                     />
+                </div>
+                <div role="group" aria-label="Glossary scope" style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    {[["all", "All"], ["fund", "Fundamentals"], ["tech", "Technicals"]].map(([id, label]) => {
+                        const on = scope === id;
+                        return (
+                            <button key={id} type="button" className="lm-ghost" aria-pressed={on} onClick={() => setScope(id)} style={{
+                                padding: "6px 14px", borderRadius: 999, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 600,
+                                border: `1px solid ${on ? withAlpha(T.accent, 0.45) : T.panelBorder}`,
+                                background: on ? T.accentSoft : T.card, color: on ? T.accent : T.subtext,
+                            }}>{label}</button>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -799,8 +844,11 @@ function Glossary({ T, mobile }) {
                     </div>
                     <dl style={{ margin: 0, border: `1px solid ${T.panelBorder}`, borderRadius: 14, background: T.card, boxShadow: T.shadowMd, overflow: "hidden" }}>
                         {list.map((g, i) => (
-                            <div key={g.term} style={{ padding: "14px 18px", borderBottom: i === list.length - 1 ? "none" : `1px solid ${T.panelBorder}` }}>
-                                <dt style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 4, letterSpacing: "-0.01em" }}>{g.term}</dt>
+                            <div key={g.kind + g.term} style={{ padding: "14px 18px", borderBottom: i === list.length - 1 ? "none" : `1px solid ${T.panelBorder}` }}>
+                                <dt style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 4, letterSpacing: "-0.01em" }}>
+                                    {g.term}
+                                    {scope === "all" && <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "1px 7px", borderRadius: 999, color: g.kind === "tech" ? "#7c3aed" : T.muted, background: g.kind === "tech" ? withAlpha("#7c3aed", 0.12) : T.pillBg, border: `1px solid ${g.kind === "tech" ? withAlpha("#7c3aed", 0.24) : T.panelBorder}` }}>{g.kind === "tech" ? "Technical" : "Fundamental"}</span>}
+                                </dt>
                                 <dd style={{ margin: 0, fontSize: 14.5, lineHeight: 1.7, color: T.subtext }}>{g.def}</dd>
                             </div>
                         ))}
@@ -816,8 +864,10 @@ export default function LearnModule({ T: baseT }) {
     const T = useMemo(() => buildLearnTheme(baseT || {}), [baseT]);
     const mobile = useIsMobile();
     const [progress, setProgress] = useState(loadProgress);
-    const [view, setView] = useState("course"); // course | cases | glossary
-    const [activeId, setActiveId] = useState(() => { const last = loadProgress().last; const l = last != null ? LESSONS[LESSON_INDEX[last]] : null; return l && !CASE_TRACK_IDS.has(l.trackId) ? l.id : LESSONS[0].id; });
+    const [initialId] = useState(() => { const last = loadProgress().last; const l = last != null ? LESSONS[LESSON_INDEX[last]] : null; return l ? l.id : COURSE_LESSONS[0].id; });
+    const [view, setView] = useState(() => sectionOf(LESSONS[LESSON_INDEX[initialId] ?? 0].trackId)); // course | tech | cases | glossary
+    const [activeId, setActiveId] = useState(initialId);
+    const lastBySection = useRef({});
     const [menuOpen, setMenuOpen] = useState(false);
     const [readPct, setReadPct] = useState(0);
     const scrollRef = useRef(null);
@@ -825,8 +875,10 @@ export default function LearnModule({ T: baseT }) {
     const rafRef = useRef(0);
 
     const lesson = LESSONS[LESSON_INDEX[activeId] ?? 0];
-    const inCases = CASE_TRACK_IDS.has(lesson.trackId);
-    const list = inCases ? CASE_LESSONS : COURSE_LESSONS;
+    const section = sectionOf(lesson.trackId);
+    const sec = SECTIONS[section];
+    const techLevel = TECH_LEVEL_OF[lesson.trackId];
+    const list = sec.lessons;
     const idx = list.indexOf(lesson);
     const prev = idx > 0 ? list[idx - 1] : null;
     const next = idx < list.length - 1 ? list[idx + 1] : null;
@@ -835,8 +887,10 @@ export default function LearnModule({ T: baseT }) {
     const col = trackColor(lesson.trackId);
 
     const pick = useCallback((id) => {
+        const target = sectionOf(LESSONS[LESSON_INDEX[id]].trackId);
+        lastBySection.current[target] = id;
         setActiveId(id);
-        setView(CASE_TRACK_IDS.has(LESSONS[LESSON_INDEX[id]].trackId) ? "cases" : "course");
+        setView(target);
         setMenuOpen(false);
         setProgress(p => {
             const np = { ...p, last: id };
@@ -889,9 +943,8 @@ export default function LearnModule({ T: baseT }) {
     const switchView = (id) => {
         setMenuOpen(false);
         if (id === "glossary") { setView("glossary"); return; }
-        const wantCase = id === "cases";
-        if (wantCase === inCases) { setView(id); return; }
-        pick((wantCase ? CASE_LESSONS : COURSE_LESSONS)[0].id);
+        if (id === section) { setView(id); return; }
+        pick(lastBySection.current[id] || SECTIONS[id].lessons[0].id);
     };
     const segBtn = (id, label) => {
         const active = view === id;
@@ -903,7 +956,7 @@ export default function LearnModule({ T: baseT }) {
                 onClick={() => switchView(id)}
                 aria-pressed={active}
                 style={{
-                    flex: mobile ? 1 : "0 0 auto", minHeight: mobile ? 36 : undefined, padding: mobile ? "7px 6px" : "7px 16px", border: "none", borderRadius: 9, cursor: "pointer", fontSize: mobile ? 13 : 13.5, whiteSpace: "nowrap", letterSpacing: "-0.005em",
+                    flex: mobile ? 1 : "0 0 auto", minHeight: mobile ? 36 : undefined, padding: mobile ? "7px 2px" : "7px 16px", border: "none", borderRadius: 9, cursor: "pointer", fontSize: mobile ? 12 : 13.5, whiteSpace: "nowrap", letterSpacing: "-0.005em",
                     fontWeight: active ? 700 : 600, background: active ? T.card : "transparent", color: active ? T.text : T.muted,
                     boxShadow: active ? T.shadowSm : "none",
                 }}
@@ -940,23 +993,23 @@ export default function LearnModule({ T: baseT }) {
             <div style={{ position: "relative", flex: "0 0 auto", background: T.surface, borderBottom: `1px solid ${T.panelBorder}`, padding: mobile ? "8px 12px" : "14px 20px" }}>
               <div style={{ width: "100%", maxWidth: SHELL_MAX, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: mobile ? 8 : 12, flexWrap: mobile ? "nowrap" : "wrap" }}>
                 {mobile ? (
-                    <h1 style={{ position: "absolute", width: 1, height: 1, margin: -1, padding: 0, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 }}>Learn fundamental analysis</h1>
+                    <h1 style={{ position: "absolute", width: 1, height: 1, margin: -1, padding: 0, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 }}>{sec.title}</h1>
                 ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                     <Tile color={T.accent} size={40} radius={12}><Icon name="book" size={20} /></Tile>
                     <div style={{ minWidth: 0 }}>
-                        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: T.text, lineHeight: 1.25 }}>Learn fundamental analysis</h1>
-                        <div style={{ fontSize: 13.5, color: T.subtext, marginTop: 2 }}>{inCases ? "Real companies analysed from their annual reports, step by step." : `From reading a P&L to judging a stock, in ${list.length} short lessons.`}</div>
+                        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: T.text, lineHeight: 1.25 }}>{view === "glossary" ? "Glossary" : sec.title}</h1>
+                        <div style={{ fontSize: 13.5, color: T.subtext, marginTop: 2 }}>{view === "glossary" ? "Definitions across fundamental and technical analysis." : sec.sub(list.length)}</div>
                     </div>
                 </div>
                 )}
                 <div style={{ display: "flex", alignItems: "center", gap: mobile ? 8 : 12, flexWrap: mobile ? "nowrap" : "wrap", flex: mobile ? 1 : "0 1 auto", minWidth: 0 }}>
                     <div role="group" aria-label="Section" style={{ display: "inline-flex", alignItems: "center", gap: 2, padding: mobile ? 3 : 4, borderRadius: 12, background: T.pillBg, border: `1px solid ${T.panelBorder}`, flex: mobile ? 1 : "0 0 auto", minWidth: 0 }}>
-                        {segBtn("course", "Course")}
+                        {segBtn("course", mobile ? "Fundamentals" : "Fundamentals")}
+                        {segBtn("tech", "Technicals")}
                         {segBtn("cases", mobile ? "Cases" : "Case studies")}
                         {segBtn("glossary", "Glossary")}
                     </div>
-                    {mobile && view !== "glossary" && <ProgressPill done={doneCount} total={list.length} T={T} compact />}
                 </div>
                 {!mobile && <ProgressPill done={doneCount} total={list.length} T={T} />}
               </div>
@@ -981,11 +1034,12 @@ export default function LearnModule({ T: baseT }) {
                             <span style={{ display: "block", fontSize: 12, color: T.muted, fontWeight: 600 }}>{menuOpen ? `${list.length} lessons` : `Lesson ${idx + 1} of ${list.length}`}</span>
                             <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{menuOpen ? "Choose a lesson" : lesson.title}</span>
                         </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: doneCount === list.length ? T.pos : T.muted, fontFamily: MONO }}>{doneCount}/{list.length}</span>
                         <span style={{ color: T.muted, display: "flex", transform: menuOpen ? "rotate(180deg)" : "none", transition: "transform .18s ease" }}><Icon name="down" size={16} stroke={2.4} /></span>
                     </button>
                     {menuOpen && (
                         <div ref={sideRef} style={{ position: "absolute", left: 0, right: 0, top: "100%", maxHeight: "62vh", overflowY: "auto", overscrollBehavior: "contain", padding: "10px 8px 14px", background: T.surface, borderTop: `1px solid ${T.panelBorder}`, borderBottom: `1px solid ${T.panelBorder}`, boxShadow: T.shadowLg }}>
-                            <Outline activeId={lesson.id} done={progress.done} onPick={pick} T={T} tracks={inCases ? CASE_TRACKS : COURSE_TRACKS} groups={inCases ? CASE_SECTORS : undefined} mobile={mobile} />
+                            <Outline activeId={lesson.id} done={progress.done} onPick={pick} T={T} tracks={sec.tracks} groups={sec.groups} mobile={mobile} />
                         </div>
                     )}
                 </div>
@@ -999,7 +1053,7 @@ export default function LearnModule({ T: baseT }) {
             <div style={{ display: "flex", flex: 1, minHeight: 0, width: "100%", maxWidth: SHELL_MAX, margin: "0 auto", gap: mobile ? 0 : 20, padding: mobile ? 0 : "20px 20px 0" }}>
                 {!mobile && view !== "glossary" && (
                     <aside ref={sideRef} style={{ flex: "0 0 296px", alignSelf: "stretch", overflowY: "auto", background: T.surface, border: `1px solid ${T.panelBorder}`, borderRadius: 16, boxShadow: T.shadowMd, padding: "16px 12px 24px", marginBottom: 20, overscrollBehavior: "contain" }}>
-                        <Outline activeId={lesson.id} done={progress.done} onPick={pick} T={T} tracks={inCases ? CASE_TRACKS : COURSE_TRACKS} groups={inCases ? CASE_SECTORS : undefined} mobile={mobile} />
+                        <Outline activeId={lesson.id} done={progress.done} onPick={pick} T={T} tracks={sec.tracks} groups={sec.groups} mobile={mobile} />
                     </aside>
                 )}
 
@@ -1012,6 +1066,9 @@ export default function LearnModule({ T: baseT }) {
                                 <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, color: col, background: withAlpha(col, T.isDark ? 0.16 : 0.09), border: `1px solid ${withAlpha(col, 0.26)}` }}>
                                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: col }} />{lesson.trackTitle}
                                 </span>
+                                {techLevel && (
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, color: T.subtext, background: T.pillBg, border: `1px solid ${T.panelBorder}` }}>{techLevel.title}</span>
+                                )}
                                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, color: T.subtext, background: T.pillBg, border: `1px solid ${T.panelBorder}` }}>
                                     <Icon name="clock" size={13} />{lesson.minutes} min read
                                 </span>
@@ -1048,7 +1105,7 @@ export default function LearnModule({ T: baseT }) {
                             </div>
 
                             <p style={{ margin: "30px 0 0", fontSize: 12.5, lineHeight: 1.65, color: T.muted, textAlign: "center" }}>
-                                This course is for education only and is not investment advice. The company in the examples is fictional.
+                                {sec.foot}
                             </p>
                         </article>
                     )}

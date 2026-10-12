@@ -2066,7 +2066,7 @@ function MacroIcon({ type, size = 15 }) {
     return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M14.6 9.3c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.5.8-2.5 1.9 0 2.7 5.2 1.4 5.2 4.1 0 1.2-1.1 2-2.6 2-1.3 0-2.3-.7-2.7-1.7" /><path d="M12 5.8v1.9M12 16.3v1.9" /></svg>;
 }
 
-const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = false, card, series, gid, extras }) {
+const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = false, hideSub = false, card, series, gid, extras }) {
     // Optional per-card accent (metals) — applied to icon tile, chip and chart line.
     const tintHex = card.tint ? (Dbase.isDark ? card.tint.dark : card.tint.light) : null;
     const D = React.useMemo(() => (tintHex ? { ...Dbase, accent: tintHex } : Dbase), [Dbase, tintHex]);
@@ -2166,9 +2166,11 @@ const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = 
                                 {!card.bps && <span style={{ opacity: 0.85 }}>({fmtPct(pct)})</span>}
                             </span>
                         </div>
-                        <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: HERO_SANS }}>
-                            {card.sub}{asOf ? ` \u00B7 ${asOf}` : ""}
-                        </div>
+                        {!hideSub && (
+                            <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: HERO_SANS }}>
+                                {card.sub}{asOf ? ` \u00B7 ${asOf}` : ""}
+                            </div>
+                        )}
                     </>
                 ) : (
                     <>
@@ -2277,7 +2279,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
                 </div>
                 {MACRO_CARDS.map(card => (
                     <div className="sd-hero-card" key={card.key}>
-                        <MacroPanel D={DD} isCompact={isCompact} bare card={card} series={macroSeries?.[card.symbol]} extras={macroExtras?.[card.key]} gid={`${card.key}-m`} />
+                        <MacroPanel D={DD} isCompact={isCompact} bare hideSub={EXTRA_MACRO_CARDS.some(c => c.key === card.key)} card={card} series={macroSeries?.[card.symbol]} extras={macroExtras?.[card.key]} gid={`${card.key}-m`} />
                     </div>
                 ))}
             </div>
@@ -4678,6 +4680,220 @@ export async function warmStockDashboardCaches(userToken) {
     return _stockDashboardWarmPromise;
 }
 
+// ─── EXPLORE CARDS (LEARN · JOURNAL) ─────────────────────────────────────────
+// Two promo tiles at the very bottom of the dashboard. Same visual language as the hero
+// cards: hairline border, soft layered shadow, 2px accent bar, tracked-caps eyebrow, mono
+// numerals. The whole card is the click target; the pill is the visual affordance.
+function ExploreArrow({ size = 14 }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12h14" /><path d="M13 6l6 6-6 6" />
+        </svg>
+    );
+}
+
+function ExplorePromoCard({ D, isCompact, tint, eyebrow, icon, title, blurb, chips, cta, onOpen, children }) {
+    const [hover, setHover] = useState(false);
+    const [focus, setFocus] = useState(false);
+    const base = heroSurface(D);
+    const lifted = hover && !isCompact;
+    const onTint = luminance(tint) > 0.4 ? "#0b1220" : "#ffffff";
+    return (
+        <div
+            role="link"
+            tabIndex={0}
+            aria-label={`${title}. ${cta}`}
+            onClick={() => onOpen && onOpen()}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen && onOpen(); } }}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            onFocus={() => setFocus(true)}
+            onBlur={() => setFocus(false)}
+            style={{
+                ...base,
+                border: `1px solid ${hover || focus ? withAlpha(tint, D.isDark ? 0.5 : 0.34) : D.panelBorder}`,
+                boxShadow: focus
+                    ? `0 0 0 3px ${withAlpha(tint, 0.22)}`
+                    : lifted
+                        ? (D.isDark ? "0 16px 36px rgba(0,0,0,0.42)" : `0 1px 2px rgba(15,23,42,0.04), 0 20px 36px -18px ${withAlpha(tint, 0.42)}`)
+                        : base.boxShadow,
+                position: "relative",
+                overflow: "hidden",
+                minWidth: 0,
+                cursor: "pointer",
+                outline: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: isCompact ? 14 : 18,
+                padding: isCompact ? "22px 18px 18px" : "28px 28px 24px",
+                transform: lifted ? "translateY(-2px)" : "translateY(0)",
+                transition: "transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease",
+                fontFamily: HERO_SANS,
+            }}
+        >
+            {/* hairline accent bar + soft corner glow */}
+            <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 22, right: 22, height: 2, borderRadius: "0 0 2px 2px", background: `linear-gradient(90deg, ${withAlpha(tint, D.isDark ? 0.9 : 0.75)}, ${withAlpha(tint, 0)})` }} />
+            <div aria-hidden="true" style={{ position: "absolute", top: -90, right: -70, width: 280, height: 280, borderRadius: "50%", pointerEvents: "none", background: `radial-gradient(circle, ${withAlpha(tint, D.isDark ? 0.2 : 0.11)} 0%, ${withAlpha(tint, 0)} 68%)`, opacity: hover ? 1 : 0.8, transition: "opacity 0.3s ease" }} />
+
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <span style={{
+                    width: 36, height: 36, minWidth: 36, borderRadius: 11, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    color: tint, background: withAlpha(tint, D.isDark ? 0.18 : 0.1), border: `1px solid ${withAlpha(tint, D.isDark ? 0.32 : 0.2)}`,
+                }}>
+                    {icon}
+                </span>
+                <span style={{ fontSize: 12, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.11em", whiteSpace: "nowrap" }}>{eyebrow}</span>
+            </div>
+
+            <div style={{ position: "relative", minWidth: 0 }}>
+                <div style={{ fontSize: isCompact ? 21 : 25, fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.2, color: D.text }}>{title}</div>
+                <div style={{ marginTop: 10, fontSize: isCompact ? 14 : 14.5, lineHeight: 1.6, color: D.subtext, maxWidth: 520 }}>{blurb}</div>
+            </div>
+
+            <div style={{ position: "relative", minWidth: 0 }}>{children}</div>
+
+            <div style={{ position: "relative", display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {chips.map(c => (
+                    <span key={c} style={{
+                        padding: "5px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, lineHeight: 1.2, whiteSpace: "nowrap",
+                        color: D.subtext, background: D.softFill, border: `1px solid ${D.panelBorder}`,
+                    }}>{c}</span>
+                ))}
+            </div>
+
+            <div style={{ position: "relative", marginTop: "auto", paddingTop: 2 }}>
+                <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 9, padding: "10px 16px 10px 18px", borderRadius: 999,
+                    background: tint, color: onTint, fontSize: 14, fontWeight: 700, letterSpacing: "0.005em",
+                    boxShadow: `0 8px 18px -8px ${withAlpha(tint, 0.65)}`,
+                }}>
+                    {cta}
+                    <span style={{ display: "inline-flex", transform: hover ? "translateX(3px)" : "translateX(0)", transition: "transform 0.2s ease" }}><ExploreArrow /></span>
+                </span>
+            </div>
+        </div>
+    );
+}
+
+// Learn: a 4-step path (static, no data) inside a soft inset panel.
+function LearnPathVisual({ D, tint }) {
+    const steps = ["Basics", "Statements", "Ratios", "Stage analysis"];
+    return (
+        <div style={{ padding: "16px 16px 14px", borderRadius: 12, background: D.softFill, border: `1px solid ${D.panelBorder}` }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+                {steps.map((label, i) => {
+                    const first = i === 0;
+                    return (
+                        <div key={label} style={{ position: "relative", minWidth: 0 }}>
+                            {i < steps.length - 1 && (
+                                <div aria-hidden="true" style={{ position: "absolute", top: 12, left: 34, right: 6, height: 2, borderRadius: 2, background: first ? `linear-gradient(90deg, ${tint}, ${withAlpha(tint, 0.25)})` : withAlpha(D.muted, 0.28) }} />
+                            )}
+                            <span style={{
+                                width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                fontFamily: HERO_MONO, fontSize: 12, fontWeight: 700,
+                                background: first ? tint : D.panelBg, color: first ? (luminance(tint) > 0.4 ? "#0b1220" : "#fff") : D.muted,
+                                border: `1.5px solid ${first ? tint : withAlpha(D.muted, 0.4)}`,
+                                boxShadow: first ? `0 0 0 4px ${withAlpha(tint, D.isDark ? 0.2 : 0.14)}` : "none",
+                            }}>{i + 1}</span>
+                            <div style={{ marginTop: 9, paddingRight: 6, fontSize: 12, fontWeight: first ? 700 : 600, lineHeight: 1.3, color: first ? D.text : D.subtext }}>{label}</div>
+                        </div>
+                    );
+                })}
+            </div>
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${D.panelBorder}`, fontSize: 12, color: D.muted }}>
+                Built for beginners &middot; start from zero
+            </div>
+        </div>
+    );
+}
+
+// Journal: illustrative equity curve + three stat tiles, clearly marked as a sample.
+function JournalPreviewVisual({ D, tint }) {
+    const line = "M0,62 C20,60 30,48 50,52 S80,58 100,44 S130,30 150,36 S185,46 205,28 S245,14 270,20 S290,10 300,8";
+    const gid = "explore-journal-eq";
+    const stats = [
+        { label: "Win rate", value: "58%" },
+        { label: "Expectancy", value: "+0.8R" },
+        { label: "Net P&L", value: "+\u20B942.6K" },
+    ];
+    return (
+        <div style={{ padding: "14px 16px 14px", borderRadius: 12, background: D.softFill, border: `1px solid ${D.panelBorder}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontSize: 11, color: D.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>Equity curve</span>
+                <span style={{ fontSize: 10.5, color: D.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, border: `1px solid ${D.panelBorder}` }}>Sample</span>
+            </div>
+            <div style={{ position: "relative", height: 78, marginTop: 8 }}>
+                <svg width="100%" height="100%" viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true" style={{ display: "block", overflow: "visible" }}>
+                    <defs>
+                        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={tint} stopOpacity={D.isDark ? 0.34 : 0.22} />
+                            <stop offset="100%" stopColor={tint} stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <line x1="0" x2="300" y1="62" y2="62" stroke={D.muted} strokeOpacity="0.4" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+                    <path d={`${line} L300,80 L0,80 Z`} fill={`url(#${gid})`} />
+                    <path d={line} fill="none" stroke={tint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                </svg>
+                <span aria-hidden="true" style={{ position: "absolute", right: -4, top: "10%", marginTop: -4, width: 8, height: 8, borderRadius: "50%", background: tint, boxShadow: `0 0 0 4px ${withAlpha(tint, 0.2)}` }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 12 }}>
+                {stats.map(t => (
+                    <div key={t.label} style={{ minWidth: 0, padding: "7px 10px", borderRadius: 10, background: D.panelBg, border: `1px solid ${D.panelBorder}` }}>
+                        <div style={{ fontSize: 10, color: D.muted, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{t.label}</div>
+                        <div style={{ marginTop: 4, fontFamily: HERO_MONO, fontSize: 14, fontWeight: 700, color: D.text, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t.value}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+const ExploreCards = React.memo(function ExploreCards({ D, isCompact, onNavigate }) {
+    const learnTint = D.accent || "#1e3a5f";
+    const journalTint = D.pos || "#0e7a53";
+    const iconProps = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" };
+    return (
+        <div style={{
+            minWidth: 0,
+            marginTop: isCompact ? 14 : 18,
+            display: isCompact ? "flex" : "grid",
+            flexDirection: isCompact ? "column" : undefined,
+            gridTemplateColumns: isCompact ? undefined : "1fr 1fr",
+            gap: isCompact ? 14 : 18,
+            alignItems: "stretch",
+        }}>
+            <ExplorePromoCard
+                D={D}
+                isCompact={isCompact}
+                tint={learnTint}
+                eyebrow="Learn"
+                icon={<svg {...iconProps}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>}
+                title="Learn to read the business and the chart"
+                blurb="Step-by-step lessons that take you from financial statements to Weinstein stage analysis and O'Neil's CAN SLIM, written for complete beginners."
+                chips={["P&L", "Balance sheet", "Cash flow", "Stage analysis", "CAN SLIM"]}
+                cta="Start learning"
+                onOpen={() => onNavigate && onNavigate("learn")}
+            >
+                <LearnPathVisual D={D} tint={learnTint} />
+            </ExplorePromoCard>
+            <ExplorePromoCard
+                D={D}
+                isCompact={isCompact}
+                tint={journalTint}
+                eyebrow="Journal"
+                icon={<svg {...iconProps}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>}
+                title="Find your edge, one trade at a time"
+                blurb="Log every trade, then see what is really working: win rate, expectancy, capital gains by Indian financial year, XIRR and dividends in one place."
+                chips={["Trade log", "Analytics", "Capital gains", "Funds & XIRR", "Dividends"]}
+                cta="Open Journal"
+                onOpen={() => onNavigate && onNavigate("tradevault", "dashboard")}
+            >
+                <JournalPreviewVisual D={D} tint={journalTint} />
+            </ExplorePromoCard>
+        </div>
+    );
+});
+
 export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     const D = useMemo(() => buildDashboardTheme(T), [T]);
     const { isCompact, isTablet } = useViewportFlags();
@@ -5701,6 +5917,9 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     <LeadershipScreenCards T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
                 </div>
                 </LeadershipPanel>
+
+                {/* ── LEARN + JOURNAL PROMO CARDS ─────────────────────────────────── */}
+                <ExploreCards D={D} isCompact={isCompact} onNavigate={onNavigate} />
 
                 <style>{`
                 .stock-dashboard-shell * {

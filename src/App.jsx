@@ -23599,6 +23599,8 @@ export default function App() {
                                                 } else if (tab === "tradevault") {
                                                     setProductTab("tradevault");
                                                     if (sub) setPage(sub);
+                                                } else if (tab === "learn") {
+                                                    setProductTab("learn");
                                                 }
                                             }}
                                         />
