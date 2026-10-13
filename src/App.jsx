@@ -11672,6 +11672,12 @@ const SCREENS_TABLE_FETCHERS = {
     // server-side). Direct table fetch, strongest bearish score first, then the
     // deepest breakdown (most negative breakdown_pct).
     freshBreakdown: _makeScreensTableFetcher("fresh_breakdown", "te_scr_freshbreakdown_v1", "select=*&order=bearish_score.desc.nullslast,breakdown_pct.asc.nullslast&limit=1000"),
+    // bearish_tight_base: bearish mirror of the tight-base screens  a tight,
+    // volume-contracting base sitting just above (or just through) its support /
+    // breakdown_level (distance_to_support_pct, setup_status, base_range_pct,
+    // recent_range_2w_pct, volume_contraction_pct, SMAs, rs_rating and
+    // bearish_tight_score all computed server-side). Strongest score first.
+    bearishTightBase: _makeScreensTableFetcher("bearish_tight_base", "te_scr_bearishtightbase_v1", "select=*&order=bearish_tight_score.desc.nullslast&limit=1000"),
     weeklyBreakoutSoon: _makeScreensTableFetcher("weekly_breakout_soon", "te_scr_weeklybreakoutsoon_v1", "select=*&order=pct_to_breakout.asc.nullslast&limit=1000"),
 };
 
@@ -16751,6 +16757,11 @@ const ALL_COLUMNS = [
     { key: "previous_20d_low", label: "Prev 20D Low", defaultOn: false },
     { key: "breakdown_pct", label: "Breakdown %", defaultOn: false },
     { key: "bearish_score", label: "Bearish Score", defaultOn: false },
+    { key: "breakdown_level", label: "Breakdown Level", defaultOn: false },
+    { key: "distance_to_support_pct", label: "% To Support", defaultOn: false },
+    { key: "setup_status", label: "Setup Status", defaultOn: false },
+    { key: "base_range_pct", label: "Base Range %", defaultOn: false },
+    { key: "bearish_tight_score", label: "Bearish Tight Score", defaultOn: false },
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
@@ -16789,6 +16800,11 @@ const STAGE4_DOWNTREND_DEFAULT_COLS = ["close", "ret_3m", "rs_rating", "rs_3m", 
 // the fields that screen actually has data for.
 const FRESH_BREAKDOWN_DEFAULT_COLS = ["close", "previous_20d_low", "breakdown_pct", "ret_3m", "rs_rating", "mansfield_rs", "sma20", "sma50", "volume", "volume_20ma", "rel_volume", "market_cap_cr", "bearish_score"];
 
+// bearish_tight_base carries support/breakdown-level fields, base + recent 2W
+// ranges, volume contraction and the 50/150/200 SMAs (no market cap / returns),
+// so the default-on columns swap in the fields that screen has data for.
+const BEARISH_TIGHT_BASE_DEFAULT_COLS = ["close", "breakdown_level", "distance_to_support_pct", "setup_status", "base_range_pct", "range_recent_2w_pct", "volume_contraction_pct", "sma50", "sma150", "sma200", "rs_rating", "bearish_tight_score"];
+
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
     { key: "pct_from_52w_low", label: "From 52W Low %", defaultOp: ">", num: true },
@@ -16810,6 +16826,9 @@ const FILTER_DEFS = [
     { key: "bear_strength_score", label: "Bear Strength", defaultOp: ">", num: true },
     { key: "breakdown_pct", label: "Breakdown %", defaultOp: "<", num: true },
     { key: "bearish_score", label: "Bearish Score", defaultOp: ">", num: true },
+    { key: "distance_to_support_pct", label: "% To Support", defaultOp: "<", num: true },
+    { key: "base_range_pct", label: "Base Range %", defaultOp: "<", num: true },
+    { key: "bearish_tight_score", label: "Bearish Tight Score", defaultOp: ">", num: true },
 ];
 
 // Pattern Filter (Chart Patterns) numeric filters  full-screen view only
@@ -16841,6 +16860,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     const volumeMomentumMode = !!detail.volumeMomentumMode;
     const stage4DowntrendMode = !!detail.stage4DowntrendMode;
     const freshBreakdownMode = !!detail.freshBreakdownMode;
+    const bearishTightBaseMode = !!detail.bearishTightBaseMode;
     const isDark = T.bg !== THEMES.light.bg;
     const sans = "'IBM Plex Sans', system-ui, sans-serif";
     const mono = "'IBM Plex Mono', monospace";
@@ -16962,6 +16982,9 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
             // Fresh Breakdown scan: swap in the columns fresh_breakdown actually has data for
         } else if (freshBreakdownMode) {
             a[c.key] = FRESH_BREAKDOWN_DEFAULT_COLS.includes(c.key);
+            // Bearish Tight Base scan: swap in the columns bearish_tight_base actually has data for
+        } else if (bearishTightBaseMode) {
+            a[c.key] = BEARISH_TIGHT_BASE_DEFAULT_COLS.includes(c.key);
         } else {
             a[c.key] = c.defaultOn;
         }
@@ -17060,6 +17083,11 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "sma200_20d_ago") return fmtINR(v);
         if (key === "bear_strength_score" || key === "bearish_score") return Math.round(Number(v)).toString();
         if (key === "breakdown_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "breakdown_level") return fmtINR(v);
+        if (key === "distance_to_support_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+        if (key === "base_range_pct") return `${Number(v).toFixed(2)}%`;
+        if (key === "setup_status") return String(v).replace(/_/g, " ");
+        if (key === "bearish_tight_score") return Math.round(Number(v)).toString();
         return String(v);
     };
 
@@ -17074,6 +17102,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pct_from_52w_low") return Number(v) >= 0 ? posClr : negClr;
         if (key === "pct_above_pivot") return Number(v) >= 0 ? posClr : negClr;
         if (key === "breakdown_pct") return Number(v) <= 0 ? negClr : T.text;
+        if (key === "distance_to_support_pct") return Number(v) <= 0 ? negClr : T.text;
         if (key === "pct_from_sma50") return Math.abs(Number(v)) <= 1.5 ? posClr : T.text;
         if (key === "pct_from_pivot") return Number(v) >= 0 ? posClr : negClr;
         if (key === "vol_ratio") return Number(v) < 0.7 ? posClr : Number(v) < 1 ? T.text : negClr;
@@ -18870,6 +18899,29 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [freshBreakdownRawRows, filterByUniverse]);
 
+    //  Bearish Tight Base scan  direct fetch from the bearish_tight_base table
+    // (rows already filtered server-side). Highest bearish_tight_score first,
+    // matching the table's ORDER BY.
+    const [bearishTightBaseRawRows, bearishTightBaseLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.bearishTightBase);
+    const dBearishTightBase = useMemo(() => {
+        const num = v => (v != null && v !== "" ? Number(v) : null);
+        const mapped = (bearishTightBaseRawRows || []).map(r => ({
+            ...r,
+            close: num(r.close),
+            breakdown_level: num(r.breakdown_level),
+            distance_to_support_pct: num(r.distance_to_support_pct),
+            base_range_pct: num(r.base_range_pct),
+            range_recent_2w_pct: num(r.recent_range_2w_pct),
+            volume_contraction_pct: num(r.volume_contraction_pct),
+            sma50: num(r.sma50),
+            sma150: num(r.sma150),
+            sma200: num(r.sma200),
+            rs_rating: num(r.rs_rating),
+            bearish_tight_score: num(r.bearish_tight_score),
+        })).sort((a, b) => (b.bearish_tight_score ?? -Infinity) - (a.bearish_tight_score ?? -Infinity));
+        return filterByUniverse(mapped);
+    }, [bearishTightBaseRawRows, filterByUniverse]);
+
     //  ADX/DI Momentum scan  dedicated fetch from the adx_di_screen table (rows
     // already filtered server-side: Mkt Cap > 500 Cr, Stage 2 trend, RS Rating >
     // 75 or NULL, ADX(14) > 20 and rising over 5 sessions, DI+ > DI- with a
@@ -20520,7 +20572,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
 
                             <CategorySection name="Bearish Screens" color={isDark ? "#f87171" : "#dc2626"}
                                 desc="Weak stocks in confirmed downtrends: below key moving averages with poor relative strength"
-                                count={(stage4DowntrendLoading || freshBreakdownLoading) ? "" : dStage4Downtrend.length + dFreshBreakdown.length}>
+                                count={(stage4DowntrendLoading || freshBreakdownLoading || bearishTightBaseLoading) ? "" : dStage4Downtrend.length + dFreshBreakdown.length + dBearishTightBase.length}>
                                 <ScreenRow rowKey="bs-stage4downtrend" title="Stage 4 Downtrend" bearish
                                     subtitle="Close below SMA50, SMA150 and SMA200 with weak relative strength, ranked by bear strength and distance below the 200 SMA"
                                     rows={dStage4Downtrend} scoreKey="bear_strength_score" scoreLabel="Bear Strength"
@@ -20533,6 +20585,12 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     formatScore={v => Math.round(v).toString()} tfLabel="Fresh Breakdown"
                                     loadingOverride={freshBreakdownLoading}
                                     detailExtra={{ freshBreakdownMode: true }} />
+                                <ScreenRow rowKey="bs-bearishtightbase" title="Bearish Tight Base" bearish
+                                    subtitle="Tight, volume-contracting base sitting at or just above its breakdown level, ranked by bearish tight score"
+                                    rows={dBearishTightBase} scoreKey="bearish_tight_score" scoreLabel="Bearish Tight Score"
+                                    formatScore={v => Math.round(v).toString()} tfLabel="Bearish Tight Base"
+                                    loadingOverride={bearishTightBaseLoading}
+                                    detailExtra={{ bearishTightBaseMode: true }} />
                             </CategorySection>
 
                         </div>
