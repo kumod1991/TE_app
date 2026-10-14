@@ -1,10 +1,5 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { START_TRACK } from "./learnStart";
-import { FOUNDATIONS_TRACKS } from "./learnFoundations";
-import { STATEMENT_TRACKS } from "./learnStatements";
-import { RATIO_TRACKS, GLOSSARY } from "./learnRatios";
-import { CASE_TRACKS, CASE_SECTORS } from "./learnCases";
-import { TECHNICAL_TRACKS, TECHNICAL_LEVELS, TECHNICAL_GLOSSARY } from "./learnTechnical";
+import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
+import { useLearnCatalog, useLessonBody, prefetchLessonBody } from "./learnData";
 
 /*
  * LearnModule — structured courses on fundamental and technical analysis, plus case studies and a glossary.
@@ -18,46 +13,17 @@ const LS_KEY = "te_learn_progress_v1";
 const SHELL_MAX = 1400;   // same centered container width as StockDashboard
 const TEXT_MAX = 940;     // readable measure for paragraphs and lists only
 
-const COURSE_TRACKS = [START_TRACK, ...FOUNDATIONS_TRACKS.filter(tr => tr.id !== "foundations"), ...STATEMENT_TRACKS, ...RATIO_TRACKS];
+/* Catalog (tracks, lessons, groups, glossary) now comes from the backend via learnData.js. */
+const CatalogCtx = createContext(null);
 
-/* Technicals: tracks grouped into four difficulty levels (resolved from learnTechnical). */
-const TECH_LEVEL_COLORS = ["#059669", "#2563eb", "#7c3aed", "#ea580c"];
-const _techById = Object.fromEntries(TECHNICAL_TRACKS.map(t => [t.id, t]));
-const TECH_LEVELS = TECHNICAL_LEVELS.map((g, i) => ({
-    ...g, color: TECH_LEVEL_COLORS[i % TECH_LEVEL_COLORS.length], unit: ["track", "tracks"],
-    tracks: g.trackIds.map(id => _techById[id]).filter(Boolean),
-}));
-const _techAssigned = new Set(TECH_LEVELS.flatMap(g => g.trackIds));
-const TECH_TRACKS = [...TECH_LEVELS.flatMap(g => g.tracks), ...TECHNICAL_TRACKS.filter(t => !_techAssigned.has(t.id))];
-const TECH_TRACK_COLOR = {};
-const TECH_LEVEL_OF = {};
-TECH_LEVELS.forEach(g => g.tracks.forEach(t => { TECH_TRACK_COLOR[t.id] = g.color; TECH_LEVEL_OF[t.id] = g; }));
-
-const TRACKS = [...COURSE_TRACKS, ...TECH_TRACKS, ...CASE_TRACKS];
-const CASE_TRACK_IDS = new Set(CASE_TRACKS.map(t => t.id));
-const TECH_TRACK_IDS = new Set(TECH_TRACKS.map(t => t.id));
-const sectionOf = (trackId) => (CASE_TRACK_IDS.has(trackId) ? "cases" : TECH_TRACK_IDS.has(trackId) ? "tech" : "course");
-const LESSONS = TRACKS.flatMap(tr => tr.lessons.map(l => ({ ...l, trackId: tr.id, trackTitle: tr.title })));
-const COURSE_LESSONS = LESSONS.filter(l => sectionOf(l.trackId) === "course");
-const TECH_LESSONS = LESSONS.filter(l => sectionOf(l.trackId) === "tech");
-const CASE_LESSONS = LESSONS.filter(l => sectionOf(l.trackId) === "cases");
-const LESSON_INDEX = Object.fromEntries(LESSONS.map((l, i) => [l.id, i]));
-
-/* Everything that differs between the three lesson sections lives here. */
-const SECTIONS = {
-    course: { lessons: COURSE_LESSONS, tracks: COURSE_TRACKS, groups: undefined, title: "Learn fundamental analysis", sub: (n) => `From reading a P&L to judging a stock, in ${n} short lessons.`, foot: "This course is for education only and is not investment advice. The company in the examples is fictional." },
-    tech: { lessons: TECH_LESSONS, tracks: TECH_TRACKS, groups: TECH_LEVELS, title: "Learn technical analysis", sub: (n) => `From reading a chart to a complete, risk-managed trading plan, in ${n} lessons across four levels.`, foot: "Educational content only, not investment advice. All stocks, prices and setups in the examples are fictional. No setup works every time, and trading involves risk of loss." },
-    cases: { lessons: CASE_LESSONS, tracks: CASE_TRACKS, groups: CASE_SECTORS, title: "Learn fundamental analysis", sub: () => "Real companies analysed from their annual reports, step by step.", foot: "This course is for education only and is not investment advice. The company in the examples is fictional." },
-};
-
-function loadProgress() {
+function loadProgress(lessonIndex) {
     try {
         const raw = localStorage.getItem(LS_KEY);
         if (!raw) return { done: {}, last: null };
         const p = JSON.parse(raw);
         return {
             done: p && typeof p.done === "object" && p.done ? p.done : {},
-            last: p && typeof p.last === "string" && LESSON_INDEX[p.last] != null ? p.last : null,
+            last: p && typeof p.last === "string" && lessonIndex[p.last] != null ? p.last : null,
         };
     } catch {
         return { done: {}, last: null };
@@ -145,9 +111,6 @@ function buildLearnTheme(T = {}) {
     };
 }
 
-/* Each track gets its own colour so the outline reads at a glance. */
-const TRACK_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#ea580c", "#c026d3"];
-const trackColor = (trackId) => TECH_TRACK_COLOR[trackId] || TRACK_COLORS[Math.max(0, TRACKS.findIndex(t => t.id === trackId)) % TRACK_COLORS.length];
 
 function buildCss(T) {
     return `
@@ -167,9 +130,11 @@ function buildCss(T) {
         .lm-input:focus { border-color: ${T.accent}; box-shadow: 0 0 0 3px ${T.ring}; outline: none; }
         .lm-article { animation: lmIn .28s ease; }
         .lm-bar { transition: width .5s cubic-bezier(.2,.7,.2,1); }
+        .lm-skel { animation: lmPulse 1.2s ease-in-out infinite; }
+        @keyframes lmPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
         @keyframes lmIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @media (prefers-reduced-motion: reduce) {
-            .lm-article { animation: none; }
+            .lm-article, .lm-skel { animation: none; }
             .lm-root *, .lm-bar { transition: none !important; }
         }
     `;
@@ -681,6 +646,7 @@ function ProgressPill({ done, total, T, compact }) {
 
 /* ── Outline (lesson list) ───────────────────────────────────────────────── */
 function Outline({ activeId, done, onPick, T, tracks, groups, mobile }) {
+    const { trackColor } = useContext(CatalogCtx);
     const trackOf = (id) => { const t = tracks.find(tr => tr.lessons.some(l => l.id === id)); return t ? t.id : null; };
     const [open, setOpen] = useState(() => { const t = trackOf(activeId); return t ? { [t]: true } : {}; });
     useEffect(() => {
@@ -767,11 +733,8 @@ function Outline({ activeId, done, onPick, T, tracks, groups, mobile }) {
 }
 
 /* ── Glossary ────────────────────────────────────────────────────────────── */
-const ALL_TERMS = [
-    ...GLOSSARY.map(g => ({ ...g, kind: "fund" })),
-    ...TECHNICAL_GLOSSARY.map(g => ({ ...g, kind: "tech" })),
-];
 function Glossary({ T, mobile }) {
+    const { ALL_TERMS } = useContext(CatalogCtx);
     const [q, setQ] = useState("");
     const [scope, setScope] = useState("all"); // all | fund | tech
     const items = useMemo(() => {
@@ -780,7 +743,7 @@ function Glossary({ T, mobile }) {
             .filter(g => scope === "all" || g.kind === scope)
             .sort((a, b) => a.term.localeCompare(b.term))
             .filter(g => !s || g.term.toLowerCase().includes(s) || g.def.toLowerCase().includes(s));
-    }, [q, scope]);
+    }, [q, scope, ALL_TERMS]);
     const groups = useMemo(() => {
         const m = new Map();
         items.forEach(g => {
@@ -860,11 +823,13 @@ function Glossary({ T, mobile }) {
 }
 
 /* ── Main module ─────────────────────────────────────────────────────────── */
-export default function LearnModule({ T: baseT }) {
+function LearnBody({ T: baseT }) {
+    const catalog = useContext(CatalogCtx);
+    const { LESSONS, LESSON_INDEX, COURSE_LESSONS, SECTIONS, TECH_LEVEL_OF, sectionOf, trackColor } = catalog;
     const T = useMemo(() => buildLearnTheme(baseT || {}), [baseT]);
     const mobile = useIsMobile();
-    const [progress, setProgress] = useState(loadProgress);
-    const [initialId] = useState(() => { const last = loadProgress().last; const l = last != null ? LESSONS[LESSON_INDEX[last]] : null; return l ? l.id : COURSE_LESSONS[0].id; });
+    const [progress, setProgress] = useState(() => loadProgress(LESSON_INDEX));
+    const [initialId] = useState(() => { const last = loadProgress(LESSON_INDEX).last; const l = last != null ? LESSONS[LESSON_INDEX[last]] : null; return l ? l.id : COURSE_LESSONS[0].id; });
     const [view, setView] = useState(() => sectionOf(LESSONS[LESSON_INDEX[initialId] ?? 0].trackId)); // course | tech | cases | glossary
     const [activeId, setActiveId] = useState(initialId);
     const lastBySection = useRef({});
@@ -885,6 +850,9 @@ export default function LearnModule({ T: baseT }) {
     const doneCount = list.filter(l => progress.done[l.id]).length;
     const isDone = !!progress.done[lesson.id];
     const col = trackColor(lesson.trackId);
+    const body = useLessonBody(lesson.id, catalog.version);
+    const nextId = next ? next.id : null;
+    useEffect(() => { if (body.status === "ready" && nextId) prefetchLessonBody(nextId, catalog.version); }, [body.status, nextId, catalog.version]);
 
     const pick = useCallback((id) => {
         const target = sectionOf(LESSONS[LESSON_INDEX[id]].trackId);
@@ -897,7 +865,7 @@ export default function LearnModule({ T: baseT }) {
             saveProgress(np);
             return np;
         });
-    }, []);
+    }, [LESSONS, LESSON_INDEX, sectionOf]);
 
     const toggleDone = () => {
         setProgress(p => {
@@ -1077,9 +1045,15 @@ export default function LearnModule({ T: baseT }) {
                             <h2 style={{ margin: "0 0 12px", fontSize: mobile ? 26 : 34, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.18, color: T.text }}>{lesson.title}</h2>
                             <p style={{ margin: "0 0 28px", paddingBottom: 26, maxWidth: TEXT_MAX, borderBottom: `1px solid ${T.panelBorder}`, fontSize: mobile ? 16 : 17, lineHeight: 1.65, color: T.subtext }}>{lesson.summary}</p>
 
-                            {lesson.blocks.map((b, i) => <Block key={i} b={b} T={T} mobile={mobile} />)}
+                            {body.status === "ready" ? (
+                                <>
+                                    {body.data.blocks.map((b, i) => <Block key={i} b={b} T={T} mobile={mobile} />)}
 
-                            <Quiz key={`q-${lesson.id}`} items={lesson.quiz} T={T} />
+                                    <Quiz key={`q-${lesson.id}`} items={body.data.quiz} T={T} />
+                                </>
+                            ) : (
+                                <LessonBodyState status={body.status} notFound={body.notFound} onRetry={body.retry} T={T} />
+                            )}
 
                             <div style={{ marginTop: 32, display: "flex", justifyContent: "center" }}>
                                 <button
@@ -1112,5 +1086,57 @@ export default function LearnModule({ T: baseT }) {
                 </main>
             </div>
         </div>
+    );
+}
+
+/* ── Lesson body placeholder: skeleton while loading, retry on failure ───── */
+function LessonBodyState({ status, notFound, onRetry, T }) {
+    if (status === "error") {
+        return (
+            <div role="alert" style={{ margin: "8px 0 24px", padding: "16px 18px", borderRadius: 14, border: `1px solid ${withAlpha(T.amber, 0.3)}`, background: T.amberSoft, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <span style={{ flex: 1, minWidth: 200, fontSize: 14.5, lineHeight: 1.6, color: T.text }}>
+                    {notFound ? "This lesson is no longer available. Pick another from the outline." : "Could not load this lesson. Check your connection and try again."}
+                </span>
+                {!notFound && (
+                    <button type="button" className="lm-ghost" onClick={onRetry} style={{ padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.panelBorder}`, background: T.card, color: T.text, fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Try again</button>
+                )}
+            </div>
+        );
+    }
+    return (
+        <div role="status" aria-busy="true" aria-label="Loading lesson" style={{ maxWidth: TEXT_MAX }}>
+            {[96, 100, 88, 94, 62, 0, 98, 91, 74].map((w, i) => w === 0
+                ? <div key={i} style={{ height: 22 }} />
+                : <div key={i} className="lm-skel" style={{ height: 14, width: `${w}%`, borderRadius: 7, background: T.softFill, marginBottom: 14 }} />)}
+        </div>
+    );
+}
+
+/* ── Public component: loads the catalog from the backend, then renders the module ── */
+export default function LearnModule({ T: baseT }) {
+    const T = useMemo(() => buildLearnTheme(baseT || {}), [baseT]);
+    const { catalog, status, reload } = useLearnCatalog();
+    const empty = !!catalog && catalog.LESSONS.length === 0;
+    if (!catalog || empty) {
+        return (
+            <div className="lm-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, minHeight: 0, width: "100%", padding: 24, background: T.bg, color: T.text, fontFamily: SANS }}>
+                <style>{buildCss(T)}</style>
+                {status === "error" ? (
+                    <div role="alert" style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 15, marginBottom: 12, color: T.subtext }}>Could not load the lessons.</div>
+                        <button type="button" className="lm-ghost" onClick={reload} style={{ padding: "9px 20px", borderRadius: 999, border: `1px solid ${T.panelBorder}`, background: T.card, color: T.text, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Try again</button>
+                    </div>
+                ) : empty ? (
+                    <div role="status" style={{ textAlign: "center", fontSize: 15, color: T.subtext, lineHeight: 1.6 }}>No lessons are published yet.</div>
+                ) : (
+                    <span role="status" className="lm-skel" style={{ fontSize: 14, color: T.muted }}>Loading lessons…</span>
+                )}
+            </div>
+        );
+    }
+    return (
+        <CatalogCtx.Provider value={catalog}>
+            <LearnBody T={baseT} />
+        </CatalogCtx.Provider>
     );
 }

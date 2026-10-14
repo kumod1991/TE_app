@@ -18,8 +18,8 @@ export { QuoteContext };
 
 
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://munqjcjvzgqyxzlmuyjj.supabase.co";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11bnFqY2p2emdxeXh6bG11eWpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3MDc5NzEsImV4cCI6MjA4NzI4Mzk3MX0.9nHH5bTsL-RRwMMPoxTBFz3896BlhBBhUPGh0xP3U4Q";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PUBLIC_SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://tradeedge.in");
 const AUTH_SESSION_KEY = "te_supabase_session";
 // ── Capacitor (Android/iOS) auth redirect ───────────────────────────────────
@@ -11672,12 +11672,12 @@ const SCREENS_TABLE_FETCHERS = {
     // server-side). Direct table fetch, strongest bearish score first, then the
     // deepest breakdown (most negative breakdown_pct).
     freshBreakdown: _makeScreensTableFetcher("fresh_breakdown", "te_scr_freshbreakdown_v1", "select=*&order=bearish_score.desc.nullslast,breakdown_pct.asc.nullslast&limit=1000"),
-    // bearish_tight_base: bearish mirror of the tight-base screens  a tight,
-    // volume-contracting base sitting just above (or just through) its support /
-    // breakdown_level (distance_to_support_pct, setup_status, base_range_pct,
-    // recent_range_2w_pct, volume_contraction_pct, SMAs, rs_rating and
-    // bearish_tight_score all computed server-side). Strongest score first.
-    bearishTightBase: _makeScreensTableFetcher("bearish_tight_base", "te_scr_bearishtightbase_v1", "select=*&order=bearish_tight_score.desc.nullslast&limit=1000"),
+    // bearish_tight_base: bearish mirror of the tight-base setups  stocks coiling in
+    // a tight base just above support (breakdown_level, distance_to_support_pct,
+    // setup_status, base_range_pct, recent_range_2w_pct, volume_contraction_pct and
+    // bearish_tight_score all computed server-side). Direct table fetch, highest
+    // bearish_tight_score first, then closest to support.
+    bearishTightBase: _makeScreensTableFetcher("bearish_tight_base", "te_scr_bearishtightbase_v1", "select=*&order=bearish_tight_score.desc.nullslast,distance_to_support_pct.asc.nullslast&limit=1000"),
     weeklyBreakoutSoon: _makeScreensTableFetcher("weekly_breakout_soon", "te_scr_weeklybreakoutsoon_v1", "select=*&order=pct_to_breakout.asc.nullslast&limit=1000"),
 };
 
@@ -16800,10 +16800,10 @@ const STAGE4_DOWNTREND_DEFAULT_COLS = ["close", "ret_3m", "rs_rating", "rs_3m", 
 // the fields that screen actually has data for.
 const FRESH_BREAKDOWN_DEFAULT_COLS = ["close", "previous_20d_low", "breakdown_pct", "ret_3m", "rs_rating", "mansfield_rs", "sma20", "sma50", "volume", "volume_20ma", "rel_volume", "market_cap_cr", "bearish_score"];
 
-// bearish_tight_base carries support/breakdown-level fields, base + recent 2W
-// ranges, volume contraction and the 50/150/200 SMAs (no market cap / returns),
-// so the default-on columns swap in the fields that screen has data for.
-const BEARISH_TIGHT_BASE_DEFAULT_COLS = ["close", "breakdown_level", "distance_to_support_pct", "setup_status", "base_range_pct", "range_recent_2w_pct", "volume_contraction_pct", "sma50", "sma150", "sma200", "rs_rating", "bearish_tight_score"];
+// bearish_tight_base carries support-distance / base-range / volume-contraction
+// fields (no 52W-high or market cap data), so the default-on columns swap in the
+// fields that screen actually has data for.
+const BEARISH_TIGHT_BASE_DEFAULT_COLS = ["close", "breakdown_level", "distance_to_support_pct", "setup_status", "base_range_pct", "recent_range_2w_pct", "volume_contraction_pct", "sma50", "sma150", "sma200", "rs_rating", "bearish_tight_score"];
 
 const FILTER_DEFS = [
     { key: "pct_from_52w_high", label: "From 52W High %", defaultOp: ">", num: true },
@@ -16826,9 +16826,11 @@ const FILTER_DEFS = [
     { key: "bear_strength_score", label: "Bear Strength", defaultOp: ">", num: true },
     { key: "breakdown_pct", label: "Breakdown %", defaultOp: "<", num: true },
     { key: "bearish_score", label: "Bearish Score", defaultOp: ">", num: true },
+    { key: "bearish_tight_score", label: "Bearish Tight Score", defaultOp: ">", num: true },
     { key: "distance_to_support_pct", label: "% To Support", defaultOp: "<", num: true },
     { key: "base_range_pct", label: "Base Range %", defaultOp: "<", num: true },
-    { key: "bearish_tight_score", label: "Bearish Tight Score", defaultOp: ">", num: true },
+    { key: "recent_range_2w_pct", label: "Recent 2W Range %", defaultOp: "<", num: true },
+    { key: "volume_contraction_pct", label: "Volume Contraction %", defaultOp: "<", num: true },
 ];
 
 // Pattern Filter (Chart Patterns) numeric filters  full-screen view only
@@ -17086,8 +17088,8 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "breakdown_level") return fmtINR(v);
         if (key === "distance_to_support_pct") return `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         if (key === "base_range_pct") return `${Number(v).toFixed(2)}%`;
-        if (key === "setup_status") return String(v).replace(/_/g, " ");
         if (key === "bearish_tight_score") return Math.round(Number(v)).toString();
+        if (key === "setup_status") return String(v).toLowerCase().split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
         return String(v);
     };
 
@@ -17102,7 +17104,6 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         if (key === "pct_from_52w_low") return Number(v) >= 0 ? posClr : negClr;
         if (key === "pct_above_pivot") return Number(v) >= 0 ? posClr : negClr;
         if (key === "breakdown_pct") return Number(v) <= 0 ? negClr : T.text;
-        if (key === "distance_to_support_pct") return Number(v) <= 0 ? negClr : T.text;
         if (key === "pct_from_sma50") return Math.abs(Number(v)) <= 1.5 ? posClr : T.text;
         if (key === "pct_from_pivot") return Number(v) >= 0 ? posClr : negClr;
         if (key === "vol_ratio") return Number(v) < 0.7 ? posClr : Number(v) < 1 ? T.text : negClr;
@@ -17929,6 +17930,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                                                     const isRelVol = c.key === "rel_volume";
                                                     const isWeinsteinTrend = ["mansfield_rs", "mansfield_rs_slope", "sma150_slope_pct", "pct_to_breakout", "distance_from_sma50", "distance_from_sma200"].includes(c.key);
                                                     const isStageLabel = c.key === "stage_label";
+                                                    const isSetupStatus = c.key === "setup_status";
                                                     let cellColor = T.subtext;
                                                     if (isRet) cellColor = retColor(c.key, v);
                                                     else if (isRS) cellColor = isDark ? "#0ea5e9" : "#0284c7";
@@ -17942,11 +17944,13 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                                                         cellColor = retColor(c.key, v);
                                                     } else if (isStageLabel && v != null) {
                                                         cellColor = v === "Advancing" ? posClr : v === "Declining" ? negClr : T.subtext;
+                                                    } else if (isSetupStatus && v != null) {
+                                                        cellColor = v === "BREAKDOWN_CONFIRMED" ? negClr : v === "NEAR_BREAKDOWN" ? (isDark ? "#f97316" : "#ea580c") : T.subtext;
                                                     }
                                                     return (
                                                         <td key={c.key} style={{
                                                             padding: isMobileTable ? "8px 8px" : "12px 16px", fontFamily: mono,
-                                                            fontSize: isMobileTable ? 11.5 : 15.5, fontWeight: (isRet || isRating || isRelVol || isWeinsteinTrend || isStageLabel) ? 600 : 400,
+                                                            fontSize: isMobileTable ? 11.5 : 15.5, fontWeight: (isRet || isRating || isRelVol || isWeinsteinTrend || isStageLabel || isSetupStatus) ? 600 : 400,
                                                             textAlign: "right", fontVariantNumeric: "tabular-nums",
                                                             color: fmt == null ? T.muted : cellColor,
                                                             whiteSpace: "nowrap"
@@ -18899,9 +18903,9 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
         return filterByUniverse(mapped);
     }, [freshBreakdownRawRows, filterByUniverse]);
 
-    //  Bearish Tight Base scan  direct fetch from the bearish_tight_base table
-    // (rows already filtered server-side). Highest bearish_tight_score first,
-    // matching the table's ORDER BY.
+    //  Bearish Tight Base scan  direct fetch from the bearish_tight_base table (rows
+    // already filtered server-side). Highest bearish_tight_score first, then closest
+    // to the breakdown level (smallest distance_to_support_pct).
     const [bearishTightBaseRawRows, bearishTightBaseLoading] = useScreensTableRows(SCREENS_TABLE_FETCHERS.bearishTightBase);
     const dBearishTightBase = useMemo(() => {
         const num = v => (v != null && v !== "" ? Number(v) : null);
@@ -18911,14 +18915,16 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
             breakdown_level: num(r.breakdown_level),
             distance_to_support_pct: num(r.distance_to_support_pct),
             base_range_pct: num(r.base_range_pct),
-            range_recent_2w_pct: num(r.recent_range_2w_pct),
+            recent_range_2w_pct: num(r.recent_range_2w_pct),
             volume_contraction_pct: num(r.volume_contraction_pct),
             sma50: num(r.sma50),
             sma150: num(r.sma150),
             sma200: num(r.sma200),
             rs_rating: num(r.rs_rating),
             bearish_tight_score: num(r.bearish_tight_score),
-        })).sort((a, b) => (b.bearish_tight_score ?? -Infinity) - (a.bearish_tight_score ?? -Infinity));
+        })).sort((a, b) =>
+            (b.bearish_tight_score ?? -Infinity) - (a.bearish_tight_score ?? -Infinity) ||
+            Math.abs(a.distance_to_support_pct ?? Infinity) - Math.abs(b.distance_to_support_pct ?? Infinity));
         return filterByUniverse(mapped);
     }, [bearishTightBaseRawRows, filterByUniverse]);
 
@@ -20586,7 +20592,7 @@ function ScreensModule({ T: themeTokens, onTechnoFundaScan }) {
                                     loadingOverride={freshBreakdownLoading}
                                     detailExtra={{ freshBreakdownMode: true }} />
                                 <ScreenRow rowKey="bs-bearishtightbase" title="Bearish Tight Base" bearish
-                                    subtitle="Tight, volume-contracting base sitting at or just above its breakdown level, ranked by bearish tight score"
+                                    subtitle="Tight, low-volatility base sitting just above support with contracting volume, ranked by bearish tight score and proximity to the breakdown level"
                                     rows={dBearishTightBase} scoreKey="bearish_tight_score" scoreLabel="Bearish Tight Score"
                                     formatScore={v => Math.round(v).toString()} tfLabel="Bearish Tight Base"
                                     loadingOverride={bearishTightBaseLoading}
