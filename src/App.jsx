@@ -11662,7 +11662,6 @@ const SCREENS_TABLE_FETCHERS = {
     // trend all already computed server-side), ordered closest-to-breakout
     // first, same dedicated-table fetch/cache pattern as the other Breakouts
     // screens tables above.
-<<<<<<< HEAD
     // stage4_downtrend: Stage-4 declines (close below SMA50/150/200, weak RS,
     // falling 200 SMA) already filtered server-side, with bear_strength_score and
     // distance_from_sma50/200 computed server-side too. Ordered strongest-bear
@@ -11680,8 +11679,6 @@ const SCREENS_TABLE_FETCHERS = {
     // bearish_tight_score all computed server-side). Direct table fetch, highest
     // bearish_tight_score first, then closest to support.
     bearishTightBase: _makeScreensTableFetcher("bearish_tight_base", "te_scr_bearishtightbase_v1", "select=*&order=bearish_tight_score.desc.nullslast,distance_to_support_pct.asc.nullslast&limit=1000"),
-=======
->>>>>>> 1dabbcf (ch)
     weeklyBreakoutSoon: _makeScreensTableFetcher("weekly_breakout_soon", "te_scr_weeklybreakoutsoon_v1", "select=*&order=pct_to_breakout.asc.nullslast&limit=1000"),
 };
 
@@ -16753,7 +16750,6 @@ const ALL_COLUMNS = [
     { key: "pct_to_high", label: "% To High", defaultOn: false },
     { key: "high_age_years", label: "High Age (Yrs)", defaultOn: false },
     { key: "high_date", label: "High Date", defaultOn: false },
-<<<<<<< HEAD
     { key: "distance_from_sma50", label: "% From 50 SMA", defaultOn: false },
     { key: "distance_from_sma200", label: "% From 200 SMA", defaultOn: false },
     { key: "sma200_20d_ago", label: "200 SMA (20D Ago)", defaultOn: false },
@@ -16767,8 +16763,6 @@ const ALL_COLUMNS = [
     { key: "setup_status", label: "Setup Status", defaultOn: false },
     { key: "base_range_pct", label: "Base Range %", defaultOn: false },
     { key: "bearish_tight_score", label: "Bearish Tight Score", defaultOn: false },
-=======
->>>>>>> 1dabbcf (ch)
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
@@ -20761,416 +20755,6 @@ const STATUS_META = {
 };
 const STATUS_ORDER = { LEADING: 0, IMPROVING: 1, WEAKENING: 2, LAGGING: 3 };
 
-// ============================================================================
-//  RRG PREMIUM RENDERER  pure helpers (no React). Used by SectorRotationModule.
-// ============================================================================
-const _RRG_PAD = { top: 20, right: 28, bottom: 44, left: 54 };
-
-function _rrgPalette(isDark) {
-    return isDark ? {
-        surface0: "#0a1020", surface1: "#0e1628",
-        grid: "rgba(148,163,184,0.07)", gridMajor: "rgba(148,163,184,0.12)",
-        axis: "rgba(203,213,225,0.55)",
-        tick: "rgba(148,163,184,0.85)", caption: "rgba(203,213,225,0.78)",
-        ring: "#0a1020", labelBg: "rgba(10,16,32,0.82)", labelText: "rgba(241,245,249,0.96)",
-        labelTextDim: "rgba(203,213,225,0.70)",
-        quad: {
-            LEADING: { fill: [34, 197, 94], text: "#4ade80", sub: "rgba(134,239,172,0.7)" },
-            IMPROVING: { fill: [234, 179, 8], text: "#facc15", sub: "rgba(253,224,71,0.7)" },
-            WEAKENING: { fill: [249, 115, 22], text: "#fb923c", sub: "rgba(253,186,116,0.7)" },
-            LAGGING: { fill: [239, 68, 68], text: "#f87171", sub: "rgba(252,165,165,0.7)" },
-        },
-        quadAlphaIn: 0.015, quadAlphaOut: 0.17,
-        dot: { LEADING: "#22c55e", IMPROVING: "#eab308", WEAKENING: "#f97316", LAGGING: "#ef4444" },
-        shadow: "rgba(0,0,0,0.55)",
-    } : {
-        surface0: "#ffffff", surface1: "#f8fafc",
-        grid: "rgba(15,23,42,0.055)", gridMajor: "rgba(15,23,42,0.10)",
-        axis: "rgba(15,23,42,0.50)",
-        tick: "rgba(51,65,85,0.85)", caption: "rgba(30,41,59,0.78)",
-        ring: "#ffffff", labelBg: "rgba(255,255,255,0.92)", labelText: "rgba(15,23,42,0.96)",
-        labelTextDim: "rgba(51,65,85,0.78)",
-        quad: {
-            LEADING: { fill: [22, 163, 74], text: "#15803d", sub: "rgba(21,128,61,0.72)" },
-            IMPROVING: { fill: [202, 138, 4], text: "#a16207", sub: "rgba(161,98,7,0.72)" },
-            WEAKENING: { fill: [234, 88, 12], text: "#c2410c", sub: "rgba(194,65,12,0.72)" },
-            LAGGING: { fill: [220, 38, 38], text: "#b91c1c", sub: "rgba(185,28,28,0.72)" },
-        },
-        quadAlphaIn: 0.012, quadAlphaOut: 0.13,
-        dot: { LEADING: "#16a34a", IMPROVING: "#d97706", WEAKENING: "#ea580c", LAGGING: "#dc2626" },
-        shadow: "rgba(15,23,42,0.28)",
-    };
-}
-
-// "Nice" ticks (1 / 2 / 2.5 / 5 x 10^n) covering [lo, hi]
-function _rrgNiceTicks(lo, hi, target) {
-    const span = hi - lo;
-    if (!(span > 0) || !isFinite(span)) return [];
-    const raw = span / Math.max(2, target);
-    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-    const norm = raw / mag;
-    const step = (norm < 1.5 ? 1 : norm < 3.2 ? 2 : norm < 7 ? 5 : 10) * mag;
-    const out = [];
-    for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-6; v += step) {
-        out.push(Math.abs(v) < step * 1e-6 ? 0 : +v.toFixed(10));
-    }
-    return out;
-}
-
-// Spread scale: asinh keeps 0 fixed + monotonic, but un-squashes the crowded core when one
-// outlier (eg. Media +14%) would otherwise flatten every other sector into a corner.
-function _rrgTf(mode, k) {
-    return mode === "spread"
-        ? { f: v => Math.asinh(v / k), inv: u => k * Math.sinh(u) }
-        : { f: v => v, inv: u => u };
-}
-
-function _rrgMedianAbs(arr, floor) {
-    if (!arr.length) return floor;
-    const s = arr.map(Math.abs).sort((a, b) => a - b);
-    return Math.max(floor, s[Math.floor(s.length / 2)] || floor);
-}
-
-/**
- * Build projection for the current data + view.
- * view = { z: zoom (>=1), cx, cy: centre in TRANSFORMED space (0 = origin) }
- */
-function _rrgBuildProjection({ items, trails, W, H, scaleMode, view }) {
-    const PAD = _RRG_PAD;
-    const pw = Math.max(10, W - PAD.left - PAD.right);
-    const ph = Math.max(10, H - PAD.top - PAD.bottom);
-    const xs = [], ys = [];
-    items.forEach(d => {
-        if (isFinite(d.rs_spread)) xs.push(d.rs_spread);
-        if (isFinite(d.momentum)) ys.push(d.momentum);
-    });
-    const kx = _rrgMedianAbs(xs, 0.004), ky = _rrgMedianAbs(ys, 0.6);
-    const tx = _rrgTf(scaleMode, kx), ty = _rrgTf(scaleMode, ky);
-    // Fit on current dots (+ trail heads), not on every trail vertex  so tails never shrink the view
-    let hx = 0, hy = 0;
-    items.forEach(d => {
-        if (isFinite(d.rs_spread)) hx = Math.max(hx, Math.abs(tx.f(d.rs_spread)));
-        if (isFinite(d.momentum)) hy = Math.max(hy, Math.abs(ty.f(d.momentum)));
-        (trails[d.sector] || []).slice(-8).forEach(p => {
-            if (isFinite(p.x)) hx = Math.max(hx, Math.abs(tx.f(p.x)) * 0.92);
-            if (isFinite(p.y)) hy = Math.max(hy, Math.abs(ty.f(p.y)) * 0.92);
-        });
-    });
-    hx = Math.max(hx * 1.18, tx.f(0.02)); hy = Math.max(hy * 1.18, ty.f(2));
-    const z = Math.max(1, view.z || 1);
-    const cxT = view.cx || 0, cyT = view.cy || 0;
-    const uxMin = cxT - hx / z, uxMax = cxT + hx / z;
-    const uyMin = cyT - hy / z, uyMax = cyT + hy / z;
-    const toX = v => PAD.left + ((tx.f(v) - uxMin) / (uxMax - uxMin)) * pw;
-    const toY = v => PAD.top + ((uyMax - ty.f(v)) / (uyMax - uyMin)) * ph;
-    const dataXMin = tx.inv(uxMin), dataXMax = tx.inv(uxMax);
-    const dataYMin = ty.inv(uyMin), dataYMax = ty.inv(uyMax);
-    const xTicks = _rrgNiceTicks(dataXMin, dataXMax, Math.max(4, Math.round(pw / 110)));
-    const yTicks = _rrgNiceTicks(dataYMin, dataYMax, Math.max(4, Math.round(ph / 80)));
-    return {
-        PAD, pw, ph, W, H, toX, toY, tx, ty, hx, hy, z, uxMin, uxMax, uyMin, uyMax,
-        cx: toX(0), cy: toY(0), xTicks, yTicks, scaleMode,
-        // px  transformed units (for pan)
-        pxToUx: (uxMax - uxMin) / pw, pxToUy: (uyMax - uyMin) / ph,
-    };
-}
-
-// decimals chosen once per axis so every tick reads the same (no "-5.0%" beside "-10%")
-function _rrgDecimals(ticks, scale) {
-    for (let d = 0; d <= 3; d++) {
-        if (ticks.every(t => Math.abs(t * scale - Number((t * scale).toFixed(d))) < 1e-9)) return d;
-    }
-    return 3;
-}
-function _rrgFmtX(v, dec) { // strength vs market, fraction -> %
-    const p = v * 100;
-    return (p > 0 ? "+" : p < 0 ? "\u2212" : "") + Math.abs(p).toFixed(dec == null ? 1 : dec) + "%";
-}
-function _rrgFmtY(v, dec) {
-    return (v > 0 ? "+" : v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(dec == null ? 1 : dec) + "%";
-}
-
-function _rrgRoundRect(ctx, x, y, w, h, r) {
-    const rr = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
-    ctx.closePath();
-}
-
-function _rrgBubbleRadius(d, st) {
-    if (st.focus === d.sector || st.hover === d.sector) return 11;
-    return st.top3.includes(d.sector) ? 9 : 7;
-}
-
-/** Draws the whole chart. Returns hit targets for label-collision / picking. */
-function _rrgDraw(ctx, p, st) {
-    const { items, trails, isDark, hover, focus, top3, insufficient, showTrails } = st;
-    const C = _rrgPalette(isDark);
-    const { PAD, pw, ph, W, H, toX, toY } = p;
-    const sans = "'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif";
-    const mono = "'IBM Plex Mono', ui-monospace, Menlo, monospace";
-    const plot = { x: PAD.left, y: PAD.top, w: pw, h: ph };
-    const cxp = Math.min(plot.x + plot.w, Math.max(plot.x, p.cx));
-    const cyp = Math.min(plot.y + plot.h, Math.max(plot.y, p.cy));
-
-    ctx.clearRect(0, 0, W, H);
-
-    //  surface 
-    const bg = ctx.createLinearGradient(0, plot.y, 0, plot.y + plot.h);
-    bg.addColorStop(0, C.surface0); bg.addColorStop(1, C.surface1);
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-
-    //  quadrant washes (strongest at the outer corner, fade toward the origin) 
-    ctx.save();
-    ctx.beginPath(); ctx.rect(plot.x, plot.y, plot.w, plot.h); ctx.clip();
-    const quads = [
-        { k: "LEADING", x0: cxp, y0: plot.y, x1: plot.x + plot.w, y1: cyp, from: [cxp, cyp], to: [plot.x + plot.w, plot.y] },
-        { k: "WEAKENING", x0: cxp, y0: cyp, x1: plot.x + plot.w, y1: plot.y + plot.h, from: [cxp, cyp], to: [plot.x + plot.w, plot.y + plot.h] },
-        { k: "LAGGING", x0: plot.x, y0: cyp, x1: cxp, y1: plot.y + plot.h, from: [cxp, cyp], to: [plot.x, plot.y + plot.h] },
-        { k: "IMPROVING", x0: plot.x, y0: plot.y, x1: cxp, y1: cyp, from: [cxp, cyp], to: [plot.x, plot.y] },
-    ];
-    quads.forEach(q => {
-        const w = q.x1 - q.x0, h = q.y1 - q.y0;
-        if (w <= 0 || h <= 0) return;
-        const [r, g, b] = C.quad[q.k].fill;
-        const gr = ctx.createLinearGradient(q.from[0], q.from[1], q.to[0], q.to[1]);
-        gr.addColorStop(0, `rgba(${r},${g},${b},${C.quadAlphaIn})`);
-        gr.addColorStop(1, `rgba(${r},${g},${b},${C.quadAlphaOut})`);
-        ctx.fillStyle = gr; ctx.fillRect(q.x0, q.y0, w, h);
-    });
-
-    //  grid 
-    ctx.lineWidth = 1;
-    p.xTicks.forEach(v => {
-        const x = Math.round(toX(v)) + 0.5;
-        if (x < plot.x || x > plot.x + plot.w) return;
-        ctx.strokeStyle = v === 0 ? "transparent" : C.grid;
-        ctx.beginPath(); ctx.moveTo(x, plot.y); ctx.lineTo(x, plot.y + plot.h); ctx.stroke();
-    });
-    p.yTicks.forEach(v => {
-        const y = Math.round(toY(v)) + 0.5;
-        if (y < plot.y || y > plot.y + plot.h) return;
-        ctx.strokeStyle = v === 0 ? "transparent" : C.grid;
-        ctx.beginPath(); ctx.moveTo(plot.x, y); ctx.lineTo(plot.x + plot.w, y); ctx.stroke();
-    });
-    ctx.restore();
-
-    //  quadrant titles (big, high-contrast, with a one-line plain meaning) 
-    const qTitle = (txt, sub, key, x, y, align) => {
-        ctx.save();
-        ctx.textAlign = align;
-        ctx.textBaseline = "alphabetic";
-        ctx.font = `800 13px ${sans}`;
-        ctx.fillStyle = C.quad[key].text; ctx.globalAlpha = 0.95;
-        ctx.fillText(txt, x, y);
-        ctx.font = `500 11px ${sans}`;
-        ctx.fillStyle = C.quad[key].sub; ctx.globalAlpha = 1;
-        ctx.fillText(sub, x, y + 15);
-        ctx.restore();
-    };
-    // only title a quadrant while enough of it is on screen (zoomed views may show just one)
-    const tp = plot.y + 20, bp = plot.y + plot.h - 24;
-    const rightW = plot.x + plot.w - cxp, leftW = cxp - plot.x, topH = cyp - plot.y, botH = plot.y + plot.h - cyp;
-    const vis = (w, h) => w > 120 && h > 60;
-    if (vis(rightW, topH)) qTitle("LEADING", "Strong & rising", "LEADING", plot.x + plot.w - 14, tp, "right");
-    if (vis(leftW, topH)) qTitle("IMPROVING", "Weak but gaining", "IMPROVING", plot.x + 14, tp, "left");
-    if (vis(rightW, botH)) qTitle("WEAKENING", "Strong but fading", "WEAKENING", plot.x + plot.w - 14, bp, "right");
-    if (vis(leftW, botH)) qTitle("LAGGING", "Weak & falling", "LAGGING", plot.x + 14, bp, "left");
-
-    //  centre axes (solid, clearly visible) 
-    ctx.save();
-    ctx.beginPath(); ctx.rect(plot.x, plot.y, plot.w, plot.h); ctx.clip();
-    ctx.strokeStyle = C.axis; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.moveTo(Math.round(p.cx) + 0.5, plot.y); ctx.lineTo(Math.round(p.cx) + 0.5, plot.y + plot.h); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(plot.x, Math.round(p.cy) + 0.5); ctx.lineTo(plot.x + plot.w, Math.round(p.cy) + 0.5); ctx.stroke();
-    ctx.restore();
-
-    //  plot frame 
-    ctx.strokeStyle = C.gridMajor; ctx.lineWidth = 1;
-    ctx.strokeRect(plot.x + 0.5, plot.y + 0.5, plot.w - 1, plot.h - 1);
-
-    //  tick labels 
-    const decX = _rrgDecimals(p.xTicks, 100), decY = _rrgDecimals(p.yTicks, 1);
-    ctx.font = `500 10.5px ${mono}`; ctx.fillStyle = C.tick;
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
-    p.xTicks.forEach(v => {
-        const x = toX(v);
-        if (x < plot.x + 14 || x > plot.x + plot.w - 14) return;
-        ctx.fillText(v === 0 ? "0" : _rrgFmtX(v, decX), x, plot.y + plot.h + 7);
-    });
-    ctx.textAlign = "right"; ctx.textBaseline = "middle";
-    p.yTicks.forEach(v => {
-        const y = toY(v);
-        if (y < plot.y + 8 || y > plot.y + plot.h - 8) return;
-        ctx.fillText(v === 0 ? "0" : _rrgFmtY(v, decY), plot.x - 8, y);
-    });
-
-    //  axis captions 
-    ctx.font = `600 11px ${sans}`; ctx.fillStyle = C.caption;
-    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-    ctx.fillText("\u2190 Weaker      Strength vs market      Stronger \u2192", plot.x + plot.w / 2, H - 8);
-    ctx.save(); ctx.translate(13, plot.y + plot.h / 2); ctx.rotate(-Math.PI / 2);
-    ctx.fillText("\u2190 Slowing      Speed of move      Speeding up \u2192", 0, 0); ctx.restore();
-
-    //  data layer, clipped to the plot 
-    ctx.save();
-    ctx.beginPath(); ctx.rect(plot.x, plot.y, plot.w, plot.h); ctx.clip();
-
-    const spot = focus || hover;
-    const dotCol = d => C.dot[d.quadrant] || C.dot.LAGGING;
-    const order = [...items].sort((a, b) => {
-        const pa = (a.sector === focus ? 3 : a.sector === hover ? 2 : top3.includes(a.sector) ? 1 : 0);
-        const pb = (b.sector === focus ? 3 : b.sector === hover ? 2 : top3.includes(b.sector) ? 1 : 0);
-        return pa - pb;
-    });
-
-    //  trails 
-    if (showTrails) order.forEach(d => {
-        const isSpot = d.sector === spot;
-        const all = (trails[d.sector] || []).filter(q => isFinite(q.x) && isFinite(q.y));
-        const pts = isSpot ? all : all.slice(-10);
-        if (pts.length < 2) return;
-        const col = dotCol(d);
-        const dim = spot && !isSpot;
-        const none = !!insufficient[d.sector];
-        const base = none ? 0.12 : dim ? 0.16 : isSpot ? 1 : 0.62;
-        ctx.save();
-        ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = col;
-        for (let i = 1; i < pts.length; i++) {
-            const t = i / (pts.length - 1);
-            ctx.globalAlpha = base * (0.18 + 0.82 * t);
-            ctx.lineWidth = (isSpot ? 1.4 : 1.1) + t * (isSpot ? 2.2 : 1.6);
-            ctx.beginPath();
-            ctx.moveTo(toX(pts[i - 1].x), toY(pts[i - 1].y));
-            ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
-            ctx.stroke();
-        }
-        if (isSpot) { // breadcrumb dots + start date
-            ctx.globalAlpha = 0.95; ctx.fillStyle = C.ring;
-            pts.forEach((q, i) => {
-                if (i === pts.length - 1) return;
-                ctx.beginPath(); ctx.arc(toX(q.x), toY(q.y), 2.6, 0, Math.PI * 2);
-                ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = col; ctx.stroke();
-            });
-            const s = pts[0];
-            if (s.date) {
-                ctx.globalAlpha = 0.9; ctx.fillStyle = C.labelTextDim;
-                ctx.font = `500 10px ${mono}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-                ctx.fillText(String(s.date).slice(5), toX(s.x), toY(s.y) - 7);
-            }
-        }
-        ctx.restore();
-    });
-
-    //  bubbles + direction arrowheads 
-    const placed = [ // label collision boxes  seeded with the four quadrant titles
-        { x: plot.x + plot.w - 130, y: plot.y + 4, w: 126, h: 40 }, { x: plot.x + 4, y: plot.y + 4, w: 126, h: 40 },
-        { x: plot.x + plot.w - 130, y: plot.y + plot.h - 44, w: 126, h: 40 }, { x: plot.x + 4, y: plot.y + plot.h - 44, w: 126, h: 40 },
-    ];
-    const dots = order.map(d => {
-        const r = _rrgBubbleRadius(d, st);
-        return { d, r, x: toX(d.rs_spread), y: toY(d.momentum) };
-    }).filter(o => isFinite(o.x) && isFinite(o.y));
-
-    dots.forEach(o => {
-        const { d, r, x, y } = o;
-        const col = dotCol(d);
-        const isSpot = d.sector === spot;
-        const dim = spot && !isSpot;
-        const none = !!insufficient[d.sector];
-        const alpha = none ? 0.28 : dim ? 0.38 : 1;
-
-        // direction arrowhead, just outside the bubble, pointing the way it is travelling
-        const tr = (trails[d.sector] || []).filter(q => isFinite(q.x) && isFinite(q.y));
-        if (showTrails && tr.length >= 2) {
-            const a = tr[tr.length - 2], b = tr[tr.length - 1];
-            const ang = Math.atan2(toY(b.y) - toY(a.y), toX(b.x) - toX(a.x));
-            if (isFinite(ang) && Math.hypot(toX(b.x) - toX(a.x), toY(b.y) - toY(a.y)) > 1.5) {
-                const ax = x + Math.cos(ang) * (r + 7), ay = y + Math.sin(ang) * (r + 7);
-                ctx.save(); ctx.globalAlpha = alpha * 0.95; ctx.fillStyle = col;
-                ctx.translate(ax, ay); ctx.rotate(ang);
-                ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-4, -4.2); ctx.lineTo(-1.5, 0); ctx.lineTo(-4, 4.2); ctx.closePath();
-                ctx.fill(); ctx.restore();
-            }
-        }
-
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        if (isSpot) { // halo
-            ctx.beginPath(); ctx.arc(x, y, r + 8, 0, Math.PI * 2);
-            ctx.fillStyle = col; ctx.globalAlpha = 0.16; ctx.fill();
-            ctx.beginPath(); ctx.arc(x, y, r + 4.5, 0, Math.PI * 2);
-            ctx.globalAlpha = 0.22; ctx.fill();
-            ctx.globalAlpha = alpha;
-        }
-        ctx.shadowColor = C.shadow; ctx.shadowBlur = isSpot ? 14 : 7; ctx.shadowOffsetY = 2;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-        const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
-        g.addColorStop(0, "rgba(255,255,255,0.55)"); g.addColorStop(0.35, col); g.addColorStop(1, col);
-        ctx.fillStyle = col; ctx.fill();
-        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-        ctx.fillStyle = g; ctx.fill();
-        ctx.lineWidth = isSpot ? 3 : 2.2; ctx.strokeStyle = C.ring; ctx.stroke();
-        ctx.restore();
-        placed.push({ x: x - r - 2, y: y - r - 2, w: (r + 2) * 2, h: (r + 2) * 2 }); // dots block labels
-    });
-
-    //  labels: every sector, greedy collision avoidance, priority = spotlight  top3  distance from origin 
-    ctx.font = `600 11.5px ${sans}`;
-    const prio = o => (o.d.sector === focus ? 1e9 : o.d.sector === hover ? 9e8 : top3.includes(o.d.sector) ? 5e8 : 0)
-        + Math.hypot(o.x - p.cx, o.y - p.cy);
-    const overlaps = (a, b) => !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
-    [...dots].sort((a, b) => prio(b) - prio(a)).forEach(o => {
-        const { d, r, x, y } = o;
-        const isSpot = d.sector === spot;
-        const forced = d.sector === focus || d.sector === hover;
-        ctx.font = `${isSpot ? 700 : 600} ${isSpot ? 12.5 : 11.5}px ${sans}`;
-        const tw = ctx.measureText(d.label).width;
-        const bw = tw + 12, bh = 19, gap = r + 5;
-        const cands = [
-            [x - bw / 2, y - gap - bh], [x + gap, y - bh / 2], [x - gap - bw, y - bh / 2], [x - bw / 2, y + gap],
-            [x + gap * 0.75, y - gap * 0.75 - bh], [x - gap * 0.75 - bw, y - gap * 0.75 - bh],
-            [x + gap * 0.75, y + gap * 0.75], [x - gap * 0.75 - bw, y + gap * 0.75],
-        ];
-        let pick = null;
-        for (const [bx, by] of cands) {
-            const box = { x: bx, y: by, w: bw, h: bh };
-            if (bx < plot.x + 2 || by < plot.y + 2 || bx + bw > plot.x + plot.w - 2 || by + bh > plot.y + plot.h - 2) continue;
-            if (placed.some(pb => overlaps(box, pb))) continue;
-            pick = box; break;
-        }
-        if (!pick && forced) pick = { x: Math.min(Math.max(plot.x + 2, cands[0][0]), plot.x + plot.w - bw - 2), y: Math.max(plot.y + 2, cands[0][1]), w: bw, h: bh };
-        if (!pick) return;
-        placed.push({ x: pick.x - 1, y: pick.y - 1, w: pick.w + 2, h: pick.h + 2 });
-        const dim = spot && !isSpot;
-        ctx.save();
-        ctx.globalAlpha = dim ? 0.5 : 1;
-        _rrgRoundRect(ctx, pick.x, pick.y, pick.w, pick.h, 9);
-        ctx.fillStyle = C.labelBg; ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = isSpot ? dotCol(d) : (isDark ? "rgba(148,163,184,0.22)" : "rgba(15,23,42,0.12)"); ctx.stroke();
-        ctx.fillStyle = C.labelText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(d.label, pick.x + pick.w / 2, pick.y + pick.h / 2 + 0.5);
-        ctx.restore();
-    });
-    ctx.restore();
-    return { dots };
-}
-
-function _rrgHit(p, items, st, mx, my) {
-    let best = null, bd = 1e9;
-    items.forEach(d => {
-        if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) return;
-        const r = _rrgBubbleRadius(d, st) + 6;
-        const dist = Math.hypot(mx - p.toX(d.rs_spread), my - p.toY(d.momentum));
-        if (dist <= r && dist < bd) { best = d.sector; bd = dist; }
-    });
-    return best;
-}
-
 /* ============================================================================
  * SectorRotationModule  simplified
  * ----------------------------------------------------------------------------
@@ -21199,39 +20783,6 @@ function SectorRotationModule({ T }) {
     const [lastDate, setLastDate] = useState(null);
     const [timeframe, setTimeframe] = useState("3M");
     const canvasRef = useRef(null);
-    const [scaleMode, setScaleMode] = useState("spread"); // "spread" (asinh, un-squashes outliers) | "linear"
-    const [showTrails, setShowTrails] = useState(true);
-    const [view, setView] = useState({ z: 1, cx: 0, cy: 0 }); // zoom + pan (centre in transformed space)
-    const [size, setSize] = useState({ w: 0, h: 0 });
-    const wrapRef = useRef(null);
-    const roRef = useRef(null);
-    const wheelCleanupRef = useRef(null);
-    const dragRef = useRef(null);
-    const stateRef = useRef({});
-    // Callback ref: the chart wrapper only exists after loading finishes, so observe it when it mounts.
-    const setWrapNode = useCallback((node) => {
-        if (roRef.current) { roRef.current.disconnect(); roRef.current = null; }
-        if (wheelCleanupRef.current) { wheelCleanupRef.current(); wheelCleanupRef.current = null; }
-        wrapRef.current = node;
-        if (!node) return;
-        const measure = () => setSize(s => {
-            const w = Math.round(node.clientWidth), h = Math.round(node.clientHeight);
-            return s.w === w && s.h === h ? s : { w, h };
-        });
-        measure();
-        if (typeof ResizeObserver !== "undefined") { roRef.current = new ResizeObserver(measure); roRef.current.observe(node); }
-        else window.addEventListener("resize", measure);
-        // non-passive wheel listener so the page doesn't scroll while zooming the chart
-        const onWheel = (e) => {
-            const s = stateRef.current;
-            if (!s.proj || !s.zoomAt) return;
-            e.preventDefault();
-            const r = node.getBoundingClientRect();
-            s.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0018));
-        };
-        node.addEventListener("wheel", onWheel, { passive: false });
-        wheelCleanupRef.current = () => { node.removeEventListener("wheel", onWheel); if (!roRef.current) window.removeEventListener("resize", measure); };
-    }, []);
     const rawHistRef = useRef(null); // { sector: [{date, rs}] }  raw RS ratios, full history
     const [insufficientSectors, setInsufficientSectors] = useState({}); // { sector: true } for sectors excluded from current tf
 
@@ -21483,83 +21034,220 @@ function SectorRotationModule({ T }) {
         [...snapshot].sort((a, b) => (b._rank ?? 0) - (a._rank ?? 0)).slice(0, 3).map(d => d.sector),
         [snapshot]);
 
-    //  Premium RRG renderer: projection (scale + zoom/pan) is memoised and shared by draw, hit-test and tooltip 
-    const proj = useMemo(() => {
-        if (size.w < 60 || size.h < 60) return null;
-        return _rrgBuildProjection({ items: filtered, trails, W: size.w, H: size.h, scaleMode, view });
-    }, [filtered, trails, size, scaleMode, view]);
-
-    // Zoom / pan reset whenever the data set or the scale changes
-    useEffect(() => { setView({ z: 1, cx: 0, cy: 0 }); }, [timeframe, statusFilter, scaleMode]);
-
+    //  RRG Canvas  simplified: no numeric ticks, no dead-zone ring, no signal dots 
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas || !proj) return;
+        if (!canvas || !filtered.length) return;
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.round(size.w * dpr);
-        canvas.height = Math.round(size.h * dpr);
+        const W = canvas.clientWidth || canvas.offsetWidth || 520;
+        const H_c = canvas.clientHeight || canvas.offsetHeight || 420;
+        if (W < 10 || H_c < 10) return;
+        canvas.width = W * dpr; canvas.height = H_c * dpr;
         const ctx = canvas.getContext("2d");
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        _rrgDraw(ctx, proj, {
-            items: filtered, trails, isDark, hover: hoveredSector, focus: focusSector,
-            top3: top3Sectors, insufficient: insufficientSectors, showTrails,
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H_c);
+
+        const PAD = { top: 28, right: 24, bottom: 40, left: 24 };
+        const pw = W - PAD.left - PAD.right;
+        const ph = H_c - PAD.top - PAD.bottom;
+
+        const allX = [], allY = [];
+        filtered.forEach(d => {
+            if (isFinite(d.rs_spread)) allX.push(d.rs_spread);
+            if (isFinite(d.momentum)) allY.push(d.momentum);
+            const t = trails[d.sector] || [];
+            t.forEach(p => { if (isFinite(p.x)) allX.push(p.x); if (isFinite(p.y)) allY.push(p.y); });
         });
-    }, [proj, filtered, trails, isDark, hoveredSector, focusSector, top3Sectors, insufficientSectors, showTrails, size]);
+        const xMid = 0, yMid = 0;
+        const xSpread = allX.length ? Math.max(0.02, Math.max(...allX.map(v => Math.abs(v - xMid))) * 1.35) : 0.1;
+        const ySpread = allY.length ? Math.max(2, Math.max(...allY.map(v => Math.abs(v - yMid))) * 1.35) : 5;
+        const xMin = xMid - xSpread, xMax = xMid + xSpread;
+        const yMin = yMid - ySpread, yMax = yMid + ySpread;
 
-    //  Zoom (wheel / buttons), pan (drag), hover + click-to-lock 
-    function zoomAt(mx, my, factor) {
-        if (!proj) return;
-        const nz = Math.min(12, Math.max(1, view.z * factor));
-        if (nz === view.z) return;
-        if (nz <= 1.001) { setView({ z: 1, cx: 0, cy: 0 }); return; }
-        const fx = (mx - proj.PAD.left) / proj.pw, fy = (my - proj.PAD.top) / proj.ph;
-        const ux = proj.uxMin + (mx - proj.PAD.left) * proj.pxToUx;
-        const uy = proj.uyMax - (my - proj.PAD.top) * proj.pxToUy;
-        const ncx = ux - (fx * 2 - 1) * (proj.hx / nz);
-        const ncy = uy + (fy * 2 - 1) * (proj.hy / nz);
-        setView({ z: nz, cx: Math.max(-proj.hx, Math.min(proj.hx, ncx)), cy: Math.max(-proj.hy, Math.min(proj.hy, ncy)) });
-    }
-    stateRef.current = { proj, zoomAt };
-    const resetView = () => setView({ z: 1, cx: 0, cy: 0 });
-    const zoomCentre = (factor) => proj && zoomAt(proj.PAD.left + proj.pw / 2, proj.PAD.top + proj.ph / 2, factor);
+        const toX = v => PAD.left + ((v - xMin) / (xMax - xMin)) * pw;
+        const toY = v => PAD.top + ((yMax - v) / (yMax - yMin)) * ph;
 
-    const _hitState = { focus: focusSector, hover: hoveredSector, top3: top3Sectors };
-    const _pt = (e) => { const r = canvasRef.current.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-    function handlePointerDown(e) {
-        if (!proj || (e.pointerType === "mouse" && e.button !== 0)) return;
-        const q = _pt(e);
-        dragRef.current = { sx: q.x, sy: q.y, cx: view.cx, cy: view.cy, moved: false, type: e.pointerType };
-        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { }
-    }
-    function handlePointerMove(e) {
-        if (!proj) return;
-        const q = _pt(e);
-        const dr = dragRef.current;
-        if (dr && dr.type === "mouse") {
-            const dx = q.x - dr.sx, dy = q.y - dr.sy;
-            if (!dr.moved && Math.hypot(dx, dy) > 4) dr.moved = true;
-            if (dr.moved && view.z > 1) {
-                setHoveredSector(null);
-                setView(v => ({
-                    ...v,
-                    cx: Math.max(-proj.hx, Math.min(proj.hx, dr.cx - dx * proj.pxToUx)),
-                    cy: Math.max(-proj.hy, Math.min(proj.hy, dr.cy + dy * proj.pxToUy)),
-                }));
-                return;
+        const cx = toX(xMid), cy = toY(yMid);
+        const quadBg = [
+            { x: cx, y: PAD.top, w: PAD.left + pw - cx, h: cy - PAD.top, c: "rgba(34,197,94,0.07)" }, // LEADING
+            { x: cx, y: cy, w: PAD.left + pw - cx, h: PAD.top + ph - cy, c: "rgba(249,115,22,0.07)" }, // WEAKENING
+            { x: PAD.left, y: cy, w: cx - PAD.left, h: PAD.top + ph - cy, c: "rgba(239,68,68,0.07)" }, // LAGGING
+            { x: PAD.left, y: PAD.top, w: cx - PAD.left, h: cy - PAD.top, c: "rgba(234,179,8,0.07)" }, // IMPROVING
+        ];
+        quadBg.forEach(q => { ctx.fillStyle = q.c; ctx.fillRect(q.x, q.y, q.w, q.h); });
+
+        // Center axes only  no grid lines, no numeric ticks (kept intentionally simple)
+        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)";
+        ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, PAD.top + ph); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(PAD.left + pw, cy); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Plain-English quadrant labels
+        const qLabels = [
+            { text: "LEADING", x: PAD.left + pw - 6, y: PAD.top + 16, align: "right", col: STATUS_META.LEADING.color },
+            { text: "WEAKENING", x: PAD.left + pw - 6, y: PAD.top + ph - 8, align: "right", col: STATUS_META.WEAKENING.color },
+            { text: "LAGGING", x: PAD.left + 6, y: PAD.top + ph - 8, align: "left", col: STATUS_META.LAGGING.color },
+            { text: "IMPROVING", x: PAD.left + 6, y: PAD.top + 16, align: "left", col: STATUS_META.IMPROVING.color },
+        ];
+        ctx.font = `700 12px 'IBM Plex Sans', sans-serif`;
+        qLabels.forEach(l => {
+            ctx.fillStyle = l.col; ctx.globalAlpha = 0.55;
+            ctx.textAlign = l.align; ctx.fillText(l.text, l.x, l.y);
+        });
+        ctx.globalAlpha = 1;
+
+        // Simple axis captions  no jargon, no numbers
+        ctx.font = `11px 'IBM Plex Sans', sans-serif`;
+        ctx.fillStyle = isDark ? "rgba(255,255,255,0.32)" : "rgba(0,0,0,0.32)";
+        ctx.textAlign = "center";
+        ctx.fillText("Weaker \u2190  Strength vs Market  \u2192 Stronger", PAD.left + pw / 2, PAD.top + ph + 26);
+        ctx.save(); ctx.translate(12, PAD.top + ph / 2);
+        ctx.rotate(-Math.PI / 2); ctx.textAlign = "center";
+        ctx.fillText("Slowing \u2190  Speed of Move  \u2192 Speeding up", 0, 0); ctx.restore();
+
+        //  DRAW TRAILS 
+        filtered.forEach(d => {
+            const pts = (trails[d.sector] || []).filter(p => isFinite(p.x) && isFinite(p.y));
+            if (pts.length < 2) return;
+            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+            const isHov = hoveredSector === d.sector;
+            const isFocus = focusSector === d.sector;
+            const isOther = focusSector && !isFocus;
+            const notEnoughData = isInsufficient(d);
+            const isTop3Sector = top3Sectors.includes(d.sector);
+            const isFaded = !isHov && !isFocus && !isTop3Sector;
+
+            ctx.save();
+            for (let i = 1; i < pts.length; i++) {
+                let alpha = isHov || isFocus
+                    ? 0.15 + (i / pts.length) * 0.65
+                    : isOther
+                        ? 0.03
+                        : notEnoughData
+                            ? 0.02
+                            : isFaded
+                                ? 0.03 + (i / pts.length) * 0.07
+                                : 0.08 + (i / pts.length) * 0.32;
+                ctx.strokeStyle = qc.color;
+                ctx.globalAlpha = alpha;
+                ctx.lineWidth = isFocus ? 2.5 : isHov ? 2 : 1.2;
+                ctx.beginPath();
+                ctx.moveTo(toX(pts[i - 1].x), toY(pts[i - 1].y));
+                ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
+                ctx.stroke();
             }
+            ctx.restore();
+        });
+
+        //  DRAW DIRECTION VECTOR ARROWS 
+        filtered.forEach(d => {
+            if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) return;
+            const pts = (trails[d.sector] || []).filter(p => isFinite(p.x) && isFinite(p.y));
+            if (pts.length < 2) return;
+            const p1 = pts[pts.length - 2];
+            const p2 = pts[pts.length - 1];
+            const x1 = toX(p1.x), y1 = toY(p1.y);
+            const x2 = toX(p2.x), y2 = toY(p2.y);
+            const dist = Math.hypot(x2 - x1, y2 - y1);
+            if (dist < 2) return;
+            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+            const isHov = hoveredSector === d.sector;
+            const isFocus = focusSector === d.sector;
+            const isOther = focusSector && !isFocus;
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const arrowLen = 8, arrowAngle = Math.PI / 6;
+
+            ctx.save();
+            ctx.strokeStyle = qc.color;
+            ctx.fillStyle = qc.color;
+            ctx.globalAlpha = isOther ? 0.08 : isHov || isFocus ? 0.95 : 0.55;
+            ctx.lineWidth = isFocus ? 2.5 : isHov ? 2 : 1.5;
+
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - arrowLen * Math.cos(angle - arrowAngle), y2 - arrowLen * Math.sin(angle - arrowAngle));
+            ctx.lineTo(x2 - arrowLen * Math.cos(angle + arrowAngle), y2 - arrowLen * Math.sin(angle + arrowAngle));
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        });
+
+        //  DRAW BUBBLES (current position) 
+        filtered.forEach(d => {
+            if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) return;
+            const bx = toX(d.rs_spread), by = toY(d.momentum);
+            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+            const isHov = hoveredSector === d.sector;
+            const isFocus = focusSector === d.sector;
+            const isOther = focusSector && !isFocus;
+            const notEnoughData = isInsufficient(d);
+            const isTop3B = top3Sectors.includes(d.sector);
+            const r = isFocus || isHov ? 10 : isTop3B ? 8 : 6;
+            const alpha = isOther ? 0.18 : notEnoughData ? 0.15 : (!isTop3B && !isHov && !isFocus) ? 0.35 : isHov || isFocus ? 1 : 0.88;
+
+            if (isHov || isFocus) { ctx.shadowColor = qc.color; ctx.shadowBlur = 18; }
+            ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
+            ctx.fillStyle = qc.color; ctx.globalAlpha = alpha; ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = isDark ? "#0f1117" : "#fff";
+            ctx.lineWidth = isFocus ? 3 : isHov ? 2.5 : 1.5; ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Label  show only for top3, hovered, or focused (keeps chart readable at a glance)
+            if (isHov || isFocus || isTop3B) {
+                ctx.font = isFocus || isHov ? `700 13px 'IBM Plex Sans', sans-serif` : `600 12px 'IBM Plex Sans', sans-serif`;
+                ctx.fillStyle = isHov || isFocus
+                    ? (isDark ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.9)")
+                    : (isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)");
+                ctx.textAlign = "center";
+                ctx.fillText(d.label, bx, by - r - 4);
+            }
+        });
+    }, [filtered, trails, hoveredSector, focusSector, isDark, top3Sectors]);
+
+    //  Canvas hover + click 
+    function _getHitSector(e) {
+        const canvas = canvasRef.current;
+        if (!canvas || !filtered.length) return null;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const W = canvas.clientWidth || canvas.offsetWidth || 520;
+        const H_c = canvas.clientHeight || canvas.offsetHeight || 420;
+        const PAD = { top: 28, right: 24, bottom: 40, left: 24 };
+        const pw = W - PAD.left - PAD.right, ph = H_c - PAD.top - PAD.bottom;
+        const allX = [], allY = [];
+        filtered.forEach(d => {
+            if (isFinite(d.rs_spread)) allX.push(d.rs_spread);
+            if (isFinite(d.momentum)) allY.push(d.momentum);
+            (trails[d.sector] || []).forEach(p => { if (isFinite(p.x)) allX.push(p.x); if (isFinite(p.y)) allY.push(p.y); });
+        });
+        const xMid = 0, yMid = 0;
+        const xSpread = allX.length ? Math.max(0.02, Math.max(...allX.map(v => Math.abs(v - xMid))) * 1.35) : 0.1;
+        const ySpread = allY.length ? Math.max(2, Math.max(...allY.map(v => Math.abs(v - yMid))) * 1.35) : 5;
+        const xMin = xMid - xSpread, xMax = xMid + xSpread;
+        const yMin = yMid - ySpread, yMax = yMid + ySpread;
+        const toX = v => PAD.left + ((v - xMin) / (xMax - xMin)) * pw;
+        const toY = v => PAD.top + ((yMax - v) / (yMax - yMin)) * ph;
+        for (const d of filtered) {
+            if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) continue;
+            if (Math.hypot(mx - toX(d.rs_spread), my - toY(d.momentum)) < 13) return d.sector;
         }
-        if (e.pointerType === "mouse") setHoveredSector(_rrgHit(proj, filtered, _hitState, q.x, q.y));
+        return null;
     }
-    function handlePointerUp(e) {
-        const dr = dragRef.current;
-        dragRef.current = null;
-        if (!proj || !dr || dr.moved) return;
-        const q = _pt(e);
-        const hit = _rrgHit(proj, filtered, _hitState, q.x, q.y);
-        setFocusSector(f => (f === hit ? null : hit));
-        if (e.pointerType !== "mouse") setHoveredSector(null);
+    function handleCanvasMouseMove(e) { setHoveredSector(_getHitSector(e)); }
+    function handleCanvasClick(e) {
+        const hit = _getHitSector(e);
+        setFocusSector(f => f === hit ? null : hit);
     }
-    function handlePointerLeave() { dragRef.current = null; setHoveredSector(null); }
+    function handleCanvasTouch(e) {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        const synth = { clientX: touch.clientX, clientY: touch.clientY };
+        const hit = _getHitSector(synth);
+        if (hit) { e.preventDefault(); setFocusSector(f => f === hit ? null : hit); }
+    }
 
     // Flat surfaces only  no layered gradients or blur, matching StockDashboard's
     // design system: a card is just its background color, depth comes from a
@@ -21733,7 +21421,7 @@ function SectorRotationModule({ T }) {
                     <div style={{
                         ...(isMobile
                             ? { display: mobileTab === "table" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileTableMinHeight, order: 2 }
-                            : { flex: "0 0 292px", maxWidth: 300, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
+                            : { flex: "0 0 260px", maxWidth: 270, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
                         border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden", minWidth: 0, background: panelBg, boxShadow: panelShadow
                     }}>
                         <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 16px 10px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
@@ -21861,100 +21549,44 @@ function SectorRotationModule({ T }) {
                         border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden",
                         background: panelBg, boxShadow: panelShadow, minWidth: 0
                     }}>
-                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 16px 12px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0, display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                            <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: text }}>Rotation Chart</div>
-                                <div style={{ fontSize: 12, color: subtext, marginTop: 3 }}>{isMobile ? "Tap a dot to inspect" : "Hover a dot to inspect, click to lock it. Scroll to zoom, drag to pan."}</div>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                                {(() => {
-                                    const seg = (active) => ({ padding: "6px 11px", fontSize: 12, fontWeight: active ? 700 : 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: active ? focusSoft : "transparent", color: active ? "#60a5fa" : text, transition: "background 140ms ease" });
-                                    const ico = { width: 30, height: 30, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, border: `1px solid ${panelBorder}`, background: segmentedBg, color: text, cursor: "pointer", fontSize: 15, fontWeight: 600, fontFamily: "inherit", padding: 0 };
-                                    return (
-                                        <>
-                                            <div role="group" aria-label="Chart scale" style={{ display: "inline-flex", borderRadius: 9, overflow: "hidden", border: `1px solid ${panelBorder}`, background: segmentedBg }}>
-                                                <button type="button" aria-pressed={scaleMode === "spread"} title="Stretches the crowded centre so sectors stay apart. Axis values stay true." onClick={() => setScaleMode("spread")} style={seg(scaleMode === "spread")}>Spread</button>
-                                                <button type="button" aria-pressed={scaleMode === "linear"} title="True linear scale" onClick={() => setScaleMode("linear")} style={seg(scaleMode === "linear")}>Linear</button>
-                                            </div>
-                                            <button type="button" aria-pressed={showTrails} title="Show the path each sector took" onClick={() => setShowTrails(t => !t)}
-                                                style={{ ...ico, width: "auto", padding: "0 11px", fontSize: 12, fontWeight: showTrails ? 700 : 500, color: showTrails ? "#60a5fa" : text, borderColor: showTrails ? "#60a5fa" : panelBorder, background: showTrails ? focusSoft : segmentedBg }}>Trails</button>
-                                            {!isMobile && (
-                                                <div style={{ display: "inline-flex", gap: 4 }}>
-                                                    <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomCentre(1 / 1.5)} style={ico}>{"\u2212"}</button>
-                                                    <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomCentre(1.5)} style={ico}>+</button>
-                                                    <button type="button" aria-label="Fit all sectors" title="Fit all sectors (or double-click the chart)" onClick={resetView} disabled={view.z === 1} style={{ ...ico, width: "auto", padding: "0 11px", fontSize: 12, opacity: view.z === 1 ? 0.45 : 1, cursor: view.z === 1 ? "default" : "pointer" }}>Fit</button>
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
-                            </div>
+                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 14px 10px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0 }}>
+                            <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: text }}>Rotation Chart</div>
+                            <div style={{ fontSize: 12, color: subtext, marginTop: 3 }}>{isMobile ? "Tap a dot to inspect" : "Hover a dot to inspect, click to lock it in place"}</div>
                         </div>
 
-                        <div ref={setWrapNode} style={{ flex: 1, position: "relative", minHeight: isMobile ? 360 : 680, overflow: "hidden" }}>
-                            <canvas ref={canvasRef}
-                                role="img"
-                                aria-label="Relative rotation graph of sectors by strength versus market and speed of move"
-                                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", cursor: hoveredSector ? "pointer" : view.z > 1 ? "grab" : "default", touchAction: isMobile ? "pan-y" : "none" }}
-                                onPointerDown={handlePointerDown}
-                                onPointerMove={handlePointerMove}
-                                onPointerUp={handlePointerUp}
-                                onPointerCancel={() => { dragRef.current = null; }}
-                                onPointerLeave={handlePointerLeave}
-                                onDoubleClick={resetView}
-                            />
+                        <canvas ref={canvasRef}
+                            style={{ flex: 1, width: "100%", cursor: hoveredSector ? "pointer" : "default", minHeight: isMobile ? 320 : 680, background: isDark ? "rgba(2,6,23,0.18)" : "rgba(255,255,255,0.4)" }}
+                            onMouseMove={handleCanvasMouseMove}
+                            onMouseLeave={() => setHoveredSector(null)}
+                            onClick={handleCanvasClick}
+                            onTouchStart={handleCanvasTouch}
+                        />
 
-                            {/* Hover / locked-sector card, anchored to the dot */}
-                            {(() => {
-                                const active = focusSector || hoveredSector;
-                                const d = active && proj ? filtered.find(x => x.sector === active) : null;
-                                if (!d) return null;
-                                const bx = proj.toX(d.rs_spread), by = proj.toY(d.momentum);
-                                if (!isFinite(bx) || !isFinite(by)) return null;
-                                if (bx < proj.PAD.left || bx > size.w - proj.PAD.right || by < proj.PAD.top || by > size.h - proj.PAD.bottom) return null;
-                                const meta = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
-                                const tr = (trails[d.sector] || []).filter(q => isFinite(q.x) && isFinite(q.y));
-                                let heading = null;
-                                if (tr.length >= 2) {
-                                    const a = tr[Math.max(0, tr.length - 6)], b = tr[tr.length - 1];
-                                    heading = `${b.x >= a.x ? "Gaining strength" : "Losing strength"}, ${b.y >= a.y ? "speeding up" : "slowing"}`;
-                                }
-                                const CW = isMobile ? 196 : 224, CH = 150;
-                                const left = bx + 26 + CW > size.w - 6 ? Math.max(6, bx - 26 - CW) : bx + 26;
-                                const top = Math.max(6, Math.min(size.h - CH - 6, by - 52));
-                                const good = isDark ? "#4ade80" : "#15803d", bad = isDark ? "#f87171" : "#b91c1c";
-                                const row = (k, v, col) => (
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, fontSize: 12 }}>
-                                        <span style={{ color: subtext }}>{k}</span>
-                                        <span style={{ fontFamily: mono, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: col }}>{v}</span>
-                                    </div>
-                                );
-                                return (
-                                    <div style={{ position: "absolute", left, top, width: CW, pointerEvents: "none", padding: "12px 14px", borderRadius: 12, background: isDark ? "rgba(10,16,32,0.96)" : "rgba(255,255,255,0.98)", border: `1px solid ${withAlpha(meta.color, 0.45)}`, boxShadow: isDark ? "0 12px 32px rgba(0,0,0,0.55)" : "0 12px 32px rgba(15,23,42,0.16)", display: "flex", flexDirection: "column", gap: 7, zIndex: 3 }}>
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                                            <span style={{ fontSize: 14, fontWeight: 800, color: text }}>{d.label}</span>
-                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: meta.color, padding: "3px 8px", borderRadius: 999, background: statusBadgeStyles[d.quadrant]?.bg, border: `1px solid ${statusBadgeStyles[d.quadrant]?.border}` }}>
-                                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color }} />{meta.label}
-                                            </span>
-                                        </div>
-                                        <div style={{ fontSize: 11.5, color: subtext, lineHeight: 1.4 }}>{meta.desc}</div>
-                                        <div style={{ height: 1, background: insetLine }} />
-                                        {row("Strength vs market", _rrgFmtX(d.rs_spread, 2), d.rs_spread >= 0 ? good : bad)}
-                                        {row("Momentum", _rrgFmtY(d.momentum, 1), d.momentum >= 0 ? good : bad)}
-                                        {heading && <div style={{ fontSize: 11.5, color: text, opacity: 0.85 }}>{"\u2192"} {heading}</div>}
-                                        {focusSector === d.sector && <div style={{ fontSize: 10.5, color: subtext, opacity: 0.8 }}>Locked. Click again to release.</div>}
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        {/* Legend / reading guide */}
-                        <div style={{ padding: isMobile ? "9px 12px 11px" : "10px 16px 12px", borderTop: `1px solid ${insetLine}`, display: "flex", alignItems: "center", gap: isMobile ? 12 : 18, flexWrap: "wrap", fontSize: 12, color: subtext, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: STATUS_META.LEADING.color, boxShadow: `0 0 0 2px ${isDark ? "#0a1020" : "#fff"}, 0 0 0 3px ${withAlpha(STATUS_META.LEADING.color, 0.4)}` }} />Dot: where it is today</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 22, height: 3, borderRadius: 2, background: `linear-gradient(90deg, ${withAlpha(STATUS_META.LEADING.color, 0.15)}, ${STATUS_META.LEADING.color})` }} />Tail: last 20 sessions</span>
-                            <span>{"\u27A4"} Arrow: where it is heading</span>
-                            {scaleMode === "spread" && <span style={{ marginLeft: "auto", opacity: 0.8 }}>Spread scale: axis values are true, spacing is stretched</span>}
-                        </div>
+                        {/* Hover/focus tooltip  plain-English only */}
+                        {(() => {
+                            const active = focusSector || hoveredSector;
+                            const d = active ? snapshot.find(x => x.sector === active) : null;
+                            if (!d) return (
+                                <div style={{ padding: isMobile ? "10px 12px 12px" : "10px 14px 12px", borderTop: `1px solid ${insetLine}`, fontSize: 12, color: subtext, opacity: 0.55, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
+                                    {isMobile ? "Tap a sector dot to see details" : "Hover or click a sector dot to see details"}
+                                </div>
+                            );
+                            const meta = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+                            const momVal = d.momentum ?? 0;
+                            return (
+                                <div style={{ padding: isMobile ? "10px 12px 12px" : "10px 14px 12px", borderTop: `1px solid ${insetLine}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
+                                    <span style={{ fontSize: isMobile ? 14 : 13, fontWeight: 800, color: text }}>{d.label}</span>
+                                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: meta.color, padding: "5px 9px", borderRadius: 999, background: statusBadgeStyles[d.quadrant]?.bg, border: `1px solid ${statusBadgeStyles[d.quadrant]?.border}` }}>
+                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color, display: "inline-block" }} />
+                                        {meta.label}
+                                    </span>
+                                    <span style={{ fontSize: 12, color: subtext }}>{meta.desc}</span>
+                                    <span style={{ fontSize: 12, color: momVal >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600, marginLeft: "auto" }}>
+                                        {momVal >= 0 ? "\u2191" : "\u2193"} {Math.abs(momVal).toFixed(1)}% momentum
+                                    </span>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>

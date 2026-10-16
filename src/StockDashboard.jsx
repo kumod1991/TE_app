@@ -1482,7 +1482,6 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
     );
 }
 
-<<<<<<< HEAD
 // ─── BREADTH PANEL ───────────────────────────────────────────────────────────
 // Premium treatment for the hero "Breadth" tile: regime chip, proportional
 // meter rails (with a 50% reference tick on the SMA rows), split-weight
@@ -2303,205 +2302,6 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
 });
 
 const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, fiiDiiData, niftyPeData, macroSeries, macroExtras, onNavigate, userToken, onLogin }) {
-=======
-function NiftyPePanel({ D, isCompact, data }) {
-    const [hoverIdx, setHoverIdx] = React.useState(null);
-    const rows = (data || [])
-        .filter(r => r && r.pe_ratio != null && Number.isFinite(Number(r.pe_ratio)))
-        .slice()
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    if (!rows.length) {
-        return (
-            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" }}>
-                <div style={{
-                    fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                    color: D.muted, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                }}>
-                    Nifty 50 &middot; P/E (TTM)
-                </div>
-                <div style={{ color: D.muted, fontSize: 13.5, marginTop: 10 }}>waiting for data</div>
-            </div>
-        );
-    }
-
-    const values = rows.map(r => Number(r.pe_ratio));
-    const latest = rows[rows.length - 1];
-    const prev = rows.length > 1 ? rows[rows.length - 2] : null;
-    const pe = values[values.length - 1];
-    const delta = prev ? pe - Number(prev.pe_ratio) : null;
-    const deltaPct = prev && Number(prev.pe_ratio) ? (delta / Number(prev.pe_ratio)) * 100 : null;
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-
-    const zone = pe >= avg * 1.08 ? "Rich" : pe <= avg * 0.92 ? "Cheap" : "Fair";
-    const zoneColor = zone === "Rich" ? (D.neg || "#ef4444") : zone === "Cheap" ? (D.pos || "#10b981") : D.accent;
-    const zoneBg = zone === "Rich" ? D.negSoft : zone === "Cheap" ? D.posSoft : withAlpha(D.accent, D.isDark ? 0.16 : 0.09);
-
-    let dateLabel = latest.date;
-    try {
-        dateLabel = new Date(latest.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
-    } catch { /* keep raw date on parse failure */ }
-
-    // per-point "Mon YYYY" labels for the hover tooltip
-    const monthLabels = rows.map(r => {
-        try { return new Date(r.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" }); }
-        catch { return String(r.date); }
-    });
-
-    // ── sparkline geometry (hand-rolled SVG, no chart lib) ──────────────────
-    const vw = 300;
-    const vh = isCompact ? 60 : 80;
-    const padY = 6;
-    const range = Math.max(max - min, 0.01);
-    const stepX = values.length > 1 ? vw / (values.length - 1) : vw;
-    const points = values.map((v, i) => [
-        i * stepX,
-        padY + (1 - (v - min) / range) * (vh - padY * 2),
-    ]);
-    const linePath = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-    const areaPath = `${linePath} L${vw},${vh} L0,${vh} Z`;
-    const avgY = padY + (1 - (avg - min) / range) * (vh - padY * 2);
-    const last = points[points.length - 1];
-    const lineColor = D.accent || "#2563eb";
-    const hovered = hoverIdx != null ? points[hoverIdx] : null;
-
-    // ── low/avg/high range-bar geometry ──────────────────────────────────────
-    const barPct = v => Math.min(100, Math.max(0, ((v - min) / range) * 100));
-    const avgPct = barPct(avg);
-    const currentPct = barPct(pe);
-
-    return (
-        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", height: "100%" }}>
-            <div style={{
-                display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 999,
-                background: zoneBg, border: `1px solid ${withAlpha(zoneColor, 0.22)}`, color: zoneColor,
-                fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-                fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", marginBottom: 14, width: "fit-content",
-            }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: zoneColor }} />
-                {zone === "Fair" ? "Fair Value" : `${zone} vs 2Y Avg`}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                <span style={{
-                    fontSize: isCompact ? 34 : 42, fontWeight: 800, letterSpacing: "-0.03em",
-                    color: D.text, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1,
-                }}>{pe.toFixed(2)}</span>
-                {delta != null && (
-                    <span style={{
-                        fontSize: 13.5, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
-                        color: delta >= 0 ? (D.pos || "#10b981") : (D.neg || "#ef4444"),
-                    }}>
-                        {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
-                        {deltaPct != null ? ` (${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%)` : ""}
-                    </span>
-                )}
-            </div>
-            <div style={{ fontSize: 13, color: D.subtext, marginTop: 4, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>
-                Nifty 50 &middot; P/E (TTM) &middot; {dateLabel}
-            </div>
-
-            <div style={{ marginTop: "auto", paddingTop: 14 }}>
-                <div style={{ position: "relative" }}>
-                    <svg
-                        viewBox={`0 0 ${vw} ${vh}`}
-                        width="100%"
-                        height={isCompact ? 60 : 80}
-                        preserveAspectRatio="none"
-                        style={{ display: "block", overflow: "visible" }}
-                        onMouseLeave={() => setHoverIdx(null)}
-                    >
-                        <defs>
-                            <linearGradient id="niftyPeGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor={lineColor} stopOpacity="0.28" />
-                                <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-                            </linearGradient>
-                        </defs>
-                        <line x1="0" y1={avgY} x2={vw} y2={avgY} stroke={D.muted} strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3,3" />
-                        <path d={areaPath} fill="url(#niftyPeGrad)" stroke="none" />
-                        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        {hovered && (
-                            <line x1={hovered[0]} y1="0" x2={hovered[0]} y2={vh} stroke={D.muted} strokeOpacity="0.4" strokeWidth="1" strokeDasharray="2,2" />
-                        )}
-                        {last && <circle cx={last[0]} cy={last[1]} r="3.2" fill={lineColor} stroke={D.panelBg} strokeWidth="1.5" />}
-                        {hovered && <circle cx={hovered[0]} cy={hovered[1]} r="4" fill={lineColor} stroke={D.panelBg} strokeWidth="2" />}
-                        {/* invisible per-month hit targets, one column per data point */}
-                        {points.map(([x], i) => (
-                            <rect
-                                key={i}
-                                x={Math.max(0, x - stepX / 2)}
-                                y="0"
-                                width={Math.max(stepX, 4)}
-                                height={vh}
-                                fill="transparent"
-                                onMouseEnter={() => setHoverIdx(i)}
-                                style={{ cursor: "crosshair" }}
-                            />
-                        ))}
-                    </svg>
-                    {hovered && (
-                        <div style={{
-                            position: "absolute",
-                            left: `${(hovered[0] / vw) * 100}%`,
-                            top: `${(hovered[1] / vh) * 100}%`,
-                            transform: `translate(${hoverIdx === 0 ? "-4px" : hoverIdx === points.length - 1 ? "calc(-100% + 4px)" : "-50%"}, calc(-100% - 10px))`,
-                            background: D.panelBg,
-                            border: `1px solid ${D.panelBorder}`,
-                            borderRadius: 8,
-                            padding: "5px 9px",
-                            boxShadow: D.shadowMd || "0 6px 16px rgba(0,0,0,0.16)",
-                            fontSize: 11.5,
-                            fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-                            color: D.subtext,
-                            whiteSpace: "nowrap",
-                            pointerEvents: "none",
-                            zIndex: 5,
-                        }}>
-                            {monthLabels[hoverIdx]}{"  "}
-                            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: D.text }}>
-                                {values[hoverIdx].toFixed(2)}
-                            </span>
-                        </div>
-                    )}
-                </div>
-
-                {/* low → high range bar, colored cheap(green) → rich(red), with a marker at the current reading */}
-                <div style={{ marginTop: 14 }}>
-                    <div style={{
-                        position: "relative", height: 6, borderRadius: 999,
-                        background: `linear-gradient(90deg, ${D.pos || "#10b981"} 0%, #eab308 50%, ${D.neg || "#ef4444"} 100%)`,
-                    }}>
-                        <div title={`2Y average ${avg.toFixed(2)}`} style={{
-                            position: "absolute", left: `${avgPct}%`, top: -3, bottom: -3, width: 2,
-                            background: D.panelBg, opacity: 0.85, transform: "translateX(-50%)",
-                        }} />
-                        <div title={`Now ${pe.toFixed(2)} — ${zone}`} style={{
-                            position: "absolute", left: `${currentPct}%`, top: -5, width: 4, height: 16, borderRadius: 2,
-                            background: zoneColor, border: `1.5px solid ${D.panelBg}`, transform: "translateX(-50%)",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-                        }} />
-                    </div>
-                    <div style={{
-                        display: "flex", justifyContent: "space-between", marginTop: 6,
-                        fontSize: 11, color: D.muted, fontFamily: "'IBM Plex Mono', monospace",
-                    }}>
-                        <span>Low {min.toFixed(1)}</span>
-                        <span>Avg {avg.toFixed(1)}</span>
-                        <span>High {max.toFixed(1)}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCompact, breadthSnapshot, gainers, losers, allHighRsStocks, rsIndustrySummary, fiiDiiData, niftyPeData, onNavigate, userToken, onLogin }) {
-    const topRsSectors = [...(rsIndustrySummary || [])]
-        .sort((a, b) => (b.count || 0) - (a.count || 0) || (a.industry || "").localeCompare(b.industry || ""))
-        .slice(0, 5);
->>>>>>> 1dabbcf (ch)
     const highPct = Number(breadthSnapshot?.near_52w_high);
     const lowPct = Number(breadthSnapshot?.near_52w_low);
     const sma50Pct = Number(breadthSnapshot?.above_sma50);
@@ -2654,7 +2454,6 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                     gap: isCompact ? 18 : 16,
                     alignItems: "stretch",
                 }}>
-<<<<<<< HEAD
                     <NiftyPePanel D={D} isCompact={isCompact} data={niftyPeData} card={!isCompact} />
 
                     {/* display: contents -> Breadth and FII/DII become direct grid items,
@@ -2665,20 +2464,6 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                         ) : metric.fiiDii ? (
                             <FiiDiiPanel key={metric.label} D={D} isCompact={isCompact} data={fiiDiiData} />
                         ) : (
-=======
-                    <div style={{ minWidth: 0 }}>
-                        <NiftyPePanel D={D} isCompact={isCompact} data={niftyPeData} />
-                    </div>
-
-                    <div style={{
-                        display: "grid",
-                        gridTemplateColumns: isCompact
-                            ? "repeat(2, minmax(0, 1fr))"
-                            : "minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1.7fr)",
-                        gap: 10,
-                    }}>
-                        {heroMetrics.map(metric => (
->>>>>>> 1dabbcf (ch)
                             <div key={metric.label} style={{
                                 minWidth: 0,
                                 width: "100%",
@@ -2710,68 +2495,10 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                         ))}
                     </div>
 
-<<<<<<< HEAD
                     {/* USD/INR · Brent · DXY, then Gold · Silver · US 10Y: extra rows of the same 3-column grid (collapsed by default) */}
                     {showAllCards && MACRO_CARDS.map(card => (
                         <MacroPanel key={card.key} D={D} isCompact={isCompact} card={card} series={macroSeries?.[card.symbol]} extras={macroExtras?.[card.key]} gid={`${card.key}-d`} />
                     ))}
-=======
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: isCompact ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
-                    gap: 8,
-                    marginTop: isCompact ? 18 : 22,
-                }}>
-                    {lenses.map(lens => {
-                        const isLocked = lens.locked && !userToken;
-                        return (
-                        <button key={lens.title} onClick={lens.onClick} type="button" style={{
-                            minWidth: 0,
-                            minHeight: isCompact ? 82 : 88,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-start",
-                            justifyContent: "space-between",
-                            gap: 10,
-                            textAlign: "left",
-                            borderRadius: 14,
-                            border: `1px solid ${D.panelBorder}`,
-                            background: D.card,
-                            color: D.text,
-                            cursor: "pointer",
-                            padding: "11px",
-                            position: "relative",
-                            fontFamily: "inherit",
-                            transition: "transform .14s ease, border-color .14s ease, background .14s ease",
-                        }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.borderColor = withAlpha(D.accent, 0.42); }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = D.panelBorder; }}
-                        >
-                            {isLocked && (
-                                <span style={{
-                                    position: "absolute", top: 9, right: 9,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    width: 20, height: 20, borderRadius: "50%",
-                                    background: withAlpha(D.accent, D.isDark ? 0.20 : 0.12),
-                                }}>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                                        <rect x="4" y="10" width="16" height="10" rx="2" fill={D.accent} />
-                                        <path d="M7 10V7a5 5 0 0110 0v3" stroke={D.accent} strokeWidth="2" fill="none" />
-                                    </svg>
-                                </span>
-                            )}
-                            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: withAlpha(D.accent, D.isDark ? 0.18 : 0.10), color: D.accent }}>
-                                <DashboardLensIcon type={lens.type} />
-                            </span>
-                            <span style={{ minWidth: 0, width: "100%" }}>
-                                <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.title}</span>
-                                <span style={{ display: "block", fontSize: 13, color: D.subtext, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{lens.meta}</span>
-                            </span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: D.accent, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "'IBM Plex Sans', -apple-system, sans-serif" }}>{isLocked ? "Login to unlock" : lens.action}</span>
-                        </button>
-                        );
-                    })}
->>>>>>> 1dabbcf (ch)
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "center", margin: "16px 0 4px" }}>
@@ -4260,7 +3987,6 @@ function LeadershipScreenCard({ T, userToken, isCompact, onNavigate, config, onL
     );
 }
 
-<<<<<<< HEAD
 // Screens up to and including High Tight Flag are always visible; everything
 // after it sits behind a "View more" toggle. Collapsed cards are not mounted,
 // so their Supabase fetches only fire once the user expands the section.
@@ -4306,14 +4032,6 @@ function LeadershipScreenCards({ T, userToken, isCompact, onNavigate, onLogin })
                     </button>
                 </div>
             )}
-=======
-function LeadershipScreenCards({ T, userToken, isCompact, onNavigate, onLogin }) {
-    return (
-        <>
-            {LEADERSHIP_SCREEN_CONFIGS.map(config => (
-                <LeadershipScreenCard key={config.key} T={T} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} config={config} onLogin={onLogin} />
-            ))}
->>>>>>> 1dabbcf (ch)
         </>
     );
 }
@@ -5283,17 +5001,12 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
     });
 
     // ── Nifty 50 P/E (monthly) ────────────────────────────────────────────────
-<<<<<<< HEAD
     const NIFTY_PE_PATH = "nifty50_pe?select=date,pe_ratio,close,updated_at&order=date.desc&limit=24";
-=======
-    const NIFTY_PE_PATH = "nifty50_pe?select=date,pe_ratio,close&order=date.desc&limit=24";
->>>>>>> 1dabbcf (ch)
     const NIFTY_PE_TTL = 60 * 60 * 1000;
     const [niftyPeData, setNiftyPeData] = useState(() => {
         const hit = cacheGet(NIFTY_PE_PATH, NIFTY_PE_TTL);
         return hit?.data || [];
     });
-<<<<<<< HEAD
 
     // ── Macro indicators: USD/INR, Brent, DXY (yahoo_macro_daily) ────────────
     const macroPath = sym => `yahoo_macro_daily?select=observation_date,symbol,close_price,previous_close,change_value,change_percent&symbol=eq.${encodeURIComponent(sym)}&order=observation_date.desc&limit=${MACRO_MAX_ROWS}`;
@@ -5320,8 +5033,6 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         [macroRows, extraRows]
     );
     const macroExtras = useMemo(() => buildMacroExtras(extraRows), [extraRows]);
-=======
->>>>>>> 1dabbcf (ch)
     const [activeMoversTab, setActiveMoversTab] = useState("gainers");
 
     const volumeShockersOffsetRef = useRef(0);
@@ -5671,7 +5382,6 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
 
     // ── Nifty 50 P/E fetch ───────────────────────────────────────────────────
     useEffect(() => {
-<<<<<<< HEAD
         let cancelled = false;
         const fetchNiftyPe = () => sbFetch(NIFTY_PE_PATH, userToken, {
             ttl: NIFTY_PE_TTL,
@@ -5748,21 +5458,6 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userToken]);
 
-=======
-        (async () => {
-            try {
-                const rows = await sbFetch(NIFTY_PE_PATH, userToken, {
-                    ttl: NIFTY_PE_TTL,
-                    onStale: fresh => setNiftyPeData(Array.isArray(fresh) ? fresh : []),
-                });
-                if (Array.isArray(rows)) setNiftyPeData(rows);
-            } catch (err) {
-                console.warn("Nifty 50 PE fetch failed:", err);
-            }
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userToken]);
->>>>>>> 1dabbcf (ch)
     // ── RS data — now backed by Postgres RPCs (see migration.sql) ─────────────
     // get_rs_stocks_enriched() and get_rs_industry_summary() replace the old
     // TIRS_RS85_PATH + TIRS_ALL_PATH + RETURNS_PATH raw fetches and all of
@@ -6077,11 +5772,8 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     allHighRsStocks={allHighRsStocks}
                     fiiDiiData={fiiDiiData}
                     niftyPeData={niftyPeData}
-<<<<<<< HEAD
                     macroSeries={macroSeries}
                     macroExtras={macroExtras}
-=======
->>>>>>> 1dabbcf (ch)
                     onNavigate={onNavigate}
                     userToken={userToken}
                     onLogin={onLogin}
@@ -6090,10 +5782,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 {/* ── MARKET OVERVIEW (Index Cards) — full width, horizontally scrollable ── */}
                 <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} style={{ marginBottom: 18 }} />
 
-<<<<<<< HEAD
                 <LeadershipPanel D={D} isCompact={isCompact}>
-=======
->>>>>>> 1dabbcf (ch)
                 {/* ── MARKET MOVERS + SECTORAL LEADERS — two halves, single row ── */}
                 <div style={{
                     display: "grid",
@@ -6198,10 +5887,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                                         <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
                                     )}
                                 </RsLoginGate>
-<<<<<<< HEAD
                                 <ViewAllInScreensLink T={D} onNavigate={onNavigate} totalCount={activeRsTab === "all" ? allHighRsStocks.length : industry ? rsIndustryStocks.length : rsIndustrySummary.length} label="RS Leaders" userToken={userToken} onLogin={onLogin} />
-=======
->>>>>>> 1dabbcf (ch)
                     </SectionCard>
                 </div>
 
@@ -6213,16 +5899,11 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     table is down to a handful of columns, pair two cards per row
                     on desktop instead of stacking every card full-width. */}
                 <div style={{
-<<<<<<< HEAD
                     minWidth: 0,
-=======
-                    marginTop: isCompact ? 14 : 18,
->>>>>>> 1dabbcf (ch)
                     display: isCompact ? "flex" : "grid",
                     flexDirection: isCompact ? "column" : undefined,
                     gridTemplateColumns: isCompact ? undefined : "1fr 1fr",
                     gap: isCompact ? 14 : 18,
-<<<<<<< HEAD
                     // On mobile this is a column flex container, where align-items
                     // governs the CROSS axis (width) — "start" there means "shrink
                     // each card to its content width" instead of stretching to fill
@@ -6232,20 +5913,14 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     // axis (items already stretch to fill their column via the grid
                     // default justify-items: stretch), so "start" is safe there.
                     alignItems: isCompact ? "stretch" : "start",
-=======
-                    alignItems: "start",
->>>>>>> 1dabbcf (ch)
                 }}>
                     <TrendTemplateCard T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
                     <LeadershipScreenCards T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
                 </div>
-<<<<<<< HEAD
                 </LeadershipPanel>
 
                 {/* ── LEARN + JOURNAL PROMO CARDS ─────────────────────────────────── */}
                 <ExploreCards D={D} isCompact={isCompact} onNavigate={onNavigate} />
-=======
->>>>>>> 1dabbcf (ch)
 
                 <style>{`
                 .stock-dashboard-shell * {
