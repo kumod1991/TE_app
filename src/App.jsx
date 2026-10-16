@@ -11661,6 +11661,7 @@ const SCREENS_TABLE_FETCHERS = {
     // trend all already computed server-side), ordered closest-to-breakout
     // first, same dedicated-table fetch/cache pattern as the other Breakouts
     // screens tables above.
+<<<<<<< HEAD
     // stage4_downtrend: Stage-4 declines (close below SMA50/150/200, weak RS,
     // falling 200 SMA) already filtered server-side, with bear_strength_score and
     // distance_from_sma50/200 computed server-side too. Ordered strongest-bear
@@ -11678,6 +11679,8 @@ const SCREENS_TABLE_FETCHERS = {
     // bearish_tight_score all computed server-side). Direct table fetch, highest
     // bearish_tight_score first, then closest to support.
     bearishTightBase: _makeScreensTableFetcher("bearish_tight_base", "te_scr_bearishtightbase_v1", "select=*&order=bearish_tight_score.desc.nullslast,distance_to_support_pct.asc.nullslast&limit=1000"),
+=======
+>>>>>>> 1dabbcf (ch)
     weeklyBreakoutSoon: _makeScreensTableFetcher("weekly_breakout_soon", "te_scr_weeklybreakoutsoon_v1", "select=*&order=pct_to_breakout.asc.nullslast&limit=1000"),
 };
 
@@ -16749,6 +16752,7 @@ const ALL_COLUMNS = [
     { key: "pct_to_high", label: "% To High", defaultOn: false },
     { key: "high_age_years", label: "High Age (Yrs)", defaultOn: false },
     { key: "high_date", label: "High Date", defaultOn: false },
+<<<<<<< HEAD
     { key: "distance_from_sma50", label: "% From 50 SMA", defaultOn: false },
     { key: "distance_from_sma200", label: "% From 200 SMA", defaultOn: false },
     { key: "sma200_20d_ago", label: "200 SMA (20D Ago)", defaultOn: false },
@@ -16762,6 +16766,8 @@ const ALL_COLUMNS = [
     { key: "setup_status", label: "Setup Status", defaultOn: false },
     { key: "base_range_pct", label: "Base Range %", defaultOn: false },
     { key: "bearish_tight_score", label: "Bearish Tight Score", defaultOn: false },
+=======
+>>>>>>> 1dabbcf (ch)
 ];
 
 // minervini_screen now carries ret_3m/ret_6m/ret_12m/volume/volume_20ma/rel_vol
