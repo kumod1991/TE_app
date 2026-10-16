@@ -982,6 +982,7 @@ function LeadershipPanel({ D, isCompact, children }) {
 function DashboardLensIcon({ type, size = 16 }) {
     const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
     if (type === "flow") return <svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>;
+    if (type === "learn") return <svg {...common}><path d="M2 9l10-5 10 5-10 5L2 9z" /><path d="M6 11.5V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.5" /><path d="M22 9v6" /></svg>;
     if (type === "ownership") return <svg {...common}><path d="M12 3l8 4v6c0 4.5-3.1 7.4-8 8-4.9-.6-8-3.5-8-8V7l8-4z" /><path d="M9 12l2 2 4-5" /></svg>;
     if (type === "watchlist") return <svg {...common}><path d="M4 5h16" /><path d="M4 12h10" /><path d="M4 19h7" /><path d="M18 14v6" /><path d="M15 17h6" /></svg>;
     if (type === "journal") return <svg {...common}><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" /><path d="M14 3v5h5" /><path d="M9 14h6" /></svg>;
@@ -2524,7 +2525,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
         { type: "screens", title: "Breadth", meta: `Market Participation`, action: "Market Breadth", onClick: () => onNavigate?.("technical", "breadth") },
         { type: "momentum", title: "TechLens", meta: `Identify leaders`, action: "Technical Screens", locked: true, onClick: () => (userToken ? onNavigate?.("technical", "screens") : onLogin?.()) },
         { type: "flow", title: "Institutions", meta: "FII / DII", action: "Flow Desk", onClick: () => onNavigate?.("financial", "fiidii") },
-        { type: "ownership", title: "Ownership", meta: "Promoter / funds", action: "Scans", onClick: () => onNavigate?.("financial", "ownership") },
+        { type: "learn", title: "Learn", meta: "Guided lessons", action: "Start", onClick: () => onNavigate?.("learn") },
         { type: "watchlist", title: "Watchlist", meta: "Saved setups", action: "Open", onClick: () => onNavigate?.("watchlist") },
         { type: "journal", title: "Journal", meta: "P&L / execution", action: "Review", onClick: () => onNavigate?.("tradevault", "dashboard") },
     ];

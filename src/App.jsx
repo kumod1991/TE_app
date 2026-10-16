@@ -136,6 +136,7 @@ const SUB_ROUTE_SEO = {
         dividends: { title: "Dividend Tracker", description: "Audit dividend receipts and income history alongside your stock portfolio." },
     },
     legal: {
+        about: { title: "About TradeEdge", description: "Learn what TradeEdge is, who it is for, and the research, screening, flow-tracking and trade journal tools it brings together for Indian equity investors." },
         disclaimer: { title: "Disclaimer", description: "Important TradeEdge financial, market data, liability, and investment-risk disclaimers." },
         privacy: { title: "Privacy Policy", description: "How TradeEdge handles account data, trade journal data, cookies, analytics, and deletion requests." },
         terms: { title: "Terms of Service", description: "Terms governing access to and use of the TradeEdge platform." },
@@ -145,7 +146,7 @@ const SUB_ROUTE_SEO = {
 const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements"]);
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "rotation"]);
 const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "funds", "dividends"]);
-const LEGAL_ROUTE_SEGMENTS = new Set(["disclaimer", "privacy", "terms", "contact"]);
+const LEGAL_ROUTE_SEGMENTS = new Set(["about", "disclaimer", "privacy", "terms", "contact"]);
 const BreadthDataContext = createContext({ industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
 
@@ -22540,6 +22541,24 @@ function LegalIcon({ name, size = 20, style }) {
             return <svg {...c}><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /><path d="M12 3c2.5 2.5 4 5.5 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.5-4-9s1.5-6.5 4-9z" /></svg>;
         case "calendar":
             return <svg {...c}><rect x="3" y="5" width="18" height="16" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="8" y1="3" x2="8" y2="7" /><line x1="16" y1="3" x2="16" y2="7" /></svg>;
+        case "bar-chart":
+            return <svg {...c}><line x1="5" y1="20" x2="5" y2="11" /><line x1="12" y1="20" x2="12" y2="5" /><line x1="19" y1="20" x2="19" y2="14" /></svg>;
+        case "search":
+            return <svg {...c}><circle cx="11" cy="11" r="6.5" /><line x1="16" y1="16" x2="20.5" y2="20.5" /></svg>;
+        case "book":
+            return <svg {...c}><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5" /><line x1="9" y1="8" x2="15" y2="8" /></svg>;
+        case "users":
+            return <svg {...c}><circle cx="9" cy="8" r="3.2" /><path d="M2.5 20c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" /><circle cx="17" cy="9" r="2.5" /><path d="M17 14.2c2.6.2 4.5 1.9 4.5 4.3" /></svg>;
+        case "star":
+            return <svg {...c}><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8z" /></svg>;
+        case "layers":
+            return <svg {...c}><path d="M12 3l9 4.5-9 4.5-9-4.5z" /><path d="M3 12l9 4.5 9-4.5" /><path d="M3 16.5L12 21l9-4.5" /></svg>;
+        case "briefcase":
+            return <svg {...c}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M3 13h18" /></svg>;
+        case "megaphone":
+            return <svg {...c}><path d="M4 10v4l9 4V6z" /><path d="M13 8.5c2.5 0 4.5 1.5 4.5 3.5s-2 3.5-4.5 3.5" /><path d="M6.5 14.5L8 20h2.5l-1-4.5" /></svg>;
+        case "compass":
+            return <svg {...c}><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>;
         default:
             return null;
     }
@@ -22568,6 +22587,7 @@ const LEGAL_COLUMNS = [
             { icon: "user", title: "Information We Collect", body: "We collect basic information you provide to us and data related to your usage of the platform." },
             { icon: "database", title: "How We Use Information", body: "Your data is used to provide and improve our services, personalize your experience and communicate important updates." },
             { icon: "shield-check", title: "Data Protection", body: "We implement industry-standard security measures to protect your data from unauthorized access." },
+            { icon: "globe", title: "Cookies & Advertising", body: "We and third-party vendors, including Google, use cookies to serve ads based on your prior visits to this and other websites. You can opt out of personalised advertising in Google Ads Settings or at www.aboutads.info." },
             { icon: "user-plus", title: "Your Rights", body: "You can access, update or delete your data at any time by contacting us." },
         ],
         highlight: { icon: "lock", body: "We do not sell or rent your personal information to third parties." },
@@ -22587,17 +22607,44 @@ const LEGAL_COLUMNS = [
     },
 ];
 
+const ABOUT_MODULES = [
+    { icon: "trending-up", title: "Market Dashboard", body: "Market momentum, breadth, leaders and sector moves at a glance." },
+    { icon: "star", title: "Watchlist", body: "Track the stocks you care about with favourites and live or end-of-day prices." },
+    { icon: "search", title: "Stock Research", body: "Financial statements, ratios, charts, ownership, peers and announcements for listed companies." },
+    { icon: "layers", title: "Screeners", body: "Filter equities on quality, valuation and growth, plus technical screens for breakouts and relative strength." },
+    { icon: "bar-chart", title: "FII / DII Flows", body: "Institutional participation across cash, index futures and stock futures." },
+    { icon: "users", title: "Ownership Scans", body: "Promoter, FII, DII and public shareholding changes, including pledges." },
+    { icon: "compass", title: "Breadth & Sector Rotation", body: "Market internals, trend alignment and relative sector leadership through RRG." },
+    { icon: "megaphone", title: "Announcements", body: "Exchange filings and corporate disclosures in one searchable feed." },
+    { icon: "briefcase", title: "Trade Journal", body: "Log trades and review P&L, analytics, capital gains, XIRR and dividends." },
+    { icon: "book", title: "Forum & Learn", body: "Structured investment theses from the community, alongside educational courses." },
+];
+
+const ABOUT_PRINCIPLES = [
+    { n: "01", title: "Research first", body: "Dense data, presented plainly, so you can form your own view rather than follow ours." },
+    { n: "02", title: "Built for India", body: "NSE and BSE conventions, Indian financial years, rupee units and SEBI-aware disclosures throughout." },
+    { n: "03", title: "Your data stays yours", body: "Journal and portfolio data are tied to your account, never sold, and can be deleted at any time." },
+];
+
 function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
-    const [activeTab, setActiveTab] = useState(LEGAL_COLUMNS.some(c => c.id === initialTab) ? initialTab : "disclaimer");
+    const NAV = [
+        { id: "about", title: "About", icon: "users" },
+        ...LEGAL_COLUMNS.map(c => ({ id: c.id, title: c.title, icon: c.icon })),
+        { id: "contact", title: "Contact", icon: "mail" },
+    ];
+    const [activeTab, setActiveTab] = useState(NAV.some(c => c.id === initialTab) ? initialTab : "disclaimer");
     const sectionRefs = useRef({});
-    const footerRef = useRef(null);
+    const isMobile = useViewportBelow(767);
+    const sans = "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+    const radius = 16;
+    const heroShadow = T.shadowLg || "0 12px 28px rgba(15,23,42,0.06)";
+    const hairline = T.borderSubtle || T.border;
+    const gold = T.gold || T.accent;
 
     useEffect(() => {
-        if (LEGAL_COLUMNS.some(c => c.id === initialTab) && sectionRefs.current[initialTab]) {
-            sectionRefs.current[initialTab].scrollIntoView({ behavior: "auto", block: "start" });
-        } else if (initialTab === "contact" && footerRef.current) {
-            footerRef.current.scrollIntoView({ behavior: "auto", block: "start" });
-        }
+        const el = sectionRefs.current[initialTab];
+        if (el && initialTab !== "about") el.scrollIntoView({ behavior: "auto", block: "start" });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -22607,149 +22654,215 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
+    const iconTile = (size, radiusPx, children, tone = "accent") => (
+        <div style={{
+            width: size, height: size, borderRadius: radiusPx, flexShrink: 0,
+            background: tone === "accent" ? T.accentFill : T.mutedFill,
+            color: tone === "accent" ? T.accent : T.subtext,
+            display: "flex", alignItems: "center", justifyContent: "center",
+        }}>{children}</div>
+    );
+
+    const facts = [
+        { label: "Coverage", value: "NSE \u00B7 BSE", note: "Indian listed equities" },
+        { label: "Modules", value: String(ABOUT_MODULES.length), note: "Research to journal" },
+        { label: "Built for", value: "Retail", note: "Traders & investors" },
+        { label: "Status", value: "Independent", note: "Not SEBI registered" },
+    ];
+
     return (
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: T.bg, overflowY: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: T.bg, fontFamily: sans }}>
             <style>{`
-                .legalv2-wrap { max-width: 1400px; margin: 0 auto; width: 100%; box-sizing: border-box; padding: 0 28px; }
-                .legalv2-body { display: flex; gap: 24px; align-items: flex-start; }
-                .legalv2-sidebar { width: 260px; flex-shrink: 0; }
-                .legalv2-grid { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; min-width: 0; }
-                .legalv2-footer-grid { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+                .legalv2-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+                .legalv2-about-top { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 28px; align-items: stretch; }
+                .legalv2-mod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 12px; }
+                .legalv2-principles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+                .legalv2-mod { transition: border-color .15s ease, transform .15s ease; }
+                .legalv2-mod:hover { border-color: ${T.borderStrong || T.accent}; transform: translateY(-1px); }
+                .legalv2-footer-grid { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+                .legalv2-tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+                .legalv2-tabs::-webkit-scrollbar { display: none; }
+                .legalv2-pill { font-family: inherit; font-size: 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 160ms ease; display: inline-flex; align-items: center; gap: 7px; }
+                .legalv2-pill:focus-visible { outline: 2px solid ${T.accent}; outline-offset: 2px; }
                 @media (max-width: 980px) {
-                    .legalv2-body { flex-direction: column; }
-                    .legalv2-sidebar { width: 100%; }
                     .legalv2-grid { grid-template-columns: 1fr; }
+                    .legalv2-about-top { grid-template-columns: 1fr; gap: 20px; }
+                    .legalv2-principles { grid-template-columns: 1fr; }
                 }
+                @media (prefers-reduced-motion: reduce) { .legalv2-mod, .legalv2-pill { transition: none; } .legalv2-mod:hover { transform: none; } }
             `}</style>
 
-            {/* Header */}
-            <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-                <div className="legalv2-wrap" style={{ paddingTop: 20, paddingBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 34, height: 34, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
-                            <img src={BRAND_LOGO_SRC} alt="" aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                        </div>
-                        <span style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: "-.02em" }}>TradeEdge</span>
-                    </div>
+            <div style={{ width: "100%", maxWidth: 1400, margin: "0 auto", padding: isMobile ? "12px 10px 24px" : "20px 20px 32px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 16 }}>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{
-                            display: "flex", alignItems: "center", gap: 7,
-                            background: T.posFill, color: T.greenText,
-                            border: `1px solid ${T.green}33`,
-                            borderRadius: 999, padding: "6px 14px",
-                            fontSize: 11, fontWeight: 700, letterSpacing: ".06em",
-                        }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.green, display: "inline-block" }} />
-                            TRANSPARENT &middot; SECURE &middot; TRUSTED
-                        </div>
-
-                        {onClose && (
-                            <button onClick={onClose} title="Close" style={{
-                                background: "none", border: `1px solid ${T.border}`, cursor: "pointer",
-                                color: T.subtext, width: 32, height: 32, borderRadius: 8,
-                                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                {/* Hero */}
+                <div style={{ borderRadius: radius, border: `1px solid ${T.border}`, background: T.card, boxShadow: heroShadow, padding: isMobile ? 14 : 20 }}>
+                    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 12 : 20, justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{
+                                display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 999,
+                                fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase",
+                                color: T.accent, background: T.accentFill, border: `1px solid ${T.accent}38`,
                             }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>
-                            </button>
-                        )}
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.accent, display: "inline-block" }} />
+                                Transparent &middot; Secure &middot; Trusted
+                            </span>
+                            <div style={{ fontSize: isMobile ? 25 : 31, fontWeight: 800, color: T.text, letterSpacing: "-0.03em", lineHeight: 1.1, margin: "14px 0 6px" }}>
+                                About &amp; Policies
+                            </div>
+                            <div style={{ fontSize: 13, color: T.subtext, lineHeight: 1.5 }}>
+                                Who we are, how we handle your data, and the terms of using TradeEdge.
+                            </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 12, background: T.mutedFill, border: `1px solid ${T.border}`, color: T.text }}>
+                                <span style={{ fontSize: 12, color: T.subtext }}>Last updated</span>
+                                <span style={{ fontSize: 13, fontWeight: 700 }}>{LEGAL_LAST_UPDATED}</span>
+                            </div>
+                            {onClose && (
+                                <button onClick={onClose} title="Close" aria-label="Close" style={{
+                                    background: T.card, border: `1px solid ${T.border}`, cursor: "pointer",
+                                    color: T.subtext, width: 36, height: 36, minHeight: 36, borderRadius: 12,
+                                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                                }}>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="legalv2-tabs" style={{ marginTop: 16 }}>
+                        {NAV.map(col => {
+                            const active = activeTab === col.id;
+                            return (
+                                <button key={col.id} onClick={() => goTo(col.id)} className="legalv2-pill" style={{
+                                    padding: isMobile ? "8px 12px" : "9px 14px",
+                                    border: `1px solid ${active ? T.accent : T.border}`,
+                                    background: active ? T.accentFill : T.card,
+                                    color: active ? T.accent : T.text,
+                                    fontWeight: active ? 700 : 500,
+                                }}>
+                                    <LegalIcon name={col.icon} size={14} />
+                                    {col.title}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
-            </div>
 
-            <div className="legalv2-wrap">
-                {/* Title row */}
-                <div style={{ marginTop: 28, marginBottom: 28 }}>
-                    <h1 style={{ margin: 0, fontSize: 34, fontWeight: 800, color: T.text, letterSpacing: "-.02em", lineHeight: 1.15 }}>
-                        Legal &amp; <span style={{ color: T.green }}>Policies</span>
-                    </h1>
-                    <p style={{ margin: "10px 0 0", fontSize: 14.5, color: T.subtext, maxWidth: 480, lineHeight: 1.6 }}>
-                        Your trust is important to us. Please read our policies carefully.
-                    </p>
-                </div>
-
-                <div className="legalv2-body">
-                    {/* Sidebar */}
-                    <div className="legalv2-sidebar">
-                        <nav style={{ display: "flex", flexDirection: "column", gap: 4, background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 6, marginBottom: 16 }}>
-                            {LEGAL_COLUMNS.map(col => {
-                                const active = activeTab === col.id;
-                                return (
-                                    <button key={col.id} onClick={() => goTo(col.id)} style={{
-                                        display: "flex", alignItems: "center", gap: 10,
-                                        textAlign: "left", padding: "10px 12px", borderRadius: 9,
-                                        border: "none", cursor: "pointer",
-                                        background: active ? T.posFill : "transparent",
-                                        color: active ? T.greenText : T.subtext,
-                                        fontFamily: "inherit", fontSize: 13.5, fontWeight: active ? 700 : 500,
-                                        transition: "background .15s, color .15s",
-                                    }}>
-                                        <LegalIcon name={col.icon} size={17} />
-                                        {col.title}
-                                    </button>
-                                );
-                            })}
-                        </nav>
-
-                        <div style={{ background: T.posFill, border: `1px solid ${T.green}33`, borderRadius: 14, padding: 18 }}>
-                            <div style={{ width: 38, height: 38, borderRadius: 10, background: T.card, color: T.green, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-                                <LegalIcon name="shield-check" size={19} />
+                {/* About */}
+                <section ref={el => { sectionRefs.current.about = el; }} aria-labelledby="legalv2-about-title" style={{ scrollMarginTop: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: radius, padding: isMobile ? "20px 16px" : "32px 32px" }}>
+                        <div className="legalv2-about-top">
+                            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                                    <span style={{ width: 22, height: 3, borderRadius: 2, background: gold, display: "inline-block" }} />
+                                    <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: T.subtext }}>About TradeEdge</span>
+                                </div>
+                                <h2 id="legalv2-about-title" style={{ margin: 0, fontSize: isMobile ? 26 : 36, fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.08, color: T.text, maxWidth: 640 }}>
+                                    Market research for Indian investors, in one workspace.
+                                </h2>
+                                <p style={{ margin: "16px 0 0", fontSize: 15, lineHeight: 1.7, color: T.subtext, maxWidth: 620 }}>
+                                    TradeEdge brings fundamentals, institutional flows, technical breadth, company announcements and a private trade journal together, so retail traders and investors can research NSE and BSE equities without juggling a dozen tabs.
+                                </p>
+                                <p style={{ margin: "12px 0 0", fontSize: 13.5, lineHeight: 1.7, color: T.subtext, maxWidth: 620 }}>
+                                    We provide data and analytics for informational purposes only. TradeEdge is not a SEBI-registered investment adviser and nothing on the platform is a recommendation. We are committed to transparency, data security and a safe experience for every user.
+                                </p>
                             </div>
-                            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 5 }}>Our Commitment</div>
-                            <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.6 }}>
-                                We are committed to transparency, data security and providing a safe experience for all our users.
+
+                            <div style={{ background: T.mutedFill, border: `1px solid ${T.border}`, borderRadius: 14, padding: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, alignContent: "stretch" }}>
+                                {facts.map(f => (
+                                    <div key={f.label} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: isMobile ? "14px 12px" : "18px 16px", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 14, minWidth: 0 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".09em", color: T.muted }}>{f.label}</div>
+                                        <div>
+                                            <div style={{ fontFamily: mono, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: T.text, letterSpacing: "-0.02em", lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.value}</div>
+                                            <div style={{ fontSize: 12, color: T.subtext, marginTop: 5, lineHeight: 1.4 }}>{f.note}</div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* 3-column grid */}
-                    <div className="legalv2-grid">
-                        {LEGAL_COLUMNS.map(col => (
+                    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: radius, padding: isMobile ? "18px 14px" : "24px 24px" }}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".11em", color: T.muted }}>What&rsquo;s inside</div>
+                            <div style={{ fontSize: 12.5, color: T.subtext }}>One login, the full research workflow.</div>
+                        </div>
+                        <div className="legalv2-mod-grid">
+                            {ABOUT_MODULES.map(m => (
+                                <div key={m.title} className="legalv2-mod" style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "16px 16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+                                    {iconTile(34, 10, <LegalIcon name={m.icon} size={17} />)}
+                                    <div>
+                                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 4, letterSpacing: "-0.01em" }}>{m.title}</div>
+                                        <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.55 }}>{m.body}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: radius, padding: isMobile ? "6px 14px" : "8px 8px" }}>
+                        <div className="legalv2-principles">
+                            {ABOUT_PRINCIPLES.map((p, i) => (
+                                <div key={p.n} style={{
+                                    padding: isMobile ? "16px 0" : "20px 22px",
+                                    borderLeft: !isMobile && i > 0 ? `1px solid ${hairline}` : "none",
+                                    borderTop: isMobile && i > 0 ? `1px solid ${hairline}` : "none",
+                                }}>
+                                    <div style={{ fontFamily: mono, fontSize: 12, fontWeight: 700, color: gold, letterSpacing: ".08em", marginBottom: 10 }}>{p.n}</div>
+                                    <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: "-0.02em", marginBottom: 6 }}>{p.title}</div>
+                                    <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.6 }}>{p.body}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                {/* Policy cards */}
+                <div className="legalv2-grid">
+                    {LEGAL_COLUMNS.map(col => {
+                        const active = activeTab === col.id;
+                        return (
                             <div
                                 key={col.id}
                                 ref={el => { sectionRefs.current[col.id] = el; }}
-                                style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "22px 20px", display: "flex", flexDirection: "column", scrollMarginTop: 24 }}
+                                style={{
+                                    background: T.card, border: `1px solid ${active ? T.accent : T.border}`, borderRadius: radius,
+                                    padding: isMobile ? "18px 16px" : "22px 20px", display: "flex", flexDirection: "column",
+                                    scrollMarginTop: 16, transition: "border-color .15s",
+                                }}
                             >
-                                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                                    <div style={{
-                                        width: 40, height: 40, borderRadius: 12,
-                                        background: T.posFill, color: T.green,
-                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                        flexShrink: 0,
-                                    }}>
-                                        <LegalIcon name={col.icon} size={22} />
-                                    </div>
-                                    <div style={{ fontSize: 16.5, fontWeight: 800, color: T.text }}>{col.title}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                                    {iconTile(40, 12, <LegalIcon name={col.icon} size={21} />)}
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: "-0.02em" }}>{col.title}</div>
                                 </div>
-                                <div style={{ width: 32, height: 3, borderRadius: 2, background: T.green, marginBottom: 14 }} />
 
-                                <p style={{ fontSize: 13, color: T.subtext, lineHeight: 1.6, margin: "0 0 16px" }}>{col.intro}</p>
+                                <p style={{ fontSize: 13, color: T.subtext, lineHeight: 1.6, margin: "0 0 18px" }}>{col.intro}</p>
 
-                                <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 18, borderTop: `1px solid ${hairline}` }}>
                                     {col.items.map(item => (
-                                        <div key={item.title} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
-                                            <div style={{ width: 28, height: 28, borderRadius: 8, background: T.hover, color: T.subtext, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-                                                <LegalIcon name={item.icon} size={15} />
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>{item.title}</div>
-                                                <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.55 }}>{item.body}</div>
+                                        <div key={item.title} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "14px 0", borderBottom: `1px solid ${hairline}` }}>
+                                            {iconTile(28, 8, <LegalIcon name={item.icon} size={15} />, "muted")}
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 3 }}>{item.title}</div>
+                                                <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.55 }}>{item.body}</div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
 
-                                <div style={{ marginTop: "auto", display: "flex", gap: 9, alignItems: "flex-start", background: T.hover, borderRadius: 10, padding: "12px 13px" }}>
-                                    <div style={{ color: T.green, flexShrink: 0, marginTop: 1 }}><LegalIcon name={col.highlight.icon} size={14} /></div>
-                                    <div style={{ fontSize: 11.5, color: T.subtext, lineHeight: 1.55 }}>{col.highlight.body}</div>
+                                <div style={{ marginTop: "auto", display: "flex", gap: 9, alignItems: "flex-start", background: T.mutedFill, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 13px" }}>
+                                    <div style={{ color: T.accent, flexShrink: 0, marginTop: 1 }}><LegalIcon name={col.highlight.icon} size={14} /></div>
+                                    <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.55 }}>{col.highlight.body}</div>
                                 </div>
                             </div>
-                        ))}
-                    </div>
+                        );
+                    })}
                 </div>
 
-                {/* Footer contact bar */}
-                <div ref={footerRef} style={{ margin: "28px 0 32px", background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "20px 24px", scrollMarginTop: 24 }}>
+                {/* Contact bar */}
+                <div ref={el => { sectionRefs.current.contact = el; }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: radius, padding: isMobile ? "16px 14px" : "20px 24px", scrollMarginTop: 16 }}>
                     <div className="legalv2-footer-grid">
                         {[
                             { icon: "headset", label: "Have Questions?", value: "If you have any questions regarding our policies, feel free to reach out to us." },
@@ -22758,15 +22871,13 @@ function LegalPage({ T, onClose, initialTab = "disclaimer" }) {
                             { icon: "calendar", label: "Last Updated", value: LEGAL_LAST_UPDATED },
                         ].map(f => (
                             <div key={f.label} style={{ display: "flex", alignItems: "flex-start", gap: 11, flex: "1 1 220px", minWidth: 200 }}>
-                                <div style={{ width: 36, height: 36, borderRadius: 10, background: T.posFill, color: T.green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <LegalIcon name={f.icon} size={17} />
-                                </div>
+                                {iconTile(36, 10, <LegalIcon name={f.icon} size={17} />)}
                                 <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>{f.label}</div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 3 }}>{f.label}</div>
                                     {f.isLink ? (
-                                        <a href={f.href} style={{ fontSize: 12, color: T.green, fontWeight: 600, textDecoration: "none" }}>{f.value}</a>
+                                        <a href={f.href} style={{ fontSize: 12.5, color: T.accent, fontWeight: 600, textDecoration: "none" }}>{f.value}</a>
                                     ) : (
-                                        <div style={{ fontSize: 12, color: T.subtext, lineHeight: 1.5 }}>{f.value}</div>
+                                        <div style={{ fontSize: 12.5, color: T.subtext, lineHeight: 1.5 }}>{f.value}</div>
                                     )}
                                 </div>
                             </div>
@@ -24300,6 +24411,7 @@ export default function App() {
                         {/* Right: links */}
                         <div style={{ display: "flex", alignItems: "center", gap: 0, flexWrap: "wrap" }}>
                             {[
+                                { label: "About", tabId: "about", href: "/legal/about" },
                                 { label: "Disclaimer", tabId: "disclaimer", href: "/legal/disclaimer" },
                                 { label: "Privacy", tabId: "privacy", href: "/legal/privacy" },
                                 { label: "Terms", tabId: "terms", href: "/legal/terms" },
