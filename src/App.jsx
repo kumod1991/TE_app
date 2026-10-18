@@ -115,7 +115,7 @@ const ROUTE_SEO = {
 };
 const SUB_ROUTE_SEO = {
     financial: {
-        search: { title: "Stock Research", description: "Search Indian listed companies and review financial statements, ratios, charts, ownership, peers, and announcements." },
+        search: { title: "Stock Research", description: "Search Indian listed companies and review financial statements, ratios, charts, ownership, and announcements." },
         screener: { title: "Indian Stock Screener", description: "Filter Indian equities with quality, valuation, growth, ownership, and market data factors." },
         fiidii: { title: "FII DII Flow Tracker", description: "Track FII and DII cash, index futures, stock futures, and institutional participation trends." },
         ownership: { title: "Ownership Scans", description: "Review promoter, FII, DII, public shareholder, and pledge changes across Indian companies." },
@@ -2010,94 +2010,109 @@ a:hover { text-decoration: underline; }
 .ann-ext-tag.scr { background:rgba(245,158,11,.1); color:${D ? "#fbbf24" : "#d97706"}; }
 .ann-ext .arr { margin-left:auto; opacity:.35; font-size:11px; }
 
- //FINANCIALS MODULE
-.fin-outer { display:flex; flex-direction:column; height:100%; width:100%; overflow:hidden; background:linear-gradient(180deg, ${T.bg} 0%, ${T.tableHead} 100%); }
-.fin-topbar { display:flex; align-items:center; gap:10px; padding:14px 20px; background:linear-gradient(180deg, ${T.surface} 0%, ${T.tableHead} 100%); border-bottom:1px solid ${T.border}; box-shadow:0 10px 30px ${T.shadow}; flex-shrink:0; flex-wrap:wrap; position:relative; z-index:10; }
+ /* FINANCIALS MODULE */
+.fin-outer { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; height:100%; width:100%; overflow:hidden; background:${T.bg}; }
+.fin-topbar { display:flex; align-items:center; gap:10px; padding:12px 20px; background:${T.surface}; border-bottom:1px solid ${T.border}; box-shadow:${T.shadowSm || "none"}; flex-shrink:0; flex-wrap:wrap; position:relative; z-index:10; }
 .fin-search-bar { display:none; }
-.fin-search-input { padding:8px 12px 8px 36px; background:${T.inputBg}; border:1.5px solid ${T.border}; border-radius:8px; color:${T.text}; font-size:13px; font-family:inherit; outline:none; transition:border-color .15s, box-shadow .15s; letter-spacing:.04em; text-transform:uppercase; width:240px; font-weight:600; }
+.fin-search-input { padding:9px 14px 9px 38px; background:${T.inputBg}; border:1px solid ${T.border}; border-radius:10px; color:${T.text}; font-size:13px; font-family:inherit; outline:none; transition:border-color .15s, box-shadow .15s, background .15s; letter-spacing:.04em; text-transform:uppercase; width:260px; font-weight:600; }
 .fin-search-input::placeholder { text-transform:none; letter-spacing:0; font-size:13px; color:${T.muted}; font-weight:400; }
-.fin-search-input:focus { border-color:${T.green}; box-shadow:0 0 0 3px ${T.greenGlow}; background:${T.surface}; }
-.fin-search-btn { padding:8px 18px; background:${T.green}; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; transition:opacity .12s, transform .08s; white-space:nowrap; flex-shrink:0; letter-spacing:.02em; }
-.fin-search-btn:hover { opacity:.88; transform:translateY(-1px); }
-.fin-search-btn:active { transform:translateY(0); }
-.fin-search-btn:disabled { opacity:.35; cursor:not-allowed; transform:none; }
-.fin-recent-label { font-size:10px; color:${T.muted}; font-weight:700; letter-spacing:.07em; text-transform:uppercase; flex-shrink:0; }
-.fin-recent-chip { padding:3px 10px; background:transparent; border:1px solid ${T.border}; border-radius:20px; color:${T.subtext}; font-size:11.5px; font-weight:500; cursor:pointer; font-family:inherit; transition:.12s; letter-spacing:.01em; }
-.fin-recent-chip:hover { border-color:${T.green}; color:${T.greenText}; background:${T.greenGlow}; }
-.fin-recent-chip.active { border-color:${T.green}; color:${T.greenText}; background:${T.greenGlow}; font-weight:600; }
-.fin-recent-clear { padding:3px 6px; background:transparent; border:none; color:${T.muted}; font-size:11px; cursor:pointer; opacity:.6; font-family:inherit; transition:opacity .1s; }
-.fin-recent-clear:hover { opacity:1; color:${T.subtext}; }
+.fin-search-input:hover { border-color:${T.borderStrong}; }
+.fin-search-input:focus { border-color:${T.accent || T.green}; box-shadow:0 0 0 3px ${T.accentFill || T.greenGlow}; background:${T.surface}; }
+.fin-search-btn { padding:9px 20px; background:${T.accent || T.green}; color:#fff; border:1px solid transparent; border-radius:10px; font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit; transition:background .14s, transform .08s, box-shadow .14s; white-space:nowrap; flex-shrink:0; letter-spacing:.03em; box-shadow:${T.shadowSm || "none"}; }
+.fin-search-btn:hover { background:${T.accentHover || T.accent || T.green}; box-shadow:${T.shadowMd || "none"}; }
+.fin-search-btn:active { transform:translateY(1px); }
+.fin-search-btn:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
+.fin-recent-label { font-size:10px; color:${T.muted}; font-weight:700; letter-spacing:.12em; text-transform:uppercase; flex-shrink:0; }
+.fin-recent-chip { padding:4px 12px; background:${T.surface}; border:1px solid ${T.border}; border-radius:999px; color:${T.subtext}; font-size:11.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:border-color .12s, color .12s, background .12s; letter-spacing:.02em; }
+.fin-recent-chip:hover { border-color:${T.borderStrong}; color:${T.text}; background:${T.hover}; }
+.fin-recent-chip.active { border-color:${T.accent || T.green}55; color:${T.accent || T.greenText}; background:${T.accentFill || T.greenGlow}; }
+.fin-recent-clear { padding:3px 6px; background:transparent; border:none; color:${T.muted}; font-size:11px; cursor:pointer; font-family:inherit; transition:color .1s; }
+.fin-recent-clear:hover { color:${T.text}; }
 .fin-body { display:flex; flex:1; overflow:hidden; min-height:0; gap:0; }
-.fin-sidebar { width:280px; min-width:280px; overflow-y:auto; border-right:1px solid ${T.border}; background:linear-gradient(180deg, ${T.surface} 0%, ${T.tableHead} 100%); box-shadow:inset -1px 0 0 ${T.border}, 14px 0 28px ${T.shadow}; flex-shrink:0; position:relative; }
-.fin-sidebar::-webkit-scrollbar { width:4px; }
-.fin-sidebar::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
-.fin-sb-section { padding:14px 16px; border-bottom:1px solid ${T.border}; }
+.fin-sidebar { width:290px; min-width:290px; overflow-y:auto; border-right:1px solid ${T.border}; background:${T.surface}; flex-shrink:0; position:relative; }
+.fin-sidebar { scrollbar-width:thin; scrollbar-color:${T.borderStrong} transparent; }
+.fin-sidebar::-webkit-scrollbar { width:8px; }
+.fin-sidebar::-webkit-scrollbar-thumb { background:${T.borderStrong}; border-radius:8px; border:2px solid ${T.surface}; background-clip:padding-box; }
+.fin-sb-section { padding:16px 18px; border-bottom:1px solid ${T.borderSubtle || T.border}; }
 .fin-sym-badge { font-size:11px; font-weight:700; color:${T.text}; letter-spacing:.08em; text-transform:uppercase; display:inline-block; font-family:inherit; }
 .fin-co-name { font-size:13px; color:${T.text}; margin-top:7px; line-height:1.4; font-weight:500; }
-.fin-price-big { font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:700; color:${T.text}; margin:8px 0 2px; font-variant-numeric:tabular-nums; }
+.fin-price-big { font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:700; color:${T.text}; margin:8px 0 2px; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
 .fin-kv-grid { display:flex; flex-direction:column; gap:0; }
-.fin-kv { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid ${T.border}33; }
+.fin-kv { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid ${T.borderSubtle || T.border}; }
 .fin-kv:last-child { border-bottom:none; }
 .fin-kv-label { font-size:12px; color:${T.subtext}; }
-.fin-kv-val { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:500; color:${T.text}; text-align:right; font-variant-numeric:tabular-nums; }
+.fin-kv-val { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:${T.text}; text-align:right; font-variant-numeric:tabular-nums; }
 .fin-tabs { display:none; } .fin-tab { display:none; }
-.fin-content { flex:1; overflow-y:auto; background:transparent; min-width:0; display:flex; flex-direction:column; }
-.fin-content::-webkit-scrollbar { width:4px; }
-.fin-content::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
-.fin-content-tabs { display:flex; gap:12px; padding:16px 18px 14px; border-bottom:1px solid ${T.border}; background:rgba(255,255,255,0.84); backdrop-filter:blur(20px) saturate(1.15); -webkit-backdrop-filter:blur(20px) saturate(1.15); flex-shrink:0; overflow-x:auto; position:sticky; top:0; z-index:6; box-shadow:0 10px 28px ${T.shadow}; scroll-snap-type:x proximity; }
+.fin-content { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; background:transparent; min-width:0; display:flex; flex-direction:column; outline:none; scrollbar-width:thin; scrollbar-color:${T.borderStrong} transparent; }
+.fin-content::-webkit-scrollbar { width:12px; }
+.fin-content::-webkit-scrollbar-track { background:${T.tableHead}; border-left:1px solid ${T.border}; }
+.fin-content::-webkit-scrollbar-thumb { background:${T.borderStrong}; border-radius:8px; border:3px solid ${T.tableHead}; background-clip:padding-box; min-height:48px; }
+.fin-content::-webkit-scrollbar-thumb:hover { background:${T.muted}; background-clip:padding-box; }
+
+/* Workspace nav: dark chrome rail, same language as the top navigation */
+.fin-content-tabs { display:flex; gap:6px; padding:12px 22px; border-bottom:1px solid ${T.chromeBorder || T.border}; background:linear-gradient(180deg, ${T.chromeBgAlt || T.surface} 0%, ${T.chromeBg || T.surface} 100%); flex-shrink:0; overflow-x:auto; position:sticky; top:0; z-index:6; box-shadow:${T.shadowMd || "none"}; scroll-snap-type:x proximity; }
 .fin-content-tabs::-webkit-scrollbar { display:none; }
-.fin-content-tab { display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:168px; padding:14px 16px; border:1px solid transparent; border-radius:18px; background:linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.35) 100%); color:${T.subtext}; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; white-space:nowrap; transition:color .15s, border-color .15s, background .15s, transform .15s, box-shadow .15s; scroll-snap-align:start; }
-.fin-content-tab:hover:not(.active) { color:${T.text}; border-color:${T.borderStrong}; background:${T.hover}; transform:translateY(-1px); }
-.fin-content-tab.active { color:${T.text}; font-weight:600; border-color:${T.green}33; background:linear-gradient(180deg, rgba(255,255,255,0.98) 0%, ${T.greenGlow} 100%); box-shadow:0 16px 34px ${T.shadow}; }
-.fin-content-tab-kicker { font-size:9px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:${T.muted}; }
-.fin-content-tab.active .fin-content-tab-kicker { color:${T.greenText}; }
-.fin-content-tab-label { font-size:13.5px; font-weight:700; line-height:1.15; color:inherit; }
-.fin-content-tab-meta { font-size:11px; color:${T.subtext}; line-height:1.2; white-space:normal; }
-.fin-content-tab.active .fin-content-tab-meta { color:${T.text}; opacity:.78; }
-.fin-content-body { padding:24px 22px 28px; flex:1; display:flex; flex-direction:column; gap:18px; background:
-radial-gradient(circle at top right, ${T.greenGlow} 0%, transparent 22%),
-linear-gradient(180deg, rgba(255,255,255,0.35) 0%, transparent 32%);
-}
-.fin-tab-hero { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:22px 22px; border:1px solid ${T.border}; border-radius:24px; background:
-linear-gradient(135deg, rgba(255,255,255,0.98) 0%, ${T.tableHead} 68%, rgba(5,150,105,0.05) 100%);
-box-shadow:0 22px 48px ${T.shadow}; }
+.fin-content-tab { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:150px; padding:10px 14px 11px; border:1px solid transparent; border-radius:12px; background:transparent; color:${T.chromeTextMuted || T.subtext}; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; white-space:nowrap; text-align:left; transition:color .15s, border-color .15s, background .15s; scroll-snap-align:start; }
+.fin-content-tab:hover:not(.active) { color:${T.chromeText || T.text}; background:${T.chromeHover || T.hover}; }
+.fin-content-tab:focus-visible { outline:2px solid ${T.navAccent || T.green}; outline-offset:2px; }
+.fin-content-tab.active { box-shadow:0 0 0 1px ${T.chromeActiveBorder || T.green}33, 0 8px 22px rgba(0,0,0,.28); color:${T.chromeActiveText || T.text}; border-color:${T.chromeActiveBorder || T.green + "55"}; background:${T.chromeActiveBg || T.greenGlow}; }
+.fin-content-tab.active::after { content:""; position:absolute; left:14px; right:14px; bottom:-1px; height:2px; border-radius:2px; background:${T.navAccent || T.green}; }
+.fin-content-tab-kicker { font-size:9px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:inherit; opacity:.7; }
+.fin-content-tab.active .fin-content-tab-kicker { color:${T.navAccent || T.green}; opacity:1; }
+.fin-content-tab-label { font-size:13.5px; font-weight:700; line-height:1.15; color:inherit; letter-spacing:-.005em; }
+.fin-content-tab-meta { display:none; }
+.fin-content-body > * { flex-shrink:0; }
+.fin-content-body { padding:22px 22px 32px; flex:1 0 auto; display:flex; flex-direction:column; gap:16px; background:${T.bg}; width:100%; max-width:1500px; margin:0 auto; box-sizing:border-box; }
+
+/* Hero */
+.fin-tab-hero { position:relative; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:26px 28px 26px 30px; border:1px solid ${T.border}; border-radius:18px; background:radial-gradient(120% 140% at 100% 0%, ${T.greenGlow} 0%, transparent 46%), linear-gradient(135deg, ${T.card} 0%, ${T.tableHead} 100%); box-shadow:${T.shadowLg || T.shadow}; overflow:hidden; }
+.fin-tab-hero::after { content:""; position:absolute; left:30px; right:28px; bottom:0; height:1px; background:linear-gradient(90deg, ${T.gold || T.green}66 0%, transparent 60%); }
+.fin-tab-hero::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:linear-gradient(180deg, ${T.green} 0%, ${T.gold || T.green} 100%); }
 .fin-tab-hero-copy { min-width:0; display:flex; flex-direction:column; gap:6px; }
-.fin-tab-hero-kicker { font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:${T.greenText}; }
-.fin-tab-hero-title { font-size:24px; font-weight:800; line-height:1.05; letter-spacing:-.03em; color:${T.text}; }
-.fin-tab-hero-subtitle { font-size:13px; line-height:1.6; color:${T.subtext}; max-width:760px; }
+.fin-tab-hero-kicker { display:inline-flex; align-items:center; gap:8px; font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:${T.greenText}; }
+.fin-tab-hero-kicker::before { content:""; width:6px; height:6px; border-radius:50%; background:${T.green}; box-shadow:0 0 0 3px ${T.greenGlow}; }
+.fin-tab-hero-title { font-size:30px; font-weight:800; line-height:1.05; letter-spacing:-.035em; color:${T.text}; }
+.fin-tab-hero-subtitle { font-size:13px; line-height:1.55; color:${T.subtext}; max-width:760px; }
 .fin-tab-hero-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; align-content:flex-start; }
-.fin-tab-chip { display:inline-flex; align-items:center; padding:8px 12px; border-radius:999px; border:1px solid ${T.border}; background:rgba(255,255,255,0.82); color:${T.subtext}; font-size:11px; font-weight:700; letter-spacing:.04em; white-space:nowrap; box-shadow:0 8px 18px ${T.shadow}; }
-.fin-tab-chip.primary { border-color:${T.green}33; background:${T.greenGlow}; color:${T.greenText}; }
+.fin-tab-chip { display:inline-flex; align-items:center; padding:6px 12px; border-radius:999px; border:1px solid ${T.border}; background:${T.cardAlt || T.surface}; color:${T.subtext}; font-size:11px; font-weight:700; letter-spacing:.04em; white-space:nowrap; }
+.fin-tab-chip.primary { border-color:${T.green}44; background:${T.greenGlow}; color:${T.greenText}; }
 .fin-company-header { display:none; }
-.fin-section { background:linear-gradient(180deg, rgba(255,255,255,0.98) 0%, ${T.tableHead} 100%); border:1px solid ${T.border}; border-radius:22px; margin-bottom:0; overflow:hidden; width:100%; box-shadow:0 18px 40px ${T.shadow}; }
-.fin-section-title { padding:14px 18px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.14em; color:${T.muted}; border-bottom:1px solid ${T.border}; background:linear-gradient(180deg, ${T.tableHead} 0%, ${T.surface} 100%); }
-.fin-table-wrap { overflow-x:auto; position:relative; border-radius:20px; background:linear-gradient(180deg, rgba(255,255,255,0.92) 0%, ${T.surface} 100%); box-shadow:inset 0 1px 0 rgba(255,255,255,0.9); }
-.fin-table-wrap::after { content:""; position:sticky; right:0; top:0; width:28px; height:100%; float:right; pointer-events:none; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, ${T.surface} 100%); }
+
+/* Premium table headers: dark chrome band, same language as the top nav */
+.fin-content-body table thead th { background:linear-gradient(180deg, ${T.chromeBgAlt || T.tableHead} 0%, ${T.chromeBg || T.tableHead} 100%) !important; color:${T.chromeTextMuted || T.muted} !important; font-size:10px !important; font-weight:700 !important; letter-spacing:.14em !important; text-transform:uppercase; padding-top:13px !important; padding-bottom:13px !important; border-bottom:2px solid ${T.green} !important; font-family:'IBM Plex Sans',sans-serif; }
+.fin-content-body table thead th:first-child { color:${T.chromeText || T.text} !important; }
+.fin-content-body table thead th.ttm-col { color:${T.navAccent || T.green} !important; border-left:1px solid ${T.chromeBorder || T.border} !important; }
+.fin-content-body table thead tr:first-child th:first-child { border-top-left-radius:0; }
+/* Section / group rows (INCOME STATEMENT, ASSETS, OPERATING...) */
+.fin-content-body table tbody td[colspan] { background:linear-gradient(90deg, ${T.greenGlow} 0%, ${T.tableHead} 38%) !important; color:${T.greenText} !important; font-size:10px !important; font-weight:800 !important; letter-spacing:.16em !important; padding-top:11px !important; padding-bottom:9px !important; box-shadow:inset 3px 0 0 ${T.green}; border-top:1px solid ${T.border} !important; border-bottom:1px solid ${T.border} !important; }
+/* Sections and tables */
+.fin-section { background:${T.card}; border:1px solid ${T.border}; border-radius:16px; margin-bottom:0; overflow:hidden; width:100%; box-shadow:${T.shadowMd || T.shadow}; }
+.fin-section-title { padding:14px 20px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.16em; color:${T.greenText}; border-bottom:1px solid ${T.border}; background:${T.tableHead}; }
+.fin-table-wrap { overflow-x:auto; position:relative; background:${T.card}; }
 .fin-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; min-width:720px; font-family:'IBM Plex Mono',monospace; }
-.fin-table thead tr { background:${T.tableHead}; border-bottom:1px solid ${T.border}; }
-.fin-table th { padding:12px 12px; text-align:right; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.10em; color:${T.muted}; white-space:nowrap; font-variant-numeric:tabular-nums; font-family:'IBM Plex Sans',sans-serif; position:sticky; top:0; z-index:1; background:${T.tableHead}; }
-.fin-table th:first-child { text-align:left; padding-left:18px; min-width:220px; font-family:'IBM Plex Sans',sans-serif; }
-.fin-table th:last-child { padding-right:16px; }
-.fin-table td { padding:10px 12px; text-align:right; border-bottom:1px solid ${T.border}; color:${T.text}; font-size:13px; white-space:nowrap; transition:background .12s, color .12s; font-variant-numeric:tabular-nums; background:transparent; }
-.fin-table td:first-child { text-align:left; padding-left:18px; color:${T.text}; font-family:'IBM Plex Sans',sans-serif; }
-.fin-table td:last-child { padding-right:16px; }
+.fin-table thead tr { background:${T.tableHead}; }
+.fin-table th { padding:12px 14px; text-align:right; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:${T.muted}; white-space:nowrap; font-variant-numeric:tabular-nums; font-family:'IBM Plex Sans',sans-serif; position:sticky; top:0; z-index:1; background:${T.tableHead}; border-bottom:1px solid ${T.border}; }
+.fin-table th:first-child { text-align:left; padding-left:20px; min-width:220px; }
+.fin-table th:last-child { padding-right:20px; }
+.fin-table td { padding:11px 14px; text-align:right; border-bottom:1px solid ${T.borderSubtle || T.border}; color:${T.text}; font-size:13px; white-space:nowrap; transition:background .12s; font-variant-numeric:tabular-nums; background:transparent; }
+.fin-table td:first-child { text-align:left; padding-left:20px; color:${T.text}; font-family:'IBM Plex Sans',sans-serif; }
+.fin-table td:last-child { padding-right:20px; }
 .fin-table tr:last-child td { border-bottom:none; }
-.fin-table tbody tr:nth-child(even) td { background:${T.tableHead}; }
 .fin-table tbody tr:hover td { background:${T.hover}; }
-.fin-table .bold td { font-weight:700; color:${T.text}; background:${T.tableHead}; border-top:1px solid ${T.border}; }
-.fin-table .bold td:first-child { color:${T.text}; }
+.fin-table .bold td { font-weight:700; color:${T.text}; background:${T.tableAlt || T.tableHead}; border-top:1px solid ${T.border}; }
 .fin-table tbody .bold:hover td { background:${T.hover}; }
-.fin-table .subrow td:first-child { padding-left:34px; color:${T.subtext}; font-size:12px; }
-.fin-table .pos { color:${T.pos}; font-weight:500; }
-.fin-table .neg { color:${T.neg}; font-weight:500; }
+.fin-table .subrow td:first-child { padding-left:36px; color:${T.subtext}; font-size:12px; }
+.fin-table .subrow td { color:${T.subtext}; }
+.fin-table .pos { color:${T.pos}; font-weight:600; }
+.fin-table .neg { color:${T.neg}; font-weight:600; }
 .fin-table th.ttm-col { color:${T.greenText}; background:${T.tableHead}; border-left:1px solid ${T.border}; font-weight:800; }
 .fin-table td.ttm-col { color:${T.greenText}; font-weight:700; background:${T.greenGlow}; border-left:1px solid ${T.border}; }
-.fin-subtabs { display:flex; gap:10px; padding:0 0 6px; margin-bottom:16px; overflow-x:auto; scroll-snap-type:x proximity; }
+.fin-subtabs { display:inline-flex; gap:4px; padding:4px; margin-bottom:4px; overflow-x:auto; scroll-snap-type:x proximity; background:${T.mutedFill || T.tableHead}; border:1px solid ${T.border}; border-radius:12px; align-self:flex-start; max-width:100%; }
 .fin-subtabs::-webkit-scrollbar { display:none; }
-.fin-subtab { padding:10px 14px; border:1px solid ${T.border}; border-radius:999px; background:rgba(255,255,255,0.9); color:${T.subtext}; font-size:12px; font-weight:700; letter-spacing:.02em; cursor:pointer; white-space:nowrap; transition:all .15s; font-family:inherit; scroll-snap-align:start; }
-.fin-subtab:hover { color:${T.text}; border-color:${T.borderStrong}; background:${T.hover}; }
-.fin-subtab.active { color:${T.greenText}; border-color:${T.green}33; background:${T.greenGlow}; box-shadow:0 10px 22px ${T.shadow}; }
-.fin-chart-wrap { padding:14px 18px; }
+.fin-subtab { padding:8px 16px; border:1px solid transparent; border-radius:9px; background:transparent; color:${T.subtext}; font-size:12px; font-weight:700; letter-spacing:.02em; cursor:pointer; white-space:nowrap; transition:all .15s; font-family:inherit; scroll-snap-align:start; }
+.fin-subtab:hover { color:${T.text}; }
+.fin-subtab.active { color:${T.text}; border-color:${T.border}; background:${T.card}; box-shadow:${T.shadowSm || "none"}; }
+.fin-chart-wrap { padding:16px 20px; }
 .fin-bar-chart { display:flex; align-items:flex-end; gap:5px; height:190px; padding:0 0 6px; }
 .fin-bar-grp { display:flex; flex-direction:column; align-items:center; flex:1; gap:5px; }
 .fin-bar { border-radius:4px 4px 0 0; transition:opacity .12s; cursor:default; min-width:14px; width:100%; }
@@ -2106,19 +2121,23 @@ box-shadow:0 22px 48px ${T.shadow}; }
 .fin-legend { display:flex; gap:14px; margin-bottom:10px; flex-wrap:wrap; }
 .fin-leg-item { display:flex; align-items:center; gap:5px; font-size:12px; color:${T.subtext}; }
 .fin-leg-dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+
+/* Empty / loading / error */
 .fin-empty { text-align:center; padding:56px 20px; color:${T.subtext}; font-size:13px; }
-.fin-error { background:${T.redGlow}; border:1px solid ${T.red}44; border-radius:7px; padding:10px 14px; font-size:13px; color:${T.redText}; margin-bottom:12px; }
-.fin-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:64px 20px; gap:10px; color:${T.subtext}; font-size:13px; }
-.fin-spinner { width:24px; height:24px; border:2px solid ${T.border}; border-top-color:${T.green}; border-radius:50%; animation:finspin .6s linear infinite; }
+.fin-empty-card { margin:40px auto 0; max-width:520px; padding:40px 32px; text-align:center; border:1px dashed ${T.borderStrong}; border-radius:16px; background:${T.card}; box-shadow:${T.shadowMd || T.shadow}; }
+.fin-empty-icon { width:56px; height:56px; margin:0 auto 18px; border-radius:16px; display:flex; align-items:center; justify-content:center; background:${T.accentFill || T.greenGlow}; color:${T.accent || T.greenText}; }
+.fin-error { background:${T.redGlow}; border:1px solid ${T.red}44; border-radius:12px; padding:12px 16px; font-size:13px; color:${T.redText}; margin-bottom:12px; }
+.fin-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:64px 20px; gap:12px; color:${T.subtext}; font-size:13px; }
+.fin-spinner { width:26px; height:26px; border:2px solid ${T.border}; border-top-color:${T.green}; border-radius:50%; animation:finspin .6s linear infinite; }
 .fin-chart-svg { width:100%; overflow:visible; }
 .fin-ytv-wrap { display:none; }
 .fin-ytv-iframe { width:100%; height:100%; border:none; }
-.fin-sugg { position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:${T.surface}; border:1.5px solid ${T.border}; border-radius:10px; width:100%; min-width:280px; max-width:360px; box-shadow:0 12px 32px ${T.shadow}, 0 2px 8px ${T.shadow}; overflow:hidden; animation:suggFadeIn .1s ease; }
+.fin-sugg { position:absolute; top:calc(100% + 6px); left:0; z-index:20; background:${T.surface}; border:1px solid ${T.border}; border-radius:12px; width:100%; min-width:280px; max-width:360px; box-shadow:${T.shadowLg || T.shadow}; overflow:hidden; animation:suggFadeIn .1s ease; }
 @keyframes suggFadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
-.fin-sugg-header { padding:6px 13px 5px; font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:${T.muted}; border-bottom:1px solid ${T.border}; background:${T.tableHead}; }
-.fin-sugg-item { padding:9px 13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid ${T.border}44; transition:background .07s; }
+.fin-sugg-header { padding:7px 14px 6px; font-size:9.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:${T.muted}; border-bottom:1px solid ${T.border}; background:${T.tableHead}; }
+.fin-sugg-item { padding:10px 14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid ${T.borderSubtle || T.border}; transition:background .07s; }
 .fin-sugg-item:last-child { border-bottom:none; }
-.fin-sugg-item:hover, .fin-sugg-item.active { background:${T.greenGlow}; }
+.fin-sugg-item:hover, .fin-sugg-item.active { background:${T.hover}; }
 .fin-sugg-item.active .fin-sugg-sym { color:${T.greenText}; }
 .fin-sugg-left { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .fin-sugg-sym { font-size:13px; font-weight:700; color:${T.text}; letter-spacing:.03em; white-space:nowrap; }
@@ -2127,52 +2146,49 @@ box-shadow:0 22px 48px ${T.shadow}; }
 .fin-sugg-badge { font-size:9px; font-weight:700; padding:2px 6px; border-radius:4px; letter-spacing:.05em; flex-shrink:0; }
 .fin-sugg-badge-nse { background:${T.greenGlow}; color:${T.greenText}; border:1px solid ${T.green}33; }
 .fin-sugg-badge-bse { background:rgba(33,150,243,0.10); color:#1976d2; border:1px solid rgba(33,150,243,0.2); }
-.fin-sugg-footer { padding:8px 13px; cursor:pointer; display:flex; align-items:center; gap:7px; color:${T.subtext}; font-size:12px; border-top:1px solid ${T.border}; background:${T.tableHead}; transition:background .07s; }
+.fin-sugg-footer { padding:9px 14px; cursor:pointer; display:flex; align-items:center; gap:7px; color:${T.subtext}; font-size:12px; border-top:1px solid ${T.border}; background:${T.tableHead}; transition:background .07s; }
 .fin-sugg-footer:hover { background:${T.hover}; color:${T.text}; }
+@media (prefers-reduced-motion: reduce) { .fin-content-tab, .fin-search-btn, .fin-subtab { transition:none; } }
 @media (max-width:1100px) {
-    .fin-sidebar { width:248px; min-width:248px; }
+    .fin-sidebar { width:250px; min-width:250px; }
     .fin-content-body { padding:18px; }
-    .fin-tab-hero { flex-direction:column; }
+    .fin-tab-hero { flex-direction:column; align-items:flex-start; }
     .fin-tab-hero-chips { justify-content:flex-start; }
 }
 @media (max-width:900px) {
     .fin-topbar { padding:12px 14px; gap:10px; }
     .fin-body { flex-direction:column; }
     .fin-content { order:1; }
-    .fin-sidebar { order:2; width:100%; min-width:0; max-height:none; border-right:none; border-bottom:none; border-top:1px solid ${T.border}; box-shadow:none; }
-    .fin-content-tabs { padding:12px 12px 10px; gap:10px; }
-    .fin-content-tab { min-width:190px; padding:12px 14px; }
-    .fin-content-body { padding:16px 12px 22px; gap:14px; }
-    .fin-tab-hero { padding:18px 16px; border-radius:18px; }
-    .fin-tab-hero-title { font-size:20px; }
-    .fin-section { border-radius:18px; }
+    .fin-sidebar { order:2; width:100%; min-width:0; max-height:none; border-right:none; border-top:1px solid ${T.border}; }
+    .fin-content-tabs { padding:8px 12px; gap:6px; }
+    .fin-content-tab { min-width:130px; padding:9px 12px 10px; }
+    .fin-content-body { padding:14px 12px 22px; gap:14px; }
+    .fin-tab-hero { padding:18px 18px 18px 20px; }
+    .fin-tab-hero-title { font-size:21px; }
 }
 @media (max-width:640px) {
     .fin-topbar { align-items:stretch; }
     .fin-search-input { width:100%; }
     .fin-search-btn { width:100%; justify-content:center; }
-    .fin-sidebar { border-radius:20px 20px 0 0; margin-top:8px; }
     .fin-sb-section { padding:12px 14px; }
-    .fin-content-tabs { padding:10px 10px 8px; }
-    .fin-content-tab { min-width:min(82vw, 260px); }
-    .fin-content-tab-meta { display:none; }
+    .fin-content-tabs { padding:8px 10px; }
+    .fin-content-tab { min-width:min(44vw, 150px); }
     .fin-content-tab-label { font-size:12.5px; }
-    .fin-tab-hero { padding:16px 14px; border-radius:20px; }
+    .fin-tab-hero { padding:16px 14px 16px 18px; border-radius:14px; }
     .fin-tab-hero-kicker { font-size:9px; }
     .fin-tab-hero-title { font-size:18px; }
     .fin-tab-hero-subtitle { font-size:12px; }
-    .fin-tab-chip { padding:6px 10px; font-size:10px; }
-    .fin-table-wrap { border-radius:18px; }
+    .fin-tab-chip { padding:5px 10px; font-size:10px; }
+    .fin-section { border-radius:14px; }
     .fin-table { min-width:560px; font-size:12px; }
     .fin-table th { padding:10px 10px; font-size:9px; }
     .fin-table td { padding:10px 10px; font-size:12px; }
     .fin-table th:first-child { min-width:168px; padding-left:14px; }
     .fin-table td:first-child { padding-left:14px; }
     .fin-table .subrow td:first-child { padding-left:26px; }
-    .fin-subtabs { margin:0 -2px 14px; padding:0 2px 6px; }
 }
 
-   //OVERVIEW TAB
+   /* OVERVIEW TAB */
 .fin-overview-wrap { padding:20px 22px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; height:100%; box-sizing:border-box; }
 .fin-ov-header { background:${T.surface}; border:1px solid ${T.border}; border-radius:14px; padding:20px 22px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; box-shadow:0 1px 4px ${T.shadow}; }
 .fin-ov-header-left { display:flex; flex-direction:column; gap:6px; min-width:0; }
@@ -2959,7 +2975,7 @@ function getSeoProfile({ route, productTab, financialSubPage, technicalSubPage, 
         const symbol = route.symbol || "Stock";
         return {
             title: `${symbol} Stock Analysis`,
-            description: `Analyze ${symbol} with TradeEdge fundamentals, price charts, ratios, ownership, peer comparison, and announcements for Indian market research.`,
+            description: `Analyze ${symbol} with TradeEdge fundamentals, price charts, ratios, ownership, and announcements for Indian market research.`,
             type: "article",
         };
     }
@@ -8751,6 +8767,7 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
     const [page, setPage] = useState(0);
     const PAGE_SIZE = 30;
     const isAnnMobile = useViewportBelow(760);
+    const [showAllCats, setShowAllCats] = useState(false);
 
     const D = T.bg === "#0f1117" || T.bg?.startsWith("#0") || T.bg?.startsWith("#1");
     const dbH = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" };
@@ -8881,305 +8898,336 @@ function CompanyAnnouncementsTab({ nseCode, bseCode, sym, T }) {
     };
 
     //  No stock selected 
+    // Category counts (most frequent first) for the filter chips
+    const catCounts = useMemo(() => {
+        const m = new Map();
+        announcements.forEach(a => { if (a.category) m.set(a.category, (m.get(a.category) || 0) + 1); });
+        return [...m.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]));
+    }, [announcements]);
+
+    // Summary strip numbers
+    const annStats = useMemo(() => {
+        const cutoff = Date.now() - 30 * 86400000;
+        let recent = 0, withFiles = 0;
+        announcements.forEach(a => {
+            const t = new Date(a.announcement_datetime || a.exchange_date).getTime();
+            if (!isNaN(t) && t >= cutoff) recent++;
+            if (a.attachment_url) withFiles++;
+        });
+        const first = announcements[0];
+        const latestIso = first && (first.announcement_datetime || first.exchange_date);
+        return { recent, withFiles, latestDate: latestIso ? formatDate(latestIso) : "", latestCat: first?.category || "" };
+    }, [announcements]);
+
+    // Group the visible page of results by month
+    const groupedDisplayed = useMemo(() => {
+        const groups = [];
+        displayed.forEach((a, idx) => {
+            const iso = a.announcement_datetime || a.exchange_date;
+            const d = new Date(iso);
+            const valid = iso && !isNaN(d);
+            const key = valid ? `${d.getFullYear()}-${d.getMonth()}` : "unknown";
+            const label = valid ? d.toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : "Undated";
+            let g = groups[groups.length - 1];
+            if (!g || g.key !== key) { g = { key, label, items: [], start: idx }; groups.push(g); }
+            g.items.push(a);
+        });
+        return groups;
+    }, [displayed]);
+
     if (!sym && !nseCode) {
         return (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, color: textSec, gap: 10 }}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .3 }}>
-                    <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.952 9.168-4.938" />
-                </svg>
-                <span style={{ fontSize: 13 }}>Search for a stock to view announcements</span>
+            <div className="ann2-empty" style={{ margin: "40px auto 0", maxWidth: 520 }}>
+                <div className="ann2-empty-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.952 9.168-4.938" />
+                    </svg>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: T.text, letterSpacing: "-.02em" }}>No company selected</div>
+                <div style={{ fontSize: 13, color: T.subtext, marginTop: 6 }}>Search for a stock to view its exchange announcements.</div>
             </div>
         );
     }
 
-    return (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    const VISIBLE_CATS = 7;
+    const catsShown = showAllCats ? catCounts : catCounts.slice(0, VISIBLE_CATS).concat(
+        catCounts.slice(VISIBLE_CATS).filter(([c]) => c === catFilter)
+    );
+    const hiddenCatCount = catCounts.length - catsShown.length;
+    const dayParts = (iso) => {
+        const d = new Date(iso);
+        if (!iso || isNaN(d)) return { day: "", mon: "", wk: "" };
+        return {
+            day: String(d.getDate()).padStart(2, "0"),
+            mon: d.toLocaleDateString("en-IN", { month: "short" }).toUpperCase(),
+            wk: d.toLocaleDateString("en-IN", { weekday: "short" }),
+        };
+    };
 
-            {/*  Header  */}
-            <div style={{
-                padding: isAnnMobile ? "16px 14px 12px" : "18px 22px 14px",
-                borderBottom: `1px solid ${divider}`,
-                background: D ? "rgba(255,255,255,0.015)" : "#fafbfc",
-                flexShrink: 0,
-            }}>
-                <div style={{ display: "flex", alignItems: isAnnMobile ? "stretch" : "center", justifyContent: "space-between", marginBottom: 12, gap: 10, flexDirection: isAnnMobile ? "column" : "row" }}>
-                    <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                            <div style={{
-                                width: 28, height: 28, borderRadius: 7,
-                                background: `${accentGrn}18`, border: `1px solid ${accentGrn}30`,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accentGrn} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.952 9.168-4.938" />
-                                </svg>
-                            </div>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: textPri, letterSpacing: "-0.01em" }}>Exchange Announcements</span>
-                            {announcements.length > 0 && (
-                                <span style={{
-                                    fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                                    background: `${accentGrn}18`, border: `1px solid ${accentGrn}30`, color: accentGrn,
-                                }}>{announcements.length}</span>
-                            )}
-                        </div>
-                        <div style={{ fontSize: 11, color: textSec, opacity: 0.6, marginTop: 3, marginLeft: 36 }}>
-                            BSE / NSE corporate filings & disclosures
-                        </div>
+    const renderCard = (ann, i, isLastInGroup) => {
+        const meta = getCatMeta(ann.category);
+        const iso = ann.announcement_datetime || ann.exchange_date;
+        const dp = dayParts(iso);
+        const timeStr = formatTime(ann.announcement_datetime);
+        const id = ann.seq_id || `${i}-${iso}`;
+        const isOpen = expanded === id;
+        const bodyText = (ann.announcement_text || "").trim();
+        const long = bodyText.length > 170;
+        const tags = (Array.isArray(ann.tags) ? ann.tags : (ann.tags ? [ann.tags] : [])).filter(t => t && t !== "OTHER");
+        return (
+            <div key={id} className="ann2-row" style={{ display: "grid", gridTemplateColumns: isAnnMobile ? "1fr" : "76px 22px minmax(0,1fr)", columnGap: 6 }}>
+                {!isAnnMobile && (
+                    <div className="ann2-date">
+                        <div className="ann2-day">{dp.day}</div>
+                        <div className="ann2-mon">{dp.mon}</div>
+                        <div className="ann2-time">{timeStr}</div>
                     </div>
-                    <button onClick={load} style={{
-                        display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
-                        color: accentGrn, background: `${accentGrn}12`, border: `1px solid ${accentGrn}28`,
-                        borderRadius: 7, padding: "7px 11px", cursor: "pointer", fontFamily: "inherit",
-                        transition: "all 0.15s",
-                    }} onMouseEnter={e => { e.currentTarget.style.background = `${accentGrn}22` }} onMouseLeave={e => { e.currentTarget.style.background = `${accentGrn}12` }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                )}
+                {!isAnnMobile && (
+                    <div className="ann2-rail">
+                        <span className="ann2-line" style={{ bottom: isLastInGroup ? "auto" : -12, height: isLastInGroup ? 26 : "auto" }} />
+                        <span className="ann2-dot" style={{ background: meta.color, boxShadow: `0 0 0 4px ${meta.color}22` }} />
+                    </div>
+                )}
+                <div className={`ann2-card${isOpen ? " open" : ""}`} style={{ borderLeft: `3px solid ${meta.color}` }}>
+                    <div className="ann2-card-top">
+                        <span className="ann2-cat" style={{ color: meta.color, background: `${meta.color}14`, borderColor: `${meta.color}30` }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={meta.icon} /></svg>
+                            {ann.category || "Update"}
+                        </span>
+                        {tags.map(tag => (
+                            <span key={tag} className="ann2-tag" style={{ color: tagColor(tag), background: `${tagColor(tag)}12`, borderColor: `${tagColor(tag)}28` }}>{tag.replace(/_/g, " ")}</span>
+                        ))}
+                        {isAnnMobile && (
+                            <span className="ann2-meta-inline">{dp.day} {dp.mon} {iso ? new Date(iso).getFullYear() : ""}{timeStr ? ` · ${timeStr}` : ""}</span>
+                        )}
+                    </div>
+                    <div className={`ann2-text${isOpen ? "" : " clamp"}`}>{bodyText || "No description provided."}</div>
+                    <div className="ann2-card-foot">
+                        {ann.attachment_url && (
+                            <a href={ann.attachment_url} target="_blank" rel="noopener noreferrer" className="ann2-attach">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Attachment
+                                {ann.attachment_size && <span className="ann2-size">{ann.attachment_size}</span>}
+                            </a>
+                        )}
+                        {long && (
+                            <button type="button" className="ann2-more" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : id)}>
+                                {isOpen ? "Show less" : "Read more"}
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }}><polyline points="6 9 12 15 18 9" /></svg>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="ann2-wrap">
+            <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes ann2Shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+                .ann2-wrap { display:flex; flex-direction:column; gap:16px; width:100%; }
+                .ann2-stats { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+                .ann2-stat { background:${T.card}; border:1px solid ${T.border}; border-radius:14px; padding:14px 16px; box-shadow:${T.shadowSm || "none"}; min-width:0; }
+                .ann2-stat-label { font-size:9.5px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:${T.muted}; }
+                .ann2-stat-val { margin-top:6px; font-size:22px; font-weight:800; letter-spacing:-.03em; color:${T.text}; font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; line-height:1.1; }
+                .ann2-stat-sub { margin-top:4px; font-size:11px; color:${T.subtext}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+                .ann2-toolbar { background:${T.card}; border:1px solid ${T.border}; border-radius:16px; padding:16px 18px; box-shadow:${T.shadowMd || T.shadow}; display:flex; flex-direction:column; gap:14px; }
+                .ann2-toolbar-top { display:flex; align-items:center; gap:12px; }
+                .ann2-search { position:relative; flex:1; min-width:0; }
+                .ann2-search svg { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:${T.muted}; pointer-events:none; }
+                .ann2-search input { width:100%; box-sizing:border-box; padding:11px 38px 11px 40px; border-radius:12px; border:1px solid ${T.border}; background:${T.inputBg}; color:${T.text}; font-size:13px; font-family:inherit; outline:none; transition:border-color .15s, box-shadow .15s, background .15s; }
+                .ann2-search input::placeholder { color:${T.muted}; }
+                .ann2-search input:hover { border-color:${T.borderStrong}; }
+                .ann2-search input:focus { border-color:${T.accent || T.green}; box-shadow:0 0 0 3px ${T.accentFill || T.greenGlow}; background:${T.surface}; }
+                .ann2-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); width:24px; height:24px; border-radius:50%; border:none; background:${T.mutedFill || T.hover}; color:${T.subtext}; cursor:pointer; font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center; padding:0; }
+                .ann2-clear:hover { color:${T.text}; }
+                .ann2-refresh { display:inline-flex; align-items:center; gap:7px; padding:10px 16px; border-radius:12px; border:1px solid ${T.border}; background:${T.surface}; color:${T.text}; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; transition:border-color .14s, background .14s; }
+                .ann2-refresh:hover { border-color:${T.borderStrong}; background:${T.hover}; }
+                .ann2-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+                .ann2-chip { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:999px; border:1px solid ${T.border}; background:${T.surface}; color:${T.subtext}; font-size:11.5px; font-weight:600; font-family:inherit; cursor:pointer; transition:border-color .12s, background .12s, color .12s; white-space:nowrap; }
+                .ann2-chip:hover { border-color:${T.borderStrong}; color:${T.text}; background:${T.hover}; }
+                .ann2-chip .n { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; background:${T.mutedFill || T.hover}; color:${T.subtext}; }
+                .ann2-chip.active { background:${T.accent || T.green}; border-color:${T.accent || T.green}; color:#fff; }
+                .ann2-chip.active .n { background:rgba(255,255,255,.2); color:#fff; }
+                .ann2-chip.more { border-style:dashed; color:${T.greenText}; }
+                .ann2-result-note { font-size:11.5px; color:${T.subtext}; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+                .ann2-month { display:flex; align-items:center; gap:12px; margin:8px 0 10px; }
+                .ann2-month-label { font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:${T.greenText}; white-space:nowrap; }
+                .ann2-month-rule { flex:1; height:1px; background:linear-gradient(90deg, ${T.border} 0%, transparent 100%); }
+                .ann2-month-count { font-size:10.5px; font-weight:700; color:${T.muted}; white-space:nowrap; }
+                .ann2-group { display:flex; flex-direction:column; gap:12px; }
+                .ann2-date { padding-top:14px; text-align:right; }
+                .ann2-day { font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:700; color:${T.text}; line-height:1; letter-spacing:-.02em; }
+                .ann2-mon { margin-top:3px; font-size:10px; font-weight:800; letter-spacing:.14em; color:${T.subtext}; }
+                .ann2-time { margin-top:3px; font-size:10px; color:${T.muted}; font-family:'IBM Plex Mono',monospace; }
+                .ann2-rail { position:relative; }
+                .ann2-line { position:absolute; left:50%; top:0; width:1px; margin-left:-0.5px; background:${T.border}; }
+                .ann2-dot { position:absolute; left:50%; top:19px; width:9px; height:9px; margin-left:-4.5px; border-radius:50%; }
+                .ann2-card { background:${T.card}; border:1px solid ${T.border}; border-radius:14px; padding:14px 18px 14px 16px; box-shadow:${T.shadowSm || "none"}; transition:box-shadow .16s, border-color .16s, transform .16s; min-width:0; }
+                .ann2-card:hover { box-shadow:${T.shadowMd || T.shadow}; transform:translateY(-1px); }
+                .ann2-card.open { box-shadow:${T.shadowLg || T.shadow}; }
+                .ann2-card-top { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+                .ann2-cat { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:8px; border:1px solid; font-size:10.5px; font-weight:800; letter-spacing:.04em; }
+                .ann2-tag { padding:3px 8px; border-radius:6px; border:1px solid; font-size:9.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+                .ann2-meta-inline { margin-left:auto; font-size:10.5px; color:${T.muted}; font-family:'IBM Plex Mono',monospace; }
+                .ann2-text { font-size:13.5px; line-height:1.65; color:${T.text}; overflow-wrap:anywhere; white-space:pre-line; }
+                .ann2-text.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+                .ann2-card-foot { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
+                .ann2-card-foot:empty { display:none; }
+                .ann2-attach { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:9px; border:1px solid ${T.green}44; background:${T.greenGlow}; color:${T.greenText}; font-size:11.5px; font-weight:700; text-decoration:none; transition:border-color .12s, background .12s; }
+                .ann2-attach:hover { border-color:${T.green}; }
+                .ann2-size { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; opacity:.75; padding-left:7px; border-left:1px solid ${T.green}44; }
+                .ann2-more { margin-left:auto; display:inline-flex; align-items:center; gap:5px; padding:5px 8px; border:none; background:transparent; color:${T.subtext}; font-size:11.5px; font-weight:700; font-family:inherit; cursor:pointer; border-radius:8px; }
+                .ann2-more:hover { color:${T.text}; background:${T.hover}; }
+                .ann2-loadmore { margin-top:8px; padding:12px 0; width:100%; border-radius:12px; border:1px dashed ${T.borderStrong}; background:${T.card}; color:${T.text}; font-size:12.5px; font-weight:700; font-family:inherit; cursor:pointer; transition:background .14s, border-color .14s; }
+                .ann2-loadmore:hover { background:${T.hover}; border-color:${T.green}; }
+                .ann2-skel { height:92px; border-radius:14px; border:1px solid ${T.border}; background:linear-gradient(90deg, ${T.card} 0%, ${T.hover} 50%, ${T.card} 100%); background-size:800px 100%; animation:ann2Shimmer 1.3s linear infinite; }
+                .ann2-empty { text-align:center; padding:44px 24px; border:1px dashed ${T.borderStrong}; border-radius:16px; background:${T.card}; }
+                .ann2-empty-icon { width:52px; height:52px; margin:0 auto 14px; border-radius:15px; display:flex; align-items:center; justify-content:center; background:${T.accentFill || T.greenGlow}; color:${T.accent || T.greenText}; }
+                .ann2-error { display:flex; gap:12px; align-items:flex-start; padding:16px 18px; border-radius:14px; background:${T.redGlow}; border:1px solid ${T.red}44; color:${T.redText}; font-size:13px; }
+                .ann2-linkbtn { margin-top:12px; padding:8px 16px; border-radius:10px; border:1px solid ${T.border}; background:${T.surface}; color:${T.greenText}; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; }
+                .ann2-linkbtn:hover { border-color:${T.green}; }
+                @media (max-width:900px) { .ann2-stats { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+                @media (max-width:640px) {
+                    .ann2-toolbar { padding:12px; border-radius:14px; }
+                    .ann2-toolbar-top { flex-direction:column; align-items:stretch; }
+                    .ann2-refresh { justify-content:center; }
+                    .ann2-card { padding:12px 14px; }
+                    .ann2-chips { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+                    .ann2-chips::-webkit-scrollbar { display:none; }
+                }
+                @media (prefers-reduced-motion: reduce) { .ann2-card, .ann2-skel { transition:none; animation:none; } .ann2-card:hover { transform:none; } }
+            `}</style>
+
+            {/* Summary strip */}
+            {announcements.length > 0 && (
+                <div className="ann2-stats">
+                    <div className="ann2-stat">
+                        <div className="ann2-stat-label">Total filings</div>
+                        <div className="ann2-stat-val">{announcements.length}</div>
+                        <div className="ann2-stat-sub">{catCounts.length} categories</div>
+                    </div>
+                    <div className="ann2-stat">
+                        <div className="ann2-stat-label">Last 30 days</div>
+                        <div className="ann2-stat-val">{annStats.recent}</div>
+                        <div className="ann2-stat-sub">new disclosures</div>
+                    </div>
+                    <div className="ann2-stat">
+                        <div className="ann2-stat-label">With attachments</div>
+                        <div className="ann2-stat-val">{annStats.withFiles}</div>
+                        <div className="ann2-stat-sub">PDF / documents</div>
+                    </div>
+                    <div className="ann2-stat">
+                        <div className="ann2-stat-label">Latest filing</div>
+                        <div className="ann2-stat-val" style={{ fontSize: 17, paddingTop: 3 }}>{annStats.latestDate || "-"}</div>
+                        <div className="ann2-stat-sub">{annStats.latestCat || "\u00A0"}</div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toolbar: search + filters */}
+            <div className="ann2-toolbar">
+                <div className="ann2-toolbar-top">
+                    <div className="ann2-search">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                        <input
+                            value={query}
+                            onChange={e => { setQuery(e.target.value); setPage(0); }}
+                            placeholder="Search announcements"
+                            aria-label="Search announcements"
+                        />
+                        {query && <button type="button" className="ann2-clear" aria-label="Clear search" onClick={() => setQuery("")}>{"\u00D7"}</button>}
+                    </div>
+                    <button type="button" className="ann2-refresh" onClick={load} disabled={loading}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={loading ? { animation: "spin .8s linear infinite" } : undefined}>
                             <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
                             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
                         </svg>
                         Refresh
                     </button>
                 </div>
-
-                {/* Search */}
-                <div style={{ position: "relative", marginBottom: 10 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                        style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", opacity: .35, pointerEvents: "none", color: textSec }}>
-                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <input
-                        value={query}
-                        onChange={e => { setQuery(e.target.value); setPage(0); }}
-                        placeholder='Search announcements'
-                        style={{
-                            width: "100%", boxSizing: "border-box", padding: "8px 12px 8px 33px",
-                            fontSize: 12.5, borderRadius: 8, outline: "none", fontFamily: "inherit",
-                            background: D ? "rgba(255,255,255,0.06)" : "#fff",
-                            border: `1px solid ${divider}`, color: textPri,
-                            transition: "border-color 0.15s",
-                        }}
-                        onFocus={e => e.target.style.borderColor = `${accentGrn}60`}
-                        onBlur={e => e.target.style.borderColor = divider}
-                    />
-                    {query && (
-                        <button onClick={() => setQuery("")} style={{
-                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                            background: "none", border: "none", cursor: "pointer", color: textSec, fontSize: 14, lineHeight: 1, padding: 2,
-                        }}></button>
-                    )}
-                </div>
-
-                {/* Category filters */}
-                {allCategories.length > 0 && (
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        <button onClick={() => { setCatFilter("all"); setPage(0); }} style={{
-                            fontSize: 10.5, fontWeight: 600, padding: "3px 10px", borderRadius: 20, cursor: "pointer",
-                            fontFamily: "inherit", border: `1px solid ${catFilter === "all" ? accentGrn : divider}`,
-                            background: catFilter === "all" ? `${accentGrn}15` : "transparent",
-                            color: catFilter === "all" ? accentGrn : textSec,
-                            transition: "all 0.15s",
-                        }}>All</button>
-                        {allCategories.map(cat => {
-                            const meta = getCatMeta(cat);
-                            const active = catFilter === cat;
-                            return (
-                                <button key={cat} onClick={() => { setCatFilter(cat); setPage(0); }} style={{
-                                    fontSize: 10.5, fontWeight: 600, padding: "3px 10px", borderRadius: 20, cursor: "pointer",
-                                    fontFamily: "inherit", border: `1px solid ${active ? meta.color : divider}`,
-                                    background: active ? `${meta.color}15` : "transparent",
-                                    color: active ? meta.color : textSec,
-                                    transition: "all 0.15s",
-                                }}>{cat}</button>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-
-            {/*  Body  */}
-            <div style={{ flex: 1, overflowY: "auto", padding: isAnnMobile ? "14px 14px 18px" : "14px 22px 22px" }}>
-
-                {/* Loading */}
-                {loading && (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: 60, color: textSec }}>
-                        <div style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: `2px solid ${divider}`, borderTopColor: accentGrn,
-                            animation: "spin 0.8s linear infinite",
-                        }} />
-                        <span style={{ fontSize: 13 }}>Loading announcements</span>
-                    </div>
-                )}
-
-                {/* Error */}
-                {!loading && error && (
-                    <div style={{
-                        display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px",
-                        borderRadius: 10, background: D ? "rgba(239,68,68,0.08)" : "#fff5f5",
-                        border: `1px solid ${D ? "rgba(239,68,68,0.2)" : "#fecaca"}`, marginTop: 4,
-                    }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
-                            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                        <span style={{ fontSize: 12.5, color: D ? "#fca5a5" : "#dc2626" }}>{error}</span>
-                    </div>
-                )}
-
-                {/* Empty state */}
-                {!loading && !error && filtered.length === 0 && announcements.length > 0 && (
-                    <div style={{ textAlign: "center", padding: 50, color: textSec }}>
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 10px", display: "block", opacity: .3 }}>
-                            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                        <div style={{ fontSize: 13 }}>No announcements match <strong>"{query || catFilter}"</strong></div>
-                        <button onClick={() => { setQuery(""); setCatFilter("all"); }} style={{
-                            marginTop: 10, fontSize: 12, color: accentGrn, background: "none", border: "none",
-                            cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
-                        }}>Clear filters</button>
-                    </div>
-                )}
-
-                {/* Announcement cards */}
-                {!loading && !error && displayed.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: isAnnMobile ? 10 : 6 }}>
-                        {displayed.map((ann, i) => {
-                            const meta = getCatMeta(ann.category);
-                            const dateStr = formatDate(ann.announcement_datetime || ann.exchange_date);
-                            const timeStr = formatTime(ann.announcement_datetime);
-                            const isOpen = expanded === (ann.seq_id || i);
-                            const bodyText = ann.announcement_text || "";
-                            const tags = Array.isArray(ann.tags) ? ann.tags : (ann.tags ? [ann.tags] : []);
-
-                            return (
-                                <div key={ann.seq_id || i}
-                                    style={{
-                                        borderRadius: 10, overflow: "hidden",
-                                        background: cardBg,
-                                        border: `1px solid ${isOpen ? `${meta.color}40` : divider}`,
-                                        transition: "border-color 0.2s, box-shadow 0.2s",
-                                        boxShadow: isOpen ? `0 2px 12px ${meta.color}18` : "none",
-                                    }}
-                                >
-                                    {/* Card header row */}
-                                    <div
-                                        onClick={() => setExpanded(isOpen ? null : (ann.seq_id || i))}
-                                        style={{
-                                            display: "flex", alignItems: "flex-start", gap: isAnnMobile ? 10 : 12, padding: isAnnMobile ? "14px 12px" : "12px 14px",
-                                            cursor: "pointer", userSelect: "none",
-                                        }}
-                                        onMouseEnter={e => { if (!isOpen) e.currentTarget.parentElement.style.background = surfaceHov; }}
-                                        onMouseLeave={e => { if (!isOpen) e.currentTarget.parentElement.style.background = cardBg; }}
-                                    >
-                                        {/* Category icon */}
-                                        <div style={{
-                                            flexShrink: 0, width: isAnnMobile ? 34 : 32, height: isAnnMobile ? 34 : 32, borderRadius: 8,
-                                            background: `${meta.color}15`, border: `1px solid ${meta.color}28`,
-                                            display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1,
-                                        }}>
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={meta.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d={meta.icon} />
-                                            </svg>
-                                        </div>
-
-                                        {/* Main content */}
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            {/* Category badge + date */}
-                                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, flexWrap: "wrap" }}>
-                                                <span style={{
-                                                    fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
-                                                    padding: "2px 8px", borderRadius: 20,
-                                                    background: `${meta.color}15`, border: `1px solid ${meta.color}28`, color: meta.color,
-                                                }}>{ann.category || "Update"}</span>
-                                                {tags.filter(t => t && t !== "OTHER").map(tag => (
-                                                    <span key={tag} style={{
-                                                        fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
-                                                        padding: "2px 6px", borderRadius: 20,
-                                                        background: `${tagColor(tag)}12`, border: `1px solid ${tagColor(tag)}25`, color: tagColor(tag),
-                                                    }}>{tag.replace(/_/g, " ")}</span>
-                                                ))}
-                                                <div style={{ marginLeft: isAnnMobile ? 0 : "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
-                                                    {dateStr && (
-                                                        <span style={{ fontSize: 10, color: textSec, opacity: 0.6, display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
-                                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                                                            </svg>
-                                                            {dateStr}
-                                                        </span>
-                                                    )}
-                                                    {timeStr && (
-                                                        <span style={{ fontSize: 10, color: textSec, opacity: 0.5, whiteSpace: "nowrap" }}>{timeStr}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Announcement preview text */}
-                                            <div style={{
-                                                fontSize: 12, color: textPri, lineHeight: 1.55, fontFamily: "inherit",
-                                                opacity: isOpen ? 1 : 0.85,
-                                            }}>
-                                                {isOpen ? bodyText : truncate(bodyText, 220)}
-                                            </div>
-
-                                            {/* Bottom row: size + attachment + expand */}
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
-                                                {ann.attachment_size && (
-                                                    <span style={{ fontSize: 9.5, color: textSec, opacity: 0.5, display: "flex", alignItems: "center", gap: 3 }}>
-                                                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
-                                                        </svg>
-                                                        {ann.attachment_size}
-                                                    </span>
-                                                )}
-                                                {ann.attachment_url && (
-                                                    <a href={ann.attachment_url} target="_blank" rel="noopener noreferrer"
-                                                        onClick={e => e.stopPropagation()}
-                                                        style={{
-                                                            fontSize: 10, fontWeight: 600, color: accentGrn,
-                                                            display: "flex", alignItems: "center", gap: 4,
-                                                            textDecoration: "none", padding: "2px 8px", borderRadius: 5,
-                                                            background: `${accentGrn}10`, border: `1px solid ${accentGrn}28`,
-                                                            transition: "background 0.15s",
-                                                        }}
-                                                        onMouseEnter={e => e.currentTarget.style.background = `${accentGrn}20`}
-                                                        onMouseLeave={e => e.currentTarget.style.background = `${accentGrn}10`}
-                                                    >
-                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-                                                        </svg>
-                                                        Attachment
-                                                    </a>
-                                                )}
-                                                <span style={{ marginLeft: "auto", fontSize: 10, color: textSec, opacity: 0.5, display: "flex", alignItems: "center", gap: 3, cursor: "pointer" }}>
-                                                    {isOpen ? "Collapse" : bodyText.length > 220 ? "Read more" : ""}
-                                                    {bodyText.length > 220 && (
-                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                                                            style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
-                                                            <polyline points="6 9 12 15 18 9" />
-                                                        </svg>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-
-                        {/* Load more */}
-                        {hasMore && (
-                            <button onClick={() => setPage(p => p + 1)} style={{
-                                marginTop: 6, padding: "9px 0", borderRadius: 9, fontSize: 12, fontWeight: 600,
-                                color: accentGrn, background: `${accentGrn}10`, border: `1px solid ${accentGrn}28`,
-                                cursor: "pointer", fontFamily: "inherit", width: "100%", transition: "background 0.15s",
-                            }}
-                                onMouseEnter={e => e.currentTarget.style.background = `${accentGrn}1c`}
-                                onMouseLeave={e => e.currentTarget.style.background = `${accentGrn}10`}
-                            >Load more ({filtered.length - displayed.length} remaining)</button>
+                {catCounts.length > 0 && (
+                    <div className="ann2-chips" role="tablist" aria-label="Filter by category">
+                        <button type="button" className={`ann2-chip${catFilter === "all" ? " active" : ""}`} onClick={() => { setCatFilter("all"); setPage(0); }}>
+                            All <span className="n">{announcements.length}</span>
+                        </button>
+                        {catsShown.map(([cat, n]) => (
+                            <button type="button" key={cat} className={`ann2-chip${catFilter === cat ? " active" : ""}`} onClick={() => { setCatFilter(cat); setPage(0); }}>
+                                {cat} <span className="n">{n}</span>
+                            </button>
+                        ))}
+                        {hiddenCatCount > 0 && (
+                            <button type="button" className="ann2-chip more" onClick={() => setShowAllCats(true)}>+{hiddenCatCount} more</button>
+                        )}
+                        {showAllCats && catCounts.length > VISIBLE_CATS && (
+                            <button type="button" className="ann2-chip more" onClick={() => setShowAllCats(false)}>Show fewer</button>
                         )}
                     </div>
                 )}
+                {announcements.length > 0 && (
+                    <div className="ann2-result-note">
+                        <span>Showing <strong style={{ color: T.text }}>{displayed.length}</strong> of <strong style={{ color: T.text }}>{filtered.length}</strong> filings{(query || catFilter !== "all") ? " (filtered)" : ""}</span>
+                        <span>Source: BSE / NSE corporate filings</span>
+                    </div>
+                )}
             </div>
 
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            {/* Loading */}
+            {loading && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }} aria-busy="true">
+                    {[0, 1, 2, 3, 4].map(i => <div key={i} className="ann2-skel" style={{ opacity: 1 - i * 0.14 }} />)}
+                </div>
+            )}
+
+            {/* Error */}
+            {!loading && error && (
+                <div className="ann2-error" role="alert">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>{error}</span>
+                </div>
+            )}
+
+            {/* No matches */}
+            {!loading && !error && filtered.length === 0 && announcements.length > 0 && (
+                <div className="ann2-empty">
+                    <div className="ann2-empty-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>No announcements match your filters</div>
+                    <div style={{ fontSize: 12.5, color: T.subtext, marginTop: 5 }}>Try a different keyword or category.</div>
+                    <button type="button" className="ann2-linkbtn" onClick={() => { setQuery(""); setCatFilter("all"); }}>Clear filters</button>
+                </div>
+            )}
+
+            {/* Timeline grouped by month */}
+            {!loading && !error && displayed.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {groupedDisplayed.map(g => (
+                        <div key={g.key}>
+                            <div className="ann2-month">
+                                <span className="ann2-month-label">{g.label}</span>
+                                <span className="ann2-month-rule" />
+                                <span className="ann2-month-count">{g.items.length} {g.items.length === 1 ? "filing" : "filings"}</span>
+                            </div>
+                            <div className="ann2-group">
+                                {g.items.map((ann, idx) => renderCard(ann, g.start + idx, idx === g.items.length - 1))}
+                            </div>
+                        </div>
+                    ))}
+                    {hasMore && (
+                        <button type="button" className="ann2-loadmore" onClick={() => setPage(p => p + 1)}>
+                            Load more <span style={{ color: T.subtext, fontWeight: 600 }}>({filtered.length - displayed.length} remaining)</span>
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -10388,7 +10436,7 @@ function RatiosTab({ data, sharedTtmCol, T }) {
     });
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+        <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto" }}>
             <div className="fin-subtabs">
                 {ratioTabs.map(tab => (
                     <button
@@ -10402,7 +10450,7 @@ function RatiosTab({ data, sharedTtmCol, T }) {
             </div>
 
             {/* Sub-Tab Content */}
-            <div style={{ flex: 1, overflowY: "auto" }}>
+            <div style={{ flex: "0 0 auto", overflowY: "visible" }}>
                 {ratioSubTab === "margin" && (
                     <MarginRatiosTab
                         enrichedAnn={enrichedAnn}
@@ -14079,6 +14127,7 @@ function FinancialAnalyticsModule({
     hideSidebar = false,
     hideHero = false,
     tabLabelOverrides = null,
+    fillParent = false,
 }) {
     const [query, setQuery] = useState("");
     const [loading, setLoading] = useState(false);
@@ -15315,7 +15364,6 @@ function FinancialAnalyticsModule({
         { id: "cashflow", label: "Cash Flow", kicker: "Liquidity", meta: "Operating cash generation and reinvestment quality." },
         { id: "ratios", label: "Ratios", kicker: "Diagnostics", meta: "Margins, returns, valuation and forensic checks." },
         { id: "shareholding", label: "Shareholding", kicker: "Ownership", meta: "Promoter, FII and DII positioning across periods." },
-        { id: "p2p", label: "Peer Analysis", kicker: "Relative Value", meta: "Side-by-side quality and valuation benchmarking." },
         { id: "documents", label: "Announcements", kicker: "Filings", meta: "Corporate updates, presentations and disclosures." },
     ];
     const visibleTabs = useMemo(() => {
@@ -15330,12 +15378,23 @@ function FinancialAnalyticsModule({
         if (!visibleTabs.some(t => t.id === activeTab)) setActiveTab(visibleTabs[0].id);
     }, [visibleTabs, activeTab]);
     const activeTabMeta = visibleTabs.find(t => t.id === activeTab) || visibleTabs[0] || TABS[0];
+    // Keyboard scrolling targets the focused element's scroller. After a search the focus sits in the
+    // search box/button (outside the scroll area), so hand it to the content pane once results load or the tab changes.
+    const contentRef = useRef(null);
+    useEffect(() => {
+        if (!data || loading || !contentRef.current) return;
+        contentRef.current.focus({ preventScroll: true });
+    }, [activeTab, data?._sym, loading]);
 
     return (
         <div
             className="fin-outer"
             onClick={() => setShowSugg(false)}
-            style={embedded ? { height: "auto", minHeight: 0, overflow: "visible", background: "transparent" } : undefined}
+            style={embedded
+                ? { height: "auto", minHeight: 0, overflow: "visible", background: "transparent" }
+                : fillParent
+                    ? { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, height: "auto", overflow: "hidden" }
+                    : undefined}
         >
             {!embedded && (
                 <div className="fin-topbar" onClick={e => e.stopPropagation()}>
@@ -15407,25 +15466,28 @@ function FinancialAnalyticsModule({
                     ? { display: "block", overflow: "visible", minHeight: "unset" }
                     : hideSidebar
                         ? { display: "block" }
-                        : undefined}
+                        : { minHeight: 0, overflow: "hidden" }}
             >
                 {!hideSidebar && (
-                    <div className="fin-sidebar">
+                    <div className="fin-sidebar" style={{ overflowY: "auto", minHeight: 0 }}>
                         {data && !loading ? <SidebarContent /> : (
-                            <div style={{ padding: "52px 20px", textAlign: "center", color: T.muted, fontSize: 13, lineHeight: 2 }}>
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 14px", display: "block", opacity: .4 }}><rect x="2" y="3" width="5" height="18" /><rect x="9.5" y="8" width="5" height="13" /><rect x="17" y="13" width="5" height="8" /></svg>
-                                Search for any<br />Indian stock<br />to see fundamentals
+                            <div style={{ padding: "56px 24px", textAlign: "center", color: T.subtext, fontSize: 12.5, lineHeight: 1.7 }}>
+                                <div className="fin-empty-icon" style={{ width: 44, height: 44, borderRadius: 12, marginBottom: 14 }}>
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="5" height="18" /><rect x="9.5" y="8" width="5" height="13" /><rect x="17" y="13" width="5" height="8" /></svg>
+                                </div>
+                                <div style={{ fontWeight: 700, color: T.text, marginBottom: 4 }}>Company snapshot</div>
+                                Search any Indian stock to see price, key ratios and filings here.
                             </div>
                         )}
                     </div>
                 )}
                 <div
                     className="fin-content"
+                    ref={contentRef}
+                    tabIndex={-1}
                     style={embedded
                         ? { width: "100%", overflow: "visible", height: "auto", minHeight: 0 }
-                        : hideSidebar
-                            ? { width: "100%" }
-                            : undefined}
+                        : { ...(hideSidebar ? { width: "100%" } : null), minHeight: 0, overflowY: "scroll", overflowX: "hidden" }}
                 >
                     {data && !loading && (
                         <div className="fin-content-tabs">
@@ -15448,14 +15510,13 @@ function FinancialAnalyticsModule({
                                         <div className="fin-tab-hero-kicker">{activeTabMeta.kicker} Workspace</div>
                                         <div className="fin-tab-hero-title">{activeTabMeta.label}</div>
                                         <div className="fin-tab-hero-subtitle">
-                                            {data.name || data._sym} across institutional-grade historical periods, optimized for both desktop review and mobile scanning.
+                                            {activeTabMeta.meta}
                                         </div>
                                     </div>
                                     <div className="fin-tab-hero-chips">
                                         <span className="fin-tab-chip primary">{data._sym}</span>
                                         <span className="fin-tab-chip">{data.sector || "Indian Equities"}</span>
                                         <span className="fin-tab-chip">{data.stmtType === "s" ? "Standalone" : "Consolidated"}</span>
-                                        <span className="fin-tab-chip">{activeTabMeta.meta}</span>
                                     </div>
                                 </div>
                             )}
@@ -15464,14 +15525,15 @@ function FinancialAnalyticsModule({
                             {activeTab === "cashflow" && <CashFlowTab data={data} T={T} />}
                             {activeTab === "ratios" && <RatiosTab data={data} sharedTtmCol={sharedTtmCol} T={T} />}
                             {activeTab === "shareholding" && <ShareholdingTab sym={data?._sym} T={T} />}
-                            {activeTab === "p2p" && <P2PTab currentData={data} sidebarRatiosRef={sidebarRatiosRef} T={T} />}
                             {activeTab === "documents" && <CompanyAnnouncementsTab nseCode={data?.nse_code || null} bseCode={data?.bse_code ? String(data.bse_code) : null} sym={data?._sym} T={T} />}
                         </>)}
                         {!data && !loading && !error && (
-                            <div className="fin-empty" style={{ paddingTop: 80 }}>
-                                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 20px", display: "block", opacity: .2 }}><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>
-                                <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 8, fontFamily: "inherit" }}>Search any Indian stock</div>
-                                <div style={{ fontSize: 13, color: T.subtext, fontFamily: "inherit" }}>{searchHistory.length > 0 ? "Click a recent ticker above or type any NSE/BSE ticker or company name." : "Type any NSE/BSE ticker or company name to view fundamentals."}</div>
+                            <div className="fin-empty-card">
+                                <div className="fin-empty-icon">
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>
+                                </div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 8, letterSpacing: "-.02em", fontFamily: "inherit" }}>Search any Indian stock</div>
+                                <div style={{ fontSize: 13, lineHeight: 1.6, color: T.subtext, fontFamily: "inherit" }}>{searchHistory.length > 0 ? "Pick a recent ticker above, or type any NSE/BSE ticker or company name." : "Type any NSE/BSE ticker or company name to view financial statements, ratios, shareholding and filings."}</div>
                             </div>
                         )}
                     </div>
@@ -20755,6 +20817,416 @@ const STATUS_META = {
 };
 const STATUS_ORDER = { LEADING: 0, IMPROVING: 1, WEAKENING: 2, LAGGING: 3 };
 
+// ============================================================================
+//  RRG PREMIUM RENDERER  pure helpers (no React). Used by SectorRotationModule.
+// ============================================================================
+const _RRG_PAD = { top: 20, right: 28, bottom: 44, left: 54 };
+
+function _rrgPalette(isDark) {
+    return isDark ? {
+        surface0: "#0a1020", surface1: "#0e1628",
+        grid: "rgba(148,163,184,0.07)", gridMajor: "rgba(148,163,184,0.12)",
+        axis: "rgba(203,213,225,0.55)",
+        tick: "rgba(148,163,184,0.85)", caption: "rgba(203,213,225,0.78)",
+        ring: "#0a1020", labelBg: "rgba(10,16,32,0.82)", labelText: "rgba(241,245,249,0.96)",
+        labelTextDim: "rgba(203,213,225,0.70)",
+        quad: {
+            LEADING: { fill: [34, 197, 94], text: "#4ade80", sub: "rgba(134,239,172,0.7)" },
+            IMPROVING: { fill: [234, 179, 8], text: "#facc15", sub: "rgba(253,224,71,0.7)" },
+            WEAKENING: { fill: [249, 115, 22], text: "#fb923c", sub: "rgba(253,186,116,0.7)" },
+            LAGGING: { fill: [239, 68, 68], text: "#f87171", sub: "rgba(252,165,165,0.7)" },
+        },
+        quadAlphaIn: 0.015, quadAlphaOut: 0.17,
+        dot: { LEADING: "#22c55e", IMPROVING: "#eab308", WEAKENING: "#f97316", LAGGING: "#ef4444" },
+        shadow: "rgba(0,0,0,0.55)",
+    } : {
+        surface0: "#ffffff", surface1: "#f8fafc",
+        grid: "rgba(15,23,42,0.055)", gridMajor: "rgba(15,23,42,0.10)",
+        axis: "rgba(15,23,42,0.50)",
+        tick: "rgba(51,65,85,0.85)", caption: "rgba(30,41,59,0.78)",
+        ring: "#ffffff", labelBg: "rgba(255,255,255,0.92)", labelText: "rgba(15,23,42,0.96)",
+        labelTextDim: "rgba(51,65,85,0.78)",
+        quad: {
+            LEADING: { fill: [22, 163, 74], text: "#15803d", sub: "rgba(21,128,61,0.72)" },
+            IMPROVING: { fill: [202, 138, 4], text: "#a16207", sub: "rgba(161,98,7,0.72)" },
+            WEAKENING: { fill: [234, 88, 12], text: "#c2410c", sub: "rgba(194,65,12,0.72)" },
+            LAGGING: { fill: [220, 38, 38], text: "#b91c1c", sub: "rgba(185,28,28,0.72)" },
+        },
+        quadAlphaIn: 0.012, quadAlphaOut: 0.13,
+        dot: { LEADING: "#16a34a", IMPROVING: "#d97706", WEAKENING: "#ea580c", LAGGING: "#dc2626" },
+        shadow: "rgba(15,23,42,0.28)",
+    };
+}
+
+// "Nice" ticks (1 / 2 / 2.5 / 5 x 10^n) covering [lo, hi]
+function _rrgNiceTicks(lo, hi, target) {
+    const span = hi - lo;
+    if (!(span > 0) || !isFinite(span)) return [];
+    const raw = span / Math.max(2, target);
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw / mag;
+    const step = (norm < 1.5 ? 1 : norm < 3.2 ? 2 : norm < 7 ? 5 : 10) * mag;
+    const out = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-6; v += step) {
+        out.push(Math.abs(v) < step * 1e-6 ? 0 : +v.toFixed(10));
+    }
+    return out;
+}
+
+// Spread scale: asinh keeps 0 fixed + monotonic, but un-squashes the crowded core when one
+// outlier (eg. Media +14%) would otherwise flatten every other sector into a corner.
+function _rrgTf(mode, k) {
+    return mode === "spread"
+        ? { f: v => Math.asinh(v / k), inv: u => k * Math.sinh(u) }
+        : { f: v => v, inv: u => u };
+}
+
+function _rrgMedianAbs(arr, floor) {
+    if (!arr.length) return floor;
+    const s = arr.map(Math.abs).sort((a, b) => a - b);
+    return Math.max(floor, s[Math.floor(s.length / 2)] || floor);
+}
+
+/**
+ * Build projection for the current data + view.
+ * view = { z: zoom (>=1), cx, cy: centre in TRANSFORMED space (0 = origin) }
+ */
+function _rrgBuildProjection({ items, trails, W, H, scaleMode, view }) {
+    const PAD = _RRG_PAD;
+    const pw = Math.max(10, W - PAD.left - PAD.right);
+    const ph = Math.max(10, H - PAD.top - PAD.bottom);
+    const xs = [], ys = [];
+    items.forEach(d => {
+        if (isFinite(d.rs_spread)) xs.push(d.rs_spread);
+        if (isFinite(d.momentum)) ys.push(d.momentum);
+    });
+    const kx = _rrgMedianAbs(xs, 0.004), ky = _rrgMedianAbs(ys, 0.6);
+    const tx = _rrgTf(scaleMode, kx), ty = _rrgTf(scaleMode, ky);
+    // Fit on current dots (+ trail heads), not on every trail vertex  so tails never shrink the view
+    let hx = 0, hy = 0;
+    items.forEach(d => {
+        if (isFinite(d.rs_spread)) hx = Math.max(hx, Math.abs(tx.f(d.rs_spread)));
+        if (isFinite(d.momentum)) hy = Math.max(hy, Math.abs(ty.f(d.momentum)));
+        (trails[d.sector] || []).slice(-8).forEach(p => {
+            if (isFinite(p.x)) hx = Math.max(hx, Math.abs(tx.f(p.x)) * 0.92);
+            if (isFinite(p.y)) hy = Math.max(hy, Math.abs(ty.f(p.y)) * 0.92);
+        });
+    });
+    hx = Math.max(hx * 1.18, tx.f(0.02)); hy = Math.max(hy * 1.18, ty.f(2));
+    const z = Math.max(1, view.z || 1);
+    const cxT = view.cx || 0, cyT = view.cy || 0;
+    const uxMin = cxT - hx / z, uxMax = cxT + hx / z;
+    const uyMin = cyT - hy / z, uyMax = cyT + hy / z;
+    const toX = v => PAD.left + ((tx.f(v) - uxMin) / (uxMax - uxMin)) * pw;
+    const toY = v => PAD.top + ((uyMax - ty.f(v)) / (uyMax - uyMin)) * ph;
+    const dataXMin = tx.inv(uxMin), dataXMax = tx.inv(uxMax);
+    const dataYMin = ty.inv(uyMin), dataYMax = ty.inv(uyMax);
+    const xTicks = _rrgNiceTicks(dataXMin, dataXMax, Math.max(4, Math.round(pw / 110)));
+    const yTicks = _rrgNiceTicks(dataYMin, dataYMax, Math.max(4, Math.round(ph / 80)));
+    return {
+        PAD, pw, ph, W, H, toX, toY, tx, ty, hx, hy, z, uxMin, uxMax, uyMin, uyMax,
+        cx: toX(0), cy: toY(0), xTicks, yTicks, scaleMode,
+        // px  transformed units (for pan)
+        pxToUx: (uxMax - uxMin) / pw, pxToUy: (uyMax - uyMin) / ph,
+    };
+}
+
+// decimals chosen once per axis so every tick reads the same (no "-5.0%" beside "-10%")
+function _rrgDecimals(ticks, scale) {
+    for (let d = 0; d <= 3; d++) {
+        if (ticks.every(t => Math.abs(t * scale - Number((t * scale).toFixed(d))) < 1e-9)) return d;
+    }
+    return 3;
+}
+function _rrgFmtX(v, dec) { // strength vs market, fraction -> %
+    const p = v * 100;
+    return (p > 0 ? "+" : p < 0 ? "\u2212" : "") + Math.abs(p).toFixed(dec == null ? 1 : dec) + "%";
+}
+function _rrgFmtY(v, dec) {
+    return (v > 0 ? "+" : v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(dec == null ? 1 : dec) + "%";
+}
+
+function _rrgRoundRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+}
+
+function _rrgBubbleRadius(d, st) {
+    if (st.focus === d.sector || st.hover === d.sector) return 11;
+    return st.top3.includes(d.sector) ? 9 : 7;
+}
+
+/** Draws the whole chart. Returns hit targets for label-collision / picking. */
+function _rrgDraw(ctx, p, st) {
+    const { items, trails, isDark, hover, focus, top3, insufficient, showTrails } = st;
+    const C = _rrgPalette(isDark);
+    const { PAD, pw, ph, W, H, toX, toY } = p;
+    const sans = "'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif";
+    const mono = "'IBM Plex Mono', ui-monospace, Menlo, monospace";
+    const plot = { x: PAD.left, y: PAD.top, w: pw, h: ph };
+    const cxp = Math.min(plot.x + plot.w, Math.max(plot.x, p.cx));
+    const cyp = Math.min(plot.y + plot.h, Math.max(plot.y, p.cy));
+
+    ctx.clearRect(0, 0, W, H);
+
+    //  surface 
+    const bg = ctx.createLinearGradient(0, plot.y, 0, plot.y + plot.h);
+    bg.addColorStop(0, C.surface0); bg.addColorStop(1, C.surface1);
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    //  quadrant washes (strongest at the outer corner, fade toward the origin) 
+    ctx.save();
+    ctx.beginPath(); ctx.rect(plot.x, plot.y, plot.w, plot.h); ctx.clip();
+    const quads = [
+        { k: "LEADING", x0: cxp, y0: plot.y, x1: plot.x + plot.w, y1: cyp, from: [cxp, cyp], to: [plot.x + plot.w, plot.y] },
+        { k: "WEAKENING", x0: cxp, y0: cyp, x1: plot.x + plot.w, y1: plot.y + plot.h, from: [cxp, cyp], to: [plot.x + plot.w, plot.y + plot.h] },
+        { k: "LAGGING", x0: plot.x, y0: cyp, x1: cxp, y1: plot.y + plot.h, from: [cxp, cyp], to: [plot.x, plot.y + plot.h] },
+        { k: "IMPROVING", x0: plot.x, y0: plot.y, x1: cxp, y1: cyp, from: [cxp, cyp], to: [plot.x, plot.y] },
+    ];
+    quads.forEach(q => {
+        const w = q.x1 - q.x0, h = q.y1 - q.y0;
+        if (w <= 0 || h <= 0) return;
+        const [r, g, b] = C.quad[q.k].fill;
+        const gr = ctx.createLinearGradient(q.from[0], q.from[1], q.to[0], q.to[1]);
+        gr.addColorStop(0, `rgba(${r},${g},${b},${C.quadAlphaIn})`);
+        gr.addColorStop(1, `rgba(${r},${g},${b},${C.quadAlphaOut})`);
+        ctx.fillStyle = gr; ctx.fillRect(q.x0, q.y0, w, h);
+    });
+
+    //  grid 
+    ctx.lineWidth = 1;
+    p.xTicks.forEach(v => {
+        const x = Math.round(toX(v)) + 0.5;
+        if (x < plot.x || x > plot.x + plot.w) return;
+        ctx.strokeStyle = v === 0 ? "transparent" : C.grid;
+        ctx.beginPath(); ctx.moveTo(x, plot.y); ctx.lineTo(x, plot.y + plot.h); ctx.stroke();
+    });
+    p.yTicks.forEach(v => {
+        const y = Math.round(toY(v)) + 0.5;
+        if (y < plot.y || y > plot.y + plot.h) return;
+        ctx.strokeStyle = v === 0 ? "transparent" : C.grid;
+        ctx.beginPath(); ctx.moveTo(plot.x, y); ctx.lineTo(plot.x + plot.w, y); ctx.stroke();
+    });
+    ctx.restore();
+
+    //  quadrant titles (big, high-contrast, with a one-line plain meaning) 
+    const qTitle = (txt, sub, key, x, y, align) => {
+        ctx.save();
+        ctx.textAlign = align;
+        ctx.textBaseline = "alphabetic";
+        ctx.font = `800 13px ${sans}`;
+        ctx.fillStyle = C.quad[key].text; ctx.globalAlpha = 0.95;
+        ctx.fillText(txt, x, y);
+        ctx.font = `500 11px ${sans}`;
+        ctx.fillStyle = C.quad[key].sub; ctx.globalAlpha = 1;
+        ctx.fillText(sub, x, y + 15);
+        ctx.restore();
+    };
+    // only title a quadrant while enough of it is on screen (zoomed views may show just one)
+    const tp = plot.y + 20, bp = plot.y + plot.h - 24;
+    const rightW = plot.x + plot.w - cxp, leftW = cxp - plot.x, topH = cyp - plot.y, botH = plot.y + plot.h - cyp;
+    const vis = (w, h) => w > 120 && h > 60;
+    if (vis(rightW, topH)) qTitle("LEADING", "Strong & rising", "LEADING", plot.x + plot.w - 14, tp, "right");
+    if (vis(leftW, topH)) qTitle("IMPROVING", "Weak but gaining", "IMPROVING", plot.x + 14, tp, "left");
+    if (vis(rightW, botH)) qTitle("WEAKENING", "Strong but fading", "WEAKENING", plot.x + plot.w - 14, bp, "right");
+    if (vis(leftW, botH)) qTitle("LAGGING", "Weak & falling", "LAGGING", plot.x + 14, bp, "left");
+
+    //  centre axes (solid, clearly visible) 
+    ctx.save();
+    ctx.beginPath(); ctx.rect(plot.x, plot.y, plot.w, plot.h); ctx.clip();
+    ctx.strokeStyle = C.axis; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(Math.round(p.cx) + 0.5, plot.y); ctx.lineTo(Math.round(p.cx) + 0.5, plot.y + plot.h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(plot.x, Math.round(p.cy) + 0.5); ctx.lineTo(plot.x + plot.w, Math.round(p.cy) + 0.5); ctx.stroke();
+    ctx.restore();
+
+    //  plot frame 
+    ctx.strokeStyle = C.gridMajor; ctx.lineWidth = 1;
+    ctx.strokeRect(plot.x + 0.5, plot.y + 0.5, plot.w - 1, plot.h - 1);
+
+    //  tick labels 
+    const decX = _rrgDecimals(p.xTicks, 100), decY = _rrgDecimals(p.yTicks, 1);
+    ctx.font = `500 10.5px ${mono}`; ctx.fillStyle = C.tick;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    p.xTicks.forEach(v => {
+        const x = toX(v);
+        if (x < plot.x + 14 || x > plot.x + plot.w - 14) return;
+        ctx.fillText(v === 0 ? "0" : _rrgFmtX(v, decX), x, plot.y + plot.h + 7);
+    });
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    p.yTicks.forEach(v => {
+        const y = toY(v);
+        if (y < plot.y + 8 || y > plot.y + plot.h - 8) return;
+        ctx.fillText(v === 0 ? "0" : _rrgFmtY(v, decY), plot.x - 8, y);
+    });
+
+    //  axis captions 
+    ctx.font = `600 11px ${sans}`; ctx.fillStyle = C.caption;
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.fillText("\u2190 Weaker      Strength vs market      Stronger \u2192", plot.x + plot.w / 2, H - 8);
+    ctx.save(); ctx.translate(13, plot.y + plot.h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText("\u2190 Slowing      Speed of move      Speeding up \u2192", 0, 0); ctx.restore();
+
+    //  data layer, clipped to the plot 
+    ctx.save();
+    ctx.beginPath(); ctx.rect(plot.x, plot.y, plot.w, plot.h); ctx.clip();
+
+    const spot = focus || hover;
+    const dotCol = d => C.dot[d.quadrant] || C.dot.LAGGING;
+    const order = [...items].sort((a, b) => {
+        const pa = (a.sector === focus ? 3 : a.sector === hover ? 2 : top3.includes(a.sector) ? 1 : 0);
+        const pb = (b.sector === focus ? 3 : b.sector === hover ? 2 : top3.includes(b.sector) ? 1 : 0);
+        return pa - pb;
+    });
+
+    //  trails 
+    if (showTrails) order.forEach(d => {
+        const isSpot = d.sector === spot;
+        const all = (trails[d.sector] || []).filter(q => isFinite(q.x) && isFinite(q.y));
+        const pts = isSpot ? all : all.slice(-10);
+        if (pts.length < 2) return;
+        const col = dotCol(d);
+        const dim = spot && !isSpot;
+        const none = !!insufficient[d.sector];
+        const base = none ? 0.12 : dim ? 0.16 : isSpot ? 1 : 0.62;
+        ctx.save();
+        ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = col;
+        for (let i = 1; i < pts.length; i++) {
+            const t = i / (pts.length - 1);
+            ctx.globalAlpha = base * (0.18 + 0.82 * t);
+            ctx.lineWidth = (isSpot ? 1.4 : 1.1) + t * (isSpot ? 2.2 : 1.6);
+            ctx.beginPath();
+            ctx.moveTo(toX(pts[i - 1].x), toY(pts[i - 1].y));
+            ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
+            ctx.stroke();
+        }
+        if (isSpot) { // breadcrumb dots + start date
+            ctx.globalAlpha = 0.95; ctx.fillStyle = C.ring;
+            pts.forEach((q, i) => {
+                if (i === pts.length - 1) return;
+                ctx.beginPath(); ctx.arc(toX(q.x), toY(q.y), 2.6, 0, Math.PI * 2);
+                ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = col; ctx.stroke();
+            });
+            const s = pts[0];
+            if (s.date) {
+                ctx.globalAlpha = 0.9; ctx.fillStyle = C.labelTextDim;
+                ctx.font = `500 10px ${mono}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+                ctx.fillText(String(s.date).slice(5), toX(s.x), toY(s.y) - 7);
+            }
+        }
+        ctx.restore();
+    });
+
+    //  bubbles + direction arrowheads 
+    const placed = [ // label collision boxes  seeded with the four quadrant titles
+        { x: plot.x + plot.w - 130, y: plot.y + 4, w: 126, h: 40 }, { x: plot.x + 4, y: plot.y + 4, w: 126, h: 40 },
+        { x: plot.x + plot.w - 130, y: plot.y + plot.h - 44, w: 126, h: 40 }, { x: plot.x + 4, y: plot.y + plot.h - 44, w: 126, h: 40 },
+    ];
+    const dots = order.map(d => {
+        const r = _rrgBubbleRadius(d, st);
+        return { d, r, x: toX(d.rs_spread), y: toY(d.momentum) };
+    }).filter(o => isFinite(o.x) && isFinite(o.y));
+
+    dots.forEach(o => {
+        const { d, r, x, y } = o;
+        const col = dotCol(d);
+        const isSpot = d.sector === spot;
+        const dim = spot && !isSpot;
+        const none = !!insufficient[d.sector];
+        const alpha = none ? 0.28 : dim ? 0.38 : 1;
+
+        // direction arrowhead, just outside the bubble, pointing the way it is travelling
+        const tr = (trails[d.sector] || []).filter(q => isFinite(q.x) && isFinite(q.y));
+        if (showTrails && tr.length >= 2) {
+            const a = tr[tr.length - 2], b = tr[tr.length - 1];
+            const ang = Math.atan2(toY(b.y) - toY(a.y), toX(b.x) - toX(a.x));
+            if (isFinite(ang) && Math.hypot(toX(b.x) - toX(a.x), toY(b.y) - toY(a.y)) > 1.5) {
+                const ax = x + Math.cos(ang) * (r + 7), ay = y + Math.sin(ang) * (r + 7);
+                ctx.save(); ctx.globalAlpha = alpha * 0.95; ctx.fillStyle = col;
+                ctx.translate(ax, ay); ctx.rotate(ang);
+                ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-4, -4.2); ctx.lineTo(-1.5, 0); ctx.lineTo(-4, 4.2); ctx.closePath();
+                ctx.fill(); ctx.restore();
+            }
+        }
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (isSpot) { // halo
+            ctx.beginPath(); ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+            ctx.fillStyle = col; ctx.globalAlpha = 0.16; ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y, r + 4.5, 0, Math.PI * 2);
+            ctx.globalAlpha = 0.22; ctx.fill();
+            ctx.globalAlpha = alpha;
+        }
+        ctx.shadowColor = C.shadow; ctx.shadowBlur = isSpot ? 14 : 7; ctx.shadowOffsetY = 2;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+        const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+        g.addColorStop(0, "rgba(255,255,255,0.55)"); g.addColorStop(0.35, col); g.addColorStop(1, col);
+        ctx.fillStyle = col; ctx.fill();
+        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        ctx.fillStyle = g; ctx.fill();
+        ctx.lineWidth = isSpot ? 3 : 2.2; ctx.strokeStyle = C.ring; ctx.stroke();
+        ctx.restore();
+        placed.push({ x: x - r - 2, y: y - r - 2, w: (r + 2) * 2, h: (r + 2) * 2 }); // dots block labels
+    });
+
+    //  labels: every sector, greedy collision avoidance, priority = spotlight  top3  distance from origin 
+    ctx.font = `600 11.5px ${sans}`;
+    const prio = o => (o.d.sector === focus ? 1e9 : o.d.sector === hover ? 9e8 : top3.includes(o.d.sector) ? 5e8 : 0)
+        + Math.hypot(o.x - p.cx, o.y - p.cy);
+    const overlaps = (a, b) => !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+    [...dots].sort((a, b) => prio(b) - prio(a)).forEach(o => {
+        const { d, r, x, y } = o;
+        const isSpot = d.sector === spot;
+        const forced = d.sector === focus || d.sector === hover;
+        ctx.font = `${isSpot ? 700 : 600} ${isSpot ? 12.5 : 11.5}px ${sans}`;
+        const tw = ctx.measureText(d.label).width;
+        const bw = tw + 12, bh = 19, gap = r + 5;
+        const cands = [
+            [x - bw / 2, y - gap - bh], [x + gap, y - bh / 2], [x - gap - bw, y - bh / 2], [x - bw / 2, y + gap],
+            [x + gap * 0.75, y - gap * 0.75 - bh], [x - gap * 0.75 - bw, y - gap * 0.75 - bh],
+            [x + gap * 0.75, y + gap * 0.75], [x - gap * 0.75 - bw, y + gap * 0.75],
+        ];
+        let pick = null;
+        for (const [bx, by] of cands) {
+            const box = { x: bx, y: by, w: bw, h: bh };
+            if (bx < plot.x + 2 || by < plot.y + 2 || bx + bw > plot.x + plot.w - 2 || by + bh > plot.y + plot.h - 2) continue;
+            if (placed.some(pb => overlaps(box, pb))) continue;
+            pick = box; break;
+        }
+        if (!pick && forced) pick = { x: Math.min(Math.max(plot.x + 2, cands[0][0]), plot.x + plot.w - bw - 2), y: Math.max(plot.y + 2, cands[0][1]), w: bw, h: bh };
+        if (!pick) return;
+        placed.push({ x: pick.x - 1, y: pick.y - 1, w: pick.w + 2, h: pick.h + 2 });
+        const dim = spot && !isSpot;
+        ctx.save();
+        ctx.globalAlpha = dim ? 0.5 : 1;
+        _rrgRoundRect(ctx, pick.x, pick.y, pick.w, pick.h, 9);
+        ctx.fillStyle = C.labelBg; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = isSpot ? dotCol(d) : (isDark ? "rgba(148,163,184,0.22)" : "rgba(15,23,42,0.12)"); ctx.stroke();
+        ctx.fillStyle = C.labelText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(d.label, pick.x + pick.w / 2, pick.y + pick.h / 2 + 0.5);
+        ctx.restore();
+    });
+    ctx.restore();
+    return { dots };
+}
+
+function _rrgHit(p, items, st, mx, my) {
+    let best = null, bd = 1e9;
+    items.forEach(d => {
+        if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) return;
+        const r = _rrgBubbleRadius(d, st) + 6;
+        const dist = Math.hypot(mx - p.toX(d.rs_spread), my - p.toY(d.momentum));
+        if (dist <= r && dist < bd) { best = d.sector; bd = dist; }
+    });
+    return best;
+}
+
 /* ============================================================================
  * SectorRotationModule  simplified
  * ----------------------------------------------------------------------------
@@ -20783,6 +21255,39 @@ function SectorRotationModule({ T }) {
     const [lastDate, setLastDate] = useState(null);
     const [timeframe, setTimeframe] = useState("3M");
     const canvasRef = useRef(null);
+    const [scaleMode, setScaleMode] = useState("spread"); // "spread" (asinh, un-squashes outliers) | "linear"
+    const [showTrails, setShowTrails] = useState(true);
+    const [view, setView] = useState({ z: 1, cx: 0, cy: 0 }); // zoom + pan (centre in transformed space)
+    const [size, setSize] = useState({ w: 0, h: 0 });
+    const wrapRef = useRef(null);
+    const roRef = useRef(null);
+    const wheelCleanupRef = useRef(null);
+    const dragRef = useRef(null);
+    const stateRef = useRef({});
+    // Callback ref: the chart wrapper only exists after loading finishes, so observe it when it mounts.
+    const setWrapNode = useCallback((node) => {
+        if (roRef.current) { roRef.current.disconnect(); roRef.current = null; }
+        if (wheelCleanupRef.current) { wheelCleanupRef.current(); wheelCleanupRef.current = null; }
+        wrapRef.current = node;
+        if (!node) return;
+        const measure = () => setSize(s => {
+            const w = Math.round(node.clientWidth), h = Math.round(node.clientHeight);
+            return s.w === w && s.h === h ? s : { w, h };
+        });
+        measure();
+        if (typeof ResizeObserver !== "undefined") { roRef.current = new ResizeObserver(measure); roRef.current.observe(node); }
+        else window.addEventListener("resize", measure);
+        // non-passive wheel listener so the page doesn't scroll while zooming the chart
+        const onWheel = (e) => {
+            const s = stateRef.current;
+            if (!s.proj || !s.zoomAt) return;
+            e.preventDefault();
+            const r = node.getBoundingClientRect();
+            s.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0018));
+        };
+        node.addEventListener("wheel", onWheel, { passive: false });
+        wheelCleanupRef.current = () => { node.removeEventListener("wheel", onWheel); if (!roRef.current) window.removeEventListener("resize", measure); };
+    }, []);
     const rawHistRef = useRef(null); // { sector: [{date, rs}] }  raw RS ratios, full history
     const [insufficientSectors, setInsufficientSectors] = useState({}); // { sector: true } for sectors excluded from current tf
 
@@ -21034,220 +21539,83 @@ function SectorRotationModule({ T }) {
         [...snapshot].sort((a, b) => (b._rank ?? 0) - (a._rank ?? 0)).slice(0, 3).map(d => d.sector),
         [snapshot]);
 
-    //  RRG Canvas  simplified: no numeric ticks, no dead-zone ring, no signal dots 
+    //  Premium RRG renderer: projection (scale + zoom/pan) is memoised and shared by draw, hit-test and tooltip 
+    const proj = useMemo(() => {
+        if (size.w < 60 || size.h < 60) return null;
+        return _rrgBuildProjection({ items: filtered, trails, W: size.w, H: size.h, scaleMode, view });
+    }, [filtered, trails, size, scaleMode, view]);
+
+    // Zoom / pan reset whenever the data set or the scale changes
+    useEffect(() => { setView({ z: 1, cx: 0, cy: 0 }); }, [timeframe, statusFilter, scaleMode]);
+
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas || !filtered.length) return;
+        if (!canvas || !proj) return;
         const dpr = window.devicePixelRatio || 1;
-        const W = canvas.clientWidth || canvas.offsetWidth || 520;
-        const H_c = canvas.clientHeight || canvas.offsetHeight || 420;
-        if (W < 10 || H_c < 10) return;
-        canvas.width = W * dpr; canvas.height = H_c * dpr;
+        canvas.width = Math.round(size.w * dpr);
+        canvas.height = Math.round(size.h * dpr);
         const ctx = canvas.getContext("2d");
-        ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, W, H_c);
-
-        const PAD = { top: 28, right: 24, bottom: 40, left: 24 };
-        const pw = W - PAD.left - PAD.right;
-        const ph = H_c - PAD.top - PAD.bottom;
-
-        const allX = [], allY = [];
-        filtered.forEach(d => {
-            if (isFinite(d.rs_spread)) allX.push(d.rs_spread);
-            if (isFinite(d.momentum)) allY.push(d.momentum);
-            const t = trails[d.sector] || [];
-            t.forEach(p => { if (isFinite(p.x)) allX.push(p.x); if (isFinite(p.y)) allY.push(p.y); });
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        _rrgDraw(ctx, proj, {
+            items: filtered, trails, isDark, hover: hoveredSector, focus: focusSector,
+            top3: top3Sectors, insufficient: insufficientSectors, showTrails,
         });
-        const xMid = 0, yMid = 0;
-        const xSpread = allX.length ? Math.max(0.02, Math.max(...allX.map(v => Math.abs(v - xMid))) * 1.35) : 0.1;
-        const ySpread = allY.length ? Math.max(2, Math.max(...allY.map(v => Math.abs(v - yMid))) * 1.35) : 5;
-        const xMin = xMid - xSpread, xMax = xMid + xSpread;
-        const yMin = yMid - ySpread, yMax = yMid + ySpread;
+    }, [proj, filtered, trails, isDark, hoveredSector, focusSector, top3Sectors, insufficientSectors, showTrails, size]);
 
-        const toX = v => PAD.left + ((v - xMin) / (xMax - xMin)) * pw;
-        const toY = v => PAD.top + ((yMax - v) / (yMax - yMin)) * ph;
+    //  Zoom (wheel / buttons), pan (drag), hover + click-to-lock 
+    function zoomAt(mx, my, factor) {
+        if (!proj) return;
+        const nz = Math.min(12, Math.max(1, view.z * factor));
+        if (nz === view.z) return;
+        if (nz <= 1.001) { setView({ z: 1, cx: 0, cy: 0 }); return; }
+        const fx = (mx - proj.PAD.left) / proj.pw, fy = (my - proj.PAD.top) / proj.ph;
+        const ux = proj.uxMin + (mx - proj.PAD.left) * proj.pxToUx;
+        const uy = proj.uyMax - (my - proj.PAD.top) * proj.pxToUy;
+        const ncx = ux - (fx * 2 - 1) * (proj.hx / nz);
+        const ncy = uy + (fy * 2 - 1) * (proj.hy / nz);
+        setView({ z: nz, cx: Math.max(-proj.hx, Math.min(proj.hx, ncx)), cy: Math.max(-proj.hy, Math.min(proj.hy, ncy)) });
+    }
+    stateRef.current = { proj, zoomAt };
+    const resetView = () => setView({ z: 1, cx: 0, cy: 0 });
+    const zoomCentre = (factor) => proj && zoomAt(proj.PAD.left + proj.pw / 2, proj.PAD.top + proj.ph / 2, factor);
 
-        const cx = toX(xMid), cy = toY(yMid);
-        const quadBg = [
-            { x: cx, y: PAD.top, w: PAD.left + pw - cx, h: cy - PAD.top, c: "rgba(34,197,94,0.07)" }, // LEADING
-            { x: cx, y: cy, w: PAD.left + pw - cx, h: PAD.top + ph - cy, c: "rgba(249,115,22,0.07)" }, // WEAKENING
-            { x: PAD.left, y: cy, w: cx - PAD.left, h: PAD.top + ph - cy, c: "rgba(239,68,68,0.07)" }, // LAGGING
-            { x: PAD.left, y: PAD.top, w: cx - PAD.left, h: cy - PAD.top, c: "rgba(234,179,8,0.07)" }, // IMPROVING
-        ];
-        quadBg.forEach(q => { ctx.fillStyle = q.c; ctx.fillRect(q.x, q.y, q.w, q.h); });
-
-        // Center axes only  no grid lines, no numeric ticks (kept intentionally simple)
-        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)";
-        ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-        ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, PAD.top + ph); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(PAD.left + pw, cy); ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Plain-English quadrant labels
-        const qLabels = [
-            { text: "LEADING", x: PAD.left + pw - 6, y: PAD.top + 16, align: "right", col: STATUS_META.LEADING.color },
-            { text: "WEAKENING", x: PAD.left + pw - 6, y: PAD.top + ph - 8, align: "right", col: STATUS_META.WEAKENING.color },
-            { text: "LAGGING", x: PAD.left + 6, y: PAD.top + ph - 8, align: "left", col: STATUS_META.LAGGING.color },
-            { text: "IMPROVING", x: PAD.left + 6, y: PAD.top + 16, align: "left", col: STATUS_META.IMPROVING.color },
-        ];
-        ctx.font = `700 12px 'IBM Plex Sans', sans-serif`;
-        qLabels.forEach(l => {
-            ctx.fillStyle = l.col; ctx.globalAlpha = 0.55;
-            ctx.textAlign = l.align; ctx.fillText(l.text, l.x, l.y);
-        });
-        ctx.globalAlpha = 1;
-
-        // Simple axis captions  no jargon, no numbers
-        ctx.font = `11px 'IBM Plex Sans', sans-serif`;
-        ctx.fillStyle = isDark ? "rgba(255,255,255,0.32)" : "rgba(0,0,0,0.32)";
-        ctx.textAlign = "center";
-        ctx.fillText("Weaker \u2190  Strength vs Market  \u2192 Stronger", PAD.left + pw / 2, PAD.top + ph + 26);
-        ctx.save(); ctx.translate(12, PAD.top + ph / 2);
-        ctx.rotate(-Math.PI / 2); ctx.textAlign = "center";
-        ctx.fillText("Slowing \u2190  Speed of Move  \u2192 Speeding up", 0, 0); ctx.restore();
-
-        //  DRAW TRAILS 
-        filtered.forEach(d => {
-            const pts = (trails[d.sector] || []).filter(p => isFinite(p.x) && isFinite(p.y));
-            if (pts.length < 2) return;
-            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
-            const isHov = hoveredSector === d.sector;
-            const isFocus = focusSector === d.sector;
-            const isOther = focusSector && !isFocus;
-            const notEnoughData = isInsufficient(d);
-            const isTop3Sector = top3Sectors.includes(d.sector);
-            const isFaded = !isHov && !isFocus && !isTop3Sector;
-
-            ctx.save();
-            for (let i = 1; i < pts.length; i++) {
-                let alpha = isHov || isFocus
-                    ? 0.15 + (i / pts.length) * 0.65
-                    : isOther
-                        ? 0.03
-                        : notEnoughData
-                            ? 0.02
-                            : isFaded
-                                ? 0.03 + (i / pts.length) * 0.07
-                                : 0.08 + (i / pts.length) * 0.32;
-                ctx.strokeStyle = qc.color;
-                ctx.globalAlpha = alpha;
-                ctx.lineWidth = isFocus ? 2.5 : isHov ? 2 : 1.2;
-                ctx.beginPath();
-                ctx.moveTo(toX(pts[i - 1].x), toY(pts[i - 1].y));
-                ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
-                ctx.stroke();
+    const _hitState = { focus: focusSector, hover: hoveredSector, top3: top3Sectors };
+    const _pt = (e) => { const r = canvasRef.current.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    function handlePointerDown(e) {
+        if (!proj || (e.pointerType === "mouse" && e.button !== 0)) return;
+        const q = _pt(e);
+        dragRef.current = { sx: q.x, sy: q.y, cx: view.cx, cy: view.cy, moved: false, type: e.pointerType };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { }
+    }
+    function handlePointerMove(e) {
+        if (!proj) return;
+        const q = _pt(e);
+        const dr = dragRef.current;
+        if (dr && dr.type === "mouse") {
+            const dx = q.x - dr.sx, dy = q.y - dr.sy;
+            if (!dr.moved && Math.hypot(dx, dy) > 4) dr.moved = true;
+            if (dr.moved && view.z > 1) {
+                setHoveredSector(null);
+                setView(v => ({
+                    ...v,
+                    cx: Math.max(-proj.hx, Math.min(proj.hx, dr.cx - dx * proj.pxToUx)),
+                    cy: Math.max(-proj.hy, Math.min(proj.hy, dr.cy + dy * proj.pxToUy)),
+                }));
+                return;
             }
-            ctx.restore();
-        });
-
-        //  DRAW DIRECTION VECTOR ARROWS 
-        filtered.forEach(d => {
-            if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) return;
-            const pts = (trails[d.sector] || []).filter(p => isFinite(p.x) && isFinite(p.y));
-            if (pts.length < 2) return;
-            const p1 = pts[pts.length - 2];
-            const p2 = pts[pts.length - 1];
-            const x1 = toX(p1.x), y1 = toY(p1.y);
-            const x2 = toX(p2.x), y2 = toY(p2.y);
-            const dist = Math.hypot(x2 - x1, y2 - y1);
-            if (dist < 2) return;
-            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
-            const isHov = hoveredSector === d.sector;
-            const isFocus = focusSector === d.sector;
-            const isOther = focusSector && !isFocus;
-            const angle = Math.atan2(y2 - y1, x2 - x1);
-            const arrowLen = 8, arrowAngle = Math.PI / 6;
-
-            ctx.save();
-            ctx.strokeStyle = qc.color;
-            ctx.fillStyle = qc.color;
-            ctx.globalAlpha = isOther ? 0.08 : isHov || isFocus ? 0.95 : 0.55;
-            ctx.lineWidth = isFocus ? 2.5 : isHov ? 2 : 1.5;
-
-            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x2, y2);
-            ctx.lineTo(x2 - arrowLen * Math.cos(angle - arrowAngle), y2 - arrowLen * Math.sin(angle - arrowAngle));
-            ctx.lineTo(x2 - arrowLen * Math.cos(angle + arrowAngle), y2 - arrowLen * Math.sin(angle + arrowAngle));
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-        });
-
-        //  DRAW BUBBLES (current position) 
-        filtered.forEach(d => {
-            if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) return;
-            const bx = toX(d.rs_spread), by = toY(d.momentum);
-            const qc = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
-            const isHov = hoveredSector === d.sector;
-            const isFocus = focusSector === d.sector;
-            const isOther = focusSector && !isFocus;
-            const notEnoughData = isInsufficient(d);
-            const isTop3B = top3Sectors.includes(d.sector);
-            const r = isFocus || isHov ? 10 : isTop3B ? 8 : 6;
-            const alpha = isOther ? 0.18 : notEnoughData ? 0.15 : (!isTop3B && !isHov && !isFocus) ? 0.35 : isHov || isFocus ? 1 : 0.88;
-
-            if (isHov || isFocus) { ctx.shadowColor = qc.color; ctx.shadowBlur = 18; }
-            ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
-            ctx.fillStyle = qc.color; ctx.globalAlpha = alpha; ctx.fill();
-            ctx.globalAlpha = 1;
-            ctx.strokeStyle = isDark ? "#0f1117" : "#fff";
-            ctx.lineWidth = isFocus ? 3 : isHov ? 2.5 : 1.5; ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            // Label  show only for top3, hovered, or focused (keeps chart readable at a glance)
-            if (isHov || isFocus || isTop3B) {
-                ctx.font = isFocus || isHov ? `700 13px 'IBM Plex Sans', sans-serif` : `600 12px 'IBM Plex Sans', sans-serif`;
-                ctx.fillStyle = isHov || isFocus
-                    ? (isDark ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.9)")
-                    : (isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)");
-                ctx.textAlign = "center";
-                ctx.fillText(d.label, bx, by - r - 4);
-            }
-        });
-    }, [filtered, trails, hoveredSector, focusSector, isDark, top3Sectors]);
-
-    //  Canvas hover + click 
-    function _getHitSector(e) {
-        const canvas = canvasRef.current;
-        if (!canvas || !filtered.length) return null;
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-        const W = canvas.clientWidth || canvas.offsetWidth || 520;
-        const H_c = canvas.clientHeight || canvas.offsetHeight || 420;
-        const PAD = { top: 28, right: 24, bottom: 40, left: 24 };
-        const pw = W - PAD.left - PAD.right, ph = H_c - PAD.top - PAD.bottom;
-        const allX = [], allY = [];
-        filtered.forEach(d => {
-            if (isFinite(d.rs_spread)) allX.push(d.rs_spread);
-            if (isFinite(d.momentum)) allY.push(d.momentum);
-            (trails[d.sector] || []).forEach(p => { if (isFinite(p.x)) allX.push(p.x); if (isFinite(p.y)) allY.push(p.y); });
-        });
-        const xMid = 0, yMid = 0;
-        const xSpread = allX.length ? Math.max(0.02, Math.max(...allX.map(v => Math.abs(v - xMid))) * 1.35) : 0.1;
-        const ySpread = allY.length ? Math.max(2, Math.max(...allY.map(v => Math.abs(v - yMid))) * 1.35) : 5;
-        const xMin = xMid - xSpread, xMax = xMid + xSpread;
-        const yMin = yMid - ySpread, yMax = yMid + ySpread;
-        const toX = v => PAD.left + ((v - xMin) / (xMax - xMin)) * pw;
-        const toY = v => PAD.top + ((yMax - v) / (yMax - yMin)) * ph;
-        for (const d of filtered) {
-            if (!isFinite(d.rs_spread) || !isFinite(d.momentum)) continue;
-            if (Math.hypot(mx - toX(d.rs_spread), my - toY(d.momentum)) < 13) return d.sector;
         }
-        return null;
+        if (e.pointerType === "mouse") setHoveredSector(_rrgHit(proj, filtered, _hitState, q.x, q.y));
     }
-    function handleCanvasMouseMove(e) { setHoveredSector(_getHitSector(e)); }
-    function handleCanvasClick(e) {
-        const hit = _getHitSector(e);
-        setFocusSector(f => f === hit ? null : hit);
+    function handlePointerUp(e) {
+        const dr = dragRef.current;
+        dragRef.current = null;
+        if (!proj || !dr || dr.moved) return;
+        const q = _pt(e);
+        const hit = _rrgHit(proj, filtered, _hitState, q.x, q.y);
+        setFocusSector(f => (f === hit ? null : hit));
+        if (e.pointerType !== "mouse") setHoveredSector(null);
     }
-    function handleCanvasTouch(e) {
-        if (e.touches.length !== 1) return;
-        const touch = e.touches[0];
-        const synth = { clientX: touch.clientX, clientY: touch.clientY };
-        const hit = _getHitSector(synth);
-        if (hit) { e.preventDefault(); setFocusSector(f => f === hit ? null : hit); }
-    }
+    function handlePointerLeave() { dragRef.current = null; setHoveredSector(null); }
 
     // Flat surfaces only  no layered gradients or blur, matching StockDashboard's
     // design system: a card is just its background color, depth comes from a
@@ -21421,7 +21789,7 @@ function SectorRotationModule({ T }) {
                     <div style={{
                         ...(isMobile
                             ? { display: mobileTab === "table" ? "flex" : "none", flex: "0 0 auto", flexDirection: "column", minHeight: mobileTableMinHeight, order: 2 }
-                            : { flex: "0 0 260px", maxWidth: 270, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
+                            : { flex: "0 0 292px", maxWidth: 300, display: "flex", flexDirection: "column", minHeight: desktopBodyHeight, height: desktopBodyHeight }),
                         border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden", minWidth: 0, background: panelBg, boxShadow: panelShadow
                     }}>
                         <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 16px 10px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
@@ -21549,44 +21917,100 @@ function SectorRotationModule({ T }) {
                         border: `1px solid ${panelBorder}`, borderRadius: premiumRadius, overflow: "hidden",
                         background: panelBg, boxShadow: panelShadow, minWidth: 0
                     }}>
-                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 14px 10px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0 }}>
-                            <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: text }}>Rotation Chart</div>
-                            <div style={{ fontSize: 12, color: subtext, marginTop: 3 }}>{isMobile ? "Tap a dot to inspect" : "Hover a dot to inspect, click to lock it in place"}</div>
+                        <div style={{ padding: isMobile ? "12px 12px 10px" : "14px 16px 12px", borderBottom: `1px solid ${insetLine}`, flexShrink: 0, display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800, color: text }}>Rotation Chart</div>
+                                <div style={{ fontSize: 12, color: subtext, marginTop: 3 }}>{isMobile ? "Tap a dot to inspect" : "Hover a dot to inspect, click to lock it. Scroll to zoom, drag to pan."}</div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                {(() => {
+                                    const seg = (active) => ({ padding: "6px 11px", fontSize: 12, fontWeight: active ? 700 : 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: active ? focusSoft : "transparent", color: active ? "#60a5fa" : text, transition: "background 140ms ease" });
+                                    const ico = { width: 30, height: 30, display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, border: `1px solid ${panelBorder}`, background: segmentedBg, color: text, cursor: "pointer", fontSize: 15, fontWeight: 600, fontFamily: "inherit", padding: 0 };
+                                    return (
+                                        <>
+                                            <div role="group" aria-label="Chart scale" style={{ display: "inline-flex", borderRadius: 9, overflow: "hidden", border: `1px solid ${panelBorder}`, background: segmentedBg }}>
+                                                <button type="button" aria-pressed={scaleMode === "spread"} title="Stretches the crowded centre so sectors stay apart. Axis values stay true." onClick={() => setScaleMode("spread")} style={seg(scaleMode === "spread")}>Spread</button>
+                                                <button type="button" aria-pressed={scaleMode === "linear"} title="True linear scale" onClick={() => setScaleMode("linear")} style={seg(scaleMode === "linear")}>Linear</button>
+                                            </div>
+                                            <button type="button" aria-pressed={showTrails} title="Show the path each sector took" onClick={() => setShowTrails(t => !t)}
+                                                style={{ ...ico, width: "auto", padding: "0 11px", fontSize: 12, fontWeight: showTrails ? 700 : 500, color: showTrails ? "#60a5fa" : text, borderColor: showTrails ? "#60a5fa" : panelBorder, background: showTrails ? focusSoft : segmentedBg }}>Trails</button>
+                                            {!isMobile && (
+                                                <div style={{ display: "inline-flex", gap: 4 }}>
+                                                    <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomCentre(1 / 1.5)} style={ico}>{"\u2212"}</button>
+                                                    <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomCentre(1.5)} style={ico}>+</button>
+                                                    <button type="button" aria-label="Fit all sectors" title="Fit all sectors (or double-click the chart)" onClick={resetView} disabled={view.z === 1} style={{ ...ico, width: "auto", padding: "0 11px", fontSize: 12, opacity: view.z === 1 ? 0.45 : 1, cursor: view.z === 1 ? "default" : "pointer" }}>Fit</button>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
                         </div>
 
-                        <canvas ref={canvasRef}
-                            style={{ flex: 1, width: "100%", cursor: hoveredSector ? "pointer" : "default", minHeight: isMobile ? 320 : 680, background: isDark ? "rgba(2,6,23,0.18)" : "rgba(255,255,255,0.4)" }}
-                            onMouseMove={handleCanvasMouseMove}
-                            onMouseLeave={() => setHoveredSector(null)}
-                            onClick={handleCanvasClick}
-                            onTouchStart={handleCanvasTouch}
-                        />
+                        <div ref={setWrapNode} style={{ flex: 1, position: "relative", minHeight: isMobile ? 360 : 680, overflow: "hidden" }}>
+                            <canvas ref={canvasRef}
+                                role="img"
+                                aria-label="Relative rotation graph of sectors by strength versus market and speed of move"
+                                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", cursor: hoveredSector ? "pointer" : view.z > 1 ? "grab" : "default", touchAction: isMobile ? "pan-y" : "none" }}
+                                onPointerDown={handlePointerDown}
+                                onPointerMove={handlePointerMove}
+                                onPointerUp={handlePointerUp}
+                                onPointerCancel={() => { dragRef.current = null; }}
+                                onPointerLeave={handlePointerLeave}
+                                onDoubleClick={resetView}
+                            />
 
-                        {/* Hover/focus tooltip  plain-English only */}
-                        {(() => {
-                            const active = focusSector || hoveredSector;
-                            const d = active ? snapshot.find(x => x.sector === active) : null;
-                            if (!d) return (
-                                <div style={{ padding: isMobile ? "10px 12px 12px" : "10px 14px 12px", borderTop: `1px solid ${insetLine}`, fontSize: 12, color: subtext, opacity: 0.55, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
-                                    {isMobile ? "Tap a sector dot to see details" : "Hover or click a sector dot to see details"}
-                                </div>
-                            );
-                            const meta = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
-                            const momVal = d.momentum ?? 0;
-                            return (
-                                <div style={{ padding: isMobile ? "10px 12px 12px" : "10px 14px 12px", borderTop: `1px solid ${insetLine}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
-                                    <span style={{ fontSize: isMobile ? 14 : 13, fontWeight: 800, color: text }}>{d.label}</span>
-                                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: meta.color, padding: "5px 9px", borderRadius: 999, background: statusBadgeStyles[d.quadrant]?.bg, border: `1px solid ${statusBadgeStyles[d.quadrant]?.border}` }}>
-                                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color, display: "inline-block" }} />
-                                        {meta.label}
-                                    </span>
-                                    <span style={{ fontSize: 12, color: subtext }}>{meta.desc}</span>
-                                    <span style={{ fontSize: 12, color: momVal >= 0 ? "#22c55e" : "#ef4444", fontWeight: 600, marginLeft: "auto" }}>
-                                        {momVal >= 0 ? "\u2191" : "\u2193"} {Math.abs(momVal).toFixed(1)}% momentum
-                                    </span>
-                                </div>
-                            );
-                        })()}
+                            {/* Hover / locked-sector card, anchored to the dot */}
+                            {(() => {
+                                const active = focusSector || hoveredSector;
+                                const d = active && proj ? filtered.find(x => x.sector === active) : null;
+                                if (!d) return null;
+                                const bx = proj.toX(d.rs_spread), by = proj.toY(d.momentum);
+                                if (!isFinite(bx) || !isFinite(by)) return null;
+                                if (bx < proj.PAD.left || bx > size.w - proj.PAD.right || by < proj.PAD.top || by > size.h - proj.PAD.bottom) return null;
+                                const meta = STATUS_META[d.quadrant] || STATUS_META.LAGGING;
+                                const tr = (trails[d.sector] || []).filter(q => isFinite(q.x) && isFinite(q.y));
+                                let heading = null;
+                                if (tr.length >= 2) {
+                                    const a = tr[Math.max(0, tr.length - 6)], b = tr[tr.length - 1];
+                                    heading = `${b.x >= a.x ? "Gaining strength" : "Losing strength"}, ${b.y >= a.y ? "speeding up" : "slowing"}`;
+                                }
+                                const CW = isMobile ? 196 : 224, CH = 150;
+                                const left = bx + 26 + CW > size.w - 6 ? Math.max(6, bx - 26 - CW) : bx + 26;
+                                const top = Math.max(6, Math.min(size.h - CH - 6, by - 52));
+                                const good = isDark ? "#4ade80" : "#15803d", bad = isDark ? "#f87171" : "#b91c1c";
+                                const row = (k, v, col) => (
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, fontSize: 12 }}>
+                                        <span style={{ color: subtext }}>{k}</span>
+                                        <span style={{ fontFamily: mono, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: col }}>{v}</span>
+                                    </div>
+                                );
+                                return (
+                                    <div style={{ position: "absolute", left, top, width: CW, pointerEvents: "none", padding: "12px 14px", borderRadius: 12, background: isDark ? "rgba(10,16,32,0.96)" : "rgba(255,255,255,0.98)", border: `1px solid ${withAlpha(meta.color, 0.45)}`, boxShadow: isDark ? "0 12px 32px rgba(0,0,0,0.55)" : "0 12px 32px rgba(15,23,42,0.16)", display: "flex", flexDirection: "column", gap: 7, zIndex: 3 }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                            <span style={{ fontSize: 14, fontWeight: 800, color: text }}>{d.label}</span>
+                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: meta.color, padding: "3px 8px", borderRadius: 999, background: statusBadgeStyles[d.quadrant]?.bg, border: `1px solid ${statusBadgeStyles[d.quadrant]?.border}` }}>
+                                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color }} />{meta.label}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: 11.5, color: subtext, lineHeight: 1.4 }}>{meta.desc}</div>
+                                        <div style={{ height: 1, background: insetLine }} />
+                                        {row("Strength vs market", _rrgFmtX(d.rs_spread, 2), d.rs_spread >= 0 ? good : bad)}
+                                        {row("Momentum", _rrgFmtY(d.momentum, 1), d.momentum >= 0 ? good : bad)}
+                                        {heading && <div style={{ fontSize: 11.5, color: text, opacity: 0.85 }}>{"\u2192"} {heading}</div>}
+                                        {focusSector === d.sector && <div style={{ fontSize: 10.5, color: subtext, opacity: 0.8 }}>Locked. Click again to release.</div>}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Legend / reading guide */}
+                        <div style={{ padding: isMobile ? "9px 12px 11px" : "10px 16px 12px", borderTop: `1px solid ${insetLine}`, display: "flex", alignItems: "center", gap: isMobile ? 12 : 18, flexWrap: "wrap", fontSize: 12, color: subtext, background: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.46)" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: STATUS_META.LEADING.color, boxShadow: `0 0 0 2px ${isDark ? "#0a1020" : "#fff"}, 0 0 0 3px ${withAlpha(STATUS_META.LEADING.color, 0.4)}` }} />Dot: where it is today</span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 22, height: 3, borderRadius: 2, background: `linear-gradient(90deg, ${withAlpha(STATUS_META.LEADING.color, 0.15)}, ${STATUS_META.LEADING.color})` }} />Tail: last 20 sessions</span>
+                            <span>{"\u27A4"} Arrow: where it is heading</span>
+                            {scaleMode === "spread" && <span style={{ marginLeft: "auto", opacity: 0.8 }}>Spread scale: axis values are true, spacing is stretched</span>}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -22242,7 +22666,7 @@ const LEGAL_COLUMNS = [
 const ABOUT_MODULES = [
     { icon: "trending-up", title: "Market Dashboard", body: "Market momentum, breadth, leaders and sector moves at a glance." },
     { icon: "star", title: "Watchlist", body: "Track the stocks you care about with favourites and live or end-of-day prices." },
-    { icon: "search", title: "Stock Research", body: "Financial statements, ratios, charts, ownership, peers and announcements for listed companies." },
+    { icon: "search", title: "Stock Research", body: "Financial statements, ratios, charts, ownership and announcements for listed companies." },
     { icon: "layers", title: "Screeners", body: "Filter equities on quality, valuation and growth, plus technical screens for breakouts and relative strength." },
     { icon: "bar-chart", title: "FII / DII Flows", body: "Institutional participation across cash, index futures and stock futures." },
     { icon: "users", title: "Ownership Scans", body: "Promoter, FII, DII and public shareholding changes, including pledges." },
@@ -23935,8 +24359,8 @@ export default function App() {
 
                                 {/* FUNDAMENTALS */}
                                 {productTab === "financial" && (
-                                    <div style={{ display: "flex", flex: 1, overflow: "hidden", background: T.bg, flexDirection: "column", minHeight: 0 }}>
-                                        {financialSubPage === "search" && <FinancialAnalyticsModule T={T} externalSearchRequest={topbarSearchRequest} />}
+                                    <div style={{ display: "flex", flex: 1, overflow: "hidden", background: T.bg, flexDirection: "column", minHeight: 0, position: "relative" }}>
+                                        {financialSubPage === "search" && <FinancialAnalyticsModule T={T} externalSearchRequest={topbarSearchRequest} fillParent />}
                                         {financialSubPage === "screener" && (
                                             <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", flexDirection: "column", width: "100%" }}>
                                                 <ScreenerModule
