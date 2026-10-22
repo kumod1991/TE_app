@@ -1,3 +1,4 @@
+
 {
   "headers": [
     {
@@ -43,7 +44,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!sw\\.js|workbox-.*\\.js|icon-.*\\.png|site\\.webmanifest|favicon.*|assets/|robots\\.txt|sitemap\\.xml).*)",
+      "source": "/((?!sw\\.js|workbox-.*\\.js|icon-.*\\.png|site\\.webmanifest|favicon.*|assets/|robots\\.txt|sitemap\\.xml|ads\\.txt).*)",
       "destination": "/index.html"
     }
   ]
