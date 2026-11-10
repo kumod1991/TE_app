@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment, createContext, useContext, Component, memo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import ForumModule from "./ForumModule";
+import FuturesJournal, { useFutData, FutDashboardSection, FutPortfolio, SegmentedTabs, FutTaxTable, calcFutFYRows } from "./FuturesJournal";
 const LearnModule = lazy(() => import("./LearnModule"));
 import WatchlistDashboard from "./WatchlistDashboard";
 import FiiDiiModule, { prefetchFiiDiiData } from "./FiiDiiModule";
@@ -129,6 +130,7 @@ const SUB_ROUTE_SEO = {
     tradevault: {
         dashboard: { title: "Trading Dashboard", description: "Review realized and unrealized P&L, active exposure, portfolio health, and recent trading activity." },
         trades: { title: "Trade Journal", description: "Log entries, exits, quantities, prices, and notes to understand trading behavior over time." },
+        "fut-trades": { title: "Futures Trade Journal", description: "Log long and short NSE futures trades with lots, expiry, entry and exit, and track open futures positions against end-of-day bhavcopy prices." },
         analytics: { title: "Trading Analytics", description: "Analyze win rate, expectancy, drawdowns, best trades, worst trades, and execution quality." },
         "capital-gains": { title: "Capital Gains Tracker", description: "Estimate realized gains across Indian financial years from your trade journal." },
         portfolio: { title: "Portfolio Tracker", description: "Monitor holdings, live or end-of-day prices, exposure, allocation, and open trade performance." },
@@ -145,7 +147,7 @@ const SUB_ROUTE_SEO = {
 };
 const FINANCIAL_ROUTE_SEGMENTS = new Set(["search", "screener", "fiidii", "ownership", "announcements"]);
 const TECHNICAL_ROUTE_SEGMENTS = new Set(["breadth", "screens", "rotation"]);
-const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "analytics", "capital-gains", "funds", "dividends"]);
+const JOURNAL_ROUTE_SEGMENTS = new Set(["dashboard", "trades", "fut-trades", "analytics", "capital-gains", "funds", "dividends"]);
 const LEGAL_ROUTE_SEGMENTS = new Set(["about", "disclaimer", "privacy", "terms", "contact"]);
 const BreadthDataContext = createContext({ industryMap: {}, tablesLoading: true });
 const useBreadthData = () => useContext(BreadthDataContext);
@@ -4058,6 +4060,22 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
 
     const stats = providedStats || calcStatsFromRows(tradeRows || buildTradeRows(trades));
 
+    // Futures journal data (fut_trades + fut_bhav_copy): feeds the combined hero card,
+    // the futures dashboard section and the futures portfolio at the bottom.
+    // Fallback cumulative series: closed trades grouped by exit date, in date order
+    // (the old fallback summed trades in database order, which gave a wrong-looking line).
+    const clientCumSeries = useMemo(() => {
+        const byDate = {};
+        stats.closed.forEach(t => { if (t.exit_date) byDate[t.exit_date] = (byDate[t.exit_date] || 0) + t.pnl; });
+        let run = 0;
+        return Object.keys(byDate).sort().map(d => { run += byDate[d]; return { date: d, value: run }; });
+    }, [stats.closed]);
+    const [dashTab, setDashTabState] = useState(() => {
+        try { return localStorage.getItem("tv_dash_tab") === "futures" ? "futures" : "cash"; } catch { return "cash"; }
+    });
+    const setDashTab = (t) => { setDashTabState(t); try { localStorage.setItem("tv_dash_tab", t); } catch { /* ignore */ } };
+    const fut = useFutData({ session, isDemo, getToken: async () => (await supabase.getValidToken()) || session?.access_token });
+
     // Cumulative P&L chart: pull the pre-aggregated running total straight from the
     // cumulative_pnl table (one row per trade_date, unique per user_id) instead of
     // re-summing stats.closed on the client. Falls back to the client-side calc
@@ -4068,14 +4086,17 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
         let cancelled = false;
         (async () => {
             try {
-                const token = await supabase.getValidToken();
+                const token = (await supabase.getValidToken()) || session?.access_token;
+                // Running total is rebuilt here from daily_pnl so the line always ends exactly at
+                // SUM(daily_pnl) (= the Net P&L card), even if the stored running column drifts.
                 const r = await fetch(
-                    `${SUPABASE_URL}/rest/v1/cumulative_pnl?select=trade_date,cumulative_pnl&user_id=eq.${uid}&order=trade_date.asc`,
+                    `${SUPABASE_URL}/rest/v1/cumulative_pnl?select=trade_date,daily_pnl&user_id=eq.${uid}&order=trade_date.asc`,
                     { headers: supabase._h(token) }
                 );
                 const rows = await r.json();
                 if (!cancelled && Array.isArray(rows)) {
-                    setCumSeries(rows.map(row => ({ date: row.trade_date, value: Number(row.cumulative_pnl) })));
+                    let run = 0;
+                    setCumSeries(rows.map(row => { run += Number(row.daily_pnl) || 0; return { date: row.trade_date, value: run }; }));
                 }
             } catch (e) { /* ignore — Sparkline falls back to client-side calc */ }
         })();
@@ -4101,16 +4122,28 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
         : stats.totalPnl;
 
     const fmtPnl = (v) => (v >= 0 ? "+" : "") + "" + Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+    // Hero card = cash + futures combined. Everything below the hero up to the cash
+    // portfolio stays cash-only; futures has its own section after the cash portfolio.
+    const futS = fut.summary;
+    const heroCombinedPnl = combinedPnl + futS.combined;
+    const heroRealized = stats.totalPnl + futS.realized;
+    const heroUnrealized = (unrealizedPnl !== null || futS.hasPrices) ? (unrealizedPnl || 0) + futS.unreal : null;
+    const heroWins = stats.wins.length + futS.wins;
+    const heroLosses = stats.losses.length + futS.losses;
+    const heroClosed = heroWins + heroLosses;
+    const heroWinRate = heroClosed ? (heroWins / heroClosed) * 100 : 0;
+    const heroOpen = openTrades.length + futS.openCount;
+    const heroLiveValue = (totalPortfolioValue !== null || futS.hasPrices) ? (totalPortfolioValue || 0) + (futS.hasPrices ? futS.notional : 0) : null;
     const dashboardHeroMetrics = [
-        { label: "Combined P&L", value: fmtPnl(combinedPnl), tone: combinedPnl >= 0 ? "positive" : "negative", sub: `${stats.closed.length} closed trades` },
-        { label: "Win rate", value: `${stats.winRate.toFixed(2)}%`, sub: `${stats.wins.length} wins / ${stats.losses.length} losses` },
-        { label: "Open exposure", value: `${openTrades.length}`, sub: hasLiveData ? `${quotedCount}/${tickerCount} tickers live` : "Refresh holdings section for live prices" },
+        { label: "Combined P&L", value: fmtPnl(heroCombinedPnl), tone: heroCombinedPnl >= 0 ? "positive" : "negative", sub: `${heroClosed} closed trades (cash + futures)` },
+        { label: "Win rate", value: `${heroWinRate.toFixed(2)}%`, sub: `${heroWins} wins / ${heroLosses} losses` },
+        { label: "Open exposure", value: `${heroOpen}`, sub: `${openTrades.length} cash \u00b7 ${futS.openCount} futures` },
     ];
     // Mobile carousel gets two extra breakdown cards (Realized / Unrealized) that desktop doesn't show as chips.
     const dashboardMobileMetrics = [
         dashboardHeroMetrics[0],
-        { label: "Realized P&L", value: fmtPnl(stats.totalPnl), tone: stats.totalPnl >= 0 ? "positive" : "negative", sub: `${stats.closed.length} closed` },
-        { label: "Unrealized P&L", value: unrealizedPnl !== null ? fmtPnl(unrealizedPnl) : "", tone: unrealizedPnl === null ? "neutral" : unrealizedPnl >= 0 ? "positive" : "negative", sub: unrealizedPnl !== null ? `${openTrades.length} open` : "Refresh holdings section to load" },
+        { label: "Realized P&L", value: fmtPnl(heroRealized), tone: heroRealized >= 0 ? "positive" : "negative", sub: `${heroClosed} closed` },
+        { label: "Unrealized P&L", value: heroUnrealized !== null ? fmtPnl(heroUnrealized) : "", tone: heroUnrealized === null ? "neutral" : heroUnrealized >= 0 ? "positive" : "negative", sub: heroUnrealized !== null ? `${heroOpen} open` : "Refresh holdings section to load" },
         dashboardHeroMetrics[1],
         dashboardHeroMetrics[2],
     ];
@@ -4125,13 +4158,18 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
                 mobileMetrics={dashboardMobileMetrics}
                 asideFirst
                 asideTitle="Live posture"
-                asideValue={totalPortfolioValue !== null ? inr(totalPortfolioValue) : "Pending"}
-                asideTone={combinedPnl >= 0 ? "positive" : "negative"}
-                asideBody={totalPortfolioValue !== null
-                    ? `${quotedCount}/${tickerCount} open tickers are feeding the current valuation.`
+                asideValue={heroLiveValue !== null ? inr(heroLiveValue) : "Pending"}
+                asideTone={heroCombinedPnl >= 0 ? "positive" : "negative"}
+                asideBody={heroLiveValue !== null
+                    ? `Cash holdings ${totalPortfolioValue !== null ? inr(totalPortfolioValue) : "pending"} + futures notional ${futS.hasPrices ? inr(futS.notional) : "none priced"}.`
                     : "Refresh the holdings section below to hydrate live prices and unrealized performance."}
             />
             {isDemo && <div className="demo-banner" style={{ display: "inline-flex", margin: "0 0 14px" }}> Demo Mode  Sign up to save your real trades.</div>}
+            <SegmentedTabs T={T} value={dashTab} onChange={setDashTab} items={[
+                { id: "cash", label: "Cash", count: trades.length },
+                { id: "futures", label: "Futures", count: fut.rows.length },
+            ]} />
+            {dashTab === "cash" && (<>
             <div className="stats-row">
                 <div className="stat-card hero">
                     <StatCardHead T={T} icon="pulse" label="Net P&amp;L from Stocks" tone={combinedPnl >= 0 ? "positive" : "negative"} />
@@ -4183,11 +4221,16 @@ function Dashboard({ trades, tradeRows, stats: providedStats, isDemo, T, session
                 </div>
             </div>
             <div className="chart-grid">
-                <div className="chart-card"><div className="chart-title">Cumulative P&amp;L</div><Sparkline series={cumSeries} data={stats.closed.map(t => t.pnl)} T={T} /></div>
+                <div className="chart-card"><div className="chart-title">Cumulative P&amp;L</div><Sparkline series={cumSeries && cumSeries.length >= 2 ? cumSeries : clientCumSeries} data={stats.closed.map(t => t.pnl)} T={T} /></div>
                 <div className="chart-card"><div className="chart-title">Win / Loss Breakdown</div><div style={{ paddingTop: 12 }}><Donut win={stats.wins.length} loss={stats.losses.length} T={T} /></div></div>
                 <div className="chart-card" style={{ gridColumn: "span 2" }}><div className="chart-title">P&amp;L by Ticker</div><BarChart trades={stats.closed} T={T} /></div>
             </div>
             <Portfolio trades={trades} T={T} session={session} embedded />
+            </>)}
+            {dashTab === "futures" && (<>
+                <FutDashboardSection T={T} fut={fut} Sparkline={Sparkline} Donut={Donut} StatCardHead={StatCardHead} />
+                <FutPortfolio T={T} fut={fut} />
+            </>)}
         </div>
     );
 }
@@ -4385,7 +4428,7 @@ function calcCapitalGainsFromRows(tradeRows) {
     });
 }
 
-function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
+function CapitalGains({ trades, tradeRows, rows: providedRows, T, session, isDemo }) {
     const rows = providedRows || calcCapitalGainsFromRows(tradeRows || buildTradeRows(trades));
     const tot = rows.reduce((a, r) => ({
         st: { buy: a.st.buy + r.st.buy, sell: a.st.sell + r.st.sell, pnl: a.st.pnl + r.st.pnl },
@@ -4396,6 +4439,18 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
     const now = new Date();
     const curFYStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
     const curFY = `${curFYStart}-${String(curFYStart + 1).slice(-2)}`;
+
+    // Cash | Futures tab (futures = business income by FY, not capital gains)
+    const [cgTab, setCgTabState] = useState(() => {
+        try { return localStorage.getItem("tv_cg_tab") === "futures" ? "futures" : "cash"; } catch { return "cash"; }
+    });
+    const setCgTab = (t) => { setCgTabState(t); try { localStorage.setItem("tv_cg_tab", t); } catch { /* ignore */ } };
+    const futCG = useFutData({ session, isDemo, getToken: async () => (await supabase.getValidToken()) || session?.access_token });
+    const futFY = useMemo(() => calcFutFYRows(futCG.stats.closed, getFY, curFY), [futCG.stats.closed, curFY]);
+    const futTotNet = futFY.reduce((s, r) => s + r.net, 0);
+    const futCur = futFY.find(r => r.fy === curFY) || { net: 0, turnover: 0, n: 0 };
+    const isFutTab = cgTab === "futures";
+    const signedInr = (v) => `${v >= 0 ? "+" : ""}${inr(v)}`;
 
     // Styles
     const isDark = T === THEMES.dark;
@@ -4437,15 +4492,26 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
                 T={T}
                 kicker="Journals / Capital Gains"
                 title="Financial-year gain book"
-                metrics={[
+                metrics={isFutTab ? [
+                    { label: "Total Net P&L (All Years)", value: signedInr(futTotNet), tone: futTotNet >= 0 ? "positive" : "negative", sub: "Futures \u00b7 non-speculative business income" },
+                    { label: `Net P&L ${curFY}`, value: signedInr(futCur.net), tone: futCur.net >= 0 ? "positive" : "negative", sub: `${futCur.n} closed trades this FY` },
+                    { label: `Turnover ${curFY}`, value: inr(futCur.turnover), tone: "neutral", sub: "Sum of absolute P&L per closed contract" },
+                ] : [
                     { label: "Total P&L (All Years)", value: `${totalPnl >= 0 ? "+" : ""}${inr(totalPnl)}`, tone: totalPnl >= 0 ? "positive" : "negative", sub: "Short Term + Long Term" },
                     { label: "Short Term P&L", value: `${tot.st.pnl >= 0 ? "+" : ""}${inr(tot.st.pnl)}`, tone: tot.st.pnl >= 0 ? "positive" : "negative", sub: "Held \u2264365 days \u00b7 Tax 20%" },
                     { label: "Long Term P&L", value: `${tot.lt.pnl >= 0 ? "+" : ""}${inr(tot.lt.pnl)}`, tone: tot.lt.pnl >= 0 ? "positive" : "negative", sub: "Held >365 days \u00b7 Tax 12.5%" },
                 ]}
                 asideTitle="Current FY"
                 asideValue={curFY}
-                asideBody="Realized gains are bucketed by exit date into Indian financial years from April to March."
+                asideBody={isFutTab
+                    ? "Futures gains are bucketed by exit date into Indian financial years and taxed as business income, not capital gains."
+                    : "Realized gains are bucketed by exit date into Indian financial years from April to March."}
             />
+            <SegmentedTabs T={T} value={cgTab} onChange={setCgTab} items={[
+                { id: "cash", label: "Cash" },
+                { id: "futures", label: "Futures", count: futCG.rows.length },
+            ]} />
+            {isFutTab ? <FutTaxTable T={T} rows={futFY} curFY={curFY} /> : (<>
 
             {/* Main table */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: `0 2px 8px ${T.shadow}` }}>
@@ -4508,6 +4574,7 @@ function CapitalGains({ trades, tradeRows, rows: providedRows, T }) {
                 <span> <strong style={{ color: T.subtext }}>STCG</strong>  15% (before Jul 2024) / 20% (after)</span>
                 <span> <strong style={{ color: T.subtext }}>LTCG</strong>  10% above 1L (before Jul 2024) / 12.5% (after)</span>
             </div>
+            </>)}
         </div>
     );
 }
@@ -23715,6 +23782,7 @@ export default function App() {
             subItems: [
                 { id: "dashboard", label: "Dashboard", description: "Open your portfolio summary and recent activity." },
                 { id: "trades", label: "Trade Journal", description: "Record entries, exits, and execution notes." },
+                { id: "fut-trades", label: "Trade Journal-FUT", description: "Log futures trades; marked to NSE F&O bhavcopy." },
                 { id: "analytics", label: "Analytics", description: "Review win rate, expectancy, and trading patterns." },
                 { id: "capital-gains", label: "Capital Gains", description: "Inspect realized P&L across Indian financial years." },
                 { id: "funds", label: "Funds & XIRR", description: "Track capital flows, cash, and return efficiency." },
@@ -24282,8 +24350,9 @@ export default function App() {
                                                     <div className="journal-main-inner">
                                                         {page === "dashboard" && <Dashboard trades={trades} tradeRows={journalTradeRows} stats={journalStats} isDemo={isDemo} T={T} session={session} />}
                                                         {page === "trades" && <Trades trades={trades} tradeRows={journalTradeRows} onAdd={() => setModal({ mode: "add" })} onEdit={t => setModal({ mode: "edit", trade: t })} onDelete={handleDelete} onImportCSV={handleImportCSV} T={T} />}
+                                                                                                                {page === "fut-trades" && <FuturesJournal T={T} session={session} isDemo={isDemo} getToken={async () => (await supabase.getValidToken()) || session?.access_token} Hero={JournalHero} />}
                                                         {page === "analytics" && <Analytics trades={trades} tradeRows={journalTradeRows} stats={journalStats} T={T} />}
-                                                        {page === "capital-gains" && <CapitalGains trades={trades} tradeRows={journalTradeRows} rows={journalCapitalGainsRows} T={T} />}
+                                                        {page === "capital-gains" && <CapitalGains trades={trades} tradeRows={journalTradeRows} rows={journalCapitalGainsRows} T={T} session={session} isDemo={isDemo} />}
                                                         {page === "funds" && <Funds funds={funds} trades={trades} onSave={handleFundSave} onDelete={handleFundDelete} onBulkDelete={handleFundBulkDelete} onImportCSV={handleFundImportCSV} T={T} session={session} />}
                                                         {page === "dividends" && <Dividends dividends={dividends} onSave={handleDividendSave} onDelete={handleDividendDelete} onImportCSV={handleDividendImportCSV} T={T} />}
                                                     </div>
