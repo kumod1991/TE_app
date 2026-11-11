@@ -14,7 +14,7 @@ const num2 = (v) => Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2
 const num0 = (v) => Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 const signed = (v, d = 2) => (v >= 0 ? "+" : "-") + Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtDate = (d) => (d ? new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "");
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 /* ── REST helpers ─────────────────────────────────────────────────────────── */
 async function sbGet(path, token) {
@@ -47,6 +47,28 @@ function fetchLatestFutDate() {
             .catch(() => { _latestDatePromise = null; return null; });
     }
     return _latestDatePromise;
+}
+
+// Distinct symbols from the latest bhavcopy day (for the ticker autosuggest). Cached for the session.
+let _symbolsPromise = null;
+function fetchFutSymbols() {
+    if (!_symbolsPromise) {
+        _symbolsPromise = (async () => {
+            const latest = await fetchLatestFutDate();
+            if (!latest) return [];
+            const seen = new Set();
+            for (let off = 0; off < 5000; off += 1000) {   // page past the 1000-row API cap
+                const rows = await sbGet(`fut_bhav_copy?select=symbol&trade_date=eq.${latest}&order=symbol.asc,expiry_date.asc,instrument_type.asc&limit=1000&offset=${off}`);
+                if (!Array.isArray(rows)) break;
+                rows.forEach(r => { if (r.symbol) seen.add(r.symbol); });
+                if (rows.length < 1000) break;
+            }
+            return [...seen].sort();
+        })()
+            .then(list => { if (!list.length) _symbolsPromise = null; return list; })
+            .catch(() => { _symbolsPromise = null; return []; });
+    }
+    return _symbolsPromise;
 }
 
 /* ── Calculations ─────────────────────────────────────────────────────────── */
@@ -258,6 +280,36 @@ function FutTradeModal({ trade, onClose, onSave, T }) {
     const timer = useRef(null);
     const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
+    // ── Symbol autosuggest (from fut_bhav_copy.symbol) ──
+    const [symbols, setSymbols] = useState([]);
+    const [symOpen, setSymOpen] = useState(false);
+    const [symHi, setSymHi] = useState(0);
+    useEffect(() => { let alive = true; fetchFutSymbols().then(l => { if (alive) setSymbols(l); }); return () => { alive = false; }; }, []);
+    const symQ = form.symbol.trim().toUpperCase();
+    const suggestions = useMemo(() => {
+        if (!symQ) return [];
+        const starts = [], has = [];
+        for (const sym of symbols) { if (sym.startsWith(symQ)) starts.push(sym); else if (sym.includes(symQ)) has.push(sym); }
+        return [...starts, ...has].slice(0, 8);
+    }, [symQ, symbols]);
+    const showSug = symOpen && suggestions.length > 0 && !(suggestions.length === 1 && suggestions[0] === symQ);
+    const pickSymbol = (sym) => {
+        // a different symbol means a different contract: clear the old expiry / lot size so they re-fill
+        setForm(f => {
+            const same = f.symbol.trim().toUpperCase() === sym;
+            return { ...f, symbol: sym, ...(same ? {} : { expiry_date: "", lot_size: "" }) };
+        });
+        loadContracts(sym);
+        setSymOpen(false);
+    };
+    const onSymKey = (e) => {
+        if (!showSug) return;
+        if (e.key === "ArrowDown") { e.preventDefault(); setSymHi(h => (h + 1) % suggestions.length); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); setSymHi(h => (h - 1 + suggestions.length) % suggestions.length); }
+        else if (e.key === "Enter") { e.preventDefault(); pickSymbol(suggestions[symHi] || suggestions[0]); }
+        else if (e.key === "Escape") { e.stopPropagation(); setSymOpen(false); }
+    };
+
     const loadContracts = (sym) => {
         clearTimeout(timer.current);
         const s = sym.trim().toUpperCase();
@@ -356,11 +408,31 @@ function FutTradeModal({ trade, onClose, onSave, T }) {
 
                 <div style={{ padding: "20px 22px 22px" }}>
                     <div style={grid2}>
-                        <div>
+                        <div style={{ position: "relative" }}>
                             <label style={labelStyle}>Symbol</label>
                             <input value={form.symbol} placeholder="e.g. RELIANCE"
-                                onChange={e => { set("symbol")(e); loadContracts(e.target.value); }}
+                                onChange={e => { set("symbol")(e); loadContracts(e.target.value); setSymOpen(true); setSymHi(0); }}
+                                onFocus={() => setSymOpen(true)}
+                                onBlur={() => setSymOpen(false)}
+                                onKeyDown={onSymKey}
                                 style={{ ...inputStyle, textTransform: "uppercase", fontWeight: 700 }} autoComplete="off" />
+                            {showSug && (
+                                <div role="listbox" style={{
+                                    position: "absolute", top: "100%", left: 0, right: 0, marginTop: 2, zIndex: 20,
+                                    background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6,
+                                    maxHeight: 220, overflowY: "auto", boxShadow: "0 6px 18px rgba(0,0,0,.25)",
+                                }}>
+                                    {suggestions.map((sym, i) => (
+                                        <div key={sym} role="option" aria-selected={i === symHi}
+                                            onMouseDown={e => { e.preventDefault(); pickSymbol(sym); }}
+                                            onMouseEnter={() => setSymHi(i)}
+                                            style={{
+                                                padding: "7px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", color: T.text,
+                                                background: i === symHi ? T.pill : "transparent",
+                                            }}>{sym}</div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div>
                             <label style={labelStyle}>Expiry</label>
@@ -371,7 +443,7 @@ function FutTradeModal({ trade, onClose, onSave, T }) {
                                         <option value={form.expiry_date}>{fmtDate(form.expiry_date)}</option>}
                                 </select>
                             ) : (
-                                <input type="date" value={form.expiry_date} onChange={set("expiry_date")} style={inputStyle} />
+                                <input type="date" value={form.expiry_date} min="2000-01-01" max="2100-12-31" onChange={set("expiry_date")} style={inputStyle} />
                             )}
                         </div>
                     </div>
@@ -390,7 +462,7 @@ function FutTradeModal({ trade, onClose, onSave, T }) {
                     <div style={grid2}>
                         <div>
                             <label style={labelStyle}>Entry date</label>
-                            <input type="date" value={form.entry_date} onChange={set("entry_date")} style={inputStyle} />
+                            <input type="date" value={form.entry_date} min="2000-01-01" max="2100-12-31" onChange={set("entry_date")} style={inputStyle} />
                         </div>
                         <div>
                             <label style={{ ...labelStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -411,7 +483,7 @@ function FutTradeModal({ trade, onClose, onSave, T }) {
                     <div style={grid2}>
                         <div>
                             <label style={labelStyle}>Exit date</label>
-                            <input type="date" value={form.exit_date} onChange={set("exit_date")} style={inputStyle} />
+                            <input type="date" value={form.exit_date} min="2000-01-01" max="2100-12-31" onChange={set("exit_date")} style={inputStyle} />
                         </div>
                         <div>
                             <label style={labelStyle}>Exit lots</label>
