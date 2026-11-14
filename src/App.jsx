@@ -16979,6 +16979,54 @@ const PATTERN_FILTER_DEFS = [
 // now lives in ChartPreviewPopover.jsx, shared with StockDashboard.jsx so both
 // TechLens/Screens and the Market Dashboard tables use the same component.
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Desktop Screens tables scroll with the PAGE (the view's outer container), not
+// inside a small box of their own. The table wrapper still needs overflow-x for
+// wide tables, which means a native `position: sticky` <thead> can no longer track
+// the page scroll, so the header row is pinned here with a transform instead.
+// Mobile (<= 600px) keeps its original inner-scroll layout; this does nothing there.
+function usePageStickyThead(outerRef, wrapRef, page) {
+    useEffect(() => {
+        const outer = outerRef.current, wrap = wrapRef.current;
+        if (!outer || !wrap) return;
+        let raf = 0;
+        const apply = () => {
+            raf = 0;
+            const thead = wrap.querySelector("thead");
+            if (!thead) return;
+            if (window.innerWidth <= 600) { thead.style.transform = ""; return; }
+            const gap = outer.getBoundingClientRect().top - wrap.getBoundingClientRect().top;
+            const max = Math.max(0, wrap.offsetHeight - thead.offsetHeight - 1);
+            const shift = Math.min(max, Math.max(0, gap));
+            thead.style.position = "relative";
+            thead.style.zIndex = "12";
+            thead.style.transform = shift > 0 ? `translateY(${shift}px)` : "";
+        };
+        const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
+        outer.addEventListener("scroll", schedule, { passive: true });
+        window.addEventListener("resize", schedule);
+        const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(schedule) : null;
+        if (ro) ro.observe(wrap);
+        apply();
+        return () => {
+            outer.removeEventListener("scroll", schedule);
+            window.removeEventListener("resize", schedule);
+            if (ro) ro.disconnect();
+            if (raf) cancelAnimationFrame(raf);
+        };
+    }, [outerRef, wrapRef]);
+
+    // New page of results: bring the top of the table back into view.
+    const firstPage = useRef(true);
+    useEffect(() => {
+        if (firstPage.current) { firstPage.current = false; return; }
+        const outer = outerRef.current, wrap = wrapRef.current;
+        if (!outer || !wrap || window.innerWidth <= 600) return;
+        const top = wrap.getBoundingClientRect().top - outer.getBoundingClientRect().top + outer.scrollTop - 56;
+        if (outer.scrollTop > top) outer.scrollTop = Math.max(0, top);
+    }, [page, outerRef, wrapRef]);
+}
+
 // 
 //  SCREEN DETAIL VIEW  full-width table, fills content area like screener
 // 
@@ -17133,6 +17181,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     const addFilterRef = useRef(null);
     const colPanelRef = useRef(null);
     const tableRef = useRef(null);
+    const outerRef = useRef(null);
 
     // Pre-warm chart cache for visible rows so hover popover is instant
     useEffect(() => {
@@ -17283,6 +17332,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         [filteredRows, pageStart]
     );
     const goToPage = p => setPage(Math.min(Math.max(1, p), totalPages));
+    usePageStickyThead(outerRef, tableRef, page);
 
     const handleSort = key => {
         if (sortKey === key) setSortDir(d => d === "desc" ? "asc" : "desc");
@@ -17412,7 +17462,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
     };
 
     return (
-        <div className="sdv-outer" style={{
+        <div className="sdv-outer" ref={outerRef} style={{
             display: "flex", flexDirection: "column", width: "100%", height: "100%",
             background: T.bg, color: T.text, fontFamily: sans, flex: 1, minHeight: 0, overflow: "hidden"
         }}>
@@ -17451,6 +17501,14 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
         .sdv-table-topline {
           padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
           border-bottom:1px solid ${T.border}; background:${isDark ? "rgba(255,255,255,0.03)" : "rgba(248,250,252,0.92)"};
+        }
+        /* Desktop: the whole view scrolls (scrollbar at the far right of the screen);
+           the table keeps its width but grows to its full height. Mobile untouched. */
+        @media (min-width:601px) {
+          .sdv-outer { overflow-y:auto !important; overflow-x:hidden !important; }
+          .sdv-shell { flex:0 0 auto; }
+          .sdv-table-shell { flex:0 0 auto; }
+          .sdv-table-wrap { flex:0 0 auto !important; overflow-x:auto !important; overflow-y:hidden !important; min-height:260px; }
         }
         @media (max-width:900px) {
           .sdv-hero { grid-template-columns:1fr; }
@@ -17713,113 +17771,6 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                     </div>
                 </div>
 
-                {/*  FILTER BAR  */}
-                <div className="sdv-filterbar">
-
-                    {filters.map(f => {
-                        const def = activeFDefs.find(d => d.key === f.key);
-                        return (
-                            <div key={f.id} style={{
-                                display: "inline-flex", alignItems: "stretch",
-                                height: 32, borderRadius: 6, border: `1px solid ${T.border}`,
-                                background: T.card, overflow: "hidden", flexShrink: 0,
-                                fontSize: 12, fontFamily: sans
-                            }}>
-                                <div style={{
-                                    display: "flex", alignItems: "center", padding: "0 10px",
-                                    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                                    borderRight: `1px solid ${T.border}`
-                                }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text, whiteSpace: "nowrap" }}>
-                                        {def?.label || f.key}
-                                    </span>
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", borderRight: `1px solid ${T.border}` }}>
-                                    <select value={f.op}
-                                        onChange={e => setFilters(fs => fs.map(x => x.id === f.id ? { ...x, op: e.target.value } : x))}
-                                        style={{
-                                            appearance: "none", WebkitAppearance: "none",
-                                            background: "transparent", border: "none", outline: "none",
-                                            fontFamily: mono, fontSize: 11, fontWeight: 700,
-                                            color: accentOrFallback, padding: "0 14px 0 8px",
-                                            height: 32, letterSpacing: ".04em", cursor: "pointer"
-                                        }}>
-                                        {[">", ">=", "<", "<="].map(o => <option key={o} value={o}>{o}</option>)}
-                                    </select>
-                                </div>
-                                <input type="number" value={f.value} placeholder="value"
-                                    onChange={e => setFilters(fs => fs.map(x => x.id === f.id ? { ...x, value: e.target.value } : x))}
-                                    style={{
-                                        width: 60, height: 32, border: "none", outline: "none",
-                                        background: "transparent", fontFamily: mono,
-                                        fontSize: 12, fontWeight: 600, color: T.text,
-                                        padding: "0 8px", textAlign: "right"
-                                    }} />
-                                <button
-                                    onClick={() => setFilters(fs => fs.filter(x => x.id !== f.id))}
-                                    style={{
-                                        width: 26, height: 32, border: "none",
-                                        borderLeft: `1px solid ${T.border}`, background: "transparent",
-                                        cursor: "pointer", color: T.muted,
-                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                        transition: "color .1s, background .1s"
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.color = T.neg; e.currentTarget.style.background = "rgba(244,63,94,0.08)"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.background = "transparent"; }}>
-                                    <svg width="7" height="7" viewBox="0 0 8 8" fill="none" stroke="currentColor"
-                                        strokeWidth="1.5" strokeLinecap="round">
-                                        <path d="M1 1l6 6M7 1L1 7" />
-                                    </svg>
-                                </button>
-                            </div>
-                        );
-                    })}
-
-                    <div style={{ position: "relative" }} ref={addFilterRef}>
-                        <button onClick={() => setAddFilterOpen(o => !o)}
-                            style={{ ...chipBtn, borderStyle: "dashed", color: T.muted }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${accentOrFallback}66`; e.currentTarget.style.color = T.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.muted; }}>
-                            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor"
-                                strokeWidth="1.6" strokeLinecap="round">
-                                <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
-                            </svg>
-                            Add Filter
-                        </button>
-                        {addFilterOpen && (
-                            <div style={{
-                                position: "absolute", top: 34, left: 0, zIndex: 200,
-                                background: T.card, border: `1px solid ${T.border}`, borderRadius: 8,
-                                boxShadow: `0 6px 24px ${T.shadow}`, padding: "4px 0",
-                                minWidth: 190, fontFamily: sans
-                            }}>
-                                {activeFDefs.map(d => (
-                                    <div key={d.key} onClick={() => addFilter(d.key)}
-                                        style={{ padding: "7px 13px", fontSize: 12, cursor: "pointer", color: T.subtext }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = T.hover; e.currentTarget.style.color = T.text; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.subtext; }}>
-                                        {d.label}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {filters.length > 0 && (
-                        <button onClick={() => setFilters([])}
-                            style={{
-                                background: "none", border: "none", cursor: "pointer",
-                                color: T.muted, fontSize: 12, fontFamily: sans, padding: "0 4px",
-                                transition: "color .12s"
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.color = T.text}
-                            onMouseLeave={e => e.currentTarget.style.color = T.muted}>
-                            Clear all
-                        </button>
-                    )}
-
-                </div>
-
                 {/*  TABLE  */}
                 <div className="sdv-table-shell">
                     <div className="sdv-table-topline">
@@ -17831,7 +17782,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                             {sortKey ? <>Sorted by <strong style={{ color: T.text, fontWeight: 700 }}>{sortKey}</strong> / {sortDir}</> : "Default sort"}
                         </div>
                     </div>
-                    <div ref={tableRef} style={{
+                    <div ref={tableRef} className="sdv-table-wrap" style={{
                         flex: 1, overflow: "auto", scrollbarWidth: "thin",
                         scrollbarColor: `${T.border} transparent`,
                         WebkitOverflowScrolling: "touch"
@@ -17839,7 +17790,7 @@ function ScreenDetailView({ detail, onBack, T, industryMap, onTechnoFundaScan, t
                         {tablesLoading ? (
                             <div style={{
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                height: "100%", gap: 10, color: T.subtext
+                                height: "100%", minHeight: 240, gap: 10, color: T.subtext
                             }}>
                                 <div style={{
                                     width: 16, height: 16, border: `1.5px solid ${T.border}`,
@@ -18198,6 +18149,7 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, uni
     const [addFilterOpen, setAddFilterOpen] = useState(false);
     const addFilterRef = useRef(null);
     const tableRef = useRef(null);
+    const outerRef = useRef(null);
     // Chart preview popover  same mechanism as ScreenDetailView
     const [hoveredRow, setHoveredRow] = useState(null); // { ticker, row, anchorRect }
 
@@ -18323,6 +18275,7 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, uni
     const pageStart = (page - 1) * PAGE_SIZE;
     const pagedRows = useMemo(() => sortedRows.slice(pageStart, pageStart + PAGE_SIZE), [sortedRows, pageStart]);
     const goToPage = p => setPage(Math.min(Math.max(1, p), totalPages));
+    usePageStickyThead(outerRef, tableRef, page);
 
     const handleSort = key => {
         if (sortKey === key) setSortDir(d => d === "desc" ? "asc" : "desc");
@@ -18373,7 +18326,7 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, uni
         : <span style={{ marginLeft: 2, color: ACCENT, fontSize: 8 }}>{sortDir === "desc" ? "" : ""}</span>;
 
     return (
-        <div className="pfv-outer" style={{
+        <div className="pfv-outer" ref={outerRef} style={{
             display: "flex", flexDirection: "column", width: "100%", height: "100%",
             background: T.bg, color: T.text, fontFamily: sans, flex: 1, minHeight: 0, overflow: "hidden"
         }}>
@@ -18406,6 +18359,15 @@ function PatternFilterModule({ T, onBack, initialTab, industryMap, universe, uni
         table.pfv-table td { padding:12px 16px; font-size:15.5px; border-bottom:1px solid ${D.panelBorder}; white-space:nowrap; }
         table.pfv-table tbody tr:hover { background:${isDark ? "rgba(255,255,255,0.025)" : "rgba(15,23,42,0.02)"}; }
         .pfv-pagination { flex-shrink:0; }
+        /* Desktop: the whole view scrolls (scrollbar at the far right of the screen);
+           the table keeps its width but grows to its full height. Mobile untouched. */
+        @media (min-width:601px) {
+          .pfv-outer { overflow-y:auto !important; overflow-x:hidden !important; }
+          .pfv-shell { flex:0 0 auto; }
+          .pfv-topcard { flex:0 0 auto; }
+          .pfv-table-shell { flex:0 0 auto; }
+          .pfv-table-wrap { flex:0 0 auto; overflow-x:auto; overflow-y:hidden; min-height:260px; }
+        }
         .pfv-mobile-back { display:none; }
         @media (max-width:600px) {
           /* On mobile the hero/badge/description ate most of the screen and
