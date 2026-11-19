@@ -1311,7 +1311,7 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
 
     // ── sparkline geometry (hand-rolled SVG, no chart lib) ──────────────────
     const vw = 300;
-    const vh = isCompact ? 60 : card ? 74 : 80;
+    const vh = isCompact ? 52 : card ? 74 : 80;
     const padY = 6;
     const range = Math.max(max - min, 0.01);
     const stepX = values.length > 1 ? vw / (values.length - 1) : vw;
@@ -1365,7 +1365,7 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                 <span style={{
-                    fontSize: isCompact ? 34 : card ? 36 : 42, fontWeight: 800, letterSpacing: "-0.03em",
+                    fontSize: isCompact ? 30 : card ? 36 : 42, fontWeight: 800, letterSpacing: "-0.03em",
                     color: D.text, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1,
                 }}>{pe.toFixed(2)}</span>
                 {delta != null && (
@@ -2154,7 +2154,7 @@ const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = 
                 {has ? (
                     <>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                            <span style={{ fontFamily: HERO_MONO, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 34 : 36, fontVariantNumeric: "tabular-nums" }}>
+                            <span style={{ fontFamily: HERO_MONO, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 30 : 36, fontVariantNumeric: "tabular-nums" }}>
                                 {card.prefix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginRight: 3, letterSpacing: 0 }}>{card.prefix}</span>}
                                 {fmt(price)}
                                 {card.suffix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginLeft: 3, letterSpacing: 0 }}>{card.suffix}</span>}
@@ -2177,7 +2177,7 @@ const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = 
                     </>
                 ) : (
                     <>
-                        <div style={{ fontFamily: HERO_MONO, fontWeight: 800, fontSize: isCompact ? 34 : 36, lineHeight: 1, color: D.muted, opacity: 0.5 }}>{EMPTY_VALUE}</div>
+                        <div style={{ fontFamily: HERO_MONO, fontWeight: 800, fontSize: isCompact ? 30 : 36, lineHeight: 1, color: D.muted, opacity: 0.5 }}>{EMPTY_VALUE}</div>
                         <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: HERO_SANS }}>{card.sub} &middot; waiting for data</div>
                     </>
                 )}
@@ -2235,11 +2235,12 @@ const HERO_DARK_THEME_INPUT = {
     neg: "#f87171",
 };
 const HERO_DARK_CARD_CSS = `
-.sd-hero-track{display:flex;align-items:flex-start;gap:12px;overflow-x:auto;overflow-y:hidden;transition:height .22s ease;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;padding:0 0 14px;margin:0 0 -10px}
+.sd-hero-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;padding:0 0 14px;margin:0 0 -10px}
 .sd-hero-track::-webkit-scrollbar{display:none}
 .sd-hero-card{flex:0 0 100%;box-sizing:border-box;scroll-snap-align:start;scroll-snap-stop:always;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden;border-radius:18px;background:linear-gradient(150deg,#0e1b31 0%,#0a1424 100%);border:1px solid rgba(148,163,184,0.14);box-shadow:0 4px 12px rgba(3,8,20,0.28)}
 .sd-hero-card>*{flex:1 1 auto;min-width:0}
 .sd-hero-dots{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px}
+@media (max-width:480px){.sd-hero-card{border-radius:16px}.sd-hero-card>*{font-size:inherit}}
 .sd-hero-dot{display:block;flex:none;width:6px;height:6px;border-radius:50%;cursor:pointer;transition:all .15s ease}
 .sd-hero-dot.active{width:16px;border-radius:4px}
 `;
@@ -2248,28 +2249,6 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
     const trackRef = useRef(null);
     const [active, setActive] = useState(0);
     const COUNT = 3 + MACRO_CARDS.length;
-    // Cards keep their natural height (no stretching to the tallest card); the track
-    // animates to the height of whichever card is currently in view.
-    const [trackH, setTrackH] = useState(null);
-    const activeRef = useRef(0);
-    const measure = () => {
-        const el = trackRef.current;
-        const card = el && el.children[activeRef.current];
-        if (!card) return;
-        const h = Math.ceil(card.getBoundingClientRect().height) + 14; // + track's bottom padding (shadow room)
-        setTrackH(prev => (prev === h ? prev : h));
-    };
-    useEffect(() => {
-        activeRef.current = active;
-        measure();
-    }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
-    useEffect(() => {
-        const el = trackRef.current;
-        if (!el || typeof ResizeObserver === "undefined") return undefined;
-        const ro = new ResizeObserver(() => measure());
-        Array.from(el.children).forEach(c => ro.observe(c));
-        return () => ro.disconnect();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const slideStep = () => {
         const el = trackRef.current;
@@ -2281,9 +2260,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
         const el = trackRef.current;
         const step = slideStep();
         if (!el || !step) return;
-        const next = Math.max(0, Math.min(COUNT - 1, Math.round(el.scrollLeft / step)));
-        activeRef.current = next;
-        setActive(next);
+        setActive(Math.max(0, Math.min(COUNT - 1, Math.round(el.scrollLeft / step))));
     };
     const goTo = i => {
         const el = trackRef.current;
@@ -2294,8 +2271,8 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
     return (
         <div style={{ marginBottom: 14 }}>
             <style>{HERO_DARK_CARD_CSS}</style>
-            <div className="sd-hero-track" ref={trackRef} onScroll={handleScroll} style={trackH ? { height: trackH } : undefined}>
-                <div className="sd-hero-card" style={{ padding: "20px 18px 20px" }}>
+            <div className="sd-hero-track" ref={trackRef} onScroll={handleScroll}>
+                <div className="sd-hero-card" style={{ padding: "14px 14px 14px" }}>
                     <NiftyPePanel D={DD} isCompact={isCompact} data={niftyPeData} />
                 </div>
                 <div className="sd-hero-card">
