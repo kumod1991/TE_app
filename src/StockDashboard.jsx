@@ -2283,7 +2283,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
                 </div>
                 {MACRO_CARDS.map(card => (
                     <div className="sd-hero-card" key={card.key}>
-                        <MacroPanel D={DD} isCompact={isCompact} bare hideSub={EXTRA_MACRO_CARDS.some(c => c.key === card.key)} card={card} series={macroSeries?.[card.symbol]} extras={macroExtras?.[card.key]} gid={`${card.key}-m`} />
+                        <MacroPanel D={DD} isCompact={isCompact} bare hideSub card={card} series={macroSeries?.[card.symbol]} extras={macroExtras?.[card.key]} gid={`${card.key}-m`} />
                     </div>
                 ))}
             </div>
