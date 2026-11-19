@@ -788,7 +788,19 @@ function StockAvatar({ T, name, ticker, size = 32 }) {
 // Shared "avatar + name + ticker" cell used by every stock table (Movers,
 // Volume Shockers, Trend Template, RS tables) so the layout is identical
 // everywhere instead of each table hand-rolling its own name column.
-function NameCell({ T, name, ticker, size = 32, nameFontSize = 15.5, tickerFontSize = 13.5 }) {
+function NameCell({ T, name, ticker, size = 32, nameFontSize = 15.5, tickerFontSize = 13.5, tickerOnly = false }) {
+    if (tickerOnly) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <StockAvatar T={T} name={name} ticker={ticker} size={size} />
+                <span style={{
+                    fontWeight: 600, fontSize: nameFontSize, color: T.text, minWidth: 0,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    fontFamily: "'IBM Plex Sans', -apple-system, sans-serif", letterSpacing: "0.01em",
+                }}>{ticker || name}</span>
+            </div>
+        );
+    }
     return (
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <StockAvatar T={T} name={name} ticker={ticker} size={size} />
@@ -1136,8 +1148,8 @@ const FiiDiiPanel = React.memo(function FiiDiiPanel({ D, isCompact, data, bare =
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            gap: 12,
-            padding: bare ? "20px 16px 16px" : isCompact ? "14px 12px 12px" : "20px 20px 18px",
+            gap: bare ? 9 : 12,
+            padding: bare ? "14px 14px 12px" : isCompact ? "14px 12px 12px" : "20px 20px 18px",
             ...(bare ? { borderRadius: 0, background: "transparent", border: "none" } : heroSurface(D)),
             ...(isCompact ? { gridColumn: "1 / -1" } : {}),
         }}>
@@ -1311,7 +1323,7 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
 
     // ── sparkline geometry (hand-rolled SVG, no chart lib) ──────────────────
     const vw = 300;
-    const vh = isCompact ? 52 : card ? 74 : 80;
+    const vh = isCompact ? 44 : card ? 74 : 80;
     const padY = 6;
     const range = Math.max(max - min, 0.01);
     const stepX = values.length > 1 ? vw / (values.length - 1) : vw;
@@ -1365,7 +1377,7 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                 <span style={{
-                    fontSize: isCompact ? 30 : card ? 36 : 42, fontWeight: 800, letterSpacing: "-0.03em",
+                    fontSize: isCompact ? 27 : card ? 36 : 42, fontWeight: 800, letterSpacing: "-0.03em",
                     color: D.text, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1,
                 }}>{pe.toFixed(2)}</span>
                 {delta != null && (
@@ -1387,7 +1399,7 @@ function NiftyPePanel({ D, isCompact, data, card = false }) {
                 Price / earnings (TTM) &middot; {card ? String(dateLabel).replace(/-/g, " ") : dateLabel}
             </div>
 
-            <div style={{ marginTop: "auto", paddingTop: 14 }}>
+            <div style={{ marginTop: "auto", paddingTop: isCompact ? 8 : 14 }}>
                 {card && (
                     <HeroTrendChart D={D} points={rows.map(r => ({ date: r.date, value: Number(r.pe_ratio) }))} dp={2} height={104} gid="pe" avgLabel="2Y AVG" tipLabel={heroMonthYear} />
                 )}
@@ -1604,8 +1616,8 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            gap: isCompact ? 16 : 12,
-            padding: bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
+            gap: isCompact ? 11 : 12,
+            padding: bare ? "14px 14px 12px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
             ...(bare ? { borderRadius: 0, background: "transparent", border: "none" } : heroSurface(D)),
         }}>
             {regime && (
@@ -1645,7 +1657,7 @@ const BreadthPanel = React.memo(function BreadthPanel({ D, isCompact, snapshot, 
             </div>
 
             {isCompact ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
                     {[items.slice(0, 2), items.slice(2)].map((pair, pi) => (
                         <React.Fragment key={pi}>
                             {pi === 1 && <div aria-hidden="true" style={{ height: 1, background: D.panelBorder }} />}
@@ -2122,8 +2134,8 @@ const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = 
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            gap: dense ? 10 : 14,
-            padding: dense ? "16px 18px 12px" : bare ? "20px 18px 16px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
+            gap: dense ? 8 : 10,
+            padding: dense ? "12px 14px 10px" : bare ? "14px 14px 12px" : isCompact ? "18px 18px 14px" : "20px 20px 18px",
             ...(bare ? { borderRadius: 0, background: "transparent", border: "none" } : heroSurface(D)),
         }}>
             {has && (
@@ -2154,7 +2166,7 @@ const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = 
                 {has ? (
                     <>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                            <span style={{ fontFamily: HERO_MONO, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 30 : 36, fontVariantNumeric: "tabular-nums" }}>
+                            <span style={{ fontFamily: HERO_MONO, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1, color: D.text, fontSize: isCompact ? 27 : 36, fontVariantNumeric: "tabular-nums" }}>
                                 {card.prefix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginRight: 3, letterSpacing: 0 }}>{card.prefix}</span>}
                                 {fmt(price)}
                                 {card.suffix && <span style={{ fontSize: "0.62em", fontWeight: 600, opacity: 0.55, marginLeft: 3, letterSpacing: 0 }}>{card.suffix}</span>}
@@ -2177,7 +2189,7 @@ const MacroPanel = React.memo(function MacroPanel({ D: Dbase, isCompact, bare = 
                     </>
                 ) : (
                     <>
-                        <div style={{ fontFamily: HERO_MONO, fontWeight: 800, fontSize: isCompact ? 30 : 36, lineHeight: 1, color: D.muted, opacity: 0.5 }}>{EMPTY_VALUE}</div>
+                        <div style={{ fontFamily: HERO_MONO, fontWeight: 800, fontSize: isCompact ? 27 : 36, lineHeight: 1, color: D.muted, opacity: 0.5 }}>{EMPTY_VALUE}</div>
                         <div style={{ fontSize: 13, color: D.subtext, marginTop: 6, fontFamily: HERO_SANS }}>{card.sub} &middot; waiting for data</div>
                     </>
                 )}
@@ -2272,7 +2284,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
         <div style={{ marginBottom: 14 }}>
             <style>{HERO_DARK_CARD_CSS}</style>
             <div className="sd-hero-track" ref={trackRef} onScroll={handleScroll}>
-                <div className="sd-hero-card" style={{ padding: "14px 14px 14px" }}>
+                <div className="sd-hero-card" style={{ padding: "12px 14px 12px" }}>
                     <NiftyPePanel D={DD} isCompact={isCompact} data={niftyPeData} />
                 </div>
                 <div className="sd-hero-card">
@@ -3655,7 +3667,7 @@ function TrendTemplateCard({ T, userToken, isCompact, onNavigate, onLogin }) {
                                 >
                                     <td style={{ padding: "9px 8px", color: T.muted, fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 24, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                                     <td data-preview-anchor="1" style={{ padding: "9px 8px", maxWidth: 170, minWidth: 110 }}>
-                                        <NameCell T={T} name={row.name} ticker={row.ticker} />
+                                        <NameCell T={T} name={row.name} ticker={row.ticker} tickerOnly size={28} />
                                     </td>
                                     <td style={{
                                         padding: "9px 8px", textAlign: "right",
@@ -3873,7 +3885,7 @@ function useSectorRotationRaw() {
     return { raw, loading, error, retry: () => setNonce(n => n + 1) };
 }
 
-const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, items, maxRows, dense = false }) {
+const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, items, maxRows, dense = false, fixedRows = false }) {
     const meta = SECTOR_ROT_STATUS[status];
     const tone = sectorRotTone(T, status);
     const shown = items.slice(0, maxRows);
@@ -3893,6 +3905,7 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
                 minWidth: 0,
                 display: "flex",
                 flexDirection: "column",
+                flex: "1 1 auto",
                 padding: dense ? "11px 12px 6px" : "13px 14px 8px",
                 borderRadius: 12,
                 border: `1px solid ${withAlpha(tone, T.isDark ? 0.26 : 0.2)}`,
@@ -3918,7 +3931,7 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
                 }}>{items.length}</span>
             </div>
 
-            {shown.length === 0 ? (
+            {(shown.length === 0 && !fixedRows) ? (
                 <div style={{ padding: dense ? "8px 0 8px" : "14px 0 12px", fontSize: 13, color: T.muted, opacity: 0.8 }}>No sectors right now</div>
             ) : (
                 <div style={{ display: "flex", flexDirection: "column" }}>
@@ -3929,6 +3942,7 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
                             <div key={s.sector} style={{
                                 display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
                                 padding: dense ? "5px 0" : "6px 0",
+                                minHeight: fixedRows ? 34 : undefined,
                                 borderTop: i === 0 ? `1px solid ${hairline}` : `1px solid ${hairline}`,
                             }}>
                                 <span style={{
@@ -3946,10 +3960,18 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
                             </div>
                         );
                     })}
+                    {fixedRows && Array.from({ length: Math.max(0, maxRows - shown.length) }).map((_, k) => (
+                        <div key={`ph${k}`} style={{
+                            minHeight: 34, display: "flex", alignItems: "center",
+                            borderTop: `1px solid ${hairline}`, fontSize: 13, color: T.muted, opacity: 0.8,
+                        }}>{shown.length === 0 && k === 0 ? "No sectors right now" : ""}</div>
+                    ))}
                 </div>
             )}
 
-            {extra > 0 && (
+            {fixedRows ? (
+                <div style={{ paddingTop: 6, fontSize: 12, color: T.muted, fontFamily: mono, minHeight: 18 }}>{extra > 0 ? `+${extra} more` : "\u00A0"}</div>
+            ) : extra > 0 && (
                 <div style={{ paddingTop: 6, fontSize: 12, color: T.muted, fontFamily: mono }}>+{extra} more</div>
             )}
         </div>
@@ -3976,7 +3998,21 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
         return () => ro.disconnect();
     }, []);
     const twoCol = gridW ? gridW >= 440 : !isCompact;
-    const maxRows = 3;
+    // Narrow layouts swipe between the four buckets (5 fixed rows each) instead of stacking them.
+    const carousel = !twoCol;
+    const maxRows = carousel ? 5 : 3;
+    const trackRef = useRef(null);
+    const [slide, setSlide] = useState(0);
+    const onTrackScroll = () => {
+        const el = trackRef.current;
+        if (!el || !el.clientWidth) return;
+        const idx = Math.max(0, Math.min(SECTOR_ROT_ORDER.length - 1, Math.round(el.scrollLeft / (el.clientWidth + 10))));
+        setSlide(prev => (prev === idx ? prev : idx));
+    };
+    const goSlide = i => {
+        const el = trackRef.current;
+        if (el) el.scrollTo({ left: i * (el.clientWidth + 10), behavior: "smooth" });
+    };
 
     // All four timeframes are cheap (≈24 sectors) — compute once per data change so tab switches are instant.
     const byTf = useMemo(() => {
@@ -4014,7 +4050,7 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <Skeleton T={T} h={8} style={{ borderRadius: 999 }} />
                 <div style={{ display: "grid", gridTemplateColumns: twoCol ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 10 }}>
-                    {[...Array(4)].map((_, i) => <Skeleton key={i} T={T} h={twoCol ? 150 : 128} />)}
+                    {[...Array(twoCol ? 4 : 1)].map((_, i) => <Skeleton key={i} T={T} h={twoCol ? 150 : 236} />)}
                 </div>
             </div>
         );
@@ -4064,12 +4100,47 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
                     ))}
                 </div>
 
-                {/* RRG-style 2x2 (one column when narrow) */}
-                <div style={{ display: "grid", gridTemplateColumns: twoCol ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 10 }}>
-                    {order.map(s => (
-                        <SectorRotationTile key={s} T={T} status={s} items={groups[s]} maxRows={maxRows} dense={!twoCol} />
-                    ))}
-                </div>
+                {carousel ? (
+                    <>
+                        <div
+                            className="sd-sector-track"
+                            ref={trackRef}
+                            onScroll={onTrackScroll}
+                            style={{ display: "flex", gap: 10, overflowX: "auto", scrollSnapType: "x mandatory", overscrollBehaviorX: "contain", WebkitOverflowScrolling: "touch" }}
+                        >
+                            {SECTOR_ROT_ORDER.map(s => (
+                                <div key={s} style={{ flex: "0 0 100%", minWidth: 0, display: "flex", scrollSnapAlign: "start", scrollSnapStop: "always" }}>
+                                    <SectorRotationTile T={T} status={s} items={groups[s]} maxRows={maxRows} dense fixedRows />
+                                </div>
+                            ))}
+                        </div>
+                        <div role="tablist" aria-label="Sector buckets" style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 4 }}>
+                            {SECTOR_ROT_ORDER.map((s, i) => (
+                                <button
+                                    key={s}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={i === slide}
+                                    aria-label={SECTOR_ROT_STATUS[s].label}
+                                    onClick={() => goSlide(i)}
+                                    style={{ width: i === slide ? 26 : 16, height: 22, padding: 0, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                >
+                                    <span style={{
+                                        display: "block", height: 6, width: i === slide ? 18 : 6, borderRadius: 999,
+                                        background: i === slide ? sectorRotTone(T, s) : withAlpha(T.muted, 0.35),
+                                        transition: "all .15s ease",
+                                    }} />
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 10 }}>
+                        {order.map(s => (
+                            <SectorRotationTile key={s} T={T} status={s} items={groups[s]} maxRows={maxRows} dense={false} />
+                        ))}
+                    </div>
+                )}
             </div>
         );
     }
@@ -4347,7 +4418,7 @@ function LeadershipScreenCard({ T, userToken, isCompact, onNavigate, config, onL
                                     >
                                         <td style={{ padding: "9px 8px", color: T.muted, fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 24, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                                         <td data-preview-anchor="1" style={{ padding: "9px 8px", maxWidth: 170, minWidth: 110 }}>
-                                            <NameCell T={T} name={row.name} ticker={row.ticker} />
+                                            <NameCell T={T} name={row.name} ticker={row.ticker} tickerOnly size={28} />
                                         </td>
                                         <td style={{ padding: "9px 8px", textAlign: "right", color: T.text, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5 }}>
                                             {row[priceKey] != null ? `₹${fmt(row[priceKey])}` : EMPTY_VALUE}
@@ -6289,6 +6360,8 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     .stock-dashboard-shell .sd-card-title { font-size: 15px !important; }
                     .stock-dashboard-shell .sd-tab { padding: 7px 11px !important; font-size: 13px !important; }
                 }
+                .stock-dashboard-shell .sd-sector-track { scrollbar-width: none; }
+                .stock-dashboard-shell .sd-sector-track::-webkit-scrollbar { display: none; }
                 @keyframes sdFadeIn {
                     from { opacity: 0; transform: translateY(6px); }
                     to { opacity: 1; transform: translateY(0); }
