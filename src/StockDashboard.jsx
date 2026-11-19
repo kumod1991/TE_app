@@ -2451,7 +2451,7 @@ const PremiumDashboardHero = React.memo(function PremiumDashboardHero({ D, isCom
                 <div style={{
                     display: "grid",
                     gridTemplateColumns: isCompact
-                        ? "1fr"
+                        ? "minmax(0, 1fr)"
                         : "repeat(3, minmax(0, 1fr))",
                     gap: isCompact ? 18 : 16,
                     alignItems: "stretch",
@@ -4011,7 +4011,7 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
         body = (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <Skeleton T={T} h={8} style={{ borderRadius: 999 }} />
-                <div style={{ display: "grid", gridTemplateColumns: twoCol ? "1fr 1fr" : "1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: twoCol ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 10 }}>
                     {[...Array(4)].map((_, i) => <Skeleton key={i} T={T} h={twoCol ? 150 : 128} />)}
                 </div>
             </div>
@@ -4063,7 +4063,7 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
                 </div>
 
                 {/* RRG-style 2x2 (one column when narrow) */}
-                <div style={{ display: "grid", gridTemplateColumns: twoCol ? "1fr 1fr" : "1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: twoCol ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 10 }}>
                     {order.map(s => (
                         <SectorRotationTile key={s} T={T} status={s} items={groups[s]} maxRows={maxRows} />
                     ))}
@@ -5266,7 +5266,7 @@ const ExploreCards = React.memo(function ExploreCards({ D, isCompact, onNavigate
             marginTop: isCompact ? 14 : 18,
             display: isCompact ? "flex" : "grid",
             flexDirection: isCompact ? "column" : undefined,
-            gridTemplateColumns: isCompact ? undefined : "1fr 1fr",
+            gridTemplateColumns: isCompact ? undefined : "minmax(0, 1fr) minmax(0, 1fr)",
             gap: isCompact ? 14 : 18,
             alignItems: "stretch",
         }}>
@@ -6193,7 +6193,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 {/* ── MARKET MOVERS + SECTOR ROTATION — two halves, single row ── */}
                 <div style={{
                     display: "grid",
-                    gridTemplateColumns: isCompact ? "1fr" : "1fr 1fr",
+                    gridTemplateColumns: isCompact ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(0, 1fr)",
                     gap: 18,
                     alignItems: "stretch",
                     minWidth: 0,
@@ -6233,7 +6233,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                     minWidth: 0,
                     display: isCompact ? "flex" : "grid",
                     flexDirection: isCompact ? "column" : undefined,
-                    gridTemplateColumns: isCompact ? undefined : "1fr 1fr",
+                    gridTemplateColumns: isCompact ? undefined : "minmax(0, 1fr) minmax(0, 1fr)",
                     gap: isCompact ? 14 : 18,
                     // On mobile this is a column flex container, where align-items
                     // governs the CROSS axis (width) — "start" there means "shrink

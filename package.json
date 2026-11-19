@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run build:web",
+    "build:web": "vite build --mode web",
+    "build:android": "vite build --mode android && node scripts/postbuild-android.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

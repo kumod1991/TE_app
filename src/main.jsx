@@ -3,6 +3,18 @@ import { createRoot } from 'react-dom/client'
 
 const App = lazy(() => import('./App.jsx'))
 
+// Load Google AdSense only in the website build.
+// Vite replaces this environment flag at build time.
+if (import.meta.env.VITE_ENABLE_ADSENSE === 'true') {
+  import('./web/adsense.js')
+    .then(({ initializeAdSense }) => {
+      initializeAdSense()
+    })
+    .catch((error) => {
+      console.error('Failed to initialize website AdSense:', error)
+    })
+}
+
 function AppShell() {
   return (
     <div className="app-shell" aria-busy="true" aria-live="polite">
