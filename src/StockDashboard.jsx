@@ -2235,7 +2235,7 @@ const HERO_DARK_THEME_INPUT = {
     neg: "#f87171",
 };
 const HERO_DARK_CARD_CSS = `
-.sd-hero-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;padding:0 0 14px;margin:0 0 -10px}
+.sd-hero-track{display:flex;align-items:flex-start;gap:12px;overflow-x:auto;overflow-y:hidden;transition:height .22s ease;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;padding:0 0 14px;margin:0 0 -10px}
 .sd-hero-track::-webkit-scrollbar{display:none}
 .sd-hero-card{flex:0 0 100%;box-sizing:border-box;scroll-snap-align:start;scroll-snap-stop:always;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden;border-radius:18px;background:linear-gradient(150deg,#0e1b31 0%,#0a1424 100%);border:1px solid rgba(148,163,184,0.14);box-shadow:0 4px 12px rgba(3,8,20,0.28)}
 .sd-hero-card>*{flex:1 1 auto;min-width:0}
@@ -2248,6 +2248,28 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
     const trackRef = useRef(null);
     const [active, setActive] = useState(0);
     const COUNT = 3 + MACRO_CARDS.length;
+    // Cards keep their natural height (no stretching to the tallest card); the track
+    // animates to the height of whichever card is currently in view.
+    const [trackH, setTrackH] = useState(null);
+    const activeRef = useRef(0);
+    const measure = () => {
+        const el = trackRef.current;
+        const card = el && el.children[activeRef.current];
+        if (!card) return;
+        const h = Math.ceil(card.getBoundingClientRect().height) + 14; // + track's bottom padding (shadow room)
+        setTrackH(prev => (prev === h ? prev : h));
+    };
+    useEffect(() => {
+        activeRef.current = active;
+        measure();
+    }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        const el = trackRef.current;
+        if (!el || typeof ResizeObserver === "undefined") return undefined;
+        const ro = new ResizeObserver(() => measure());
+        Array.from(el.children).forEach(c => ro.observe(c));
+        return () => ro.disconnect();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const slideStep = () => {
         const el = trackRef.current;
@@ -2259,7 +2281,9 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
         const el = trackRef.current;
         const step = slideStep();
         if (!el || !step) return;
-        setActive(Math.max(0, Math.min(COUNT - 1, Math.round(el.scrollLeft / step))));
+        const next = Math.max(0, Math.min(COUNT - 1, Math.round(el.scrollLeft / step)));
+        activeRef.current = next;
+        setActive(next);
     };
     const goTo = i => {
         const el = trackRef.current;
@@ -2270,7 +2294,7 @@ const HeroDarkCarousel = React.memo(function HeroDarkCarousel({ D, DD, isCompact
     return (
         <div style={{ marginBottom: 14 }}>
             <style>{HERO_DARK_CARD_CSS}</style>
-            <div className="sd-hero-track" ref={trackRef} onScroll={handleScroll}>
+            <div className="sd-hero-track" ref={trackRef} onScroll={handleScroll} style={trackH ? { height: trackH } : undefined}>
                 <div className="sd-hero-card" style={{ padding: "20px 18px 20px" }}>
                     <NiftyPePanel D={DD} isCompact={isCompact} data={niftyPeData} />
                 </div>
