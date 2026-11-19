@@ -914,7 +914,7 @@ function useViewportFlags() {
 function SectionCard({ T, children, style = {}, className = "" }) {
     return (
         <div
-            className={className}
+            className={`sd-card ${className}`.trim()}
             style={{
                 background: T.panelBg,
                 border: `1px solid ${T.panelBorder}`,
@@ -952,7 +952,7 @@ function LeadershipPanel({ D, isCompact, children }) {
                 minWidth: 0,
             }}
         >
-            <div style={{ padding: isCompact ? "18px 12px" : "24px 26px", minWidth: 0 }}>
+            <div style={{ padding: isCompact ? "14px 10px" : "24px 26px", minWidth: 0 }}>
                 <div style={{
                     display: "flex", alignItems: "center", gap: 12,
                     marginBottom: isCompact ? 14 : 18,
@@ -2941,7 +2941,7 @@ function CardHeader({ T, title, count, right, style = {} }) {
     return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10, flexWrap: "wrap", ...style }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0, flex: 1 }}>
-                <span style={{
+                <span className="sd-card-title" style={{
                     fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em",
                     color: T.text, fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
@@ -2965,6 +2965,7 @@ function TabButton({ T, active, label, count, onClick, hideCount }) {
     const accent = T.accent;
     return (
         <button
+            className="sd-tab"
             onClick={onClick}
             style={{
                 position: "relative",
@@ -3871,7 +3872,7 @@ function useSectorRotationRaw() {
     return { raw, loading, error, retry: () => setNonce(n => n + 1) };
 }
 
-const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, items, maxRows }) {
+const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, items, maxRows, dense = false }) {
     const meta = SECTOR_ROT_STATUS[status];
     const tone = sectorRotTone(T, status);
     const shown = items.slice(0, maxRows);
@@ -3891,7 +3892,7 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
                 minWidth: 0,
                 display: "flex",
                 flexDirection: "column",
-                padding: "13px 14px 8px",
+                padding: dense ? "11px 12px 6px" : "13px 14px 8px",
                 borderRadius: 12,
                 border: `1px solid ${withAlpha(tone, T.isDark ? 0.26 : 0.2)}`,
                 background: withAlpha(tone, T.isDark ? 0.07 : 0.045),
@@ -3903,9 +3904,9 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
                     width: 8, height: 8, borderRadius: "50%", background: tone, flexShrink: 0,
                     boxShadow: `0 0 0 3px ${withAlpha(tone, T.isDark ? 0.2 : 0.14)}`,
                 }} />
-                <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.01em", color: T.text, flexShrink: 0 }}>{meta.label}</span>
+                <span style={{ fontSize: dense ? 14 : 14.5, fontWeight: 700, letterSpacing: "-0.01em", color: T.text, flexShrink: 0 }}>{meta.label}</span>
                 <span style={{
-                    fontSize: 12, color: T.muted, flex: 1, minWidth: 0,
+                    fontSize: dense ? 11.5 : 12, color: T.muted, flex: 1, minWidth: 0,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>{meta.short}</span>
                 <span style={{
@@ -3917,7 +3918,7 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
             </div>
 
             {shown.length === 0 ? (
-                <div style={{ padding: "14px 0 12px", fontSize: 13, color: T.muted, opacity: 0.8 }}>No sectors right now</div>
+                <div style={{ padding: dense ? "8px 0 8px" : "14px 0 12px", fontSize: 13, color: T.muted, opacity: 0.8 }}>No sectors right now</div>
             ) : (
                 <div style={{ display: "flex", flexDirection: "column" }}>
                     {shown.map((s, i) => {
@@ -3926,17 +3927,17 @@ const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, i
                         return (
                             <div key={s.sector} style={{
                                 display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-                                padding: "6px 0",
+                                padding: dense ? "5px 0" : "6px 0",
                                 borderTop: i === 0 ? `1px solid ${hairline}` : `1px solid ${hairline}`,
                             }}>
                                 <span style={{
-                                    fontSize: 14, fontWeight: 600, color: T.text, minWidth: 0,
+                                    fontSize: dense ? 13.5 : 14, fontWeight: 600, color: T.text, minWidth: 0,
                                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                                 }}>{s.label}</span>
                                 <span style={{
-                                    flexShrink: 0, fontFamily: mono, fontWeight: 700, fontSize: 12.5,
+                                    flexShrink: 0, fontFamily: mono, fontWeight: 700, fontSize: dense ? 12 : 12.5,
                                     fontVariantNumeric: "tabular-nums", color: c,
-                                    padding: "2px 7px", borderRadius: 6,
+                                    padding: dense ? "2px 6px" : "2px 7px", borderRadius: 6,
                                     background: withAlpha(c, T.isDark ? 0.18 : 0.1),
                                 }}>
                                     {up ? "\u2191" : "\u2193"} {Math.abs(s.momentum).toFixed(1)}%
@@ -3974,7 +3975,7 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
         return () => ro.disconnect();
     }, []);
     const twoCol = gridW ? gridW >= 440 : !isCompact;
-    const maxRows = twoCol ? 3 : 4;
+    const maxRows = 3;
 
     // All four timeframes are cheap (≈24 sectors) — compute once per data change so tab switches are instant.
     const byTf = useMemo(() => {
@@ -4037,7 +4038,7 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
             <div key={tf} style={{ animation: "sdFadeIn 0.28s ease" }}>
                 {/* Headline + distribution bar */}
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 9, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 14, color: T.subtext || T.muted, fontFamily: font }}>
+                    <div style={{ fontSize: isCompact ? 13.5 : 14, color: T.subtext || T.muted, fontFamily: font }}>
                         <span style={{ fontFamily: mono, fontWeight: 700, color: T.text }}>{gaining}</span>
                         {" of "}
                         <span style={{ fontFamily: mono, fontWeight: 700, color: T.text }}>{total}</span>
@@ -4065,7 +4066,7 @@ function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, us
                 {/* RRG-style 2x2 (one column when narrow) */}
                 <div style={{ display: "grid", gridTemplateColumns: twoCol ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)", gap: 10 }}>
                     {order.map(s => (
-                        <SectorRotationTile key={s} T={T} status={s} items={groups[s]} maxRows={maxRows} />
+                        <SectorRotationTile key={s} T={T} status={s} items={groups[s]} maxRows={maxRows} dense={!twoCol} />
                     ))}
                 </div>
             </div>
@@ -4520,7 +4521,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
                 padding: "48px 20px",
                 textAlign: "center",
                 color: T.muted,
-                fontSize: 15.5,
+                fontSize: isCompact ? 14 : 15.5,
                 fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
             }}>
                 No data available
@@ -4581,7 +4582,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
     const MTh = ({ k, label, align }) => {
         const a = align || (k === "ticker" || k === "name" ? "left" : "right");
         return (
-            <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "10px 14px", textAlign: a }}>
+            <th onClick={() => handleSort(k)} style={{ ...thBase, padding: isCompact ? "10px 8px" : "10px 14px", textAlign: a }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: a === "left" ? "flex-start" : "flex-end", gap: 2 }}>
                     <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
                     <SortIcon dir={sortKey === k ? sortDir : null} />
@@ -4592,10 +4593,10 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={showDist ? 720 : 420} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={tableMaxHeight}>
+        <PremiumTableShell T={T} minWidth={isCompact ? (showDist ? 460 : 0) : (showDist ? 720 : 420)} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={tableMaxHeight}>
             <thead>
                 <tr>
-                    <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
+                    {!isCompact && <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>}
                     <MTh k="name" label="Name" />
                     <MTh k="ltp" label="LTP" />
                     <MTh k="change_pct" label="Chg %" />
@@ -4625,24 +4626,24 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
                             onClick={preview.onClick}
                         >
                             {/* Row index */}
-                            <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                            {!isCompact && <td style={{ padding: isCompact ? "10px 8px" : "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>}
                             {/* Name cell */}
-                            <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
-                                <NameCell T={T} name={row.name} ticker={row.ticker} />
+                            <td data-preview-anchor="1" style={{ padding: isCompact ? "10px 8px" : "12px 16px", maxWidth: 260, minWidth: isCompact ? 0 : 180 }}>
+                                <NameCell T={T} name={row.name} ticker={row.ticker} size={isCompact ? 28 : 32} nameFontSize={isCompact ? 14 : 15.5} tickerFontSize={isCompact ? 12 : 13.5} />
                             </td>
                             {/* LTP */}
                             <td style={{
-                                padding: "12px 16px",
+                                padding: isCompact ? "10px 8px" : "12px 16px",
                                 textAlign: "right",
                                 color: T.text,
                                 fontFamily: "'IBM Plex Mono', monospace",
-                                fontSize: 15.5,
+                                fontSize: isCompact ? 14 : 15.5,
                                 fontWeight: 500,
                                 whiteSpace: "nowrap",
                                 fontVariantNumeric: "tabular-nums",
                             }}>{fmt(row.ltp)}</td>
                             {/* Chg % — pill badge */}
-                            <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <td style={{ padding: isCompact ? "10px 8px" : "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
                                 <span style={{
                                     display: "inline-block",
                                     padding: "3px 8px",
@@ -4655,19 +4656,19 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
                                     color: chgColor,
                                     fontFamily: "'IBM Plex Mono', monospace",
                                     fontWeight: 700,
-                                    fontSize: 15.5,
-                                    minWidth: 64,
+                                    fontSize: isCompact ? 14 : 15.5,
+                                    minWidth: isCompact ? 0 : 64,
                                     textAlign: "right",
                                 }}>{fmtPct(chg)}</span>
                             </td>
                             {/* From high/low */}
                             {showDist && (
                                 <td style={{
-                                    padding: "12px 16px",
+                                    padding: isCompact ? "10px 8px" : "12px 16px",
                                     textAlign: "right",
                                     color: T.text,
                                     fontFamily: "'IBM Plex Mono', monospace",
-                                    fontSize: 15.5,
+                                    fontSize: isCompact ? 14 : 15.5,
                                 }}>{row.dist_pct != null ? `${fmt(row.dist_pct, 1)}%` : EMPTY_VALUE}</td>
                             )}
                         </tr>
@@ -4794,7 +4795,7 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
     const VTh = ({ k, label }) => {
         const a = (k === "ticker" || k === "name") ? "left" : "right";
         return (
-        <th onClick={() => handleSort(k)} style={{ ...thBase, padding: "10px 14px", textAlign: a }}>
+        <th onClick={() => handleSort(k)} style={{ ...thBase, padding: isCompact ? "10px 8px" : "10px 14px", textAlign: a }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: a === "left" ? "flex-start" : "flex-end", gap: 2 }}>
                     <span style={{ color: sortKey === k ? T.text : T.muted, transition: "color 0.15s" }}>{label}</span>
                     <SortIcon dir={sortKey === k ? sortDir : null} />
@@ -4805,10 +4806,10 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={400} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={tableMaxHeight}>
+        <PremiumTableShell T={T} minWidth={isCompact ? 0 : 400} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={tableMaxHeight}>
             <thead>
                 <tr>
-                    <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
+                    {!isCompact && <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>}
                     <VTh k="name" label="Name" />
                     <VTh k="close" label="LTP" />
                     <VTh k="volume_ratio" label="Rel Vol" />
@@ -4837,12 +4838,12 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; preview.onMouseLeave(e); }}
                             onClick={preview.onClick}
                         >
-                            <td style={{ padding: "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
-                            <td data-preview-anchor="1" style={{ padding: "12px 16px", maxWidth: 260, minWidth: 180 }}>
-                                <NameCell T={T} name={row.name} ticker={row.ticker} />
+                            {!isCompact && <td style={{ padding: isCompact ? "10px 8px" : "12px 16px", color: T.muted, fontSize: 13.5, fontFamily: "'IBM Plex Mono', monospace", textAlign: "left", width: 36, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>}
+                            <td data-preview-anchor="1" style={{ padding: isCompact ? "10px 8px" : "12px 16px", maxWidth: 260, minWidth: isCompact ? 0 : 180 }}>
+                                <NameCell T={T} name={row.name} ticker={row.ticker} size={isCompact ? 28 : 32} nameFontSize={isCompact ? 14 : 15.5} tickerFontSize={isCompact ? 12 : 13.5} />
                             </td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 15.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 15.5, color: vrColor }}>
+                            <td style={{ padding: isCompact ? "10px 8px" : "12px 16px", textAlign: "right", color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontSize: isCompact ? 14 : 15.5, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{fmt(row.close)}</td>
+                            <td style={{ padding: isCompact ? "10px 8px" : "12px 16px", textAlign: "right", fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: isCompact ? 14 : 15.5, color: vrColor }}>
                                 {vr != null ? `${Number(vr).toFixed(2)}x` : EMPTY_VALUE}
                             </td>
                         </tr>
@@ -6281,6 +6282,11 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 }
                 .stock-dashboard-shell ::-webkit-scrollbar-track {
                     background: transparent;
+                }
+                @media (max-width: 480px) {
+                    .stock-dashboard-shell .sd-card { padding: 16px 14px !important; border-radius: 13px !important; }
+                    .stock-dashboard-shell .sd-card-title { font-size: 15px !important; }
+                    .stock-dashboard-shell .sd-tab { padding: 7px 11px !important; font-size: 13px !important; }
                 }
                 @keyframes sdFadeIn {
                     from { opacity: 0; transform: translateY(6px); }
