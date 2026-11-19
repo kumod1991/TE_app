@@ -622,6 +622,8 @@ async function fetchAllStock52wVolume(userToken) {
 const EMPTY_VALUE = "-";
 const DEFAULT_VISIBLE_ITEMS = 6;
 const DEFAULT_TABLE_MAX_HEIGHT = 44 + DEFAULT_VISIBLE_ITEMS * 49;
+// Desktop Market Movers tables are taller so the card matches the Sector Rotation card beside it (~6 full rows).
+const MOVERS_DESKTOP_TABLE_MAX_HEIGHT = 440;
 const MOVERS_INITIAL_ROWS = 20;
 const MOVERS_LOAD_MORE_ROWS = 20;
 const TREND_TEMPLATE_PREVIEW_ROWS = 5;
@@ -3692,12 +3694,12 @@ function TrendTemplateCard({ T, userToken, isCompact, onNavigate, onLogin }) {
 // card above and the leadership preview cards below — every preview card here
 // only ever shows TREND_TEMPLATE_PREVIEW_ROWS rows, with the rest one tap away
 // on the matching category of the TechLens → Screens page.
-function ViewAllInScreensLink({ T, onNavigate, totalCount, label, userToken, onLogin }) {
+function ViewAllInScreensLink({ T, onNavigate, totalCount, label, userToken, onLogin, subPage = "screens", ctaLabel = "View all \u2192" }) {
     return (
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 14 }}>
             <button
                 type="button"
-                onClick={() => (userToken ? onNavigate?.("technical", "screens") : onLogin?.())}
+                onClick={() => (userToken ? onNavigate?.("technical", subPage) : onLogin?.())}
                 style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -3716,11 +3718,416 @@ function ViewAllInScreensLink({ T, onNavigate, totalCount, label, userToken, onL
                 onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
                 onMouseLeave={e => e.currentTarget.style.opacity = "1"}
             >
-                {totalCount > TREND_TEMPLATE_PREVIEW_ROWS
-                    ? `View all \u2192`
-                    : `View all \u2192`}
+                {ctaLabel}
             </button>
         </div>
+    );
+}
+
+// ─── SECTOR ROTATION GIST CARD ───────────────────────────────────────────────
+// Replaces the old "Sectoral Leaders" card. It is the at-a-glance version of
+// TechLens → Sector Rotation: for each timeframe (10D / 1M / 3M / 6M) it shows
+// how many sectors are Leading / Improving / Weakening / Lagging and the most
+// notable sectors in each bucket.
+//
+// The four buckets are laid out like the RRG itself (strength vs market runs
+// left → right, momentum runs bottom → top):
+//      Improving | Leading
+//      Lagging   | Weakening
+//
+// Maths is a 1:1 port of computeForLookback() in App.jsx's SectorRotationModule
+// (RS vs its own SMA for "strength", RS change over the lookback for "momentum"),
+// so the buckets here always agree with the full page. Data comes from one
+// sector_rs query (cached through sbFetchAll), all four timeframes are computed
+// client-side from it.
+const SECTOR_ROT_TTL = 10 * 60 * 1000;
+const SECTOR_ROT_HISTORY_DAYS = 205; // ≈ 146 sessions — covers the 6M lookback (126) + margin for holidays
+const SECTOR_ROT_TIMEFRAMES = [
+    { key: "10D", long: "10 Days", lookback: 10 },
+    { key: "1M", long: "1 Month", lookback: 21 },
+    { key: "3M", long: "3 Months", lookback: 63 },
+    { key: "6M", long: "6 Months", lookback: 126 },
+];
+const SECTOR_ROT_LABELS = {
+    bank: "Bank", pvt_bank: "Pvt Bank", fin_services: "Fin Services",
+    it: "IT", fmcg: "FMCG", pharma: "Pharma",
+    healthcare: "Healthcare", cons_dur: "Cons Dur",
+    auto: "Auto", metal: "Metal", energy: "Energy",
+    realty: "Realty", infra: "Infra", psu_bank: "PSU Bank",
+    media: "Media", cement: "Cement", housing: "Housing",
+    defence: "Defence", chemicals: "Chemicals", cap_markets: "Cap Markets",
+    transport: "Transport", tourism: "Tourism", railway_psu: "Railway PSU",
+    cpse: "CPSE",
+};
+const SECTOR_ROT_STATUS = {
+    LEADING: { label: "Leading", short: "Strong & rising", hint: "Strong, and still rising" },
+    IMPROVING: { label: "Improving", short: "Gaining strength", hint: "Was weak, now gaining strength" },
+    WEAKENING: { label: "Weakening", short: "Losing steam", hint: "Was strong, now losing steam" },
+    LAGGING: { label: "Lagging", short: "Weak & falling", hint: "Weak, and still falling behind" },
+};
+// Strongest → weakest (distribution bar, single-column order)
+const SECTOR_ROT_ORDER = ["LEADING", "IMPROVING", "WEAKENING", "LAGGING"];
+// RRG geometry (two-column order): top-left, top-right, bottom-left, bottom-right
+const SECTOR_ROT_GRID_ORDER = ["IMPROVING", "LEADING", "LAGGING", "WEAKENING"];
+
+let _sectorRotRawCache = null; // { sector: [{ date, rs }] } — survives dashboard remounts
+
+function sectorRotTone(T, status) {
+    const dark = !!T.isDark;
+    if (status === "LEADING") return T.pos || (dark ? "#22c55e" : "#0e7a53");
+    if (status === "LAGGING") return T.neg || (dark ? "#ef4444" : "#c23b3b");
+    if (status === "IMPROVING") return dark ? "#eab308" : "#c27803";
+    return dark ? "#f97316" : "#d9582b"; // WEAKENING
+}
+
+function sectorRotGroupRows(rows) {
+    const raw = {};
+    (Array.isArray(rows) ? rows : []).forEach(row => {
+        const rs = parseFloat(row.rs);
+        if (!row.sector || !isFinite(rs) || rs <= 0) return;
+        (raw[row.sector] || (raw[row.sector] = [])).push({ date: row.date, rs });
+    });
+    return Object.keys(raw).length ? raw : null;
+}
+
+function computeSectorRotation(rawHist, lookback) {
+    const out = [];
+    Object.entries(rawHist || {}).forEach(([sector, pts]) => {
+        const n = pts.length;
+        if (n < lookback + 1) return; // not enough history for this timeframe → excluded (same guard as the full page)
+        const rsNow = pts[n - 1].rs;
+        let sum = 0;
+        for (let i = n - lookback; i < n; i++) sum += pts[i].rs;
+        const sma = sum / lookback;
+        const spread = (rsNow - sma) / (sma || 1);
+        const rsPrev = pts[n - 1 - lookback].rs;
+        const momentum = rsPrev ? ((rsNow / rsPrev) - 1) * 100 : 0;
+        const velocity = rsNow - pts[Math.max(0, n - 6)].rs;
+        const quadrant =
+            spread > 0 && momentum > 0 ? "LEADING" :
+                spread > 0 && momentum <= 0 ? "WEAKENING" :
+                    spread <= 0 && momentum > 0 ? "IMPROVING" : "LAGGING";
+        const rank =
+            0.35 * spread + 0.25 * (momentum / 10) + 0.15 * velocity +
+            0.15 * (quadrant === "LEADING" || quadrant === "IMPROVING" ? 1 : 0) +
+            0.10 * (spread > 0 ? 1 : 0);
+        out.push({
+            sector,
+            label: SECTOR_ROT_LABELS[sector] || sector.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+            momentum, quadrant, rank, date: pts[n - 1].date,
+        });
+    });
+    return out;
+}
+
+function sectorRotDateLabel(raw) {
+    if (!raw) return "";
+    const d = new Date(`${String(raw).slice(0, 10)}T00:00:00`);
+    if (isNaN(d.getTime())) return String(raw);
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function useSectorRotationRaw() {
+    const [raw, setRaw] = useState(_sectorRotRawCache);
+    const [loading, setLoading] = useState(!_sectorRotRawCache);
+    const [error, setError] = useState(null);
+    const [nonce, setNonce] = useState(0);
+
+    useEffect(() => {
+        let cancelled = false;
+        const apply = (rows) => {
+            const grouped = sectorRotGroupRows(rows);
+            if (!grouped || cancelled) return false;
+            _sectorRotRawCache = grouped;
+            setRaw(grouped);
+            return true;
+        };
+        (async () => {
+            setError(null);
+            if (!_sectorRotRawCache) setLoading(true);
+            try {
+                const since = new Date();
+                since.setDate(since.getDate() - SECTOR_ROT_HISTORY_DAYS);
+                const sinceStr = since.toISOString().split("T")[0];
+                const sectorIn = Object.keys(SECTOR_ROT_LABELS).map(encodeURIComponent).join(",");
+                // Deterministic order (date, sector) so offset pagination can never duplicate/skip rows on ties.
+                const path = `sector_rs?select=date,sector,rs&sector=in.(${sectorIn})&date=gte.${sinceStr}&order=date.asc,sector.asc`;
+                const rows = await sbFetchAll(path, null, {
+                    ttl: SECTOR_ROT_TTL,
+                    onStale: fresh => apply(fresh), // silent SWR refresh
+                });
+                if (cancelled) return;
+                if (!apply(rows) && !_sectorRotRawCache) setError("No sector data available");
+            } catch (e) {
+                if (!cancelled && !_sectorRotRawCache) setError(e?.message || "Could not load sector data");
+                else console.warn("[SectorRotationCard]", e?.message);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [nonce]);
+
+    return { raw, loading, error, retry: () => setNonce(n => n + 1) };
+}
+
+const SectorRotationTile = React.memo(function SectorRotationTile({ T, status, items, maxRows }) {
+    const meta = SECTOR_ROT_STATUS[status];
+    const tone = sectorRotTone(T, status);
+    const shown = items.slice(0, maxRows);
+    const extra = items.length - shown.length;
+    const font = "'IBM Plex Sans', -apple-system, sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+    const hairline = T.isDark ? "rgba(148,163,184,0.14)" : "rgba(15,23,42,0.07)";
+    const pos = T.pos || "#0e7a53";
+    const neg = T.neg || "#c23b3b";
+
+    return (
+        <div
+            role="group"
+            aria-label={`${meta.label}: ${items.length} sectors`}
+            title={meta.hint}
+            style={{
+                minWidth: 0,
+                display: "flex",
+                flexDirection: "column",
+                padding: "13px 14px 8px",
+                borderRadius: 12,
+                border: `1px solid ${withAlpha(tone, T.isDark ? 0.26 : 0.2)}`,
+                background: withAlpha(tone, T.isDark ? 0.07 : 0.045),
+                fontFamily: font,
+            }}
+        >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, marginBottom: 6 }}>
+                <span aria-hidden="true" style={{
+                    width: 8, height: 8, borderRadius: "50%", background: tone, flexShrink: 0,
+                    boxShadow: `0 0 0 3px ${withAlpha(tone, T.isDark ? 0.2 : 0.14)}`,
+                }} />
+                <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.01em", color: T.text, flexShrink: 0 }}>{meta.label}</span>
+                <span style={{
+                    fontSize: 12, color: T.muted, flex: 1, minWidth: 0,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>{meta.short}</span>
+                <span style={{
+                    fontSize: 12, fontWeight: 700, fontFamily: mono, color: tone, flexShrink: 0,
+                    padding: "1px 8px", borderRadius: 999,
+                    background: withAlpha(tone, T.isDark ? 0.18 : 0.1),
+                    border: `1px solid ${withAlpha(tone, 0.28)}`,
+                }}>{items.length}</span>
+            </div>
+
+            {shown.length === 0 ? (
+                <div style={{ padding: "14px 0 12px", fontSize: 13, color: T.muted, opacity: 0.8 }}>No sectors right now</div>
+            ) : (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                    {shown.map((s, i) => {
+                        const up = s.momentum >= 0;
+                        const c = up ? pos : neg;
+                        return (
+                            <div key={s.sector} style={{
+                                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                                padding: "6px 0",
+                                borderTop: i === 0 ? `1px solid ${hairline}` : `1px solid ${hairline}`,
+                            }}>
+                                <span style={{
+                                    fontSize: 14, fontWeight: 600, color: T.text, minWidth: 0,
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                }}>{s.label}</span>
+                                <span style={{
+                                    flexShrink: 0, fontFamily: mono, fontWeight: 700, fontSize: 12.5,
+                                    fontVariantNumeric: "tabular-nums", color: c,
+                                    padding: "2px 7px", borderRadius: 6,
+                                    background: withAlpha(c, T.isDark ? 0.18 : 0.1),
+                                }}>
+                                    {up ? "\u2191" : "\u2193"} {Math.abs(s.momentum).toFixed(1)}%
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {extra > 0 && (
+                <div style={{ paddingTop: 6, fontSize: 12, color: T.muted, fontFamily: mono }}>+{extra} more</div>
+            )}
+        </div>
+    );
+});
+
+function SectorRotationCardView({ T, raw, loading, error, onRetry, isCompact, userToken, onNavigate, onLogin }) {
+    const font = "'IBM Plex Sans', -apple-system, sans-serif";
+    const mono = "'IBM Plex Mono', monospace";
+    const [tf, setTf] = useState("3M"); // same default as the Sector Rotation page
+
+    // Measure the card body so the 2×2 RRG layout collapses to one column when narrow
+    // (tablet-width halves, phones) instead of squeezing names and pills.
+    const gridRef = useRef(null);
+    const [gridW, setGridW] = useState(0);
+    useEffect(() => {
+        const el = gridRef.current;
+        if (!el || typeof ResizeObserver === "undefined") return undefined;
+        const ro = new ResizeObserver(entries => {
+            const w = Math.round(entries[0].contentRect.width);
+            setGridW(prev => (prev === w ? prev : w));
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+    const twoCol = gridW ? gridW >= 440 : !isCompact;
+    const maxRows = twoCol ? 3 : 4;
+
+    // All four timeframes are cheap (≈24 sectors) — compute once per data change so tab switches are instant.
+    const byTf = useMemo(() => {
+        if (!raw) return null;
+        const out = {};
+        SECTOR_ROT_TIMEFRAMES.forEach(({ key, lookback }) => { out[key] = computeSectorRotation(raw, lookback); });
+        return out;
+    }, [raw]);
+
+    const rows = byTf ? byTf[tf] || [] : [];
+    const groups = useMemo(() => {
+        const g = { LEADING: [], IMPROVING: [], WEAKENING: [], LAGGING: [] };
+        rows.forEach(r => g[r.quadrant].push(r));
+        // Leading / Improving: best first. Weakening / Lagging: weakest (most negative momentum) first.
+        g.LEADING.sort((a, b) => b.rank - a.rank);
+        g.IMPROVING.sort((a, b) => b.rank - a.rank);
+        g.WEAKENING.sort((a, b) => a.momentum - b.momentum);
+        g.LAGGING.sort((a, b) => a.momentum - b.momentum);
+        return g;
+    }, [rows]);
+
+    const total = rows.length;
+    const gaining = groups.LEADING.length + groups.IMPROVING.length;
+    const asOf = useMemo(() => {
+        let latest = "";
+        rows.forEach(r => { if (r.date > latest) latest = r.date; });
+        return sectorRotDateLabel(latest);
+    }, [rows]);
+
+    const order = twoCol ? SECTOR_ROT_GRID_ORDER : SECTOR_ROT_ORDER;
+
+    let body;
+    if (loading && !raw) {
+        body = (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <Skeleton T={T} h={8} style={{ borderRadius: 999 }} />
+                <div style={{ display: "grid", gridTemplateColumns: twoCol ? "1fr 1fr" : "1fr", gap: 10 }}>
+                    {[...Array(4)].map((_, i) => <Skeleton key={i} T={T} h={twoCol ? 150 : 128} />)}
+                </div>
+            </div>
+        );
+    } else if (error && !raw) {
+        body = (
+            <div style={{ padding: "44px 20px", textAlign: "center", color: T.muted, fontSize: 14.5, fontFamily: font }}>
+                <div style={{ marginBottom: 12 }}>Sector rotation is unavailable right now.</div>
+                <button type="button" onClick={onRetry} style={{
+                    padding: "7px 16px", borderRadius: 999, cursor: "pointer", fontFamily: font, fontSize: 13.5, fontWeight: 700,
+                    color: T.text, background: T.pillBg, border: `1px solid ${T.pillBorder}`,
+                }}>Retry</button>
+            </div>
+        );
+    } else if (!total) {
+        body = (
+            <div style={{ padding: "44px 20px", textAlign: "center", color: T.muted, fontSize: 14.5, fontFamily: font }}>
+                Not enough history yet for this timeframe.
+            </div>
+        );
+    } else {
+        body = (
+            <div key={tf} style={{ animation: "sdFadeIn 0.28s ease" }}>
+                {/* Headline + distribution bar */}
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 9, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 14, color: T.subtext || T.muted, fontFamily: font }}>
+                        <span style={{ fontFamily: mono, fontWeight: 700, color: T.text }}>{gaining}</span>
+                        {" of "}
+                        <span style={{ fontFamily: mono, fontWeight: 700, color: T.text }}>{total}</span>
+                        {" sectors gaining strength"}
+                    </div>
+                </div>
+                <div
+                    role="img"
+                    aria-label={SECTOR_ROT_ORDER.map(s => `${groups[s].length} ${SECTOR_ROT_STATUS[s].label.toLowerCase()}`).join(", ")}
+                    style={{ display: "flex", gap: 3, height: 8, marginBottom: 16 }}
+                >
+                    {SECTOR_ROT_ORDER.filter(s => groups[s].length > 0).map(s => (
+                        <span
+                            key={s}
+                            title={`${SECTOR_ROT_STATUS[s].label}: ${groups[s].length}`}
+                            style={{
+                                flex: groups[s].length, minWidth: 6, borderRadius: 999,
+                                background: sectorRotTone(T, s), opacity: T.isDark ? 0.9 : 0.85,
+                                transition: "flex 0.4s ease",
+                            }}
+                        />
+                    ))}
+                </div>
+
+                {/* RRG-style 2x2 (one column when narrow) */}
+                <div style={{ display: "grid", gridTemplateColumns: twoCol ? "1fr 1fr" : "1fr", gap: 10 }}>
+                    {order.map(s => (
+                        <SectorRotationTile key={s} T={T} status={s} items={groups[s]} maxRows={maxRows} />
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <SectionCard T={T} style={{ marginBottom: 0, minWidth: 0 }}>
+            <CardHeader T={T} title="Sector Rotation" count={total || undefined} />
+            <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: 10, flexWrap: "wrap", marginBottom: 16,
+            }}>
+                <TabBar T={T}>
+                    {SECTOR_ROT_TIMEFRAMES.map(({ key, long }) => (
+                        <TabButton
+                            key={key}
+                            T={T}
+                            active={tf === key}
+                            label={isCompact ? key : long}
+                            onClick={() => setTf(key)}
+                            hideCount
+                        />
+                    ))}
+                </TabBar>
+                {asOf && (
+                    <span style={{ fontSize: 12.5, color: T.muted, fontFamily: font, whiteSpace: "nowrap" }}>
+                        As of <span style={{ fontFamily: mono, fontWeight: 600, color: T.subtext || T.muted }}>{asOf}</span>
+                    </span>
+                )}
+            </div>
+
+            <div ref={gridRef} style={{ minWidth: 0 }}>{body}</div>
+
+            <ViewAllInScreensLink
+                T={T}
+                onNavigate={onNavigate}
+                totalCount={total}
+                label="Sector Rotation"
+                subPage="rotation"
+                ctaLabel={"View full rotation \u2192"}
+                userToken={userToken}
+                onLogin={onLogin}
+            />
+        </SectionCard>
+    );
+}
+
+function SectorRotationCard({ T, userToken, isCompact, onNavigate, onLogin }) {
+    const { raw, loading, error, retry } = useSectorRotationRaw();
+    return (
+        <SectorRotationCardView
+            T={T}
+            raw={raw}
+            loading={loading}
+            error={error}
+            onRetry={retry}
+            isCompact={isCompact}
+            userToken={userToken}
+            onNavigate={onNavigate}
+            onLogin={onLogin}
+        />
     );
 }
 
@@ -4038,7 +4445,7 @@ function LeadershipScreenCards({ T, userToken, isCompact, onNavigate, onLogin })
 
 
 // â”€â”€â”€ MOVERS TABLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const MoversTable = React.memo(function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
+const MoversTable = React.memo(function MoversTable({ T, data, loading, type, isCompact, hasMore = false, loadingMore = false, onLoadMore, tableMaxHeight = DEFAULT_TABLE_MAX_HEIGHT }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
     const [sortKey, setSortKey] = useState(() => {
@@ -4185,7 +4592,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={showDist ? 720 : 420} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={showDist ? 720 : 420} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={tableMaxHeight}>
             <thead>
                 <tr>
                     <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
@@ -4276,7 +4683,7 @@ const MoversTable = React.memo(function MoversTable({ T, data, loading, type, is
 
 
 // ─── VOLUME SHOCKERS TABLE ───────────────────────────────────────────────────
-const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loadingMore = false, onLoadMore }) {
+const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, loading, isCompact, hasMore = false, loadingMore = false, onLoadMore, tableMaxHeight = DEFAULT_TABLE_MAX_HEIGHT }) {
     const [visibleCount, setVisibleCount] = useState(MOVERS_INITIAL_ROWS);
     const { wrapRef, rowPreviewHandlers, PreviewPopover } = useChartRowPreview({ T, accentColor: T.accent });
     const [sortKey, setSortKey] = useState("volume_ratio");
@@ -4398,7 +4805,7 @@ const VolumeShockersTable = React.memo(function VolumeShockersTable({ T, data, l
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
-        <PremiumTableShell T={T} minWidth={400} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={DEFAULT_TABLE_MAX_HEIGHT}>
+        <PremiumTableShell T={T} minWidth={400} isScrollable={visibleRows.length > DEFAULT_VISIBLE_ITEMS} maxHeight={tableMaxHeight}>
             <thead>
                 <tr>
                     <th style={{ ...thBase, padding: "11px 16px", textAlign: "left", width: 36, cursor: "default" }}>#</th>
@@ -5783,7 +6190,7 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                 <MarketOverview T={D} userToken={userToken} isCompact={isCompact} isTablet={isTablet} style={{ marginBottom: 18 }} />
 
                 <LeadershipPanel D={D} isCompact={isCompact}>
-                {/* ── MARKET MOVERS + SECTORAL LEADERS — two halves, single row ── */}
+                {/* ── MARKET MOVERS + SECTOR ROTATION — two halves, single row ── */}
                 <div style={{
                     display: "grid",
                     gridTemplateColumns: isCompact ? "1fr" : "1fr 1fr",
@@ -5806,89 +6213,13 @@ export default function StockDashboard({ T, userToken, onLogin, onNavigate }) {
                             <TabButton T={D} active={activeMoversTab === "volume_shockers"} label={isCompact ? "Vol Shockers" : "Volume Shockers"} count={volumeShockers.length} onClick={() => setActiveMoversTab("volume_shockers")} hideCount={isCompact} />
                         </TabBar>
         {activeMoversTab === "volume_shockers"
-            ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} hasMore={volumeShockersHasMore} loadingMore={loadingMoreVolumeShockers} onLoadMore={loadMoreVolumeShockers} />
-            : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} hasMore={moversHasMore} loadingMore={loadingMoreMovers} onLoadMore={loadMoreMovers} />
+            ? <VolumeShockersTable key="volume_shockers" T={D} data={volumeShockers} loading={loadingVolumeShockers} isCompact={isCompact} tableMaxHeight={isCompact ? DEFAULT_TABLE_MAX_HEIGHT : MOVERS_DESKTOP_TABLE_MAX_HEIGHT} hasMore={volumeShockersHasMore} loadingMore={loadingMoreVolumeShockers} onLoadMore={loadMoreVolumeShockers} />
+            : <MoversTable T={D} data={currentMoversData} loading={loadingMovers} type={activeMoversTab} isCompact={isCompact} tableMaxHeight={isCompact ? DEFAULT_TABLE_MAX_HEIGHT : MOVERS_DESKTOP_TABLE_MAX_HEIGHT} hasMore={moversHasMore} loadingMore={loadingMoreMovers} onLoadMore={loadMoreMovers} />
         }
                     </SectionCard>
 
-                    {/* -- RS RATING / SECTORAL LEADERS CARD -- */}
-                    <SectionCard T={D} style={{ marginBottom: 0, minWidth: 0 }}>
-                                <div style={{
-                                    display: "flex",
-                                    flexDirection: isCompact ? "column" : "row",
-                                    justifyContent: "space-between",
-                                    alignItems: isCompact ? "flex-start" : "center",
-                                    marginBottom: 16,
-                                    gap: 12
-                                }}>
-                                    <CardHeader
-                                        T={D}
-                                        title={
-                                            activeRsTab === "all"
-                                                ? "All Stocks with RS Rating > 85"
-                                                : industry
-                                                    ? `RS Rating > 85 - ${industry}`
-                                                    : "Sectoral Leaders"
-                                        }
-                                        count={
-                                            activeRsTab === "all"
-                                                ? allHighRsStocks.length
-                                                : industry
-                                                    ? rsIndustryStocks.length
-                                                    : rsIndustrySummary.length
-                                        }
-                                        style={{ marginBottom: 0 }}
-                                    />
-
-                                    {activeRsTab === "sector" && industry && (
-                                        <button
-                                            onClick={() => setIndustry("")}
-                                            style={{
-                                                padding: isCompact ? "8px 12px" : "10px 14px",
-                                                fontSize: 16.5,
-                                                fontWeight: 600,
-                                                color: D.text,
-                                                background: D.pillBg,
-                                                border: `1px solid ${D.pillBorder}`,
-                                                borderRadius: 999,
-                                                cursor: "pointer",
-                                                fontFamily: "inherit",
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
-                                            {"← Back"}
-                                        </button>
-                                    )}
-                                </div>
-                                {/* RS sub-tabs */}
-                                <TabBar T={D} style={{ marginBottom: 16 }}>
-                                    <TabButton
-                                        T={D}
-                                        active={activeRsTab === "sector"}
-                                        label="Sector Wise"
-                                        onClick={() => { setActiveRsTab("sector"); setIndustry(""); }}
-                                        hideCount
-                                    />
-                                    <TabButton
-                                        T={D}
-                                        active={activeRsTab === "all"}
-                                        label="All"
-                                        count={allHighRsStocks.length}
-                                        onClick={() => setActiveRsTab("all")}
-                                        hideCount={isCompact}
-                                    />
-                                </TabBar>
-                                <RsLoginGate T={D} isLocked={false} onLogin={onLogin}>
-                                    {activeRsTab === "all" ? (
-                                        <AllRsTable T={D} data={allHighRsStocks} loading={loadingAllRs} isCompact={isCompact} />
-                                    ) : industry ? (
-                                        <RsTable T={D} data={rsIndustryStocks} loading={loadingRs} isCompact={isCompact} />
-                                    ) : (
-                                        <RsIndustrySummaryTable T={D} data={rsIndustrySummary} loading={loadingRs} onIndustryClick={setIndustry} isCompact={isCompact} />
-                                    )}
-                                </RsLoginGate>
-                                <ViewAllInScreensLink T={D} onNavigate={onNavigate} totalCount={activeRsTab === "all" ? allHighRsStocks.length : industry ? rsIndustryStocks.length : rsIndustrySummary.length} label="RS Leaders" userToken={userToken} onLogin={onLogin} />
-                    </SectionCard>
+                    {/* -- SECTOR ROTATION GIST (TechLens -> Sector Rotation) -- */}
+                    <SectorRotationCard T={D} userToken={userToken} isCompact={isCompact} onNavigate={onNavigate} onLogin={onLogin} />
                 </div>
 
                 {/* ── TREND TEMPLATE (MINERVINI) + LEADERSHIP SCREEN PREVIEWS ────────
